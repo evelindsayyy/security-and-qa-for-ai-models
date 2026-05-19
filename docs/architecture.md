@@ -1,0 +1,1 @@
+Diagram or chart of tech stack, evaluator vs security scanner, and other architectural decisions  
