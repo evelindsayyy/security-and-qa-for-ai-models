@@ -112,14 +112,14 @@ Key variables will include:
 
 | Milestone | Status |
 |---|---|
-| Gateway API tested | ✅ Done |
-| Stakeholder meeting | 🔄 Scheduled / Pending |
-| Stack finalized | ⏳ Pending stakeholder meeting |
-| Repo structure + CI | ⏳ Week 2 |
-| Scanner MVP | ⏳ Weeks 3–4 |
-| Evaluator MVP | ⏳ Weeks 5–6 |
+| Gateway API tested | Done |
+| Stakeholder meeting | Scheduled / Pending |
+| Stack finalized | Pending stakeholder meeting |
+| Repo structure + CI | Week 2 |
+| Scanner MVP | Weeks 3–4 |
+| Evaluator MVP | Weeks 5–6 |
 | Integration + deployment | ⏳ Week 7 |
-| Polish + handoff | ⏳ Weeks 8–9 |
+| Polish + handoff | Weeks 8–9 |
 
 ---
 
