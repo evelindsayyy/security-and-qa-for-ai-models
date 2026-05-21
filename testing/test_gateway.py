@@ -19,7 +19,7 @@ def run_simple_test():
             },
             {
                 "role": "user", 
-                "content": "The new hardware prototype works seamlessly without any signal noise."
+                "content": "For a first-time director, the movie was surprisingly decent—though that isn't saying much."
             }
         ]
     )
