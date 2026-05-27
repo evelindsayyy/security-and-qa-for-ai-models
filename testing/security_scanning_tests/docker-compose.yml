@@ -2,7 +2,9 @@
 
 services:
   scanner:
-    build: .
+    build:
+      context: ../..
+      dockerfile: testing/security_scanning_tests/Dockerfile
 
     # run as your dgx user so output/ files aren't owned by root
     # export these on the host before docker compose run:

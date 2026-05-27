@@ -8,11 +8,12 @@ from fickling.analysis import Severity, check_safety
 from fickling.fickle import Pickled, StackedPickle
 
 # worst severity wins when a .bin has multiple stacked pickles
+# use .name — Severity enum isn't hashable in this fickling version
 SEVERITY_RANK = {
-    Severity.LIKELY_SAFE: 0,
-    Severity.POSSIBLY_UNSAFE: 1,
-    Severity.LIKELY_UNSAFE: 2,
-    Severity.LIKELY_OVERTLY_MALICIOUS: 3,
+    "LIKELY_SAFE": 0,
+    "POSSIBLY_UNSAFE": 1,
+    "LIKELY_UNSAFE": 2,
+    "LIKELY_OVERTLY_MALICIOUS": 3,
 }
 
 
@@ -52,7 +53,7 @@ def load_pytorch_pickle(bin_path: Path) -> tuple[str, list[Pickled]]:
 def analyze_pytorch_bin(bin_path: Path) -> dict:
     fmt, pickles = load_pytorch_pickle(bin_path)
     severities = [check_safety(p).severity for p in pickles]
-    worst = max(severities, key=lambda s: SEVERITY_RANK[s])
+    worst = max(severities, key=lambda s: SEVERITY_RANK[s.name])
 
     return {
         "file": str(bin_path),
