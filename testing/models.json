@@ -1,0 +1,22 @@
+{
+  "models": [
+    {
+      "name": "duke-mistral",
+      "model": "Mistral on-site",
+      "base_url": "https://litellm.oit.duke.edu/v1",
+      "api_key_env": "DUKE_AI_GATEWAY_API_KEY"
+    },
+    {
+      "name": "duke-llama33",
+      "model": "Llama 3.3",
+      "base_url": "https://litellm.oit.duke.edu/v1",
+      "api_key_env": "DUKE_AI_GATEWAY_API_KEY"
+    },
+    {
+      "name": "duke-gpt54",
+      "model": "gpt-5.4",
+      "base_url": "https://litellm.oit.duke.edu/v1",
+      "api_key_env": "DUKE_AI_GATEWAY_API_KEY"
+    }
+  ]
+}
