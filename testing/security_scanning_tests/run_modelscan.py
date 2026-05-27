@@ -1,26 +1,31 @@
-"""run modelscan on /models/distilbert-base-uncased — writes json + txt to /output/."""
+"""run modelscan on /models/<MODEL_ID>/ — writes json + txt to /output/<MODEL_ID>/."""
 
-from pathlib import Path
-
-from scan_helpers import dump_json, format_modelscan_text, run_modelscan
-
-MODEL_DIR = Path("/models/distilbert-base-uncased")
-OUTPUT_DIR = Path("/output")
+from scan_helpers import (
+    dump_json,
+    format_modelscan_text,
+    get_model_dir,
+    get_model_id,
+    output_dir,
+    run_modelscan,
+)
 
 
 def main() -> None:
-    if not MODEL_DIR.exists():
-        raise FileNotFoundError(f"{MODEL_DIR} not found — run download_model.py first")
+    model_id = get_model_id()
+    model_dir = get_model_dir(model_id)
+    out = output_dir(model_id)
 
-    print(f"running modelscan on {MODEL_DIR} ...")
-    payload = run_modelscan(MODEL_DIR)
+    if not model_dir.exists():
+        raise FileNotFoundError(f"{model_dir} not found — run download_model.py first")
 
-    dump_json(OUTPUT_DIR / "modelscan_report.json", payload)
-    (OUTPUT_DIR / "modelscan_report.txt").write_text(format_modelscan_text(payload))
+    print(f"running modelscan on {model_dir} ...")
+    payload = run_modelscan(model_dir)
 
-    summary = payload.get("summary", {})
-    print(f"wrote /output/modelscan_report.json")
-    print(f"  total issues: {summary.get('total_issues', 0)}")
+    dump_json(out / "modelscan_report.json", payload)
+    (out / "modelscan_report.txt").write_text(format_modelscan_text(payload))
+
+    print(f"wrote {out}/modelscan_report.json")
+    print(f"  total issues: {payload.get('summary', {}).get('total_issues', 0)}")
 
 
 if __name__ == "__main__":
