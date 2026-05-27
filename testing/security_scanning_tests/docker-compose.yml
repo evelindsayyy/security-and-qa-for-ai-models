@@ -1,0 +1,26 @@
+# docker compose for the security scanning tests
+
+services:
+  scanner:
+    build: .
+
+    # run as your dgx user so output/ files aren't owned by root
+    # export these on the host before docker compose run:
+    #   export UID=$(id -u) GID=$(id -g)
+    user: "${UID}:${GID}"
+
+    volumes:
+      # bind-mount: files here persist on the dgx host even after container exits
+      # ./models on dgx  <->  /models inside container
+      - ./models:/models
+      # scan json reports land here on the dgx host
+      - ./output:/output
+
+    environment:
+      # optional — set on dgx host before running for faster hf downloads:
+      #   export HF_TOKEN=hf_...
+      - HF_TOKEN=${HF_TOKEN:-}
+
+    # needed so "docker compose run ... bash" gives you an interactive shell
+    stdin_open: true
+    tty: true
