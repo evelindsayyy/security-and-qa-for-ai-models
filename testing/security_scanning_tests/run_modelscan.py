@@ -6,17 +6,17 @@ run inside the container:
 
 writes to /output/ (bind-mounted to ./output/ on dgx):
     modelscan_report.json  — structured output (what our scanner will parse)
-    modelscan_report.txt   — human-readable log for docs / debugging
+    modelscan_report.txt   — plain-text summary (no emojis)
 """
 
-import json
-import subprocess
 from pathlib import Path
+
+from scan_helpers import dump_json, format_modelscan_text, run_modelscan
 
 # where download_model.py put the files
 MODEL_DIR = Path("/models/distilbert-base-uncased")
 
-# bind-mounted output folder on dgx
+# bind-mounted output folder on dgx — note: /output inside container, not ./output
 OUTPUT_DIR = Path("/output")
 JSON_OUT = OUTPUT_DIR / "modelscan_report.json"
 TEXT_OUT = OUTPUT_DIR / "modelscan_report.txt"
@@ -32,39 +32,20 @@ def main() -> None:
 
     print(f"running modelscan on {MODEL_DIR} ...")
 
-    # --- json report (the important one for our scanner schema) ---
-    json_result = subprocess.run(
-        ["modelscan", "scan", "-p", str(MODEL_DIR), "--output-format", "json"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    # use python api — newer modelscan dropped --output-format cli flag
+    payload = run_modelscan(MODEL_DIR)
 
-    # modelscan sometimes prints warnings to stderr even on success
-    json_body = json_result.stdout or json_result.stderr
-    JSON_OUT.write_text(json_body)
+    dump_json(JSON_OUT, payload)
     print(f"wrote {JSON_OUT}")
 
-    # --- plain text report (nice to read in terminal / paste into notes) ---
-    text_result = subprocess.run(
-        ["modelscan", "scan", "-p", str(MODEL_DIR)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    text_body = text_result.stdout or text_result.stderr
-    TEXT_OUT.write_text(text_body)
+    TEXT_OUT.write_text(format_modelscan_text(payload))
     print(f"wrote {TEXT_OUT}")
 
-    # print a quick summary so you don't have to open the json file immediately
-    if json_result.stdout:
-        try:
-            payload = json.loads(json_result.stdout)
-            summary = payload.get("summary", {})
-            print("\nmodelscan summary:")
-            print(json.dumps(summary, indent=2))
-        except json.JSONDecodeError:
-            print("(couldn't parse json stdout — check modelscan_report.json manually)")
+    # quick terminal summary
+    summary = payload.get("summary", {})
+    print("\nmodelscan summary:")
+    print(f"  total issues: {summary.get('total_issues', 0)}")
+    print(f"  severity counts: {summary.get('total_issues_by_severity', {})}")
 
 
 if __name__ == "__main__":

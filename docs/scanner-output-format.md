@@ -22,15 +22,15 @@ our scanner should eventually output something like:
   },
   "scan_metadata": {
     "scanned_at": "2026-05-26T19:50:00+00:00",
-    "scanner_version": "scanner_spike-0.1.0",
-    "container_image": "testing/scanner_spike"
+    "scanner_version": "security_scanning_tests-0.1.0",
+    "container_image": "testing/security_scanning_tests"
   }
 }
 ```
 
 | field | meaning |
 |---|---|
-| `overall_risk_score` | 0–100 weighted score (placeholder `0` in spike) |
+| `overall_risk_score` | 0–100 weighted score (placeholder `0` in test scripts) |
 | `severity_tier` | `low` / `medium` / `high` / `critical` |
 | `findings` | list of individual issues (from modelscan `issues[]`) |
 | `tool_results` | raw-ish output from each tool for audit trail |
@@ -66,18 +66,19 @@ each item in `issues` (when present) may include:
 - `severity` — `{ "name": "CRITICAL", "value": 1 }`
 - `source` — file path inside the model dir
 
-spike script: `run_modelscan.py` → `output/modelscan_report.json`
+test script: `run_modelscan.py` → `output/modelscan_report.json`
 
 ---
 
 ## fickling output
 
-fickling analyzes pickle serialization in `.bin` files. spike captures:
+fickling analyzes the pickle inside `pytorch_model.bin` (a zip archive). test scripts capture:
 
 ```json
 {
   "file": "/models/distilbert-base-uncased/pytorch_model.bin",
   "is_likely_safe": true,
+  "severity": "LIKELY_SAFE",
   "ast_node_count": 1234,
   "ast_node_types": {
     "Global": 50,
@@ -88,11 +89,13 @@ fickling analyzes pickle serialization in `.bin` files. spike captures:
 
 | field | meaning |
 |---|---|
-| `is_likely_safe` | fickling's high-level safety signal |
+| `is_likely_safe` | true when fickling severity is LIKELY_SAFE |
+| `severity` | fickling severity enum name (e.g. LIKELY_SAFE) |
 | `ast_node_count` | nodes in the pickle AST |
 | `ast_node_types` | breakdown of node types (for debugging / docs) |
+| `analysis_summary` | plain-text fickling analysis |
 
-spike script: `run_fickling.py` → `output/fickling_report.json`
+test script: `run_fickling.py` → `output/fickling_report.json`
 
 ---
 
@@ -103,7 +106,7 @@ copy one run to `testing/fixtures/sample_scan_result.distilbert.json` for the te
 
 ---
 
-## severity mapping (spike logic)
+## severity mapping (test script logic)
 
 | modelscan counts | `severity_tier` |
 |---|---|
