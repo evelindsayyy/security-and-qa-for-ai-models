@@ -1,17 +1,20 @@
 """
-analyze the pickle-based pytorch weights file with fickling.
+analyze the pickle inside pytorch_model.bin with fickling.
 
 run inside the container:
     python run_fickling.py
+
+why not point fickling at the .bin directly?
+    pytorch .bin is a zip archive — we extract archive/data.pkl first
+    (see scan_helpers.load_pytorch_bin_pickle)
 
 writes:
     /output/fickling_report.json  (bind-mounted to ./output/ on dgx)
 """
 
-import json
 from pathlib import Path
 
-import fickling
+from scan_helpers import analyze_pickle, dump_json, load_pytorch_bin_pickle
 
 MODEL_DIR = Path("/models/distilbert-base-uncased")
 BIN_FILE = MODEL_DIR / "pytorch_model.bin"
@@ -29,30 +32,17 @@ def main() -> None:
 
     print(f"running fickling on {BIN_FILE} ...")
 
-    with BIN_FILE.open("rb") as handle:
-        # load the pickle AST without executing arbitrary code
-        pickled = fickling.Pickled.load(handle)
+    # pull pickle out of the pytorch zip wrapper, then analyze
+    pickled = load_pytorch_bin_pickle(BIN_FILE)
+    report = analyze_pickle(pickled)
+    report["file"] = str(BIN_FILE)
 
-    # high-level yes/no — distilbert should be True (legit model)
-    likely_safe = fickling.is_likely_safe(pickled)
-
-    # count what kinds of AST nodes show up — useful for documenting fickling output
-    node_types: dict[str, int] = {}
-    for node in pickled.ast.body:
-        name = type(node).__name__
-        node_types[name] = node_types.get(name, 0) + 1
-
-    report = {
-        "file": str(BIN_FILE),
-        "is_likely_safe": likely_safe,
-        "ast_node_count": len(pickled.ast.body),
-        "ast_node_types": node_types,
-    }
-
-    JSON_OUT.write_text(json.dumps(report, indent=2))
+    dump_json(JSON_OUT, report)
     print(f"wrote {JSON_OUT}")
     print("\nfickling summary:")
-    print(json.dumps(report, indent=2))
+    print(f"  is_likely_safe: {report['is_likely_safe']}")
+    print(f"  severity: {report['severity']}")
+    print(f"  ast_node_count: {report['ast_node_count']}")
 
 
 if __name__ == "__main__":

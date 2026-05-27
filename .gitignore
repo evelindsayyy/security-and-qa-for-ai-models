@@ -8,6 +8,6 @@ __pycache__/
 
 CONTEXT.md
 
-# scanner spike runtime data (large, machine-local — lives on dgx after bind mount)
-testing/scanner_spike/models/
-testing/scanner_spike/output/
+# security scanning test runtime data (large, machine-local — lives on dgx after bind mount)
+testing/security_scanning_tests/models/
+testing/security_scanning_tests/output/
