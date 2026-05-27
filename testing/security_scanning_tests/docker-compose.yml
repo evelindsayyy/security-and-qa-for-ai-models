@@ -2,11 +2,12 @@
 
 services:
   scanner:
-    build: .
+    build:
+      context: ../..
+      dockerfile: testing/security_scanning_tests/Dockerfile
 
-    # run as your dgx user so output/ files aren't owned by root
-    # export these on the host before docker compose run:
-    #   export UID=$(id -u) GID=$(id -g)
+    # run as your dgx user — set UID/GID in .env (see .env.example), NOT sudo
+    # without this, container runs as root and output/ files become undeletable without a trick
     user: "${UID}:${GID}"
 
     volumes:
@@ -17,9 +18,10 @@ services:
       - ./output:/output
 
     environment:
-      # optional — set on dgx host before running for faster hf downloads:
-      #   export HF_TOKEN=hf_...
       - HF_TOKEN=${HF_TOKEN:-}
+      - MODEL_ID=${MODEL_ID:-distilbert-base-uncased}
+      # keep hf cache on the bind mount — default /.cache is not writable as non-root
+      - HF_HOME=/models/.cache/huggingface
 
     # needed so "docker compose run ... bash" gives you an interactive shell
     stdin_open: true

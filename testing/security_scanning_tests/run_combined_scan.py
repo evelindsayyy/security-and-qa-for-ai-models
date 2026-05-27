@@ -1,31 +1,46 @@
 """merge modelscan + fickling into one json — see docs/scanner-output-format.md."""
 
 from datetime import datetime, timezone
-from pathlib import Path
 
-from scan_helpers import analyze_pytorch_bin, dump_json, run_modelscan, severity_tier
-
-MODEL_ID = "distilbert-base-uncased"
-MODEL_DIR = Path("/models") / MODEL_ID
-BIN_FILE = MODEL_DIR / "pytorch_model.bin"
+from scan_helpers import (
+    analyze_pytorch_bin,
+    dump_json,
+    find_pickle_weights,
+    get_model_dir,
+    get_model_id,
+    modelscan_summary_trimmed,
+    modelscan_tier,
+    output_dir,
+    run_modelscan,
+)
 
 
 def main() -> None:
-    if not MODEL_DIR.exists():
-        raise FileNotFoundError(f"{MODEL_DIR} not found — run download_model.py first")
+    model_id = get_model_id()
+    model_dir = get_model_dir(model_id)
+    out = output_dir(model_id)
+    bin_file = find_pickle_weights(model_dir)
 
-    print("running combined scan ...")
-    modelscan = run_modelscan(MODEL_DIR)
-    fickling = analyze_pytorch_bin(BIN_FILE)
+    if not model_dir.exists():
+        raise FileNotFoundError(f"{model_dir} not found — run download_model.py first")
+
+    print(f"running combined scan for {model_id} ...")
+    modelscan = run_modelscan(model_dir)
+    ms_summary = modelscan_summary_trimmed(modelscan)
+
+    fickling = None
+    if bin_file:
+        fickling = analyze_pytorch_bin(bin_file)
 
     combined = {
-        "model_id": MODEL_ID,
-        "scanned_files": ["pytorch_model.bin", "model.safetensors"],
+        "model_id": model_id,
+        "scanned_files": ms_summary.get("scanned_files", []),
         "overall_risk_score": 0,
-        "severity_tier": severity_tier(modelscan),
+        "severity_tier": modelscan_tier(modelscan),
+        "fickling_severity": fickling["severity"] if fickling else None,
         "findings": modelscan.get("issues", []),
         "tool_results": {
-            "modelscan": modelscan.get("summary", modelscan),
+            "modelscan": ms_summary,
             "fickling": fickling,
         },
         "scan_metadata": {
@@ -34,9 +49,10 @@ def main() -> None:
         },
     }
 
-    dump_json(Path("/output/combined_scan.json"), combined)
-    print("wrote /output/combined_scan.json")
-    print(f"  tier: {combined['severity_tier']}, fickling safe: {fickling['is_likely_safe']}")
+    dump_json(out / "combined_scan.json", combined)
+    print(f"wrote {out}/combined_scan.json")
+    print(f"  modelscan tier: {combined['severity_tier']}")
+    print(f"  fickling severity: {combined['fickling_severity']}")
 
 
 if __name__ == "__main__":
