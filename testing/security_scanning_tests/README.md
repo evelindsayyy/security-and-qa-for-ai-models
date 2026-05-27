@@ -21,12 +21,24 @@ cat .env    # should show your numeric UID/GID, not 1000
 
 `UID`/`GID` here is **not sudo** — just your normal user id from `id -u`.
 
-if you already ran scans before creating `.env`, fix folder ownership once (no sudo):
+if you already ran scans before creating `.env`, fix folder ownership once (no sudo).
+
+**must run from `testing/security_scanning_tests/`** — not repo root:
 
 ```bash
 cd ~/security-and-qa-for-ai-models/testing/security_scanning_tests
+
 docker run --rm -v "${PWD}/models:/work" ubuntu chown -R $(id -u):$(id -g) /work
 docker run --rm -v "${PWD}/output:/work" ubuntu chown -R $(id -u):$(id -g) /work
+```
+
+if that still fails, nuke and recreate `models/` (from same directory):
+
+```bash
+cd ~/security-and-qa-for-ai-models/testing/security_scanning_tests
+docker run --rm -v "${PWD}:/work" -w /work ubuntu rm -rf models
+mkdir models
+ls -ld models    # should show jkm75, not root
 ```
 
 prompt may show `I have no name!` — harmless, your uid just isn't in the container's passwd file.
@@ -144,7 +156,8 @@ use `${PWD}` uppercase in bash.
 
 | problem | cause | fix |
 |---|---|---|
-| `Permission denied: '/models/...'` | `models/` owned by root from runs before `.env` | chown command above, then retry |
+| `Permission denied: '/models/...'` | `models/` owned by root, or chown ran from **repo root** not `testing/security_scanning_tests/` | cd to correct dir, chown again (see above) or rm+mkdir models |
+| `Permission denied: '/.cache'` | hf cache defaults to container home | fixed via `HF_HOME` in compose — rebuild image and re-run compose |
 | `Permission denied` deleting output | same for `output/` | chown or rm via ubuntu container |
 | `UID variable is not set` | no `.env` file | copy `.env.example`, set UID/GID |
 | `I have no name!` in prompt | uid not in container passwd | harmless, ignore |

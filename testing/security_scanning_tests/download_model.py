@@ -8,7 +8,8 @@ from scan_helpers import get_model_dir, get_model_id
 def main() -> None:
     model_id = get_model_id()
     model_dir = get_model_dir(model_id)
-    model_dir.parent.mkdir(parents=True, exist_ok=True)
+    # create target dir — needs write access on /models (see readme if permission denied)
+    model_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"MODEL_ID={model_id}")
     print(f"downloading to {model_dir} ...")

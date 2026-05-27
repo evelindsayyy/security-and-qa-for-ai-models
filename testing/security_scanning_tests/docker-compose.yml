@@ -18,11 +18,10 @@ services:
       - ./output:/output
 
     environment:
-      # optional — set on dgx host before running for faster hf downloads:
-      #   export HF_TOKEN=hf_...
       - HF_TOKEN=${HF_TOKEN:-}
-      # which hugging face repo to download/scan (default: distilbert-base-uncased)
       - MODEL_ID=${MODEL_ID:-distilbert-base-uncased}
+      # keep hf cache on the bind mount — default /.cache is not writable as non-root
+      - HF_HOME=/models/.cache/huggingface
 
     # needed so "docker compose run ... bash" gives you an interactive shell
     stdin_open: true
