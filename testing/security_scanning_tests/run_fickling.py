@@ -1,23 +1,36 @@
-"""run fickling on pytorch_model.bin — writes json to /output/."""
+"""run fickling on pickle weights in /models/<MODEL_ID>/ — writes json + txt to /output/<MODEL_ID>/."""
 
-from pathlib import Path
-
-from scan_helpers import analyze_pytorch_bin, dump_json
-
-BIN_FILE = Path("/models/distilbert-base-uncased/pytorch_model.bin")
-OUTPUT_DIR = Path("/output")
+from scan_helpers import (
+    analyze_pytorch_bin,
+    dump_json,
+    find_pickle_weights,
+    format_fickling_text,
+    get_model_dir,
+    get_model_id,
+    output_dir,
+)
 
 
 def main() -> None:
-    if not BIN_FILE.exists():
-        raise FileNotFoundError(f"{BIN_FILE} not found — run download_model.py first")
+    model_id = get_model_id()
+    model_dir = get_model_dir(model_id)
+    out = output_dir(model_id)
+    bin_file = find_pickle_weights(model_dir)
 
-    print(f"running fickling on {BIN_FILE} ...")
-    report = analyze_pytorch_bin(BIN_FILE)
-    dump_json(OUTPUT_DIR / "fickling_report.json", report)
+    if bin_file is None:
+        raise FileNotFoundError(
+            f"no pickle weights in {model_dir} — fickling needs pytorch_model.bin (or similar). "
+            "safetensors-only repos skip fickling; modelscan still works."
+        )
 
-    print("wrote /output/fickling_report.json")
-    print(f"  format: {report['pytorch_format']}, safe: {report['is_likely_safe']}")
+    print(f"running fickling on {bin_file} ...")
+    report = analyze_pytorch_bin(bin_file)
+
+    dump_json(out / "fickling_report.json", report)
+    (out / "fickling_report.txt").write_text(format_fickling_text(report))
+
+    print(f"wrote {out}/fickling_report.json")
+    print(f"  severity: {report['severity']}, safe: {report['is_likely_safe']}")
 
 
 if __name__ == "__main__":

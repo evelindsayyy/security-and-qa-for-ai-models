@@ -22,6 +22,8 @@ services:
       # optional — set on dgx host before running for faster hf downloads:
       #   export HF_TOKEN=hf_...
       - HF_TOKEN=${HF_TOKEN:-}
+      # which hugging face repo to download/scan (default: distilbert-base-uncased)
+      - MODEL_ID=${MODEL_ID:-distilbert-base-uncased}
 
     # needed so "docker compose run ... bash" gives you an interactive shell
     stdin_open: true

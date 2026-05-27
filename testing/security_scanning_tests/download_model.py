@@ -1,20 +1,20 @@
-"""download distilbert to /models/ — run inside container after compose up."""
-
-from pathlib import Path
+"""download a hugging face model to /models/ — set MODEL_ID env var to change model."""
 
 from huggingface_hub import snapshot_download
 
-REPO_ID = "distilbert-base-uncased"
-LOCAL_DIR = Path("/models") / REPO_ID
+from scan_helpers import get_model_dir, get_model_id
 
 
 def main() -> None:
-    LOCAL_DIR.parent.mkdir(parents=True, exist_ok=True)
-    print(f"downloading {REPO_ID} to {LOCAL_DIR} ...")
+    model_id = get_model_id()
+    model_dir = get_model_dir(model_id)
+    model_dir.parent.mkdir(parents=True, exist_ok=True)
+
+    print(f"downloading {model_id} to {model_dir} ...")
 
     snapshot_download(
-        repo_id=REPO_ID,
-        local_dir=str(LOCAL_DIR),
+        repo_id=model_id,
+        local_dir=str(model_dir),
         ignore_patterns=["*.msgpack", "*.h5", "flax_*", "tf_*"],
     )
 
