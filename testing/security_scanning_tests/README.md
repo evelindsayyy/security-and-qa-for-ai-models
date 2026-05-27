@@ -6,24 +6,38 @@ output schema: [`docs/scanner-output-format.md`](../../docs/scanner-output-forma
 
 ---
 
+## one-time dgx setup 
+
+tell docker to run as **your user**, not root. otherwise scan output
+files are owned by root and you can't delete them normally.
+
+```bash
+cd ~/security-and-qa-for-ai-models/testing/security_scanning_tests
+cp .env.example .env
+sed -i "s/^UID=.*/UID=$(id -u)/" .env
+sed -i "s/^GID=.*/GID=$(id -g)/" .env
+cat .env    # should show your numeric UID/GID, not 1000
+```
+
+---
+
 ## pipeline (start to end)
 
 ```
 dgx host                          docker container (/app)
 ────────                          ──────────────────────
 git pull repo
-docker compose build    ───────►  image built from:
-  │                                 - requirements.txt (deps)
-  │                                 - testing/security_scanning_tests/*.py
+create .env (once)      ───────►  docker runs as your uid (not root)
+docker compose build    ───────►  image built from requirements.txt + scripts
 docker compose run bash ───────►  interactive shell
   │
-  │  ./models  ──bind mount──►   /models   (downloaded weights, persists)
-  │  ./output  ──bind mount──►   /output  (scan reports, persists)
+  │  ./models  ──bind mount──►   /models
+  │  ./output  ──bind mount──►   /output/<MODEL_ID>/
   │
-  │                               python download_model.py  → hf → /models/
-  │                               python run_modelscan.py   → /output/modelscan_*
-  │                               python run_fickling.py    → /output/fickling_*
-  │                               python run_combined_scan.py → /output/<MODEL_ID>/combined_scan.json
+  │                               python download_model.py
+  │                               python run_modelscan.py
+  │                               python run_fickling.py
+  │                               python run_combined_scan.py
   │
 exit                            container deleted (models/ + output/ stay on dgx)
 ```
@@ -31,6 +45,8 @@ exit                            container deleted (models/ + output/ stay on dgx
 ---
 
 ## dgx quick start
+
+**after every `git pull`, run `docker compose build`** 
 
 ```bash
 cd ~/security-and-qa-for-ai-models/testing/security_scanning_tests
@@ -41,9 +57,10 @@ docker compose build
 docker compose run --rm scanner bash
 ```
 
-inside container (default model: distilbert-base-uncased):
+inside container:
 
 ```bash
+echo $MODEL_ID    # from .env — default distilbert-base-uncased
 python download_model.py
 python run_modelscan.py
 python run_fickling.py
@@ -58,99 +75,56 @@ exit
 
 | file | role |
 |---|---|
+| `.env` | your UID/GID/MODEL_ID — create once from `.env.example`, gitignored |
 | `Dockerfile` | builds image from repo root requirements.txt + scripts |
-| `docker-compose.yml` | mounts models/output, runs as your uid |
+| `docker-compose.yml` | mounts models/output, runs as your uid from `.env` |
 | `scan_helpers.py` | shared modelscan + fickling logic |
-| `download_model.py` | pulls distilbert to /models/ |
+| `download_model.py` | pulls model to /models/ |
 | `run_modelscan.py` | full modelscan → json + txt |
 | `run_fickling.py` | fickling on .bin → json + txt |
-| `run_combined_scan.py` | merged report for dashboard prototype |
-
-rebuild after `git pull`: `docker compose build`
+| `run_combined_scan.py` | merged report |
 
 ---
 
 ## testing other models
 
-pick a hugging face repo id, set `MODEL_ID`, run the same scripts. outputs go to
-`/output/<model-id>/` so different models don't overwrite each other.
-
-### good models to try
-
-| MODEL_ID | size | why test it |
-|---|---|---|
-| `distilbert-base-uncased` | ~260mb | default — legacy stacked pickle `.bin` |
-| `gpt2` | ~500mb | different arch, also has `pytorch_model.bin` |
-| `bert-base-uncased` | ~440mb | same era as distilbert, sanity comparison |
-| `facebook/opt-125m` | ~250mb | small decoder model |
-| `sentence-transformers/all-MiniLM-L6-v2` | ~90mb | tiny, good for quick reruns |
-
-**safetensors-only repos** (no `.bin` file): modelscan still runs, fickling skips with an error.
-
-### commands (inside container)
-
-default model (distilbert):
+set `MODEL_ID` in `.env` or export before `docker compose run`:
 
 ```bash
-python download_model.py
-python run_modelscan.py
-python run_fickling.py
-python run_combined_scan.py
-ls /output/distilbert-base-uncased/
+# option a — edit .env permanently
+echo "MODEL_ID=gpt2" >> .env   # or edit the line
+
+# option b — one-off for this session
+MODEL_ID=gpt2 docker compose run --rm scanner bash
 ```
 
-different model — set env var before each script (or export once in the shell):
+| MODEL_ID | size | why |
+|---|---|---|
+| `distilbert-base-uncased` | ~260mb | default — legacy stacked pickle |
+| `gpt2` | ~500mb | different arch |
+| `bert-base-uncased` | ~440mb | compare to distilbert |
+| `facebook/opt-125m` | ~250mb | small decoder |
+| `sentence-transformers/all-MiniLM-L6-v2` | ~90mb | quick reruns |
+
+safetensors-only repos: modelscan works, fickling errors (no `.bin`) — expected.
+
+inside container after `export MODEL_ID=gpt2` or setting in `.env`:
 
 ```bash
-export MODEL_ID=gpt2
-python download_model.py
-python run_modelscan.py
-python run_fickling.py
+python download_model.py      # MODEL_ID=gpt2, -> /models/gpt2
 python run_combined_scan.py
 cat /output/gpt2/combined_scan.json
 ```
 
-org/model ids work too:
-
-```bash
-export MODEL_ID=sentence-transformers/all-MiniLM-L6-v2
-python download_model.py
-python run_combined_scan.py
-ls /output/sentence-transformers--all-MiniLM-L6-v2/
-```
-
-### from dgx host (before entering container)
-
-pass `MODEL_ID` into docker so it's set automatically:
-
-```bash
-export UID=$(id -u) GID=$(id -g)
-export MODEL_ID=gpt2
-docker compose run --rm scanner bash
-# then run scripts inside — MODEL_ID is already set
-```
-
-compare two models:
-
-```bash
-export MODEL_ID=distilbert-base-uncased
-python run_combined_scan.py
-
-export MODEL_ID=gpt2
-python download_model.py
-python run_combined_scan.py
-
-ls /output/
-# distilbert-base-uncased/combined_scan.json
-# gpt2/combined_scan.json
-```
-
 ---
+
 
 ## troubleshooting
 
 | problem | fix |
 |---|---|
-| `permission denied` on output/ | `sudo chown -R $USER:$USER output/`, always export `UID`/`GID` |
-| `UID variable is not set` warning | `export UID=$(id -u) GID=$(id -g)` before compose |
-| scripts stale in container | `git pull` then `docker compose build` |
+| `UID variable is not set` warning | create `.env` from `.env.example`, set UID/GID with `id -u` / `id -g` |
+| output owned by root, can't delete | cleanup command above, then fix `.env` so it doesn't happen again |
+| still downloads distilbert after MODEL_ID=gpt2 | `docker compose build` after `git pull`, check `echo $MODEL_ID` in container |
+| `python` not found on dgx host | run scripts inside container only |
+| scripts stale | `git pull` then `docker compose build` |

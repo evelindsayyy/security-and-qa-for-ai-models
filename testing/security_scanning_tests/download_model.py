@@ -10,7 +10,8 @@ def main() -> None:
     model_dir = get_model_dir(model_id)
     model_dir.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"downloading {model_id} to {model_dir} ...")
+    print(f"MODEL_ID={model_id}")
+    print(f"downloading to {model_dir} ...")
 
     snapshot_download(
         repo_id=model_id,

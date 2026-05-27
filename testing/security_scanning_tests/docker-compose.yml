@@ -6,9 +6,8 @@ services:
       context: ../..
       dockerfile: testing/security_scanning_tests/Dockerfile
 
-    # run as your dgx user so output/ files aren't owned by root
-    # export these on the host before docker compose run:
-    #   export UID=$(id -u) GID=$(id -g)
+    # run as your dgx user — set UID/GID in .env (see .env.example), NOT sudo
+    # without this, container runs as root and output/ files become undeletable without a trick
     user: "${UID}:${GID}"
 
     volumes:
