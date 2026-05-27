@@ -1,13 +1,11 @@
 # scanner output format (draft)
 
-> documents what pillar 1 security scans should produce.
-> the test in `testing/security_scanning_tests/` generates a first version of this shape.
+documents what pillar 1 security scans should produce.
+`testing/security_scanning_tests/` generates a first version of this shape.
 
 ---
 
 ## target schema (future `ScanResult`)
-
-our scanner should eventually output something like:
 
 ```json
 {
@@ -17,96 +15,30 @@ our scanner should eventually output something like:
   "severity_tier": "low",
   "findings": [],
   "tool_results": {
-    "modelscan": { },
-    "fickling": { }
+    "modelscan": {},
+    "fickling": {}
   },
   "scan_metadata": {
     "scanned_at": "2026-05-26T19:50:00+00:00",
-    "scanner_version": "security_scanning_tests-0.1.0",
-    "container_image": "testing/security_scanning_tests"
+    "scanner_version": "security_scanning_tests-0.1.0"
   }
 }
 ```
 
 | field | meaning |
 |---|---|
-| `overall_risk_score` | 0–100 weighted score (placeholder `0` in test scripts) |
+| `overall_risk_score` | 0–100 weighted score (placeholder `0` for now) |
 | `severity_tier` | `low` / `medium` / `high` / `critical` |
-| `findings` | list of individual issues (from modelscan `issues[]`) |
-| `tool_results` | raw-ish output from each tool for audit trail |
+| `findings` | modelscan `issues[]` |
+| `tool_results` | raw tool output for audit trail |
 
 ---
 
-## modelscan output
+## modelscan
 
-modelscan writes json with roughly:
+api returns `summary`, `issues`, `errors`. see `output/modelscan_report.json`.
 
-```json
-{
-  "summary": {
-    "total_issues_by_severity": {
-      "CRITICAL": 0,
-      "HIGH": 0,
-      "MEDIUM": 0,
-      "LOW": 0
-    },
-    "total_issues": 0,
-    "input_path": "/models/distilbert-base-uncased"
-  },
-  "issues": [],
-  "errors": []
-}
-```
-
-each item in `issues` (when present) may include:
-
-- `description` — human-readable finding
-- `operator` — pickle op that triggered it (e.g. `REDUCE`)
-- `module` — python module referenced
-- `severity` — `{ "name": "CRITICAL", "value": 1 }`
-- `source` — file path inside the model dir
-
-test script: `run_modelscan.py` → `output/modelscan_report.json`
-
----
-
-## fickling output
-
-fickling analyzes the pickle inside `pytorch_model.bin` (a zip archive). test scripts capture:
-
-```json
-{
-  "file": "/models/distilbert-base-uncased/pytorch_model.bin",
-  "is_likely_safe": true,
-  "severity": "LIKELY_SAFE",
-  "ast_node_count": 1234,
-  "ast_node_types": {
-    "Global": 50,
-    "Put": 100
-  }
-}
-```
-
-| field | meaning |
-|---|---|
-| `is_likely_safe` | true when fickling severity is LIKELY_SAFE |
-| `severity` | fickling severity enum name (e.g. LIKELY_SAFE) |
-| `ast_node_count` | nodes in the pickle AST |
-| `ast_node_types` | breakdown of node types (for debugging / docs) |
-| `analysis_summary` | plain-text fickling analysis |
-
-test script: `run_fickling.py` → `output/fickling_report.json`
-
----
-
-## combined report
-
-`run_combined_scan.py` merges both into `output/combined_scan.json`.
-copy one run to `testing/fixtures/sample_scan_result.distilbert.json` for the team.
-
----
-
-## severity mapping (test script logic)
+severity tier mapping:
 
 | modelscan counts | `severity_tier` |
 |---|---|
@@ -115,4 +47,26 @@ copy one run to `testing/fixtures/sample_scan_result.distilbert.json` for the te
 | any MEDIUM | `medium` |
 | otherwise | `low` |
 
-real `overall_risk_score` weighting lives in `scanner/` later (see `docs/architecture.md`).
+---
+
+## fickling
+
+`pytorch_model.bin` may be a zip (modern) or stacked pickle (distilbert).
+
+```json
+{
+  "file": "/models/distilbert-base-uncased/pytorch_model.bin",
+  "pytorch_format": "pytorch_stacked_pickle",
+  "stack_count": 2,
+  "is_likely_safe": true,
+  "severity": "LIKELY_SAFE",
+  "ast_node_count": 1234
+}
+```
+
+| field | meaning |
+|---|---|
+| `pytorch_format` | `pytorch_zip`, `pytorch_stacked_pickle`, or `raw_pickle` |
+| `is_likely_safe` | all stacked pickles passed fickling checks |
+| `severity` | worst severity across stacked pickles |
+| `ast_node_count` | total ast nodes across all pickles in the file |

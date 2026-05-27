@@ -4,6 +4,11 @@ services:
   scanner:
     build: .
 
+    # run as your dgx user so output/ files aren't owned by root
+    # export these on the host before docker compose run:
+    #   export UID=$(id -u) GID=$(id -g)
+    user: "${UID}:${GID}"
+
     volumes:
       # bind-mount: files here persist on the dgx host even after container exits
       # ./models on dgx  <->  /models inside container

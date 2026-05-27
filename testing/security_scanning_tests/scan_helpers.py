@@ -1,119 +1,86 @@
-"""
-shared helpers for the security scanning spike scripts.
-
-keeps modelscan + fickling logic in one place so run_*.py stay short.
-"""
+"""shared helpers — modelscan api + fickling on pytorch .bin files."""
 
 import json
 import zipfile
 from pathlib import Path
 
 from fickling.analysis import Severity, check_safety
-from fickling.fickle import Pickled
+from fickling.fickle import Pickled, StackedPickle
+
+# worst severity wins when a .bin has multiple stacked pickles
+SEVERITY_RANK = {
+    Severity.LIKELY_SAFE: 0,
+    Severity.POSSIBLY_UNSAFE: 1,
+    Severity.LIKELY_UNSAFE: 2,
+    Severity.LIKELY_OVERTLY_MALICIOUS: 3,
+}
 
 
-def load_pytorch_bin_pickle(bin_path: Path) -> Pickled:
-    """
-    pytorch .bin files are zip archives, not raw pickle files.
-    pull out the inner data.pkl and parse that with fickling.
-    """
-    with zipfile.ZipFile(bin_path, "r") as zf:
-        pkl_names = [name for name in zf.namelist() if name.endswith("data.pkl")]
-        if not pkl_names:
-            raise ValueError(f"no data.pkl found inside {bin_path}")
-
-        # distilbert uses archive/data.pkl — first match is fine
-        with zf.open(pkl_names[0]) as handle:
-            return Pickled.load(handle)
-
-
-def analyze_pickle(pickled: Pickled) -> dict:
-    """run fickling safety checks and return a json-friendly dict."""
-    results = check_safety(pickled)
-
-    # count ast node types — handy when documenting what fickling exposes
-    node_types: dict[str, int] = {}
-    for node in pickled.ast.body:
-        name = type(node).__name__
-        node_types[name] = node_types.get(name, 0) + 1
-
-    return {
-        "is_likely_safe": results.severity == Severity.LIKELY_SAFE,
-        "severity": results.severity.name,
-        "ast_node_count": len(pickled.ast.body),
-        "ast_node_types": node_types,
-        "analysis_summary": results.to_string(),
-    }
+def dump_json(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2))
 
 
 def run_modelscan(model_dir: Path) -> dict:
-    """
-    call modelscan via its python api (not cli).
-
-    the cli flags changed in newer modelscan versions (--output-format is gone).
-    the api returns a stable dict with summary + issues + errors.
-    """
+    # python api — newer modelscan dropped cli json flags
     from modelscan.modelscan import ModelScan
 
-    scanner = ModelScan()
-    return scanner.scan(str(model_dir))
+    return ModelScan().scan(str(model_dir))
 
 
-def format_modelscan_text(payload: dict) -> str:
-    """build a plain-text report from modelscan api output (no emojis)."""
-    summary = payload.get("summary", {})
-    lines = [
-        "--- modelscan summary ---",
-        "",
-    ]
+def load_pytorch_pickle(bin_path: Path) -> tuple[str, list[Pickled]]:
+    # modern .bin = zip with data.pkl inside
+    if zipfile.is_zipfile(bin_path):
+        with zipfile.ZipFile(bin_path) as zf:
+            names = [n for n in zf.namelist() if n.endswith("data.pkl")]
+            if not names:
+                raise ValueError(f"no data.pkl in {bin_path}")
+            with zf.open(names[0]) as handle:
+                return "pytorch_zip", [Pickled.load(handle)]
 
-    counts = summary.get("total_issues_by_severity", {})
-    for severity in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
-        lines.append(f"  {severity}: {counts.get(severity, 0)}")
+    # legacy .bin = stacked pickles (distilbert uses this)
+    with bin_path.open("rb") as handle:
+        stacked = StackedPickle.load(handle)
+    if stacked:
+        return "pytorch_stacked_pickle", list(stacked)
 
-    lines.append(f"  total issues: {summary.get('total_issues', 0)}")
-    lines.append(f"  input path: {summary.get('input_path', 'unknown')}")
+    # fallback — single raw pickle
+    with bin_path.open("rb") as handle:
+        return "raw_pickle", [Pickled.load(handle)]
 
-    issues = payload.get("issues", [])
-    lines.append("")
-    if issues:
-        lines.append("--- issues ---")
-        for issue in issues:
-            desc = issue.get("description", str(issue))
-            source = issue.get("source", "")
-            lines.append(f"  - [{source}] {desc}")
-    else:
-        lines.append("no issues found")
 
-    skipped = summary.get("skipped", {})
-    total_skipped = skipped.get("total_skipped", 0)
-    lines.append("")
-    lines.append(f"skipped files: {total_skipped}")
-    lines.append("(run modelscan with --show-skipped on cli to see full list)")
+def analyze_pytorch_bin(bin_path: Path) -> dict:
+    fmt, pickles = load_pytorch_pickle(bin_path)
+    severities = [check_safety(p).severity for p in pickles]
+    worst = max(severities, key=lambda s: SEVERITY_RANK[s])
 
-    errors = payload.get("errors", [])
-    if errors:
-        lines.append("")
-        lines.append("--- errors ---")
-        for err in errors:
-            lines.append(f"  - {err}")
-
-    return "\n".join(lines)
+    return {
+        "file": str(bin_path),
+        "pytorch_format": fmt,
+        "stack_count": len(pickles),
+        "is_likely_safe": all(s == Severity.LIKELY_SAFE for s in severities),
+        "severity": worst.name,
+        "ast_node_count": sum(len(p.ast.body) for p in pickles),
+    }
 
 
 def severity_tier(modelscan_payload: dict) -> str:
-    """map modelscan severity counts -> low/medium/high/critical."""
     counts = modelscan_payload.get("summary", {}).get("total_issues_by_severity", {})
-    if counts.get("CRITICAL", 0) > 0:
+    if counts.get("CRITICAL", 0):
         return "critical"
-    if counts.get("HIGH", 0) > 0:
+    if counts.get("HIGH", 0):
         return "high"
-    if counts.get("MEDIUM", 0) > 0:
+    if counts.get("MEDIUM", 0):
         return "medium"
     return "low"
 
 
-def dump_json(path: Path, data: dict) -> None:
-    """write pretty json to a bind-mounted output path."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2))
+def format_modelscan_text(payload: dict) -> str:
+    summary = payload.get("summary", {})
+    counts = summary.get("total_issues_by_severity", {})
+    lines = [f"total issues: {summary.get('total_issues', 0)}"]
+    for level in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
+        lines.append(f"  {level}: {counts.get(level, 0)}")
+    if not payload.get("issues"):
+        lines.append("no issues found")
+    return "\n".join(lines)
