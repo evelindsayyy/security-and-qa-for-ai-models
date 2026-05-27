@@ -1,0 +1,4 @@
+provider_name,model,n,accuracy
+duke-gpt54,gpt-5.4,25,0.88
+duke-mistral,Mistral on-site,25,0.72
+duke-llama33,Llama 3.3,25,0.64
