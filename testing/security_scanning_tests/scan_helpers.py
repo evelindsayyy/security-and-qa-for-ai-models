@@ -31,18 +31,21 @@ SEVERITY_RANK = {
 
 
 def get_model_id() -> str:
-    # e.g. MODEL_ID=gpt2 or MODEL_ID=sentence-transformers/all-MiniLM-L6-v2
+    # e.g. MODEL_ID=gpt2 or MODEL_ID=facebook/opt-125m
     return os.environ.get("MODEL_ID", DEFAULT_MODEL_ID)
 
 
+def safe_dir_name(model_id: str) -> str:
+    # org/model ids become org--model on disk (no nested folders, easier permissions)
+    return model_id.replace("/", "--")
+
+
 def get_model_dir(model_id: str | None = None) -> Path:
-    return MODELS_ROOT / (model_id or get_model_id())
+    return MODELS_ROOT / safe_dir_name(model_id or get_model_id())
 
 
 def output_dir(model_id: str | None = None) -> Path:
-    # one subfolder per model so runs don't overwrite each other
-    safe_name = (model_id or get_model_id()).replace("/", "--")
-    return Path("/output") / safe_name
+    return Path("/output") / safe_dir_name(model_id or get_model_id())
 
 
 def find_pickle_weights(model_dir: Path) -> Path | None:
