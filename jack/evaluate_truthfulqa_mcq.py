@@ -171,7 +171,7 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--csv", default="TruthfulQA.csv")
     p.add_argument("--config", default="models.json")
-    p.add_argument("--limit", type=int, default=25, help="Use None/0 only after testing costs")
+    p.add_argument("--limit", type=int, default=50, help="Use None/0 only after testing costs")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--out", default="results/truthfulqa_model_eval.csv")
     args = p.parse_args()
