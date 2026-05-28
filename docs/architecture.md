@@ -1,10 +1,10 @@
 # Architecture
 
-> Draft — subject to change as scope is confirmed with stakeholders and the GPU VM is provisioned.
+> Draft
 
 ## Overview
 
-Three pillars, one dashboard — two development tracks. See [`team-tracks.md`](team-tracks.md).
+Three pillars, one dashboard — two development tracks. See [`README.md`](README.md) and [`team-tracks.md`](team-tracks.md).
 
 | Pillar | Component | Track | Team |
 |--------|-----------|-------|------|
@@ -12,7 +12,7 @@ Three pillars, one dashboard — two development tracks. See [`team-tracks.md`](
 | Safety | `safety/` | A | Raphael, Nithi |
 | Efficacy | `evaluator/` | B | Grace, Jack |
 
-**Track A** (`scanner/` + `safety/`) inspects artifacts before deploy and probes model **outputs** for policy harm, jailbreaks, and red-team scenarios. **Track B** (`evaluator/`) benchmarks how well gateway models perform on Duke tasks and captures operational metrics (latency, tokens, cost, failure rate).
+**Track A** (`scanner/` + `safety/`) inspects artifacts before deploy and probes model **outputs** for policy harm, jailbreaks, and red-team scenarios. **Track B** (`evaluator/`) benchmarks gateway models on **Duke-custom task suites** plus selective subsets of public benchmarks (MT-Bench, IFEval, DocBench-style tasks, etc. — see [`evaluation-framework.md`](evaluation-framework.md)) and captures operational metrics (latency, tokens, cost, failure rate).
 
 All tracks push structured results to a shared Postgres database. A FastAPI service exposes results to a Next.js dashboard.
 
@@ -63,13 +63,11 @@ Pure-Python, artifact-level. Given a Hugging Face model ID, it pulls files via t
 - **Secret scanner** — [TruffleHog](tool-stack.md) wrapper for credentials accidentally committed to model repos.
 - **Risk scorer** — weighted rubric mapping findings to Low / Medium / High / Critical; reconciles ModelScan vs Fickling disagreements.
 
-Output: a `ScanResult` document persisted to Postgres. Runs in an isolated worker/container — never in the API process (see `testing/security_scanning_tests/ISOLATION.md`).
-
-Current spike: ModelScan + Fickling + pip-audit/OSV comparison in `testing/security_scanning_tests/`. Full matrix: [`tool-stack.md`](tool-stack.md).
+Output: a `ScanResult` document persisted to Postgres. Details: [`security-framework.md`](security-framework.md). Tools: [`tool-stack.md`](tool-stack.md).
 
 ### Safety — `safety/` (Safety — Track A)
 
-Pure-Python, inference-level **policy and harm** evaluation. Calls Duke Gateway (or on-prem) models through the LiteLLM OpenAI-compatible API.
+Python, inference-level **policy and harm** evaluation. Calls Duke Gateway (or on-prem) models through the LiteLLM OpenAI-compatible API.
 
 - **Safety probe runner** — 25–30 prompts across the Llama Guard hazard taxonomy (harmful content, academic dishonesty, sensitive data disclosure, jailbreak resistance).
 - **Red teaming suite** — structured bypass / guardrail tests (Week 4+, per ITSO).
@@ -78,22 +76,23 @@ Pure-Python, inference-level **policy and harm** evaluation. Calls Duke Gateway 
 - **Red teaming** — evaluate **[promptfoo](tool-stack.md)** for declarative probe suites + CI; ITSO has no formal framework today.
 - **LiteLLM guardrails** — document hook path for Duke gateway (ITSO direction); see `tool-stack.md`.
 
-Output: `SafetyResult` rows in Postgres. Primary for gateway models today even when file scanning is N/A.
-
-Tool reference: [`tool-stack.md`](tool-stack.md).
+Output: `SafetyResult` rows in Postgres. Primary for gateway models today even when file scanning is N/A. See [`security-framework.md`](security-framework.md).
 
 ### Evaluator — `evaluator/` (Efficacy — Track B)
 
 Pure-Python, inference-level **performance** evaluation. Calls Duke Gateway models through LiteLLM.
 
 - **Runner** — multiple models × multiple tasks × temperature variations, with timeouts and error handling.
-- **Task loader** — reads and validates YAML efficacy task suites from `tasks/`.
-- **Efficacy metrics** — ROUGE-L for text overlap; LLM-as-judge for graded scoring on open-ended tasks.
+- **Task loader** — Duke YAML suites from `tasks/`; optional imported subsets from public benchmarks per [`evaluation-framework.md`](evaluation-framework.md).
+- **Three-layer eval model** — (1) Duke-custom tasks primary; (2) adapted benchmark subsets where task type matches; (3) published external scores as reference on nutrition label only.
+- **Efficacy metrics** — ROUGE-L for text overlap; LLM-as-judge for graded scoring (see `tasks/rubrics/`).
 - **Variation testing** — N rephrased prompts per task, measure response consistency (Charley Kneifel).
 - **Operational metrics** — latency, token usage, cost, failure rate per call (ITSO: availability is part of CIA).
-- **Comparator** — structured side-by-side output across N models, feeds the recommendation engine.
+- **Comparator** — structured side-by-side output across N models.
 
-Output: `EvalRun` + `TaskResult` rows in Postgres.
+Output: `EvalRun` + `TaskResult` rows in Postgres (`provenance`: `duke` | `benchmark`).
+
+Full benchmark mapping (SWE-bench, MT-Bench, MMLU, function-calling leaderboards, etc.): [`evaluation-framework.md`](evaluation-framework.md).
 
 ### API — `api/`
 
@@ -233,7 +232,7 @@ sequenceDiagram
 
 ## Deployment
 
-- **Target:** GPU VM provisioned by Duke OIT (pending).
+- **Target:** GPU VM provisioned by Duke OIT.
 - **Containerization:** Docker + Docker Compose. One command starts API + worker + Redis + Postgres + frontend.
 - **Production compose:** no hot reload, proper restart policies, secrets from environment variables.
 - **CI/CD:** GitLab CI runs lint, unit tests, and a Docker build check on every push to `main`.
@@ -243,4 +242,5 @@ sequenceDiagram
 - Async backend — Celery + Redis is the default; SLURM only if Duke OIT exposes the cluster scheduler from the GPU VM.
 - Frontend stack — Next.js + Tailwind is the working choice; Streamlit is a fallback if frontend ownership becomes a problem.
 - Auth — Duke Shibboleth preferred; prototype may run unauthenticated behind the VM firewall.
-- AI Gateway integration path — document with Michael Faber in parallel; not required for the prototype to ship.
+- AI Gateway / LiteLLM guardrail hooks — document integration path (Michael Faber, ITSO); prototype can ship without implementing hooks.
+- Public benchmark pilot — IFEval vs DocBench-style subset (see evaluation-framework).

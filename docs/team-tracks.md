@@ -2,7 +2,7 @@
 
 Code+ 2026 — Duke OIT. The **nutrition label** has three pillars (security, safety, efficacy). Development is split into **two tracks**.
 
-Related: [`tool-stack.md`](tool-stack.md) · [`architecture.md`](architecture.md)
+Related: [`README.md`](README.md) (index) · [`architecture.md`](architecture.md) · [`security-framework.md`](security-framework.md) · [`evaluation-framework.md`](evaluation-framework.md) · [`tool-stack.md`](tool-stack.md)
 
 ---
 
@@ -42,7 +42,7 @@ Related: [`tool-stack.md`](tool-stack.md) · [`architecture.md`](architecture.md
 | Track | Primary |
 |-------|---------|
 | A | ModelScan, Fickling, pip-audit, OSV, TruffleHog; LLM Guard and promptfoo (evaluate); LiteLLM for probes |
-| B | LiteLLM, ROUGE-L, LLM-as-judge, efficacy YAML |
+| B | LiteLLM, ROUGE-L, LLM-as-judge, Duke YAML suites, adapted public benchmarks (see evaluation-framework) |
 | Shared | LiteLLM to Duke AI Gateway |
 
 Evaluate: OWASP Dependency-Check, Watchtower. Stretch: CycloneDX ML-BOM, LiteLLM guardrail hooks. Out of scope: Checkmarx, vulnhuntr (summer).
@@ -57,7 +57,7 @@ Details: [`tool-stack.md`](tool-stack.md)
 
 | | Deliverables |
 |---|--------------|
-| **Team** | Repo scaffold; stakeholder calls (Charley, Michael); `docs/architecture.md`; gateway test |
+| **Team** | Repo scaffold; stakeholder calls with Charley Kneifel and Michael Faber; `docs/architecture.md`; gateway test |
 | **Track A** | Tool research (ModelScan, Fickling); architecture draft |
 | **Track B** | `testing/test_gateway.py` working against Duke AI Gateway |
 
@@ -68,8 +68,8 @@ Details: [`tool-stack.md`](tool-stack.md)
 | | Deliverables |
 |---|--------------|
 | **Team** | Problem statement in `docs/`; data model sketch with `deployment_context`; Docker Compose (API + DB + worker target); GitLab CI (lint, docker build); nutrition label layout (Grace mockups) |
-| **Track A** | File-scan spike on DGX (done: modelscan, fickling, combined JSON, OSV vs pip-audit, metadata listing, Pydantic schemas, isolation notes, gpt2 calibration doc). Remaining: ModelScan gap map; scope lock; tool decisions; LiteLLM guardrail path (doc); safety probe YAML stub; `SafetyResult` schema |
-| **Track B** | Nutrition label efficacy/ops fields; LiteLLM runner with timeout; first efficacy YAML tasks; DGX end-to-end; `EvalRun` / `TaskResult` schemas; variation-testing prior art |
+| **Track A** | File-scan spike on DGX (see `security-framework.md`). Remaining: gap map; scope lock; tool decisions; guardrail path doc; `SafetyResult` schema; safety probes (week 3+) |
+| **Track B** | Implement task YAML and evaluator; see proposed ideas in `evaluation-framework.md` (doc only) |
 
 ---
 
@@ -79,7 +79,7 @@ Details: [`tool-stack.md`](tool-stack.md)
 |---|--------------|
 | **Team** | Both tracks produce structured output from real gateway or HF data |
 | **Track A** | ModelScan + fickling reconciled into one `ScanResult`; format detector (safetensors vs pickle vs ONNX); initial risk scorer (tool disagreement handling); safety probe runner on gateway; begin `scanner/` and `safety/` extraction from spike |
-| **Track B** | Multi-model, multi-task runner; YAML task loader; ROUGE-L; variation-testing pipeline (N rephrased prompts) |
+| **Track B** | Multi-model runner; task loader (Duke + benchmark subsets); ROUGE-L; variation-testing pipeline |
 
 ---
 
@@ -89,7 +89,7 @@ Details: [`tool-stack.md`](tool-stack.md)
 |---|--------------|
 | **Team** | End-to-end pipelines per track; unit tests |
 | **Track A** | Dependency scanning (pip-audit + OSV) in pipeline; TruffleHog for secrets; risk formula (low/medium/high/critical, NIST AI RMF language); model ID in, `ScanResult` JSON out; red-team probe design (prompt injection, jailbreaks); LLM Guard / promptfoo pilot results |
-| **Track B** | Efficacy suites across Duke use cases; operational metrics (latency, tokens, cost, failure rate); side-by-side comparator; runner and metrics tests |
+| **Track B** | Full Duke suites; pilot adapted benchmark subset (IFEval or DocBench-style); ops metrics; comparator |
 
 ---
 

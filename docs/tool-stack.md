@@ -1,6 +1,7 @@
 # Tool stack
 
-Track mapping: [`team-tracks.md`](team-tracks.md).  
+Index: [`README.md`](README.md). Track A approach: [`security-framework.md`](security-framework.md). Track B approach: [`evaluation-framework.md`](evaluation-framework.md).
+
 Status: **In use** | **Spike** | **Planned** | **Evaluate** | **Stretch** | **Out of scope**
 
 ---
@@ -46,17 +47,25 @@ Checkmarx (enterprise). vulnhuntr (AI-generated app code, future project). Devel
 
 ## Track B — Evaluation
 
-| Tool | Status | Role |
-|------|--------|------|
+| Tool / source | Status | Role |
+|---------------|--------|------|
 | LiteLLM | In use | Gateway inference |
+| Duke YAML suites | Planned | Primary tasks (`tasks/`, rubrics) |
 | ROUGE-L | Planned | Summarization overlap (week 3) |
 | LLM-as-judge | Planned | Graded tasks (week 5); human validation week 8 |
 | promptfoo | Evaluate | Optional multi-model efficacy matrices |
-| HELM / MT-Bench | Evaluate | Prior art reference only |
+| IFEval, DocBench, QASPER | Evaluate | API-friendly subsets; see `evaluation-framework.md` |
+| MT-Bench, AlpacaEval | Reference | Prompt and judge patterns |
+| SWE-bench (full) | Out of scope | Requires coding agent + repo; not default gateway eval |
+| SWE-bench Lite / HumanEval | Evaluate | Optional coding-snippet column |
+| Berkeley Function Calling Leaderboard | Evaluate | Agentic / tool-use scenarios |
+| HELM, Chatbot Arena | Reference | External context on nutrition label |
+
+Details: [`evaluation-framework.md`](evaluation-framework.md)
 
 ---
 
-## Recommended stack
+## Proposed stack
 
 **Track A:** ModelScan + Fickling + pip-audit/OSV + TruffleHog; LLM Guard or custom probes + promptfoo; LiteLLM transport.
 

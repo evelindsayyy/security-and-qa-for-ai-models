@@ -2,7 +2,7 @@
 
 dockerized spike for pillar 1 — download a model, run modelscan + fickling, write json reports.
 
-output schema: [`docs/scanner-output-format.md`](../../docs/scanner-output-format.md)
+docs: [`docs/security-framework.md`](../../docs/security-framework.md)
 
 ---
 
@@ -111,7 +111,7 @@ see `schemas.py` for `ScanRequest`, `ScanResult`, `Finding`, `Severity`.
 
 read [`ISOLATION.md`](ISOLATION.md) — why scans run in docker, not in the future API process.
 
-team tracks: [`docs/team-tracks.md`](../../docs/team-tracks.md) · personal notes: `CONTEXT.md` at repo root (gitignored).
+docs index: [`docs/README.md`](../../docs/README.md)
 
 do **not** run python on the dgx host — deps only exist inside the container.
 
