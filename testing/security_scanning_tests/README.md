@@ -70,6 +70,49 @@ ls /output/distilbert-base-uncased/
 exit
 ```
 
+---
+
+## week 2 spike scripts
+
+rebuild image after `git pull` (new deps: pip-audit, pydantic, requests):
+
+```bash
+docker compose build
+docker compose run --rm scanner bash
+```
+
+### metadata only (no weights)
+
+```bash
+python list_model_metadata.py
+# -> prints summary, writes /output/<model>/metadata.json
+```
+
+uses HF API only — good for inventory before deciding to download.
+
+### OSV vs pip-audit
+
+```bash
+python compare_osv_pip_audit.py
+# -> side-by-side CVE ids for pillow==8.1.0
+# -> raw json in /output/osv_pip_audit_spike/
+```
+
+### pydantic schemas
+
+```bash
+python run_combined_scan.py   # need combined_scan.json first
+python schemas_demo.py        # validates output against ScanResult model
+```
+
+see `schemas.py` for `ScanRequest`, `ScanResult`, `Finding`, `Severity`.
+
+### isolation research
+
+read [`ISOLATION.md`](ISOLATION.md) — why scans run in docker, not in the future API process.
+
+team tracks: [`docs/team-tracks.md`](../../docs/team-tracks.md) · personal notes: `CONTEXT.md` at repo root (gitignored).
+
 do **not** run python on the dgx host — deps only exist inside the container.
 
 ---

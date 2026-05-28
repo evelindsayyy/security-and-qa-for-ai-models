@@ -4,7 +4,17 @@
 
 ## Overview
 
-Three pillars, one dashboard. The **scanner** (security) inspects model files before they touch Duke infrastructure; the **evaluator** (safety + efficacy) probes models at inference time via the Duke AI Gateway. Both pillars push structured results to a shared Postgres database. A FastAPI service exposes results to a Next.js dashboard.
+Three pillars, one dashboard — two development tracks. See [`team-tracks.md`](team-tracks.md).
+
+| Pillar | Component | Track | Team |
+|--------|-----------|-------|------|
+| Security | `scanner/` | A | Raphael, Nithi |
+| Safety | `safety/` | A | Raphael, Nithi |
+| Efficacy | `evaluator/` | B | Grace, Jack |
+
+**Track A** (`scanner/` + `safety/`) inspects artifacts before deploy and probes model **outputs** for policy harm, jailbreaks, and red-team scenarios. **Track B** (`evaluator/`) benchmarks how well gateway models perform on Duke tasks and captures operational metrics (latency, tokens, cost, failure rate).
+
+All tracks push structured results to a shared Postgres database. A FastAPI service exposes results to a Next.js dashboard.
 
 ## System Context
 
@@ -19,8 +29,9 @@ flowchart LR
     API[FastAPI<br/>API layer]
     Q[Redis<br/>queue]
     W[Celery workers]
-    Scanner[scanner/<br/>Pillar 1: Security]
-    Evaluator[evaluator/<br/>Pillars 2+3: Safety + Efficacy]
+    Scanner[scanner/<br/>Security — Track A]
+    Safety[safety/<br/>Safety — Track A]
+    Evaluator[evaluator/<br/>Efficacy — Track B]
     DB[(PostgreSQL)]
   end
 
@@ -30,38 +41,59 @@ flowchart LR
   API -->|enqueue| Q
   Q --> W
   W --> Scanner
+  W --> Safety
   W --> Evaluator
   Scanner -->|fetch model| HF
-  Evaluator -->|prompts| GW
+  Safety -->|safety probes| GW
+  Evaluator -->|efficacy tasks| GW
   Scanner --> DB
+  Safety --> DB
   Evaluator --> DB
 ```
 
 ## Components
 
-### Scanner — `scanner/` (Pillar 1: Security)
+### Scanner — `scanner/` (Security — Track A)
 
 Pure-Python, artifact-level. Given a Hugging Face model ID, it pulls files via the HF Hub library and runs:
 
 - **Format detector** — classifies files (safetensors, pickle/PyTorch, ONNX, config JSON, code) and flags anything that needs deeper inspection.
 - **Pickle inspector** — uses [fickling](https://github.com/trailofbits/fickling) to walk the serialization AST and flag dangerous operations (designed to catch attacks like nullifAI).
 - **Dependency scanner** — `pip-audit` + direct OSV API queries against `requirements.txt` / `pyproject.toml` shipped alongside the model.
-- **Secret scanner** — TruffleHog wrapper for credentials accidentally committed to model repos.
-- **Risk scorer** — weighted rubric mapping findings to Low / Medium / High / Critical.
+- **Secret scanner** — [TruffleHog](tool-stack.md) wrapper for credentials accidentally committed to model repos.
+- **Risk scorer** — weighted rubric mapping findings to Low / Medium / High / Critical; reconciles ModelScan vs Fickling disagreements.
 
-Output: a `ScanResult` document persisted to Postgres.
+Output: a `ScanResult` document persisted to Postgres. Runs in an isolated worker/container — never in the API process (see `testing/security_scanning_tests/ISOLATION.md`).
 
-### Evaluator — `evaluator/` (Pillars 2 + 3: Safety & Efficacy)
+Current spike: ModelScan + Fickling + pip-audit/OSV comparison in `testing/security_scanning_tests/`. Full matrix: [`tool-stack.md`](tool-stack.md).
 
-Pure-Python, inference-level. Calls Duke Gateway models through the LiteLLM OpenAI-compatible API.
+### Safety — `safety/` (Safety — Track A)
+
+Pure-Python, inference-level **policy and harm** evaluation. Calls Duke Gateway (or on-prem) models through the LiteLLM OpenAI-compatible API.
+
+- **Safety probe runner** — 25–30 prompts across the Llama Guard hazard taxonomy (harmful content, academic dishonesty, sensitive data disclosure, jailbreak resistance).
+- **Red teaming suite** — structured bypass / guardrail tests (Week 4+, per ITSO).
+- **Deployment context** — probe set varies by chatbot vs agentic, tools connected, guardrails on/off.
+- **Classifier** — pattern matching baseline; evaluate **[LLM Guard](tool-stack.md)** (Protect AI, MIT, input/output scanners) as middleware alternative.
+- **Red teaming** — evaluate **[promptfoo](tool-stack.md)** for declarative probe suites + CI; ITSO has no formal framework today.
+- **LiteLLM guardrails** — document hook path for Duke gateway (ITSO direction); see `tool-stack.md`.
+
+Output: `SafetyResult` rows in Postgres. Primary for gateway models today even when file scanning is N/A.
+
+Tool reference: [`tool-stack.md`](tool-stack.md).
+
+### Evaluator — `evaluator/` (Efficacy — Track B)
+
+Pure-Python, inference-level **performance** evaluation. Calls Duke Gateway models through LiteLLM.
 
 - **Runner** — multiple models × multiple tasks × temperature variations, with timeouts and error handling.
-- **Task loader** — reads and validates YAML task suites from `tasks/`.
-- **Safety probes** — 25–30 prompts across the Llama Guard hazard taxonomy (harmful content, academic dishonesty, sensitive data disclosure, jailbreak resistance).
-- **Efficacy metrics** — ROUGE-L for text overlap; latency and token counts captured per call; LLM-as-judge for graded scoring on open-ended tasks.
+- **Task loader** — reads and validates YAML efficacy task suites from `tasks/`.
+- **Efficacy metrics** — ROUGE-L for text overlap; LLM-as-judge for graded scoring on open-ended tasks.
+- **Variation testing** — N rephrased prompts per task, measure response consistency (Charley Kneifel).
+- **Operational metrics** — latency, token usage, cost, failure rate per call (ITSO: availability is part of CIA).
 - **Comparator** — structured side-by-side output across N models, feeds the recommendation engine.
 
-Output: `EvalRun` + `EvalResult` rows in Postgres.
+Output: `EvalRun` + `TaskResult` rows in Postgres.
 
 ### API — `api/`
 
@@ -73,7 +105,9 @@ FastAPI service wrapping both pillars. Async-by-default: long-running scans and 
 | `GET /scans/{id}` | status + structured results |
 | `GET /models` | inventory with latest risk score per model |
 | `GET /models/{id}` | full report — scan + eval + safety history |
-| `POST /evals` | submit an eval run (list of model IDs + task suite) |
+| `POST /safety` | submit a safety probe run (model IDs + deployment context) |
+| `GET /safety/{id}` | safety profile + per-category pass/fail |
+| `POST /evals` | submit an efficacy eval run (list of model IDs + task suite) |
 | `GET /evals/{id}` | results, including cross-model comparison |
 
 ### Async jobs — Celery + Redis

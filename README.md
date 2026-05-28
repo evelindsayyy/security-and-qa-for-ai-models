@@ -1,6 +1,6 @@
 # Security & QA Tools for Duke's AI Models
 ### Code+ 2026 — Duke Office of Information Technology
-> **Draft** — subject to change as scope is confirmed with stakeholders
+> **Draft** — subject to change
 
 ---
 
@@ -60,9 +60,14 @@ Produces comparative analytics to help Duke OIT choose the right model for each 
 
 ---
 
-## Team
+## Team & Tracks
 
-Grace Zhan · Jack Yi · Nithi Vechalapu · Raphael Karamagi
+Development is split into two tracks. The nutrition label still reports all three pillars (security, safety, efficacy). See [`docs/team-tracks.md`](docs/team-tracks.md) for track ownership and the 10-week schedule.
+
+| Track | Members | Focus |
+|-------|---------|-------|
+| **A — Security & Safety** | Raphael Karamagi, Nithi Vechalapu | Artifact scanning (Hugging Face), dependency CVEs, secrets; inference-time safety probes, jailbreaks, red teaming |
+| **B — Evaluation** | Grace Zhan, Jack Yi | Efficacy benchmarks via Duke AI Gateway, task suites, metrics, operational performance (latency, cost, reliability) |
 
 ---
 
@@ -84,16 +89,17 @@ Grace Zhan · Jack Yi · Nithi Vechalapu · Raphael Karamagi
 ## Repo Structure (High Level)
 
 ```
-scanner/        # Pillar 1: Security — artifact scanning, pure Python
-evaluator/      # Pillars 2+3: Safety + Efficacy — inference-time evaluation, pure Python
-tasks/          # YAML task suite definitions (Duke-specific prompts and safety probes)
+scanner/        # Track A: Security — artifact scanning (Hugging Face, pre-deploy)
+safety/         # Track A: Safety — inference-time probes, red teaming (gateway + on-prem)
+evaluator/      # Track B: Evaluation — efficacy benchmarks via Duke AI Gateway
+tasks/          # YAML task suites (efficacy prompts; safety probes under Track A coordination)
 api/            # Web API layer wrapping all three pillars
 frontend/       # Dashboard UI (stack TBD)
 testing/        # Spike scripts and exploratory work
-docs/           # Architecture, data model, API spec
+docs/           # Architecture, team tracks, data model, API spec
 ```
 
-See `docs/architecture.md` for system design and `docs/data-model.md` for DB schema (both in progress).
+See `docs/team-tracks.md` (schedule), `docs/tool-stack.md` (tools), and `docs/architecture.md` (system design).
 
 ---
 
@@ -145,8 +151,8 @@ Key variables will include:
 | Stack finalized | Pending stakeholder meetings |
 | GPU VM provisioned | Pending (George Bowen) |
 | Repo structure + CI | Week 2 |
-| Security scanner MVP | Weeks 3–4 |
-| Safety + efficacy evaluator MVP | Weeks 3–4 (parallel) |
+| Security & safety MVP (Track A) | Weeks 3–4 |
+| Evaluation MVP (Track B) | Weeks 3–4 (parallel) |
 | API layer + dashboard | Weeks 5–6 |
 | Integration + deployment | Week 7 |
 | Polish + handoff | Weeks 8–9 |
