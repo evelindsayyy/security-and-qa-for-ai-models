@@ -1,11 +1,15 @@
 # Documentation
 
-| Doc | Contents |
-|-----|----------|
-| [`team-tracks.md`](team-tracks.md) | Tracks, deployment context, 10-week plan |
-| [`tool-stack.md`](tool-stack.md) | **Decided tools** and what we are not using |
-| [`security-framework.md`](security-framework.md) | Track A pipelines, output, calibration |
-| [`evaluation-framework.md`](evaluation-framework.md) | Track B task ideas and benchmarks |
-| [`architecture.md`](architecture.md) | System design, API, database |
+Open-source technical reference. **Tasks:** GitLab — [`.gitlab/README.md`](../.gitlab/README.md).
 
-Track A spike: [`testing/security_scanning_tests/README.md`](../testing/security_scanning_tests/README.md)
+| Document | Contents |
+|----------|----------|
+| [`team-tracks.md`](team-tracks.md) | Tracks, weekly outcomes |
+| [`track-a-framework.md`](track-a-framework.md) | Scanning + safety → security pillar |
+| [`evaluation-framework.md`](evaluation-framework.md) | Efficacy pillar (Track B) |
+| [`gateway-models.md`](gateway-models.md) | Duke gateway model catalog and test tiers |
+| [`data-model.md`](data-model.md) | Postgres sketch, structured outputs |
+| [`tool-stack.md`](tool-stack.md) | Tools and rationale |
+| [`architecture.md`](architecture.md) | System design, API, flows |
+
+Spike (scanning): [`testing/security_scanning_tests/README.md`](../testing/security_scanning_tests/README.md)

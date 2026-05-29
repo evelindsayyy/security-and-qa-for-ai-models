@@ -1,6 +1,8 @@
 # Tool stack
 
-Quick reference. Pipelines: [`security-framework.md`](security-framework.md) (A), [`evaluation-framework.md`](evaluation-framework.md) (B). Schedule: [`team-tracks.md`](team-tracks.md).
+Technical reference for tool choices. Weekly work is tracked in **GitLab** (see [`.gitlab/README.md`](../.gitlab/README.md)).
+
+Pipelines: [`track-a-framework.md`](track-a-framework.md) (Track A) · [`evaluation-framework.md`](evaluation-framework.md) (Track B) · [`gateway-models.md`](gateway-models.md) · [`team-tracks.md`](team-tracks.md) (outcomes)
 
 **Status:** In use | Spike | Planned | Stretch | Not used (summer)
 
@@ -10,80 +12,89 @@ Quick reference. Pipelines: [`security-framework.md`](security-framework.md) (A)
 
 | Tool | Status | Role |
 |------|--------|------|
-| LiteLLM | In use | Duke AI Gateway; Track A safety probes, Track B evals. Spike: `testing/test_gateway.py` |
+| LiteLLM | In use | Duke AI Gateway; Track A safety, Track B efficacy (`testing/test_gateway.py`) |
 
 ---
 
-## Track A — decided stack
+## Track A (security pillar)
 
-One tool per job. Alternatives listed under [Not used](#track-a--not-used-summer) only.
-
-### Security (artifacts, pre-deploy)
+### Scanning (artifacts, pre-deploy)
 
 | Tool | Status | Role |
 |------|--------|------|
 | ModelScan | In use | ML file / format scan |
-| Fickling | In use | Pickle AST; always paired with ModelScan |
-| pip-audit | Spike → Planned | Dependency CVEs (week 4) |
-| OSV API | Spike | CVE lookup; complements pip-audit |
-| TruffleHog | Planned | Secrets in model repos (week 4) |
+| Fickling | In use | Pickle AST; paired with ModelScan |
+| pip-audit | Spike → Planned | Dependency CVEs |
+| OSV API | Spike | CVE lookup with pip-audit |
+| TruffleHog | Planned | Secrets in model repos |
 
 Spike: `testing/security_scanning_tests/`
 
-### Safety (gateway / on-prem inference)
+### Safety (inference / red team)
 
 | Tool | Status | Role |
 |------|--------|------|
-| garak | Planned (week 3–4) | Automated red-team probe runs via LiteLLM |
-| Duke probes (`safety/`) | Planned | Policy-specific prompts (academic integrity, Duke context) |
-| LiteLLM guardrails | Planned (doc, week 5) | Integration path for ITSO |
+| garak | Planned | Broad automated probes (jailbreak, injection, toxicity, leakage) via LiteLLM |
+| promptfoo | Planned | [Declarative red-team YAML](https://github.com/promptfoo/promptfoo), custom graders, CI; Duke policy and academic-integrity suites |
+| Duke probes | Planned | Duke-only prompts not covered by garak catalog (may live in `safety/promptfoo/`) |
+| LiteLLM guardrails | Planned (doc) | Gateway integration path (ITSO) |
 
-Probe categories follow Llama Guard taxonomy. Deployment context (`chatbot` / `agentic`, tools, guardrails) selects probe subsets.
+**Division of labor (avoid duplicate prompts):**
 
-### Track A — not used (summer)
+| Tool | Owns |
+|------|------|
+| garak | Wide vulnerability probe catalog, detector pass/fail |
+| promptfoo | Curated red-team scenarios, regression in GitLab CI, named policy tests |
+| Duke probes | Institutional policy wording if not encoded in promptfoo configs |
+
+Probe categories align with Llama Guard taxonomy. `deployment_context` selects subsets (chatbot vs agentic, guardrails on/off).
+
+### Not used (summer)
 
 | Tool | Reason |
 |------|--------|
-| PyRIT | Overlaps garak on prompt-based red team; adopt only if multi-turn campaigns are required (stretch, week 10) |
-| promptfoo | Overlaps garak + Duke probes on Track A; optional on Track B for efficacy regression only |
-| LLM Guard | Overlaps gateway guardrails; document LiteLLM hooks instead of a second middleware pilot |
+| PyRIT | Overlaps garak/promptfoo; stretch only if multi-turn campaigns required |
+| LLM Guard | Overlaps gateway guardrails; document LiteLLM hooks instead |
 | ART | Adversarial ML on loaded weights; not HF scan or chat APIs |
 | Watchtower | Overlaps ModelScan |
-| OWASP Dependency-Check | Use pip-audit + OSV unless gap analysis requires broader SCA |
+| OWASP Dependency-Check | Default: pip-audit + OSV |
 | Checkmarx, vulnhuntr | Out of scope |
-| Heretic | Research only (weight-level bypass limits) |
-| CycloneDX | Stretch (week 10 ML-BOM) |
+| Heretic | Research only |
+| CycloneDX | Stretch (ML-BOM) |
 
 ---
 
-## Track B — decided stack
+## Track B (efficacy pillar)
 
 | Tool | Status | Role |
 |------|--------|------|
-| LiteLLM | In use | Inference |
-| Duke YAML suites | Planned | Primary tasks (`tasks/`, rubrics) |
+| LiteLLM | In use | Gateway inference |
+| Duke YAML suites | Planned | Primary efficacy tasks (`tasks/`, rubrics) |
 | ROUGE-L | Planned | Summarization |
 | LLM-as-judge | Planned | Graded tasks |
 | IFEval / DocBench-style | Evaluate | Optional benchmark subsets |
-| promptfoo | Evaluate | Optional multi-model matrices only |
 
-Reference only (not in pipeline): MT-Bench, AlpacaEval, full SWE-bench, HELM. See [`evaluation-framework.md`](evaluation-framework.md).
+Track B does **not** own red-team or jailbreak suites — those are Track A **safety**. Track B measures task quality and ops metrics.
+
+Reference only: MT-Bench, AlpacaEval, full SWE-bench, HELM. See [`evaluation-framework.md`](evaluation-framework.md).
 
 ---
 
+## Pipelines
 
 ```text
-HF model  →  ModelScan + Fickling + deps + secrets  →  ScanResult
-Gateway   →  garak + Duke probes (LiteLLM)           →  SafetyResult
+Scanning     → ModelScan + Fickling + deps + secrets → ScanResult   } security pillar
+Safety       → garak + promptfoo + Duke probes       → SafetyResult } (Track A)
+Efficacy     → Duke tasks + metrics                  → EvalRun      (Track B)
 ```
 
 ---
 
 ## Open decisions
 
-| Item | Default if unresolved |
-|------|------------------------|
+| Item | Default |
+|------|---------|
 | OWASP Dependency-Check vs pip-audit | pip-audit + OSV |
 | Watchtower | Skip |
+| Trivy (teammate spike) | Defer unless standup adopts |
 | PyRIT | Stretch only |
-| promptfoo on Track A | No |

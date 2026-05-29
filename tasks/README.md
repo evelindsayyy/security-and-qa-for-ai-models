@@ -1,6 +1,6 @@
 # Tasks (Track B)
 
-Implemented by **Grace and Jack**. Track A (security and safety) does not add files here.
+Implemented by **Grace and Jack**. Track A (scanning and safety — security pillar) does not add task suites here.
 
 | Path | Status |
 |------|--------|

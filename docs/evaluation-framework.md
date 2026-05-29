@@ -1,8 +1,12 @@
 # Evaluation (Track B)
 
-Track A: [`security-framework.md`](security-framework.md). Tools: [`tool-stack.md`](tool-stack.md). Schedule: [`team-tracks.md`](team-tracks.md).
+Track A (security pillar): [`track-a-framework.md`](track-a-framework.md). Tools: [`tool-stack.md`](tool-stack.md). Schedule: [`team-tracks.md`](team-tracks.md).
 
 Track B implements `tasks/` and `evaluator/`. This doc lists proposed suites and benchmark references.
+
+Gateway models and test tiers (shared with Track A): [`gateway-models.md`](gateway-models.md). Structured outputs: [`data-model.md`](data-model.md). GitLab issues: [`.gitlab/README.md`](../.gitlab/README.md) §8.
+
+**Red team** (jailbreaks, academic dishonesty, harm probes) is Track A **safety** — garak and promptfoo in [`tool-stack.md`](tool-stack.md). Track B measures task quality, not policy bypass.
 
 ---
 
@@ -33,7 +37,7 @@ Record latency, tokens, cost, and failure rate on every run.
 | Coding snippet | CS, CoLab | Short code help — not full repos |
 | Variation consistency | All | N rephrased prompts per intent |
 
-**Not in Track B:** harm, jailbreaks, academic dishonesty (Track A safety).
+**Not in Track B:** harm, jailbreaks, academic dishonesty (Track A **safety**, security pillar).
 
 ---
 

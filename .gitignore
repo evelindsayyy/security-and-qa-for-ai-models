@@ -7,8 +7,6 @@ testing/security_scanning_tests/.env
 .DS_Store
 __pycache__/
 
-CONTEXT.md
-
 # security scanning test runtime data (large, machine-local — lives on dgx after bind mount)
 testing/security_scanning_tests/models/
 testing/security_scanning_tests/output/
