@@ -1,0 +1,64 @@
+# Public benchmark catalog for Track B evaluation.
+# Items here are reference or import candidates — not all are run in production.
+# See docs/evaluation-framework.md for Duke mapping and scope.
+
+version: 1
+
+# Public benchmark reference for Track B. Duke task ideas: docs/evaluation-framework.md
+
+benchmarks:
+  - id: duke_it_support
+    source: internal
+    duke_use_case: it_support
+    run_via_gateway: true
+    status: in_development
+    notes: Primary suite; rubric in tasks/rubrics/it_support.yaml
+
+  - id: ifeval
+    source: https://github.com/google-research/google-research/tree/master/instruction_following_eval
+    duke_use_case: instruction_compliance
+    run_via_gateway: true
+    status: candidate_pilot
+    notes: Verifiable constraints; small subset for week 3-4 pilot
+
+  - id: docbench
+    source: https://github.com/Anni-Zou/DocBench
+    duke_use_case: summarization
+    run_via_gateway: true
+    status: candidate
+    notes: Document QA; license review before importing prompts
+
+  - id: mt_bench
+    source: https://github.com/lm-sys/FastChat/tree/main/fastchat/llm_judge
+    duke_use_case: general_chat_quality
+    run_via_gateway: partial
+    status: reference
+    notes: Multi-turn patterns; use published scores where possible
+
+  - id: swe_bench
+    source: https://www.swebench.com/
+    duke_use_case: software_engineering
+    run_via_gateway: false
+    status: reference_only
+    notes: Full harness not suited to gateway chat API; cite external leaderboard
+
+  - id: swe_bench_lite
+    source: https://www.swebench.com/lite.html
+    duke_use_case: coding_assist
+    run_via_gateway: partial
+    status: evaluate
+    notes: Optional single-file coding prompts only
+
+  - id: berkeley_function_calling
+    source: https://gorilla.cs.berkeley.edu/leaderboard.html
+    duke_use_case: agentic_tools
+    run_via_gateway: partial
+    status: candidate
+    notes: Aligns with ITSO agentic deployment context
+
+  - id: truthfulqa
+    source: https://github.com/sylinrl/TruthfulQA
+    duke_use_case: factuality
+    run_via_gateway: true
+    status: candidate
+    notes: Small sample for policy and general knowledge column

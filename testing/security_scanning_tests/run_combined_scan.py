@@ -1,4 +1,4 @@
-"""merge modelscan + fickling into one json — see docs/scanner-output-format.md."""
+"""merge modelscan + fickling into one json — see docs/security-framework.md."""
 
 from datetime import datetime, timezone
 
