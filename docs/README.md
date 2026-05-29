@@ -1,11 +1,11 @@
-# Documentation index
+# Documentation
 
-| Doc | Audience | Contents |
-|-----|----------|----------|
-| [`team-tracks.md`](team-tracks.md) | Whole team | Tracks, deployment context, 10-week schedule |
-| [`architecture.md`](architecture.md) | Whole team | System design, API, database sketch |
-| [`security-framework.md`](security-framework.md) | Track A | Artifact scanning, safety probes, output format, calibration |
-| [`evaluation-framework.md`](evaluation-framework.md) | Track B | Efficacy task ideas, public benchmarks (reference) |
-| [`tool-stack.md`](tool-stack.md) | Whole team | Tools by track and status |
+| Doc | Contents |
+|-----|----------|
+| [`team-tracks.md`](team-tracks.md) | Tracks, deployment context, 10-week plan |
+| [`tool-stack.md`](tool-stack.md) | **Decided tools** and what we are not using |
+| [`security-framework.md`](security-framework.md) | Track A pipelines, output, calibration |
+| [`evaluation-framework.md`](evaluation-framework.md) | Track B task ideas and benchmarks |
+| [`architecture.md`](architecture.md) | System design, API, database |
 
-Track A spike (Docker, DGX): [`testing/security_scanning_tests/README.md`](../testing/security_scanning_tests/README.md)
+Track A spike: [`testing/security_scanning_tests/README.md`](../testing/security_scanning_tests/README.md)

@@ -67,16 +67,13 @@ Output: a `ScanResult` document persisted to Postgres. Details: [`security-frame
 
 ### Safety — `safety/` (Safety — Track A)
 
-Python, inference-level **policy and harm** evaluation. Calls Duke Gateway (or on-prem) models through the LiteLLM OpenAI-compatible API.
+Inference-level policy and harm checks via LiteLLM (gateway or on-prem).
 
-- **Safety probe runner** — 25–30 prompts across the Llama Guard hazard taxonomy (harmful content, academic dishonesty, sensitive data disclosure, jailbreak resistance).
-- **Red teaming suite** — structured bypass / guardrail tests (Week 4+, per ITSO).
-- **Deployment context** — probe set varies by chatbot vs agentic, tools connected, guardrails on/off.
-- **Classifier** — pattern matching baseline; evaluate **[LLM Guard](tool-stack.md)** (Protect AI, MIT, input/output scanners) as middleware alternative.
-- **Red teaming** — evaluate **[promptfoo](tool-stack.md)** for declarative probe suites + CI; ITSO has no formal framework today.
-- **LiteLLM guardrails** — document hook path for Duke gateway (ITSO direction); see `tool-stack.md`.
+- **garak** — automated probe runs (jailbreak, injection, toxicity, leakage).
+- **Duke probes** — in-repo policy prompts (academic integrity, institutional context).
+- **Deployment context** — probe set by chatbot vs agentic, tools, guardrails.
 
-Output: `SafetyResult` rows in Postgres. Primary for gateway models today even when file scanning is N/A. See [`security-framework.md`](security-framework.md).
+Output: `SafetyResult` in Postgres. See [`security-framework.md`](security-framework.md), [`tool-stack.md`](tool-stack.md).
 
 ### Evaluator — `evaluator/` (Efficacy — Track B)
 
@@ -242,5 +239,5 @@ sequenceDiagram
 - Async backend — Celery + Redis is the default; SLURM only if Duke OIT exposes the cluster scheduler from the GPU VM.
 - Frontend stack — Next.js + Tailwind is the working choice; Streamlit is a fallback if frontend ownership becomes a problem.
 - Auth — Duke Shibboleth preferred; prototype may run unauthenticated behind the VM firewall.
-- AI Gateway / LiteLLM guardrail hooks — document integration path (Michael Faber, ITSO); prototype can ship without implementing hooks.
+- LiteLLM guardrail hooks — document integration path (week 5); prototype may ship without hooks.
 - Public benchmark pilot — IFEval vs DocBench-style subset (see evaluation-framework).

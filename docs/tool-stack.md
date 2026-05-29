@@ -1,82 +1,89 @@
 # Tool stack
 
-Index: [`README.md`](README.md). Track A approach: [`security-framework.md`](security-framework.md). Track B approach: [`evaluation-framework.md`](evaluation-framework.md).
+Quick reference. Pipelines: [`security-framework.md`](security-framework.md) (A), [`evaluation-framework.md`](evaluation-framework.md) (B). Schedule: [`team-tracks.md`](team-tracks.md).
 
-Status: **In use** | **Spike** | **Planned** | **Evaluate** | **Stretch** | **Out of scope**
-
----
-
-## LiteLLM (both tracks) — In use
-
-Open-source proxy (MIT). Duke AI Gateway routes through it. Track A uses it for safety probes; Track B for efficacy benchmarks. ITSO asked to document native guardrail hooks (Planned, week 5 docs). Spike: `testing/test_gateway.py`.
+**Status:** In use | Spike | Planned | Stretch | Not used (summer)
 
 ---
 
-## Track A — Security and safety
+## Shared
 
-### Artifact security
-
-| Tool | Vendor | Status | Role |
-|------|--------|--------|------|
-| ModelScan | Protect AI | In use | ML format scanning; 0.8.x skips many files (gap map in progress) |
-| Fickling | Trail of Bits | In use | Pickle AST analysis; pair with ModelScan (false positives on legacy `.bin`) |
-| OSV API | Google | Spike | CVE lookup without install |
-| pip-audit | PyPA | Spike | Dependency audit; production pipeline week 4 |
-| TruffleHog | Truffle Security | Planned | Secrets in repos (week 4) |
-| OWASP Dependency-Check | OWASP | Evaluate | Broader SCA; compare to pip-audit + OSV |
-| Watchtower | AI Shield | Evaluate | Overlaps ModelScan stack; adopt only if gap map justifies |
-| CycloneDX | OWASP | Stretch | ML-BOM / SBOM (week 10) |
-
-Spike path: `testing/security_scanning_tests/`
-
-### Safety (inference)
-
-| Tool | Vendor | Status | Role |
-|------|--------|--------|------|
-| LLM Guard | Protect AI | Evaluate | Input/output scanners (injection, PII, toxicity); MIT, same vendor as ModelScan |
-| promptfoo | promptfoo.dev | Evaluate | Red-team YAML suites (Track A); optional efficacy regression (Track B) |
-| LiteLLM guardrails | BerriAI | Planned | Document gateway integration (ITSO) |
-| Llama Guard taxonomy | Meta | Planned | Hazard categories for probe design |
-| Heretic | OSS (p-e-w) | Stretch | Weight-level alignment removal; research/limitations only |
-
-### Out of scope (summer)
-
-Checkmarx (enterprise). vulnhuntr (AI-generated app code, future project). Developer Assist (product TBD).
+| Tool | Status | Role |
+|------|--------|------|
+| LiteLLM | In use | Duke AI Gateway; Track A safety probes, Track B evals. Spike: `testing/test_gateway.py` |
 
 ---
 
-## Track B — Evaluation
+## Track A — decided stack
 
-| Tool / source | Status | Role |
-|---------------|--------|------|
-| LiteLLM | In use | Gateway inference |
+One tool per job. Alternatives listed under [Not used](#track-a--not-used-summer) only.
+
+### Security (artifacts, pre-deploy)
+
+| Tool | Status | Role |
+|------|--------|------|
+| ModelScan | In use | ML file / format scan |
+| Fickling | In use | Pickle AST; always paired with ModelScan |
+| pip-audit | Spike → Planned | Dependency CVEs (week 4) |
+| OSV API | Spike | CVE lookup; complements pip-audit |
+| TruffleHog | Planned | Secrets in model repos (week 4) |
+
+Spike: `testing/security_scanning_tests/`
+
+### Safety (gateway / on-prem inference)
+
+| Tool | Status | Role |
+|------|--------|------|
+| garak | Planned (week 3–4) | Automated red-team probe runs via LiteLLM |
+| Duke probes (`safety/`) | Planned | Policy-specific prompts (academic integrity, Duke context) |
+| LiteLLM guardrails | Planned (doc, week 5) | Integration path for ITSO |
+
+Probe categories follow Llama Guard taxonomy. Deployment context (`chatbot` / `agentic`, tools, guardrails) selects probe subsets.
+
+### Track A — not used (summer)
+
+| Tool | Reason |
+|------|--------|
+| PyRIT | Overlaps garak on prompt-based red team; adopt only if multi-turn campaigns are required (stretch, week 10) |
+| promptfoo | Overlaps garak + Duke probes on Track A; optional on Track B for efficacy regression only |
+| LLM Guard | Overlaps gateway guardrails; document LiteLLM hooks instead of a second middleware pilot |
+| ART | Adversarial ML on loaded weights; not HF scan or chat APIs |
+| Watchtower | Overlaps ModelScan |
+| OWASP Dependency-Check | Use pip-audit + OSV unless gap analysis requires broader SCA |
+| Checkmarx, vulnhuntr | Out of scope |
+| Heretic | Research only (weight-level bypass limits) |
+| CycloneDX | Stretch (week 10 ML-BOM) |
+
+---
+
+## Track B — decided stack
+
+| Tool | Status | Role |
+|------|--------|------|
+| LiteLLM | In use | Inference |
 | Duke YAML suites | Planned | Primary tasks (`tasks/`, rubrics) |
-| ROUGE-L | Planned | Summarization overlap (week 3) |
-| LLM-as-judge | Planned | Graded tasks (week 5); human validation week 8 |
-| promptfoo | Evaluate | Optional multi-model efficacy matrices |
-| IFEval, DocBench, QASPER | Evaluate | API-friendly subsets; see `evaluation-framework.md` |
-| MT-Bench, AlpacaEval | Reference | Prompt and judge patterns |
-| SWE-bench (full) | Out of scope | Requires coding agent + repo; not default gateway eval |
-| SWE-bench Lite / HumanEval | Evaluate | Optional coding-snippet column |
-| Berkeley Function Calling Leaderboard | Evaluate | Agentic / tool-use scenarios |
-| HELM, Chatbot Arena | Reference | External context on nutrition label |
+| ROUGE-L | Planned | Summarization |
+| LLM-as-judge | Planned | Graded tasks |
+| IFEval / DocBench-style | Evaluate | Optional benchmark subsets |
+| promptfoo | Evaluate | Optional multi-model matrices only |
 
-Details: [`evaluation-framework.md`](evaluation-framework.md)
+Reference only (not in pipeline): MT-Bench, AlpacaEval, full SWE-bench, HELM. See [`evaluation-framework.md`](evaluation-framework.md).
 
 ---
 
-## Proposed stack
 
-**Track A:** ModelScan + Fickling + pip-audit/OSV + TruffleHog; LLM Guard or custom probes + promptfoo; LiteLLM transport.
-
-**Track B:** LiteLLM + ROUGE-L + LLM-as-judge + efficacy YAML; ops metrics on every call.
+```text
+HF model  →  ModelScan + Fickling + deps + secrets  →  ScanResult
+Gateway   →  garak + Duke probes (LiteLLM)           →  SafetyResult
+```
 
 ---
 
-## Open decisions (week 2)
+## Open decisions
 
-- OWASP Dependency-Check vs pip-audit + OSV (one-page comparison)
-- LLM Guard pilot: three gateway models, latency and false-positive rate
-- promptfoo: five safety probes, three efficacy tasks
-- Watchtower: skip unless gap analysis requires it
-- LiteLLM guardrail integration path for OIT/ITSO
+| Item | Default if unresolved |
+|------|------------------------|
+| OWASP Dependency-Check vs pip-audit | pip-audit + OSV |
+| Watchtower | Skip |
+| PyRIT | Stretch only |
+| promptfoo on Track A | No |
