@@ -1,8 +1,8 @@
 # security scanning tests
 
-dockerized spike for pillar 1 — download a model, run modelscan + fickling, write json reports.
+dockerized spike for **scanning** (security pillar) — download a model, run modelscan + fickling, write json reports.
 
-docs: [`docs/security-framework.md`](../../docs/security-framework.md)
+docs: [`docs/track-a-framework.md`](../../docs/track-a-framework.md)
 
 ---
 
@@ -107,11 +107,7 @@ python schemas_demo.py        # validates output against ScanResult model
 
 see `schemas.py` for `ScanRequest`, `ScanResult`, `Finding`, `Severity`.
 
-### isolation research
-
-read [`ISOLATION.md`](ISOLATION.md) — why scans run in docker, not in the future API process.
-
-docs index: [`docs/README.md`](../../docs/README.md)
+docs: [`docs/README.md`](../../docs/README.md). Track A tasks: [`.gitlab/README.md`](../../.gitlab/README.md).
 
 do **not** run python on the dgx host — deps only exist inside the container.
 

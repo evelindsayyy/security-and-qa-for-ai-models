@@ -1,8 +1,8 @@
 """
-pydantic data shapes for pillar 1 security scanning.
+pydantic data shapes for Track A scanning (security pillar).
 
 week 2 spike — will move to scanner/schemas.py when we extract production package.
-aligned with docs/security-framework.md and ITSO requirement to reconcile tool disagreement.
+aligned with docs/track-a-framework.md and ITSO requirement to reconcile tool disagreement.
 
 reconciliation note (gpt2 lesson):
   fickling may say LIKELY_UNSAFE while modelscan says 0 issues on a known-safe model.

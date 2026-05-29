@@ -6,13 +6,15 @@ Code+ 2026 — Duke Office of Information Technology
 
 ## Overview
 
-Duke's AI Gateway publishes models to 40,000+ community members but lacks automated vetting before publication. This project produces a **nutrition label** per model across three pillars:
+Duke's AI Gateway publishes models to 40,000+ community members but lacks automated vetting before publication. This project produces a **nutrition label** per model across two pillars:
 
-| Pillar | Question |
-|--------|----------|
-| **Security** | Can model files or dependencies compromise Duke infrastructure? |
-| **Safety** | Can the model be used to cause harm or violate policy at inference time? |
-| **Efficacy** | How well does the model perform on Duke-relevant tasks (IT support, coursework help, research, med education, creative writing, summarization, and related MVP suites)? |
+| Pillar | Part | Question |
+|--------|------|----------|
+| **Security** | **Scanning** | Can model files or dependencies compromise Duke infrastructure? |
+| **Security** | **Safety** | Can the model be used to cause harm or violate policy at inference time? |
+| **Efficacy** | | How well does the model perform on Duke-relevant tasks (IT support, coursework help, research, med education, creative writing, summarization, and related MVP suites)? |
+
+**Track A** (scanning + safety) delivers the **security** pillar. **Track B** delivers **efficacy**.
 
 Deliverable: structured, publishable results for OIT and the AI Gateway — depth on ~10 gateway models today, with a path to on-prem open-source models later.
 
@@ -34,10 +36,12 @@ Deliverable: structured, publishable results for OIT and the AI Gateway — dept
 
 | Track | Members | Focus |
 |-------|---------|-------|
-| **A — Security & Safety** | Raphael Karamagi, Nithi Vechalapu | HF artifact scanning, CVEs, secrets; safety probes, red teaming |
+| **A — Scanning & Safety** | Raphael Karamagi, Nithi Vechalapu | Security pillar: HF scanning, CVEs, secrets; inference safety and red team |
 | **B — Evaluation** | Grace Zhan, Jack Yi | Efficacy benchmarks, task suites, metrics, operational performance |
 
-Details: [`docs/team-tracks.md`](docs/team-tracks.md) · [`docs/security-framework.md`](docs/security-framework.md) (Track A) · [`docs/evaluation-framework.md`](docs/evaluation-framework.md) (Track B)
+Docs: [`docs/README.md`](docs/README.md) · Track A: [`docs/track-a-framework.md`](docs/track-a-framework.md) · Track B: [`docs/evaluation-framework.md`](docs/evaluation-framework.md)
+
+**Planning:** GitLab — [`.gitlab/README.md`](.gitlab/README.md) (`[Track A]`, `[Track B]`, `[Team]` issues)
 
 ---
 
@@ -45,8 +49,9 @@ Details: [`docs/team-tracks.md`](docs/team-tracks.md) · [`docs/security-framewo
 
 | Today | Coming |
 |-------|--------|
-| ~10 Azure/OpenAI models on AI Gateway (cloud, guardrails) | On-prem GPU hosting of open-source Hugging Face models |
-| Efficacy and safety probes are highest priority | File-level security scanning becomes critical pre-deploy |
+| ~10 **gateway** models (Azure/OpenAI/Meta cloud APIs — see [`docs/gateway-models.md`](docs/gateway-models.md)) | On-prem HF hosting (then **scanning** + safety on those repos) |
+| **Safety** and efficacy run against gateway IDs via LiteLLM | **Scanning** on HF artifacts before deploy |
+| Mistral phased out — exclude from new tests | Confirm catalog with OIT |
 
 Evaluation is **deployment-aware** (chatbot vs agentic, tools, data access, guardrails, commercial vs OSS). See ITSO notes in [`docs/team-tracks.md`](docs/team-tracks.md).
 
@@ -55,8 +60,8 @@ Evaluation is **deployment-aware** (chatbot vs agentic, tools, data access, guar
 ## Repository layout
 
 ```
-scanner/        # Track A: artifact security (Hugging Face)
-safety/         # Track A: inference-time safety probes
+scanner/        # Track A: scanning (HF artifacts)
+safety/         # Track A: safety (inference / red team)
 evaluator/      # Track B: efficacy evaluation via AI Gateway
 tasks/          # YAML task suites and rubrics
 api/            # FastAPI (planned)
