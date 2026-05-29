@@ -1,0 +1,19 @@
+services:
+  scanner-trivy:
+    build:
+      context: ../..
+      dockerfile: testing/security_scanning_tests/Dockerfile2
+
+    user: "${UID}:${GID}"
+
+    volumes:
+      - ./models:/models
+      - ./output:/output
+
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+      - MODEL_ID=${MODEL_ID:-distilbert-base-uncased}
+      - HF_HOME=/models/.cache/huggingface
+
+    stdin_open: true
+    tty: true

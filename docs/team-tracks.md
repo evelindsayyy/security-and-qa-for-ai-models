@@ -1,168 +1,74 @@
 # Team tracks and schedule
 
-Code+ 2026 — Duke OIT. The **nutrition label** has three pillars (security, safety, efficacy). Development is split into **two tracks**.
+Code+ 2026 — Duke OIT. The nutrition label has two pillars — **security** (scanning + safety) and **efficacy**.
 
-Related: [`README.md`](README.md) (index) · [`architecture.md`](architecture.md) · [`security-framework.md`](security-framework.md) · [`evaluation-framework.md`](evaluation-framework.md) · [`tool-stack.md`](tool-stack.md)
+**Execution (tasks):** GitLab — [`.gitlab/README.md`](../.gitlab/README.md) (Track A, Track B, Team).
+
+| Doc | Contents |
+|-----|----------|
+| [`track-a-framework.md`](track-a-framework.md) | Track A: scanning, safety, security pillar |
+| [`gateway-models.md`](gateway-models.md) | Duke gateway catalog; HF scan list; test tiers |
+| [`data-model.md`](data-model.md) | Postgres sketch; structured outputs |
+| [`evaluation-framework.md`](evaluation-framework.md) | Track B task design |
+| [`tool-stack.md`](tool-stack.md) | Tools and rationale |
+| [`architecture.md`](architecture.md) | System design |
 
 ---
 
 ## Tracks
 
-| Track | Members | Owns | Code |
-|-------|---------|------|------|
-| **A — Security & Safety** | Raphael Karamagi, Nithi Vechalapu | HF artifact scanning, dependency CVEs, secrets; inference safety (probes, jailbreaks, red team) | `scanner/`, `safety/` |
-| **B — Evaluation** | Grace Zhan, Jack Yi | Efficacy benchmarks, gateway runner, task suites, metrics, ops performance | `evaluator/`, `tasks/` |
+| Track | Members | Delivers | Code |
+|-------|---------|----------|------|
+| **A — Scanning & Safety** | Raphael Karamagi, Nithi Vechalapu | **Security** pillar (scanning + safety) | `scanner/`, `safety/` |
+| **B — Evaluation** | Grace Zhan, Jack Yi | **Efficacy** pillar | `evaluator/`, `tasks/` |
 
-| Pillar | Track |
-|--------|-------|
-| Security (files) | A |
-| Safety (outputs) | A |
-| Efficacy (performance) | B |
-
----
-
-## Duke deployment context
-
-**Today:** ~10 Azure/OpenAI gateway models (cloud, contract guardrails). Track B (efficacy) is the primary OIT need. Track A still runs safety probes on gateway models. File scanning is lower priority until on-prem OSS.
-
-**Soon:** On-prem GPU deployment of open-source Hugging Face models. Track A file scanning becomes critical before models touch Duke infrastructure.
-
-**ITSO:** Evaluation must reflect deployment context — chatbot vs agentic, tools, data access, guardrails, commercial vs OSS. Store as `deployment_context` on each model.
-
-| Deployment | Track A | Track B |
-|------------|---------|---------|
-| Cloud gateway (guarded) | Safety, red team | Efficacy (primary) |
-| OSS on-prem | Security scan + safety | Efficacy |
-| Unknown HF repo | Security scan + safety | Optional |
+| Label part | Track A component | Question |
+|------------|-------------------|----------|
+| Security → **Scanning** | `scanner/` | Files, deps, secrets |
+| Security → **Safety** | `safety/` | Harm, policy, red team |
+| **Efficacy** | `evaluator/` | Task performance |
 
 ---
 
-## Tool stack (summary)
+## Deployment context
 
-| Track | Primary |
-|-------|---------|
-| A | ModelScan, Fickling, pip-audit, OSV, TruffleHog; LLM Guard and promptfoo (evaluate); LiteLLM for probes |
-| B | LiteLLM, ROUGE-L, LLM-as-judge, Duke YAML suites, adapted public benchmarks (see evaluation-framework) |
-| Shared | LiteLLM to Duke AI Gateway |
+~10 cloud gateway models today; on-prem Hugging Face models coming. Store `deployment_context` per model (chatbot vs agentic, tools, guardrails). ITSO: safety and efficacy probes must match deployment type.
 
-Evaluate: OWASP Dependency-Check, Watchtower. Stretch: CycloneDX ML-BOM, LiteLLM guardrail hooks. Out of scope: Checkmarx, vulnhuntr (summer).
-
-Details: [`tool-stack.md`](tool-stack.md)
+| Deployment | Scanning | Safety | Efficacy |
+|------------|----------|--------|----------|
+| Cloud gateway | Lower priority | Yes | Yes |
+| OSS on-prem | Yes | Yes | Yes |
+| Unknown HF repo | Yes | Yes | Optional |
 
 ---
 
-## 10-week schedule
+## Tool summary
 
-### Week 1 — Complete
+| Track | Stack |
+|-------|--------|
+| A — scanning | ModelScan, Fickling, pip-audit, OSV, TruffleHog |
+| A — safety | garak, promptfoo, Duke probes |
+| B | LiteLLM, Duke YAML suites, ROUGE-L, LLM-as-judge |
 
-| | Deliverables |
-|---|--------------|
-| **Team** | Repo scaffold; stakeholder calls with Charley Kneifel and Michael Faber; `docs/architecture.md`; gateway test |
-| **Track A** | Tool research (ModelScan, Fickling); architecture draft |
-| **Track B** | `testing/test_gateway.py` working against Duke AI Gateway |
-
----
-
-### Week 2 — Current
-
-| | Deliverables |
-|---|--------------|
-| **Team** | Problem statement in `docs/`; data model sketch with `deployment_context`; Docker Compose (API + DB + worker target); GitLab CI (lint, docker build); nutrition label layout (Grace mockups) |
-| **Track A** | File-scan spike on DGX (see `security-framework.md`). Remaining: gap map; scope lock; tool decisions; guardrail path doc; `SafetyResult` schema; safety probes (week 3+) |
-| **Track B** | Implement task YAML and evaluator; see proposed ideas in `evaluation-framework.md` (doc only) |
+Details: [`tool-stack.md`](tool-stack.md).
 
 ---
 
-### Week 3
+## Weekly outcomes
 
-| | Deliverables |
-|---|--------------|
-| **Team** | Both tracks produce structured output from real gateway or HF data |
-| **Track A** | ModelScan + fickling reconciled into one `ScanResult`; format detector (safetensors vs pickle vs ONNX); initial risk scorer (tool disagreement handling); safety probe runner on gateway; begin `scanner/` and `safety/` extraction from spike |
-| **Track B** | Multi-model runner; task loader (Duke + benchmark subsets); ROUGE-L; variation-testing pipeline |
+Tasks live in GitLab. High-level goals:
 
----
+| Week | Team | Track A (scanning & safety) | Track B (efficacy) |
+|------|------|----------------------------|---------------------|
+| 1 | Scaffold, architecture, gateway test | Tool research (done) | Gateway test (done) |
+| 2 | Data model, catalog, Docker, CI, mockups | HF scan regression; gap map; SafetyResult; promptfoo on **1 gateway** model | Schemas; loader; gateway smoke |
+| 3 | Structured output | scanner/ + safety/; safety on **1 gateway** model | Multi-model runner; IT support E2E |
+| 4 | E2E + unit tests | Scan E2E; garak + promptfoo on **3 gateway** models | Core suites; align pilot models with Track A |
+| 5 | **API, Celery, Postgres** | `/scans`, `/safety` | `/evals`, LLM-as-judge |
+| 6 | **Dashboard** | Scanning + safety UI | Efficacy charts |
+| 7 | Demo, **freeze** | Security pillar complete on gateway + HF samples | Gateway efficacy runs |
+| 8 | Hardening | Scanning FP study ~50 HF models | Judge validation |
+| 9 | Handoff | Limitations, ADRs | Eval limitations, runbooks |
+| 10 | Stretch (1–2) | Optional scanning/safety extras | Optional suites / benchmarks |
 
-### Week 4
-
-| | Deliverables |
-|---|--------------|
-| **Team** | End-to-end pipelines per track; unit tests |
-| **Track A** | Dependency scanning (pip-audit + OSV) in pipeline; TruffleHog for secrets; risk formula (low/medium/high/critical, NIST AI RMF language); model ID in, `ScanResult` JSON out; red-team probe design (prompt injection, jailbreaks); LLM Guard / promptfoo pilot results |
-| **Track B** | Full Duke suites; pilot adapted benchmark subset (IFEval or DocBench-style); ops metrics; comparator |
-
----
-
-### Week 5
-
-| | Deliverables |
-|---|--------------|
-| **Team** | REST API, background jobs, Postgres persistence |
-| **Track A** | `POST/GET /scans`; `POST/GET /safety` (or combined safety endpoint); scan jobs via Celery |
-| **Track B** | `POST/GET /evals`; LLM-as-judge scoring; eval jobs via Celery |
-| **Team** | Nutrition label API endpoint (all pillars); document LiteLLM guardrail integration path |
-
----
-
-### Week 6
-
-| | Deliverables |
-|---|--------------|
-| **Team** | Dashboard on DGX; production Docker Compose |
-| **Track A** | Security findings drill-down; safety heatmap (Grace mockup alignment) |
-| **Track B** | Efficacy comparison charts; quality suite matrix |
-| **Team** | Nutrition label as publishable view; commercial vs OSS visible in UI |
-
----
-
-### Week 7 — Demo and scope freeze
-
-| | Deliverables |
-|---|--------------|
-| **Team** | Run against all Duke gateway models; demo to stakeholders; triage feedback; **feature freeze** for weeks 8–9 |
-| **Track A** | Gateway safety results; HF scan samples where applicable; red-team summary |
-| **Track B** | Gateway efficacy results; LLM-as-judge vs human correlation reported |
-| **Team** | Document known gaps before stakeholders ask |
-
----
-
-### Week 8
-
-| | Deliverables |
-|---|--------------|
-| **Team** | Hardening; performance and API security pass |
-| **Track A** | False-positive study (~50 HF models); calibrate from gpt2 baseline |
-| **Track B** | Judge validation on human-scored sample (target r > 0.7) |
-| **Team** | Fix demo feedback |
-
----
-
-### Week 9
-
-| | Deliverables |
-|---|--------------|
-| **Team** | Handoff package (deploy, maintain, extend); limitations doc; final demo prep |
-| **Track A** | Document scanner coverage limits (skipped files, poisoned weights, obfuscation) |
-| **Track B** | Document eval limits (long-context, multilingual, multi-turn) |
-| **Team** | ADRs for major design choices; CI/CD integration notes |
-
----
-
-### Week 10 — Stretch (pick 1–2)
-
-| Option | Track |
-|--------|-------|
-| CycloneDX ML-BOM generation | A |
-| Red teaming pipeline formalization | A |
-| Scheduled re-scanning (CVE feeds) | A |
-| LiteLLM guardrail hook prototype | A |
-| MCP/agent inventory doc | A |
-| GitLab CI snippet for auto-scan on model release | Team |
-
----
-
-## Shared ownership (all weeks)
-
-- `api/`, `frontend/`, PostgreSQL schema, Celery + Redis, GitLab CI
-- Nutrition label layout; week 7 demo
-- Spike code: `testing/security_scanning_tests/` (Track A, until migrated to `scanner/`)
+Shared all weeks: `api/`, `frontend/`, Postgres, Celery, GitLab CI, nutrition label UI.
