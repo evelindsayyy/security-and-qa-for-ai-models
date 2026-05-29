@@ -1,8 +1,10 @@
 # Data model (Postgres sketch)
 
+**Scope:** tables, columns, JSON field shapes. **Not here:** component diagrams or API flows — see [`architecture.md`](architecture.md).
+
 Shared reference for **Team** schema work and Track A/B structured outputs. Implementation: week 5 API; design starts week 2.
 
-Related: [`architecture.md`](architecture.md), [`gateway-models.md`](gateway-models.md).
+Related: [`gateway-models.md`](gateway-models.md).
 
 ---
 
@@ -99,7 +101,28 @@ erDiagram
 | A — safety | Red team run | `SafetyResult` (W2+) | `safety_runs`, `safety_findings` |
 | B — efficacy | Task suite run | `EvalRun`, `TaskResult` (Track B) | `eval_runs`, `eval_results` |
 
-Spike files today: `testing/security_scanning_tests/schemas.py`, `output/<model>/combined_scan.json`.
+Spike files today:
+
+| Track | File |
+|-------|------|
+| A — scanning | `testing/scanning/schemas.py`, `output/<model>/combined_scan.json` |
+| B — efficacy | `testing/eval/truthfulqa/` CSV columns below (W2); Pydantic TBD W3 |
+
+### TruthfulQA spike → `eval_results` (W2)
+
+Detail CSV columns map to future `eval_results` rows:
+
+| CSV column | DB field (target) |
+|------------|-------------------|
+| `provider_name` | logical provider alias |
+| `model` | `gateway_model_id` |
+| `row_index` | `task_id` or external id |
+| `correct` | `score` (0/1) |
+| `gold_letter`, `pred_letter` | store in `detail` JSONB |
+
+Summary CSV: `provider_name`, `model`, `n`, `accuracy` → aggregate on `eval_runs`.
+
+Committed sample: `testing/eval/output/samples/truthfulqa_w2_summary.csv`.
 
 ---
 

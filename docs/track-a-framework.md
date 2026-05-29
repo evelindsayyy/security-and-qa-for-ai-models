@@ -2,7 +2,7 @@
 
 Track A delivers the nutrition label **security** pillar through two parts: **scanning** (artifacts) and **safety** (inference / red team).
 
-Track B: [`evaluation-framework.md`](evaluation-framework.md). Tools: [`tool-stack.md`](tool-stack.md). Schedule: [`team-tracks.md`](team-tracks.md).
+Track B: [`track-b-framework.md`](track-b-framework.md). Tools: [`tool-stack.md`](tool-stack.md). Schedule: [`team-tracks.md`](team-tracks.md).
 
 ---
 
@@ -20,7 +20,7 @@ Track B: [`evaluation-framework.md`](evaluation-framework.md). Tools: [`tool-sta
 ## Scanning (artifacts)
 
 When: before on-prem or HF weights are deployed.  
-Where: `scanner/` (production), `testing/security_scanning_tests/` (spike).
+Where: `scanner/` (production), `testing/scanning/` (spike).
 
 ```text
 model_id → metadata (optional) → download → ModelScan + Fickling
@@ -68,7 +68,7 @@ Academic-dishonesty and jailbreak testing belong here, not in Track B efficacy s
 
 | Part | Artifact | Location |
 |------|----------|----------|
-| Scanning | `ScanResult` | Spike: `testing/security_scanning_tests/output/`; production: Postgres via `scanner/` |
+| Scanning | `ScanResult` | Spike: `testing/scanning/output/`; production: Postgres via `scanner/` |
 | Safety | `SafetyResult` | Production: Postgres via `safety/` |
 
 `ScanRequest`, `ScanResult`, `Finding` — `schemas.py` (spike). `SafetyResult` — see GitLab W2-2.
@@ -104,17 +104,29 @@ Do not block deploy on Fickling alone. Risk scorer must merge ModelScan and Fick
 
 ---
 
+## Week 2 status (end of Friday)
+
+| Done | Not done (→ W3) |
+|------|------------------|
+| ModelScan, Fickling, combined scan, `ScanResult` schemas | `SafetyResult` schemas |
+| HF regression: gpt2, distilbert, opt-125m | ModelScan gap map (final doc) |
+| OSV vs pip-audit spike; metadata listing | promptfoo gateway smoke |
+| Trivy spike added (`run_trivy.py`) — decision open | `scanner/` / `safety/` packages |
+| | Team: Docker Compose, CI, Postgres catalog |
+
+---
+
 ## Package roadmap (`scanner/` and `safety/`)
 
 | Week | `scanner/` | `safety/` |
 |------|------------|-----------|
-| W2 | Spike only (`testing/security_scanning_tests/`) | Schemas only |
+| W2 | Spike only (`testing/scanning/`) | Schemas only (slipped) |
 | W3 | Extract package; `risk_scorer`, `pipeline` v0 | `garak_runner`, `promptfoo/`, probes v0 |
 | W4 | deps, secrets, E2E `scan_model()` | Pilot 3 gateway models |
 | W5 | Celery worker integration | Celery worker; writes `safety_runs` |
 | W6 | — | — (UI reads DB via API) |
 
-Target layout documented in [`.gitlab/README.md`](../.gitlab/README.md) § Package structure.
+Target layout: [`scanner/README.md`](../scanner/README.md), [`docs/architecture.md`](architecture.md).
 
 ---
 

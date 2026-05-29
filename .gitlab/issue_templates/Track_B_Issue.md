@@ -14,6 +14,7 @@ As **ROLE**, I want **GOAL**, so that **BENEFIT**.
 Define Track B-specific tools and metrics in issue comments — this template only enforces cross-track contracts.
 
 ## References
-- docs/evaluation-framework.md
+- docs/track-b-framework.md
+- docs/data-model.md (EvalRun shape)
 
 /label ~track-b ~efficacy

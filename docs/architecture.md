@@ -1,6 +1,6 @@
 # Architecture
 
-> Draft
+> Draft — **components, flows, deployment.** Table columns and JSON shapes: [`data-model.md`](data-model.md) only.
 
 ## Overview
 
@@ -12,7 +12,7 @@ Two nutrition-label pillars (**security**, **efficacy**) — two development tra
 | **Security** | Safety | `safety/` | A | Raphael, Nithi |
 | **Efficacy** | | `evaluator/` | B | Grace, Jack |
 
-**Track A** delivers the **security** pillar: **scanning** (artifacts before deploy) and **safety** (inference harm, policy, red team). **Track B** delivers **efficacy** via Duke task suites and public benchmark subsets (see [`evaluation-framework.md`](evaluation-framework.md)), plus operational metrics (latency, tokens, cost, failure rate).
+**Track A** delivers the **security** pillar: **scanning** (artifacts before deploy) and **safety** (inference harm, policy, red team). **Track B** delivers **efficacy** via Duke task suites and public benchmark subsets (see [`track-b-framework.md`](track-b-framework.md)), plus operational metrics (latency, tokens, cost, failure rate).
 
 All tracks push structured results to a shared Postgres database. A FastAPI service exposes results to a Next.js dashboard.
 
@@ -81,7 +81,7 @@ Output: `SafetyResult` in Postgres. See [`track-a-framework.md`](track-a-framewo
 Pure-Python, inference-level **performance** evaluation. Calls Duke Gateway models through LiteLLM.
 
 - **Runner** — multiple models × multiple tasks × temperature variations, with timeouts and error handling.
-- **Task loader** — Duke YAML suites from `tasks/`; optional imported subsets from public benchmarks per [`evaluation-framework.md`](evaluation-framework.md).
+- **Task loader** — Duke YAML suites from `tasks/`; optional imported subsets from public benchmarks per [`track-b-framework.md`](track-b-framework.md).
 - **Three-layer eval model** — (1) Duke-custom tasks primary; (2) adapted benchmark subsets where task type matches; (3) published external scores as reference on nutrition label only.
 - **Efficacy metrics** — ROUGE-L for text overlap; LLM-as-judge for graded scoring (see `tasks/rubrics/`).
 - **Variation testing** — N rephrased prompts per task, measure response consistency (Charley Kneifel).
@@ -90,7 +90,7 @@ Pure-Python, inference-level **performance** evaluation. Calls Duke Gateway mode
 
 Output: `EvalRun` + `TaskResult` rows in Postgres (`provenance`: `duke` | `benchmark`).
 
-Full benchmark mapping (SWE-bench, MT-Bench, MMLU, function-calling leaderboards, etc.): [`evaluation-framework.md`](evaluation-framework.md).
+Full benchmark mapping (SWE-bench, MT-Bench, MMLU, function-calling leaderboards, etc.): [`track-b-framework.md`](track-b-framework.md).
 
 ### API — `api/`
 
@@ -191,4 +191,4 @@ sequenceDiagram
 - Frontend stack — Next.js + Tailwind is the working choice; Streamlit is a fallback if frontend ownership becomes a problem.
 - Auth — Duke Shibboleth preferred; prototype may run unauthenticated behind the VM firewall.
 - LiteLLM guardrail hooks — document integration path (week 5); prototype may ship without hooks.
-- Public benchmark pilot — IFEval vs DocBench-style subset (see evaluation-framework).
+- Public benchmark pilot — IFEval vs DocBench-style subset (see track-b-framework).

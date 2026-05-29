@@ -2,7 +2,16 @@
 
 Models available through the **Duke AI Gateway** (LiteLLM / Azure-backed). Used for **safety** (Track A) and **efficacy** (Track B). Not used for **scanning** — scanning uses Hugging Face repo IDs on DGX.
 
-Confirm exact **LiteLLM `model=` strings** with OIT (gateway display names may include spaces, e.g. `GPT 4.1 Mini` in `testing/test_gateway.py`).
+Confirm exact **LiteLLM `model=` strings** with OIT. **Verified in W2 spikes:**
+
+| LiteLLM `model=` (spike) | Alias | Notes |
+|----------------------------|-------|-------|
+| `gpt-5.4` | duke-gpt54 | TruthfulQA, LiteLLM scripts |
+| `Llama 3.3` | duke-llama33 | |
+| `Mistral on-site` | duke-mistral | **Deprecated** — do not add new runs |
+| `GPT 4.1 Mini` | — | OpenAI SDK (`testing/test_gateway.py`) |
+
+Also seen in compare scripts: `openai/gpt-5.4`, `openai/Llama 3.3` — confirm prefix with OIT.
 
 **Mistral:** being phased out — do not plan new tests on Mistral; remove from catalog when gateway drops it.
 
@@ -58,7 +67,7 @@ Use only when a task explicitly requires them (Track B may own; Track A safety u
 
 ## Scanning test models (HF on DGX — not gateway)
 
-Separate catalog for **artifact scanning** spikes (`testing/security_scanning_tests/`):
+Separate catalog for **artifact scanning** spikes (`testing/scanning/`):
 
 | HF `MODEL_ID` | Role |
 |---------------|------|

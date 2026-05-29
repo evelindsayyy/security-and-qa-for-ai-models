@@ -39,9 +39,9 @@ Deliverable: structured, publishable results for OIT and the AI Gateway — dept
 | **A — Scanning & Safety** | Raphael Karamagi, Nithi Vechalapu | Security pillar: HF scanning, CVEs, secrets; inference safety and red team |
 | **B — Evaluation** | Grace Zhan, Jack Yi | Efficacy benchmarks, task suites, metrics, operational performance |
 
-Docs: [`docs/README.md`](docs/README.md) · Track A: [`docs/track-a-framework.md`](docs/track-a-framework.md) · Track B: [`docs/evaluation-framework.md`](docs/evaluation-framework.md)
+Docs: [`docs/README.md`](docs/README.md) · Track A: [`docs/track-a-framework.md`](docs/track-a-framework.md) · Track B: [`docs/track-b-framework.md`](docs/track-b-framework.md)
 
-**Planning:** GitLab — [`.gitlab/README.md`](.gitlab/README.md) (`[Track A]`, `[Track B]`, `[Team]` issues)
+**Planning:** GitLab — [`.gitlab/README.md`](.gitlab/README.md) (how to use issues); technical detail in `docs/`
 
 ---
 
@@ -66,7 +66,7 @@ evaluator/      # Track B: efficacy evaluation via AI Gateway
 tasks/          # YAML task suites and rubrics
 api/            # FastAPI (planned)
 frontend/       # Dashboard (planned, React per mockups)
-testing/        # Spikes (gateway test, security scanning on DGX)
+testing/        # Spikes: scanning/, eval/, gateway/
 docs/           # See docs/README.md
 ```
 
@@ -100,15 +100,23 @@ See [`docs/README.md`](docs/README.md) for the full index.
 
 ```bash
 cp .env.example .env
-# Set DUKE_GATEWAY_API_KEY from dashboard.ai.duke.edu
+# Set OPENAI_API_KEY / DUKE_AI_GATEWAY_API_KEY from dashboard.ai.duke.edu
 pip install -r requirements.txt
 python testing/test_gateway.py
+```
+
+**TruthfulQA pilot (Track B):**
+
+```bash
+export DUKE_AI_GATEWAY_API_KEY=...
+cd testing/eval/truthfulqa
+python evaluate_truthfulqa_mcq.py --limit 50
 ```
 
 **Security scanning spike (DGX, Docker only):**
 
 ```bash
-cd testing/security_scanning_tests
+cd testing/scanning
 # See README in that directory for UID/GID and docker compose steps
 ```
 
@@ -118,7 +126,7 @@ cd testing/security_scanning_tests
 
 See `.env.example`. Never commit `.env`.
 
-- `DUKE_GATEWAY_API_KEY` — Duke AI Gateway
+- `DUKE_AI_GATEWAY_API_KEY` / `OPENAI_API_KEY` — Duke AI Gateway (same token; see `.env.example`)
 - `HUGGINGFACE_TOKEN` — Hugging Face Hub (gated models)
 - `DATABASE_URL`, `REDIS_URL` — when API stack is live
 
@@ -142,9 +150,10 @@ See `.env.example`. Never commit `.env`.
 | Gateway API test | Done |
 | Security scanning spike (ModelScan, Fickling, OSV/pip-audit) | Done |
 | Track / tool / evaluation docs | Done |
-| Data model + GitLab CI | Week 2 (in progress) |
-| Scanner + safety MVP | Weeks 3–4 |
-| Evaluation MVP | Weeks 3–4 |
+| Week 2 scanning spike + TruthfulQA pilot | Done (see local `gitlab-transfer.md` W2) |
+| Safety schemas + promptfoo; Team Docker/CI | Week 3 |
+| Scanner + safety packages | Weeks 3–4 |
+| Evaluation (`evaluator/`) MVP | Weeks 3–5 |
 | API + persistence | Week 5 |
 | Dashboard + DGX deploy | Week 6 |
 | Stakeholder demo, scope freeze | Week 7 |

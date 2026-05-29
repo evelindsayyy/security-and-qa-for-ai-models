@@ -90,7 +90,7 @@ def call_model(client: OpenAI, model: str, messages: list[dict[str, str]], retri
             choice = resp.choices[0]
             content = choice.message.content or ""
             print(model, "finish_reason=", choice.finish_reason, "content=", repr(content))
-            return content;
+            return content
         except Exception as e:  # retry rate limits/transient gateway errors
             last_err = e
             time.sleep(2**attempt)
@@ -167,15 +167,31 @@ def load_configs(path: str) -> list[ModelConfig]:
     return configs
 
 
+def _default_paths() -> tuple[Path, Path, Path]:
+    root = Path(__file__).resolve().parent
+    return (
+        root / "datasets" / "TruthfulQA.csv",
+        root / "models.gateway.json",
+        root.parent / "output" / "truthfulqa_model_eval.csv",
+    )
+
+
 def main() -> None:
+    csv_default, config_default, out_default = _default_paths()
     p = argparse.ArgumentParser()
-    p.add_argument("--csv", default="TruthfulQA.csv")
-    p.add_argument("--config", default="models.json")
-    p.add_argument("--limit", type=int, default=50, help="Use None/0 only after testing costs")
+    p.add_argument("--csv", default=str(csv_default))
+    p.add_argument("--config", default=str(config_default))
+    p.add_argument("--limit", type=int, default=50, help="Use 0 for full dataset (costly)")
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--out", default="results/truthfulqa_model_eval.csv")
+    p.add_argument("--out", default=str(out_default))
     args = p.parse_args()
-    evaluate(args.csv, load_configs(args.config), args.limit or None, args.seed, args.out)
+    evaluate(
+        args.csv,
+        load_configs(args.config),
+        args.limit or None,
+        args.seed,
+        args.out,
+    )
 
 
 if __name__ == "__main__":

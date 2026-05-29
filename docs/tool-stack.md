@@ -1,8 +1,8 @@
 # Tool stack
 
-Technical reference for tool choices. Weekly work is tracked in **GitLab** (see [`.gitlab/README.md`](../.gitlab/README.md)).
+Technical reference for tool choices. Work tracking: [`.gitlab/README.md`](../.gitlab/README.md).
 
-Pipelines: [`track-a-framework.md`](track-a-framework.md) (Track A) · [`evaluation-framework.md`](evaluation-framework.md) (Track B) · [`gateway-models.md`](gateway-models.md) · [`team-tracks.md`](team-tracks.md) (outcomes)
+Pipelines: [`track-a-framework.md`](track-a-framework.md) (Track A) · [`track-b-framework.md`](track-b-framework.md) (Track B) · [`gateway-models.md`](gateway-models.md) · [`team-tracks.md`](team-tracks.md) (outcomes)
 
 **Status:** In use | Spike | Planned | Stretch | Not used (summer)
 
@@ -28,7 +28,7 @@ Pipelines: [`track-a-framework.md`](track-a-framework.md) (Track A) · [`evaluat
 | OSV API | Spike | CVE lookup with pip-audit |
 | TruffleHog | Planned | Secrets in model repos |
 
-Spike: `testing/security_scanning_tests/`
+Spike: `testing/scanning/`
 
 ### Safety (inference / red team)
 
@@ -76,7 +76,7 @@ Probe categories align with Llama Guard taxonomy. `deployment_context` selects s
 
 Track B does **not** own red-team or jailbreak suites — those are Track A **safety**. Track B measures task quality and ops metrics.
 
-Reference only: MT-Bench, AlpacaEval, full SWE-bench, HELM. See [`evaluation-framework.md`](evaluation-framework.md).
+Reference only: MT-Bench, AlpacaEval, full SWE-bench, HELM. See [`track-b-framework.md`](track-b-framework.md).
 
 ---
 

@@ -1,15 +1,21 @@
 # Documentation
 
-Open-source technical reference. **Tasks:** GitLab — [`.gitlab/README.md`](../.gitlab/README.md).
+Open-source guides. **GitLab:** [`.gitlab/README.md`](../.gitlab/README.md) (how to track work).
 
-| Document | Contents |
-|----------|----------|
-| [`team-tracks.md`](team-tracks.md) | Tracks, weekly outcomes |
+| Document | Role |
+|----------|------|
+| [`team-tracks.md`](team-tracks.md) | Tracks, weekly outcomes (amended timeline) |
 | [`track-a-framework.md`](track-a-framework.md) | Scanning + safety → security pillar |
-| [`evaluation-framework.md`](evaluation-framework.md) | Efficacy pillar (Track B) |
-| [`gateway-models.md`](gateway-models.md) | Duke gateway model catalog and test tiers |
-| [`data-model.md`](data-model.md) | Postgres sketch, structured outputs |
+| [`track-b-framework.md`](track-b-framework.md) | Efficacy pillar (Track B) |
+| [`gateway-models.md`](gateway-models.md) | Gateway catalog; HF scan list; test tiers |
+| [`architecture.md`](architecture.md) | System design, API, deployment flows |
+| [`data-model.md`](data-model.md) | Postgres tables and structured JSON |
 | [`tool-stack.md`](tool-stack.md) | Tools and rationale |
-| [`architecture.md`](architecture.md) | System design, API, flows |
 
-Spike (scanning): [`testing/security_scanning_tests/README.md`](../testing/security_scanning_tests/README.md)
+**Spikes**
+
+| Path | Track |
+|------|-------|
+| [`testing/scanning/README.md`](../testing/scanning/README.md) | A — scanning |
+| [`testing/eval/README.md`](../testing/eval/README.md) | B — efficacy |
+| [`testing/gateway/README.md`](../testing/gateway/README.md) | B / shared gateway |
