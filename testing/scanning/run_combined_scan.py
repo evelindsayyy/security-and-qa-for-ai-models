@@ -45,7 +45,7 @@ def main() -> None:
         },
         "scan_metadata": {
             "scanned_at": datetime.now(timezone.utc).isoformat(),
-            "scanner_version": "security_scanning_tests-0.1.0",
+            "scanner_version": "testing-scanning-0.1.0",
         },
     }
 
