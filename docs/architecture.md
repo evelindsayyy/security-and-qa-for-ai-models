@@ -20,24 +20,25 @@ All tracks push structured results to a shared Postgres database. A FastAPI serv
 
 ```mermaid
 flowchart LR
-  User([Duke IT / Gateway team])
-  HF[(Hugging Face Hub)]
-  GW[Duke AI Gateway<br/>LiteLLM proxy]
+  User(["Duke IT and Gateway team"])
+  HF[("Hugging Face Hub")]
+  GW["Duke AI Gateway LiteLLM"]
 
-  subgraph VM[GPU VM — Duke OIT]
-    UI[Next.js + Tailwind<br/>Dashboard]
-    API[FastAPI<br/>API layer]
-    Q[Redis<br/>queue]
-    W[Celery workers]
-    Scanner[scanner/<br/>Scanning — Track A]
-    Safety[safety/<br/>Safety — Track A]
-    Evaluator[evaluator/<br/>Efficacy — Track B]
-    DB[(PostgreSQL)]
+  subgraph vm ["GPU VM - Duke OIT"]
+    UI["Next.js Dashboard"]
+    API["FastAPI"]
+    Q["Redis queue"]
+    W["Celery workers"]
+    Scanner["scanner - Track A"]
+    Safety["safety - Track A"]
+    Evaluator["evaluator - Track B"]
+    DB[("PostgreSQL")]
   end
 
   User -->|HTTPS| UI
   UI -->|REST| API
-  API <--> DB
+  API --> DB
+  DB --> API
   API -->|enqueue| Q
   Q --> W
   W --> Scanner
@@ -131,24 +132,24 @@ Recharts for charts. Duke Shibboleth via VM config; if blocked, skip auth for th
 
 ```mermaid
 sequenceDiagram
-  participant U as User (Dashboard)
+  participant U as Dashboard
   participant A as FastAPI
   participant R as Redis
   participant W as Celery worker
   participant HF as Hugging Face
   participant DB as Postgres
 
-  U->>A: POST /scans { model_id }
-  A->>DB: insert scan(status=queued)
+  U->>A: POST /scans with model_id
+  A->>DB: insert scan status queued
   A->>R: enqueue scan job
-  A-->>U: 202 { scan_id }
-  W->>R: dequeue
+  A-->>U: 202 Accepted plus scan_id
+  W->>R: dequeue job
   W->>HF: download model artifacts
-  W->>W: format + pickle + deps + secrets
+  W->>W: scan pickle deps secrets
   W->>W: risk scoring
-  W->>DB: update scan, insert findings
-  U->>A: GET /scans/{id}
-  A->>DB: read
+  W->>DB: update scan and findings
+  U->>A: GET /scans by id
+  A->>DB: read results
   A-->>U: ScanResult JSON
 ```
 
@@ -156,26 +157,26 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-  participant U as User (Dashboard)
+  participant U as Dashboard
   participant A as FastAPI
   participant R as Redis
   participant W as Celery worker
   participant GW as Duke AI Gateway
   participant DB as Postgres
 
-  U->>A: POST /evals { model_ids, task_suite }
-  A->>DB: insert eval_run(status=queued)
+  U->>A: POST /evals model_ids and task_suite
+  A->>DB: insert eval_run status queued
   A->>R: enqueue eval job
-  A-->>U: 202 { eval_run_id }
-  W->>R: dequeue
-  loop for each model × task × temperature
-    W->>GW: chat/completions
-    GW-->>W: response + usage
+  A-->>U: 202 Accepted plus eval_run_id
+  W->>R: dequeue job
+  loop Each model and task
+    W->>GW: chat completions
+    GW-->>W: response and token usage
   end
-  W->>W: metrics + LLM-as-judge
+  W->>W: metrics and LLM judge
   W->>DB: insert eval_results
-  U->>A: GET /evals/{id}
-  A-->>U: results + comparison
+  U->>A: GET /evals by id
+  A-->>U: results and comparison
 ```
 
 ## Deployment
