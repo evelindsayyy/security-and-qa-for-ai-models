@@ -1,7 +1,7 @@
 # GitLab — how we track work
 
 **Technical docs:** [`docs/`](../docs/) (architecture, tools, frameworks).  
-**Copy-paste issues and milestones:** maintainer keeps [`.gitlab/gitlab-transfer.md`](gitlab-transfer.md) locally (gitignored — not in repo).
+**Copy-paste issues and milestones:** maintainer keeps [`.gitlab/gitlab-transfer.md`](gitlab-transfer.md) locally (gitignored). That file includes: transfer checklist, user story vs issue vs task, architecture/database timing, and full issue bodies **W1–W7**.
 
 ---
 

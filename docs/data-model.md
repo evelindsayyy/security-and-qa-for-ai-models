@@ -19,77 +19,51 @@ Related: [`gateway-models.md`](gateway-models.md).
 
 ## Entity relationship (target)
 
-```mermaid
-erDiagram
-  MODEL ||--o{ SCAN : has
-  MODEL ||--o{ SAFETY_RUN : has
-  MODEL ||--o{ EVAL_RUN : has
-  SCAN ||--o{ FINDING : produces
-  SAFETY_RUN ||--o{ SAFETY_FINDING : produces
-  EVAL_RUN ||--o{ EVAL_RESULT : contains
-  TASK_SUITE ||--o{ EVAL_RUN : drives
+GitLab and GitHub render the flowchart below. (Entity-relationship diagrams with column lists often fail in GitLab’s Mermaid parser; use the [table reference](#table-reference-postgresql) for exact columns.)
 
-  MODEL {
-    string id PK
-    string gateway_model_id
-    string hf_repo nullable
-    string display_name
-    string provider
-    string deployment_type
-    json deployment_context
-    timestamp first_seen
-  }
-  SCAN {
-    uuid id PK
-    string model_id FK
-    string status
-    int risk_score
-    string risk_level
-    json scan_result_json
-    timestamp finished_at
-  }
-  FINDING {
-    uuid id PK
-    uuid scan_id FK
-    string source
-    string category
-    string severity
-    text detail
-  }
-  SAFETY_RUN {
-    uuid id PK
-    string model_id FK
-    string status
-    json deployment_context
-    json tool_results
-    timestamp finished_at
-  }
-  SAFETY_FINDING {
-    uuid id PK
-    uuid safety_run_id FK
-    string category
-    string probe_source
-    bool passed
-    text detail
-  }
-  EVAL_RUN {
-    uuid id PK
-    string task_suite_id FK
-    string status
-    timestamp finished_at
-  }
-  EVAL_RESULT {
-    uuid id PK
-    uuid eval_run_id FK
-    string model_id FK
-    string task_id
-    float score
-    int latency_ms
-    int tokens_in
-    int tokens_out
-    float cost_usd nullable
-  }
+```mermaid
+flowchart TB
+  subgraph catalog [Catalog]
+    models[(models)]
+    task_suites[(task_suites)]
+  end
+
+  subgraph security_scanning [Security - scanning]
+    scans[(scans)]
+    findings[(findings)]
+  end
+
+  subgraph security_safety [Security - safety]
+    safety_runs[(safety_runs)]
+    safety_findings[(safety_findings)]
+  end
+
+  subgraph efficacy [Efficacy]
+    eval_runs[(eval_runs)]
+    eval_results[(eval_results)]
+  end
+
+  models --> scans
+  scans --> findings
+  models --> safety_runs
+  safety_runs --> safety_findings
+  task_suites --> eval_runs
+  eval_runs --> eval_results
+  models --> eval_results
 ```
+
+### Table reference (PostgreSQL)
+
+| Table | Primary key | Foreign keys | Main columns |
+|-------|-------------|--------------|--------------|
+| `models` | `id` | — | `gateway_model_id`, `hf_repo` (optional), `display_name`, `provider`, `deployment_type`, `deployment_context` (JSONB) |
+| `scans` | `id` (uuid) | `model_id` → `models` | `status`, `risk_score`, `risk_level`, `scan_result_json`, `finished_at` |
+| `findings` | `id` (uuid) | `scan_id` → `scans` | `source`, `category`, `severity`, `detail` |
+| `safety_runs` | `id` (uuid) | `model_id` → `models` | `status`, `deployment_context`, `tool_results`, `finished_at` |
+| `safety_findings` | `id` (uuid) | `safety_run_id` → `safety_runs` | `category`, `probe_source`, `passed`, `detail` |
+| `task_suites` | `id` | — | suite metadata (name, version) |
+| `eval_runs` | `id` (uuid) | `task_suite_id` → `task_suites` | `status`, `finished_at` |
+| `eval_results` | `id` (uuid) | `eval_run_id`, `model_id` | `task_id`, `score`, `latency_ms`, `tokens_in`, `tokens_out`, `cost_usd` (optional) |
 
 ---
 
