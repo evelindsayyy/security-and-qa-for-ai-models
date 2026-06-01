@@ -41,7 +41,7 @@ Deliverable: structured, publishable results for OIT and the AI Gateway — dept
 
 Docs: [`docs/README.md`](docs/README.md) · Track A: [`docs/track-a-framework.md`](docs/track-a-framework.md) · Track B: [`docs/track-b-framework.md`](docs/track-b-framework.md)
 
-**Planning:** GitLab — [`.gitlab/README.md`](.gitlab/README.md) (how to use issues); technical detail in `docs/`
+**Planning:** GitLab — [`.gitlab/README.md`](.gitlab/README.md); technical detail in `docs/`
 
 ---
 

@@ -60,8 +60,6 @@ model_ids + deployment_context
 | [promptfoo](https://github.com/promptfoo/promptfoo) | Declarative red-team configs, graders, CI-friendly regression |
 | Duke probes | Duke-specific policy and academic-integrity scenarios |
 
-Academic-dishonesty and jailbreak testing belong here, not in Track B efficacy suites.
-
 ---
 
 ## Output
@@ -101,18 +99,6 @@ Do not block deploy on Fickling alone. Risk scorer must merge ModelScan and Fick
 |------|---------------|---------------|
 | Inventory / label fields | Yes | No |
 | ModelScan / Fickling | No | Yes |
-
----
-
-## Week 2 status (end of Friday)
-
-| Done | Not done (→ W3) |
-|------|------------------|
-| ModelScan, Fickling, combined scan, `ScanResult` schemas | `SafetyResult` schemas |
-| HF regression: gpt2, distilbert, opt-125m | ModelScan gap map (final doc) |
-| OSV vs pip-audit spike; metadata listing | promptfoo gateway smoke |
-| Trivy spike added (`run_trivy.py`) — decision open | `scanner/` / `safety/` packages |
-| | Team: Docker Compose, CI, Postgres catalog |
 
 ---
 

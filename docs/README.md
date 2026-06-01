@@ -1,6 +1,6 @@
 # Documentation
 
-Open-source guides. **GitLab:** [`.gitlab/README.md`](../.gitlab/README.md) (how to track work).
+Project guides & info. **GitLab:** [`.gitlab/README.md`](../.gitlab/README.md) (how to track work).
 
 | Document | Role |
 |----------|------|

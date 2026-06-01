@@ -19,18 +19,6 @@ Gateway catalog: [`gateway-models.md`](gateway-models.md). Structured outputs: [
 
 ---
 
-## Week 2 completed (gateway)
-
-| Work | Location | Notes |
-|------|----------|-------|
-| TruthfulQA MCQ pilot | `testing/eval/truthfulqa/` | n=50; gpt-5.4 **0.90**, Mistral on-site **0.74**, Llama 3.3 **0.62** |
-| LiteLLM compare / smoke | `testing/gateway/` | Latency, tokens; env-based API key |
-| OpenAI SDK smoke | `testing/test_gateway.py` | `GPT 4.1 Mini` display name |
-
-**Slipped to W3:** formal `EvalRun` / `TaskResult` schemas; YAML task loader; ops metrics on every call; move runner into `evaluator/`.
-
----
-
 ## Layers
 
 ```text
@@ -60,7 +48,7 @@ Record latency, tokens, cost, and failure rate on every run.
 
 ---
 
-## Rollout (amended after W2)
+## Rollout
 
 | When | Suites / work |
 |------|----------------|
@@ -75,7 +63,7 @@ Record latency, tokens, cost, and failure rate on every run.
 
 | Benchmark | Use |
 |-----------|-----|
-| TruthfulQA MCQ | W2 spike only — optional column on label |
+| TruthfulQA MCQ | W2 spike — optional column on label |
 | IFEval, DocBench / QASPER | Optional subsets |
 | MT-Bench, AlpacaEval | Quality reference on label |
 | Berkeley Function Calling | Agentic / tool-use |

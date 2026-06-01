@@ -4,7 +4,7 @@ Technical reference for tool choices. Work tracking: [`.gitlab/README.md`](../.g
 
 Pipelines: [`track-a-framework.md`](track-a-framework.md) (Track A) · [`track-b-framework.md`](track-b-framework.md) (Track B) · [`gateway-models.md`](gateway-models.md) · [`team-tracks.md`](team-tracks.md) (outcomes)
 
-**Status:** In use | Spike | Planned | Stretch | Not used (summer)
+**Status:** In use | Spike | Planned | Stretch | Not used 
 
 ---
 
@@ -39,16 +39,6 @@ Spike: `testing/scanning/`
 | Duke probes | Planned | Duke-only prompts not covered by garak catalog (may live in `safety/promptfoo/`) |
 | LiteLLM guardrails | Planned (doc) | Gateway integration path (ITSO) |
 
-**Division of labor (avoid duplicate prompts):**
-
-| Tool | Owns |
-|------|------|
-| garak | Wide vulnerability probe catalog, detector pass/fail |
-| promptfoo | Curated red-team scenarios, regression in GitLab CI, named policy tests |
-| Duke probes | Institutional policy wording if not encoded in promptfoo configs |
-
-Probe categories align with Llama Guard taxonomy. `deployment_context` selects subsets (chatbot vs agentic, guardrails on/off).
-
 ### Not used (summer)
 
 | Tool | Reason |
@@ -74,9 +64,7 @@ Probe categories align with Llama Guard taxonomy. `deployment_context` selects s
 | LLM-as-judge | Planned | Graded tasks |
 | IFEval / DocBench-style | Evaluate | Optional benchmark subsets |
 
-Track B does **not** own red-team or jailbreak suites — those are Track A **safety**. Track B measures task quality and ops metrics.
-
-Reference only: MT-Bench, AlpacaEval, full SWE-bench, HELM. See [`track-b-framework.md`](track-b-framework.md).
+Reference: MT-Bench, AlpacaEval, full SWE-bench, HELM. See [`track-b-framework.md`](track-b-framework.md).
 
 ---
 
@@ -96,5 +84,5 @@ Efficacy     → Duke tasks + metrics                  → EvalRun      (Track B
 |------|---------|
 | OWASP Dependency-Check vs pip-audit | pip-audit + OSV |
 | Watchtower | Skip |
-| Trivy (teammate spike) | Defer unless standup adopts |
+| Trivy  | Defer unless standup adopts |
 | PyRIT | Stretch only |
