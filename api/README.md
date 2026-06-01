@@ -1,11 +1,5 @@
 # API (`api/`)
 
-Flask REST service (week 5+): enqueue scans, safety, evals to Celery; serve GET results from Postgres.
+Flask REST + Celery (week 5). Until then: [`frontend/`](../frontend/) for UI spikes.
 
-- Design: [`docs/architecture.md`](../docs/architecture.md)
-- UI: [`frontend/`](../frontend/) (same application-factory pattern)
-
-```bash
-uv sync
-uv run flask --app frontend:create_app run --debug   # UI spike until api/ is wired
-```
+[`docs/architecture.md`](../docs/architecture.md) · [`.gitlab/README.md`](../.gitlab/README.md).

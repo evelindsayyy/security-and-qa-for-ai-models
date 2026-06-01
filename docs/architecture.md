@@ -1,6 +1,6 @@
 # Architecture
 
-> Draft — **components, flows, deployment.** Table columns and JSON shapes: [`data-model.md`](data-model.md) only.
+> Draft — **components, flows, deployment.** Tables and field examples: [`data-model.md`](data-model.md).
 
 ## Overview
 
@@ -113,19 +113,7 @@ Output: `SafetyResult` in Postgres. See [`track-a-framework.md`](track-a-framewo
 
 ### Evaluator — `evaluator/` (efficacy — Track B)
 
-Pure-Python, inference-level **performance** evaluation. Calls Duke Gateway models through LiteLLM.
-
-- **Runner** — multiple models × multiple tasks × temperature variations, with timeouts and error handling.
-- **Task loader** — Duke YAML suites from `tasks/`; optional imported subsets from public benchmarks per [`track-b-framework.md`](track-b-framework.md).
-- **Three-layer eval model** — (1) Duke-custom tasks primary; (2) adapted benchmark subsets where task type matches; (3) published external scores as reference on nutrition label only.
-- **Efficacy metrics** — ROUGE-L for text overlap; LLM-as-judge for graded scoring (see `tasks/rubrics/`).
-- **Variation testing** — N rephrased prompts per task, measure response consistency (Charley Kneifel).
-- **Operational metrics** — latency, token usage, cost, failure rate per call (ITSO: availability is part of CIA).
-- **Comparator** — structured side-by-side output across N models.
-
-Output: `EvalRun` + `TaskResult` rows in Postgres (`provenance`: `duke` | `benchmark`).
-
-Full benchmark mapping (SWE-bench, MT-Bench, MMLU, function-calling leaderboards, etc.): [`track-b-framework.md`](track-b-framework.md).
+Gateway task evaluation via LiteLLM. Loads Duke suites from `tasks/`; records scores and operational metrics (latency, tokens, cost). Suite list and rollout: [`track-b-framework.md`](track-b-framework.md). Week 5: `eval_runs` / `eval_results` in Postgres.
 
 ### API — `api/`
 

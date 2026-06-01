@@ -41,7 +41,7 @@ Deliverable: structured, publishable results for OIT and the AI Gateway — dept
 
 Docs: [`docs/README.md`](docs/README.md) · Track A: [`docs/track-a-framework.md`](docs/track-a-framework.md) · Track B: [`docs/track-b-framework.md`](docs/track-b-framework.md)
 
-**Planning:** GitLab — [`.gitlab/README.md`](.gitlab/README.md); technical detail in `docs/`
+**Planning:** GitLab — [`.gitlab/README.md`](.gitlab/README.md); technical direction in `docs/`
 
 ---
 
@@ -64,7 +64,7 @@ scanner/        # Track A: scanning (HF artifacts)
 safety/         # Track A: safety (inference / red team)
 evaluator/      # Track B: efficacy evaluation via AI Gateway
 tasks/          # YAML task suites and rubrics
-models/         # Gateway catalog seed (YAML, week 3+)
+models/         # Gateway catalog seed placeholder (week 3+)
 api/            # Flask REST API (week 5+)
 frontend/       # Nutrition label UI (Flask W3+)
 testing/        # Spikes: scanning/, eval/, gateway/
@@ -163,10 +163,10 @@ See `.env.example`. Never commit `.env`.
 | Gateway API test | Done |
 | Security scanning spike (ModelScan, Fickling, OSV/pip-audit) | Done |
 | Track / tool / evaluation docs | Done |
-| Week 2 scanning spike + TruthfulQA pilot | Done (see local `gitlab-transfer.md` W2) |
+| Week 2 scanning spike + TruthfulQA pilot | Done |
 | Safety schemas + promptfoo; Team Docker/CI | Week 3 |
 | Scanner + safety packages | Weeks 3–4 |
-| Evaluation (`evaluator/`) MVP | Weeks 3–5 |
+| Evaluation (`evaluator/`) | W3: MVP suites, 1 gateway model; W4+: pilot scale |
 | API + persistence | Week 5 |
 | Dashboard + DGX deploy | Week 6 |
 | Stakeholder demo, scope freeze | Week 7 |

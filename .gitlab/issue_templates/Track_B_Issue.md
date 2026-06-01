@@ -10,6 +10,10 @@ As **ROLE**, I want **GOAL**, so that **BENEFIT**.
 - [ ] Records latency_ms, tokens_in, tokens_out (and cost if available)
 - [ ] No red-team / jailbreak / academic-dishonesty prompts (Track A **safety**)
 
+## Tool output → data model
+- [ ] Run executed; **sample JSON** attached or path in comment (`testing/eval/output/` or `evaluator/` output)
+- [ ] Fields map to `eval_runs` / `eval_results` (or noted as provisional in comment)
+
 ## Out of scope
 Define Track B-specific tools and metrics in issue comments — this template only enforces cross-track contracts.
 

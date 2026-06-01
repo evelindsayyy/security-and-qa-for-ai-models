@@ -15,4 +15,4 @@ uv run flask --app frontend:create_app run --debug
 | `/models` | Gateway catalog (docs-aligned) |
 | `/hello` | Smoke test |
 
-Week 5+: poll `api/`. `instance/` at repo root is gitignored (Flask local DB).
+Week 5+: poll `api/`. `instance/` at repo root is gitignored (Flask local DB). Tasks: [`.gitlab/README.md`](../.gitlab/README.md).

@@ -64,18 +64,12 @@ model_ids + deployment_context
 
 ## Output
 
-| Part | Artifact | Location |
-|------|----------|----------|
-| Scanning | `ScanResult` | Spike: `testing/scanning/output/`; production: Postgres via `scanner/` |
-| Safety | `SafetyResult` | Production: Postgres via `safety/` |
+Normalized shapes: [`data-model.md`](data-model.md) (`scans`/`findings`, `safety_runs`/`safety_findings`). Week 3: run tools, capture raw JSON, map into Pydantic in `scanner/` and `safety/` before Postgres (week 5).
 
-`ScanRequest`, `ScanResult`, `Finding` — `schemas.py` (spike). `SafetyResult` — see GitLab W2-2.
-
-| Field (scan spike) | Notes |
-|------------------|-------|
-| `severity_tier` | ModelScan-based until risk reconciler (week 3) |
-| `fickling_severity` | Merged in week 3 scorer |
-| `overall_risk_score` | Rubric TBD |
+| Part | Spike (learn tool output) | Production |
+|------|---------------------------|------------|
+| Scanning | `testing/scanning/` → `ScanResult` in `schemas.py` | `scanner/` → JSON then Postgres |
+| Safety | Run garak / promptfoo; sample output in issue | `safety/` → `SafetyResult` JSON |
 
 ---
 

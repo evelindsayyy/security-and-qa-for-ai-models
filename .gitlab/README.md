@@ -1,70 +1,59 @@
-# GitLab — how we track work
+# GitLab
 
-**Technical docs:** [`docs/`](../docs/) (architecture, tools, frameworks).  
+**Technical overview:** [`docs/`](../docs/).
+
 ---
 
 ## Tracks
 
-| Track | Members | Title prefix | Label |
-|-------|---------|--------------|-------|
-| A — Scanning & Safety | Raphael, Nithi | `[Track A]` | `track-a` |
-| B — Evaluation | Grace, Jack | `[Track B]` | `track-b` |
-| Team — shared | Everyone | `[Team]` | `team-shared` |
+| Track | Members | Prefix | Label |
+|-------|---------|--------|-------|
+| A | Raphael, Nithi | `[Track A]` | `track-a` |
+| B | Grace, Jack | `[Track B]` | `track-b` |
+| Team | Everyone | `[Team]` | `team-shared` |
+
+Labels: `scanning` · `safety` · `gateway` · `efficacy` · `evaluator` · `frontend` · `mvp` · `spike` · `docs` · …
 
 ---
 
-## Labels
+## Milestones
 
-`track-a` · `track-b` · `team-shared` · `scanning` · `safety` · `red-team` · `gateway` · `efficacy` · `evaluator` · `frontend` · `mvp` · `spike` · `docs` · `blocked` · `stretch`
-
-- `gateway` — Duke AI Gateway model IDs (not HF DGX scan)
-- `scanning` — HF artifact pipeline only
-
----
-
-## Milestones (names only)
-
-| Milestone | One-line goal |
+| Milestone | Status / goal |
 |-----------|----------------|
-| W1 — Kickoff | Scaffold, gateway test, tool research |
-| W2 — Foundation | Spikes, schemas, catalog (mostly done) |
-| W3 — Core pipelines | Packages + structured JSON; W2 carryover |
-| W4 — E2E & tests | Scan E2E; safety on 3 gateway models |
-| W5 — API & integration | Flask, Postgres, Celery, `/scans` `/safety` `/evals` |
-| W3+ — Frontend | `frontend/` — model list, mockups |
-| W6 — Frontend | Full nutrition label UI |
-| W7 — MVP demo (freeze) | Full gateway catalog |
-| W8–W9 — Hardening & handoff | FP study, runbooks |
-| W10 — Stretch | Optional |
-
-Full milestone descriptions to paste: `gitlab-transfer.md` → Milestones section.
+| W1–W2 | **Closed** — spikes, docs |
+| **W3** | **Current** — packages, catalog, CI, frontend, MVP efficacy on 1 gateway model |
+| W4 | E2E scan; safety + MVP efficacy on 3 gateway models |
+| W5 | Flask `api/`, Postgres, Celery |
+| W6–W7 | Full UI, demo freeze |
 
 ---
 
-## Creating work items
+## Spikes → packages → Postgres
 
-1. **New issue** — pick template under `issue_templates/` (Track A, Track B, Team, or Task).
-2. **Parent issue** — story for the week; assign milestone; add labels.
-3. **Child tasks** — use `Track_*_Task.md`; set parent link `#PARENT_ID`.
-4. **Integration (W5–W6)** — relate Track A, Track B, and Team API/frontend issues.
-5. **Merge request** — `Closes #N` in description when done.
+Spikes in `testing/` exist to **run tools and inspect output**, not to ship production code.
 
-### Adding a new week
+| Step | What to prove |
+|------|----------------|
+| 1. Spike | Run ModelScan, garak, promptfoo, eval scripts; save **raw + normalized JSON** samples |
+| 2. Map | Align fields to [`docs/data-model.md`](../docs/data-model.md); note gaps in the issue comment |
+| 3. Package | `scanner/`, `safety/`, `evaluator/` Pydantic schemas + on-disk JSON (W3–4) |
+| 4. API | Week 5 migrations + `api/` persistence |
 
-- Create issues only for that week’s milestone (avoid backlog dumping).
-- Monday: add next week’s issues from `gitlab-transfer.md`.
-- Amend milestones in GitLab if scope shifts; note in milestone description.
+Use label `spike` when the issue is mainly “see what the tool returns.” Parent `mvp` issues should link the spike MR or sample files.
 
 ---
 
-## References
+## Hygiene
+
+1. New issue → `issue_templates/`
+2. Assign **current** milestone (W3 now)
+3. Child tasks when work splits; MR uses `Closes #N`
+4. Monday: open issues for **that week only** (parent first, then its children in order)
 
 | Doc | Use |
 |-----|-----|
 | [`docs/team-tracks.md`](../docs/team-tracks.md) | Weekly outcomes |
-| [`docs/track-a-framework.md`](../docs/track-a-framework.md) | Scanning + safety |
-| [`docs/track-b-framework.md`](../docs/track-b-framework.md) | Efficacy |
-| [`docs/gateway-models.md`](../docs/gateway-models.md) | Model catalog |
-| [`docs/data-model.md`](../docs/data-model.md) | Postgres / JSON shapes |
-
-**Templates:** `issue_templates/Track_A_Issue.md`, `Track_B_Issue.md`, `Team_Issue.md`, `Track_*_Task.md`
+| [`docs/track-a-framework.md`](../docs/track-a-framework.md) | Security |
+| [`docs/track-b-framework.md`](../docs/track-b-framework.md) | Efficacy / MVP suites |
+| [`docs/gateway-models.md`](../docs/gateway-models.md) | Catalog |
+| [`docs/data-model.md`](../docs/data-model.md) | Postgres sketch |

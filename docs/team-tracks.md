@@ -29,11 +29,11 @@ Code+ 2026 — Duke OIT. The nutrition label has two pillars — **security** (s
 | Week | Focus | Track A | Track B |
 |------|------|---------|---------|
 | 1 | Scaffold | Tool research | Gateway test |
-| 2 | Data model docs | Scan spikes; safety schemas | TruthfulQA pilot; benchmark & tool research |
-| 3 | Docker, CI, catalog; **`frontend/`** (model list) | `scanner/` + `safety/`; 1-model safety | `evaluator/`; IT support E2E |
-| 4 | E2E tests; frontend stubs | Scan E2E; safety **3 models** | Core suites; same 3 models |
-| 5 | Postgres + **`api/`** | `/scans`, `/safety` | `/evals` |
-| 6 | **`frontend/`** full UI | Scanning + safety views | Efficacy charts |
+| 2 | scan/eval spikes, `docs/data-model.md` sketch, gateway doc | HF scan spike; TruthfulQA pilot | Gateway smoke |
+| 3 | Docker, CI, catalog, `frontend/` | `scanner/` + `safety/`; 1-model safety | `evaluator/`; MVP suites, 1 gateway model |
+| 4 | E2E tests; frontend stubs | Scan E2E; safety 3 models | MVP suites on 3 pilot models |
+| 5 | Postgres + `api/` | `/scans`, `/safety` | `/evals` |
+| 6 | `frontend/` full UI | Scanning + safety views | Efficacy charts |
 | 7 | Demo freeze | Full gateway safety + HF samples | Gateway efficacy |
 | 8–9 | Hardening / handoff | FP study | Judge validation |
 | 10 | Stretch | Optional | Optional |

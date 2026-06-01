@@ -1,11 +1,11 @@
 # Tasks (Track B)
 
-Implemented by **Grace and Jack**. Track A (scanning and safety — security pillar) does not add task suites here.
+Duke eval suites and rubrics. Track A does not add suites here.
 
-| Path | Status |
-|------|--------|
-| `suites/` | Duke YAML suites (week 3+) — see [`suites/README.md`](suites/README.md) |
-| `rubrics/it_support.yaml` | Draft rubric for IT support judging |
-| `benchmarks/manifest.yaml` | Public benchmark reference catalog |
+| Path | Role |
+|------|------|
+| `suites/` | YAML prompts (week 3+) |
+| `rubrics/` | Grading rubrics (e.g. IT support) |
+| `benchmarks/manifest.yaml` | Public benchmark references |
 
-Proposed task ideas: [`docs/track-b-framework.md`](../docs/track-b-framework.md).
+MVP suite list: [`docs/track-b-framework.md`](../docs/track-b-framework.md).

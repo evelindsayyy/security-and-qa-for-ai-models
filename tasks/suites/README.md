@@ -1,3 +1,3 @@
 # Task suites (Track B)
 
-Duke YAML eval suites for `evaluator/` (week 3+). Rubrics: [`../rubrics/`](../rubrics/). Benchmark refs: [`../benchmarks/manifest.yaml`](../benchmarks/manifest.yaml).
+YAML prompts for `evaluator/`. MVP priority: [`docs/track-b-framework.md`](../../docs/track-b-framework.md).

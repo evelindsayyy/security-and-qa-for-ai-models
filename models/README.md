@@ -1,5 +1,5 @@
-# Models (catalog seed)
+# Models (catalog)
 
-Gateway **catalog seed** for the Postgres `models` table (week 3 design, week 5 migrations). Add `seed.yaml` here when the team agrees field names with [`docs/gateway-models.md`](../docs/gateway-models.md).
+Placeholder for gateway **catalog seed** (YAML/SQL) before week 5 Postgres. Canonical list: [`docs/gateway-models.md`](../docs/gateway-models.md). Mapping agreed in week 3 Team issue.
 
-**Not** Hugging Face weights — those live under [`testing/scanning/models/`](../testing/scanning/models/README.md).
+**Not** Hugging Face weights — see [`testing/scanning/models/`](../testing/scanning/models/README.md).
