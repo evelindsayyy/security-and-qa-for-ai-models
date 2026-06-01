@@ -1,5 +1,7 @@
 openai>=1.0.0
 python-dotenv>=1.0.0
+litellm>=1.0.0
+pandas>=2.0.0
 huggingface_hub
 modelscan
 fickling

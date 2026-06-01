@@ -1,11 +1,21 @@
-# Documentation index
+# Documentation
 
-| Doc | Audience | Contents |
-|-----|----------|----------|
-| [`team-tracks.md`](team-tracks.md) | Whole team | Tracks, deployment context, 10-week schedule |
-| [`architecture.md`](architecture.md) | Whole team | System design, API, database sketch |
-| [`security-framework.md`](security-framework.md) | Track A | Artifact scanning, safety probes, output format, calibration |
-| [`evaluation-framework.md`](evaluation-framework.md) | Track B | Efficacy task ideas, public benchmarks (reference) |
-| [`tool-stack.md`](tool-stack.md) | Whole team | Tools by track and status |
+Project guides & info. **GitLab:** [`.gitlab/README.md`](../.gitlab/README.md) (how to track work).
 
-Track A spike (Docker, DGX): [`testing/security_scanning_tests/README.md`](../testing/security_scanning_tests/README.md)
+| Document | Role |
+|----------|------|
+| [`team-tracks.md`](team-tracks.md) | Tracks, weekly outcomes (amended timeline) |
+| [`track-a-framework.md`](track-a-framework.md) | Scanning + safety → security pillar |
+| [`track-b-framework.md`](track-b-framework.md) | Efficacy pillar (Track B) |
+| [`gateway-models.md`](gateway-models.md) | Gateway catalog; HF scan list; test tiers |
+| [`architecture.md`](architecture.md) | System design, API, deployment flows |
+| [`data-model.md`](data-model.md) | Postgres tables and structured JSON |
+| [`tool-stack.md`](tool-stack.md) | Tools and rationale |
+
+**Spikes**
+
+| Path | Track |
+|------|-------|
+| [`testing/scanning/README.md`](../testing/scanning/README.md) | A — scanning |
+| [`testing/eval/README.md`](../testing/eval/README.md) | B — efficacy |
+| [`testing/gateway/README.md`](../testing/gateway/README.md) | B / shared gateway |

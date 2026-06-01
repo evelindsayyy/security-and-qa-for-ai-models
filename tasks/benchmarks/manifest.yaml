@@ -1,10 +1,10 @@
 # Public benchmark catalog for Track B evaluation.
 # Items here are reference or import candidates — not all are run in production.
-# See docs/evaluation-framework.md for Duke mapping and scope.
+# See docs/track-b-framework.md for Duke mapping and scope.
 
 version: 1
 
-# Public benchmark reference for Track B. Duke task ideas: docs/evaluation-framework.md
+# Public benchmark reference for Track B. Duke task ideas: docs/track-b-framework.md
 
 benchmarks:
   - id: duke_it_support
