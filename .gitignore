@@ -1,5 +1,7 @@
 # Ignore the python & local virtual environment
 venv/
+.venv/
+**/.venv/
 .env
 testing/security_scanning_tests/.env
 
