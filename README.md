@@ -104,6 +104,7 @@ See [`docs/README.md`](docs/README.md) for the full index.
 ```bash
 uv sync
 uv run flask --app frontend:create_app run --debug
+# or: python main.py  →  /  /dashboard  /models
 ```
 
 See [`frontend/README.md`](frontend/README.md).

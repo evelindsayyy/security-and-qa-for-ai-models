@@ -15,7 +15,6 @@ testing/scanning/models/*
 testing/scanning/output/*
 !testing/scanning/output/README.md
 
-# GitLab copy-paste backlog (maintainer local only)
 .gitlab/gitlab-transfer.md
 
 # eval spikes — regenerate locally

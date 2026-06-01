@@ -18,12 +18,6 @@ All tracks push structured results to a shared Postgres database. **`api/`** (Fl
 
 ## System context
 
-### POST vs GET (Flask)
-
-**POST** starts work that can take minutes (artifact scan, safety probes, or task-suite eval). Flask writes a **queued** row in Postgres, puts a message on **Redis**, and returns a **job id** right away so the frontend can show “running” and poll. It does not call Hugging Face or the gateway itself.
-
-**GET** loads status or finished results for the nutrition label. Flask reads **Postgres only**—no Redis, no Celery, no external APIs. Use GET after POST (or on page refresh) when the user needs `status`, findings, scores, or model history.
-
 ### Write paths (one per job type)
 
 Each POST picks a Celery task, one external system, and one result family in Postgres. Redis is only the handoff from Flask to Celery.
