@@ -23,3 +23,6 @@ testing/eval/output/
 # never commit keys
 **/sk-*.txt
 jack/
+
+# Flask instance folder (config, sqlite db, secrets — must stay local)
+instance/
