@@ -8,8 +8,9 @@ Project guides & info. **GitLab:** [`.gitlab/README.md`](../.gitlab/README.md) (
 | [`track-a-framework.md`](track-a-framework.md) | Scanning + safety → security pillar |
 | [`track-b-framework.md`](track-b-framework.md) | Efficacy pillar (Track B) |
 | [`gateway-models.md`](gateway-models.md) | Gateway catalog; HF scan list; test tiers |
-| [`architecture.md`](architecture.md) | System design, API, deployment flows |
-| [`data-model.md`](data-model.md) | Postgres tables and structured JSON |
+| [`architecture.md`](architecture.md) | System design, `api/`, `frontend/`, deployment |
+| [`../frontend/README.md`](../frontend/README.md) | Nutrition label UI |
+| [`data-model.md`](data-model.md) | Postgres tables and relationships |
 | [`tool-stack.md`](tool-stack.md) | Tools and rationale |
 
 **Spikes**

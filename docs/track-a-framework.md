@@ -110,7 +110,7 @@ Do not block deploy on Fickling alone. Risk scorer must merge ModelScan and Fick
 | W3 | Extract package; `risk_scorer`, `pipeline` v0 | `garak_runner`, `promptfoo/`, probes v0 |
 | W4 | deps, secrets, E2E `scan_model()` | Pilot 3 gateway models |
 | W5 | Celery worker integration | Celery worker; writes `safety_runs` |
-| W6 | — | — (UI reads DB via API) |
+| W6 | — | UI in `frontend/` (reads `api/`) |
 
 Target layout: [`scanner/README.md`](../scanner/README.md), [`docs/architecture.md`](architecture.md).
 

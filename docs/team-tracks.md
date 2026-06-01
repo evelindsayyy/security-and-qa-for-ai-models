@@ -30,15 +30,15 @@ Code+ 2026 — Duke OIT. The nutrition label has two pillars — **security** (s
 |------|------|---------|---------|
 | 1 | Scaffold | Tool research | Gateway test |
 | 2 | Data model docs | Scan spikes; safety schemas | TruthfulQA pilot; benchmark & tool research |
-| 3 | Docker, CI, catalog | `scanner/` + `safety/`; 1-model safety | `evaluator/`; IT support E2E |
-| 4 | E2E tests | Scan E2E; safety **3 models** | Core suites; same 3 models |
-| 5 | Postgres + API | `/scans`, `/safety` | `/evals` |
-| 6 | Dashboard | Scanning + safety UI | Efficacy charts |
+| 3 | Docker, CI, catalog; **`frontend/`** (model list) | `scanner/` + `safety/`; 1-model safety | `evaluator/`; IT support E2E |
+| 4 | E2E tests; frontend stubs | Scan E2E; safety **3 models** | Core suites; same 3 models |
+| 5 | Postgres + **`api/`** | `/scans`, `/safety` | `/evals` |
+| 6 | **`frontend/`** full UI | Scanning + safety views | Efficacy charts |
 | 7 | Demo freeze | Full gateway safety + HF samples | Gateway efficacy |
 | 8–9 | Hardening / handoff | FP study | Judge validation |
 | 10 | Stretch | Optional | Optional |
 
-Shared: `api/`, `frontend/`, Postgres, Celery, GitLab CI.
+Shared: `frontend/`, `api/` (W5+), Postgres, Celery, GitLab CI.
 
 ---
 

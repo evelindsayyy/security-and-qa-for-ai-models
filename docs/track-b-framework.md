@@ -54,7 +54,7 @@ Record latency, tokens, cost, and failure rate on every run.
 |------|----------------|
 | **W3** | Eval schemas; `evaluator/` runner; IT support E2E; multi-model gateway |
 | **W4–5** | Summarization, student study, policy Q&A; align **3-model pilot** with Track A |
-| **W5–6** | Creative writing, research literature, med education, coding; dashboard charts |
+| **W5–6** | Creative writing, research literature, med education, coding; frontend charts |
 | Later | Research workflow, variation overlay, benchmark subsets |
 
 ---

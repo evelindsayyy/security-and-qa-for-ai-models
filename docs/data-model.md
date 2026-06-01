@@ -10,46 +10,35 @@ Related: [`gateway-models.md`](gateway-models.md).
 
 ## Design principles
 
-- One **`models`** row per gateway model (and optionally per HF repo for on-prem).
-- **Scanning** results link to `hf_repo` / scan jobs.
-- **Safety** and **efficacy** results link to `gateway_model_id` + `deployment_context`.
-- Store **raw tool JSON** paths or JSONB blobs for audit; dashboard reads normalized fields.
+- One **`models`** row per gateway model (optional `hf_repo` when on-prem).
+- Scanning → `scans` / `findings`. Safety → `safety_runs` / `safety_findings`. Efficacy → `eval_runs` / `eval_results`.
+- Raw tool output in JSONB where needed; frontend uses normalized columns.
 
 ---
 
-## Entity relationship (target)
+## Table chains
 
-GitLab and GitHub render the flowchart below. (Entity-relationship diagrams with column lists often fail in GitLab’s Mermaid parser; use the [table reference](#table-reference-postgresql) for exact columns.)
+Anchor: **`models`**. Three chains (left to right). Filled by Celery after the matching **POST**; the frontend reads them via **GET** (see [`architecture.md`](architecture.md#post-vs-get-flask)).
+
+**Scanning** (`POST /scans` → `scanner/` → Hugging Face): `models` → `scans` → `findings`
 
 ```mermaid
-flowchart TB
-  subgraph catalog [Catalog]
-    models[(models)]
-    task_suites[(task_suites)]
-  end
+flowchart LR
+  models --> scans --> findings
+```
 
-  subgraph security_scanning [Security - scanning]
-    scans[(scans)]
-    findings[(findings)]
-  end
+**Safety** (`POST /safety` → `safety/` → Duke AI Gateway): `models` → `safety_runs` → `safety_findings`
 
-  subgraph security_safety [Security - safety]
-    safety_runs[(safety_runs)]
-    safety_findings[(safety_findings)]
-  end
+```mermaid
+flowchart LR
+  models --> safety_runs --> safety_findings
+```
 
-  subgraph efficacy [Efficacy]
-    eval_runs[(eval_runs)]
-    eval_results[(eval_results)]
-  end
+**Efficacy** (`POST /evals` → `evaluator/` → Duke AI Gateway): `task_suites` → `eval_runs` → `eval_results` → `models`
 
-  models --> scans
-  scans --> findings
-  models --> safety_runs
-  safety_runs --> safety_findings
-  task_suites --> eval_runs
-  eval_runs --> eval_results
-  models --> eval_results
+```mermaid
+flowchart LR
+  task_suites --> eval_runs --> eval_results --> models
 ```
 
 ### Table reference (PostgreSQL)
@@ -67,20 +56,13 @@ flowchart TB
 
 ---
 
-## Structured outputs (by track)
+## Spike → DB mapping
 
-| Track | Job | Python type (spike) | DB home |
-|-------|-----|---------------------|---------|
-| A — scanning | HF artifact scan | `ScanResult`, `Finding` | `scans`, `findings` |
-| A — safety | Red team run | `SafetyResult` (W2+) | `safety_runs`, `safety_findings` |
-| B — efficacy | Task suite run | `EvalRun`, `TaskResult` (Track B) | `eval_runs`, `eval_results` |
-
-Spike files today:
-
-| Track | File |
-|-------|------|
-| A — scanning | `testing/scanning/schemas.py`, `output/<model>/combined_scan.json` |
-| B — efficacy | `testing/eval/truthfulqa/` CSV columns below (W2); Pydantic TBD W3 |
+| Track | Types / files | Tables |
+|-------|---------------|--------|
+| A scanning | `ScanResult` — `testing/scanning/schemas.py` | `scans`, `findings` |
+| A safety | `SafetyResult` (W2+) | `safety_runs`, `safety_findings` |
+| B efficacy | TruthfulQA CSV (W2) → `EvalRun` (W3) | `eval_runs`, `eval_results` |
 
 ### TruthfulQA spike → `eval_results` (W2)
 

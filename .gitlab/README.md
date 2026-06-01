@@ -1,8 +1,6 @@
 # GitLab — how we track work
 
 **Technical docs:** [`docs/`](../docs/) (architecture, tools, frameworks).  
-**Copy-paste issues and milestones:** maintainer keeps [`.gitlab/gitlab-transfer.md`](gitlab-transfer.md) locally (gitignored). That file includes: transfer checklist, user story vs issue vs task, architecture/database timing, and full issue bodies **W1–W7**.
-
 ---
 
 ## Tracks
@@ -32,8 +30,9 @@
 | W2 — Foundation | Spikes, schemas, catalog (mostly done) |
 | W3 — Core pipelines | Packages + structured JSON; W2 carryover |
 | W4 — E2E & tests | Scan E2E; safety on 3 gateway models |
-| W5 — API & integration | Postgres, Celery, `/scans` `/safety` `/evals` |
-| W6 — Dashboard | Nutrition label UI |
+| W5 — API & integration | Flask, Postgres, Celery, `/scans` `/safety` `/evals` |
+| W3+ — Frontend | `frontend/` — model list, mockups |
+| W6 — Frontend | Full nutrition label UI |
 | W7 — MVP demo (freeze) | Full gateway catalog |
 | W8–W9 — Hardening & handoff | FP study, runbooks |
 | W10 — Stretch | Optional |
@@ -47,7 +46,7 @@ Full milestone descriptions to paste: `gitlab-transfer.md` → Milestones sectio
 1. **New issue** — pick template under `issue_templates/` (Track A, Track B, Team, or Task).
 2. **Parent issue** — story for the week; assign milestone; add labels.
 3. **Child tasks** — use `Track_*_Task.md`; set parent link `#PARENT_ID`.
-4. **Integration (W5–W6)** — use **Related issues** between Track A, Track B, and Team API/dashboard issues.
+4. **Integration (W5–W6)** — relate Track A, Track B, and Team API/frontend issues.
 5. **Merge request** — `Closes #N` in description when done.
 
 ### Adding a new week
