@@ -1,0 +1,21 @@
+# Trivy spike (Nithi): docker compose -f docker/compose.trivy.yml run --rm scanner-trivy bash
+
+services:
+  scanner-trivy:
+    build:
+      context: ../../..
+      dockerfile: testing/scanning/docker/Dockerfile.trivy
+
+    user: "${UID}:${GID}"
+
+    volumes:
+      - ../models:/models
+      - ../output:/output
+
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+      - MODEL_ID=${MODEL_ID:-distilbert-base-uncased}
+      - HF_HOME=/models/.cache/huggingface
+
+    stdin_open: true
+    tty: true

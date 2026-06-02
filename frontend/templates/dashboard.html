@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}All models — mockup{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+  <h1>All models</h1>
+  <p class="sub">{{ version }} sketch · placeholder data · {{ suite }} · {{ question_count }} questions</p>
+
+  <table class="model-table">
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>Vendor</th>
+        <th>Hosting</th>
+        <th>Agreement</th>
+        <th>Accuracy</th>
+        <th>Completeness</th>
+        <th>Policy</th>
+        <th>Tone</th>
+        <th>Overall</th>
+        <th>Latency</th>
+        <th>Cost</th>
+        <th>Last eval</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.model }}</td>
+        <td>{{ row.vendor }}</td>
+        <td>{{ row.hosting }}</td>
+        <td class="{{ row.agreement_class }}">{{ row.agreement }}</td>
+        {% if row.scored %}
+          <td class="num">{{ row.accuracy }}</td>
+          <td class="num">{{ row.completeness }}</td>
+          <td class="num">{{ row.policy }}</td>
+          <td class="num">{{ row.tone }}</td>
+          <td class="num"><b>{{ row.overall }}</b></td>
+          <td class="num">{{ row.latency }}</td>
+          <td class="num">{{ row.cost }}</td>
+          <td>{{ row.last_eval }}</td>
+        {% else %}
+          <td class="num dim">—</td>
+          <td class="num dim">—</td>
+          <td class="num dim">—</td>
+          <td class="num dim">—</td>
+          <td class="num dim">—</td>
+          <td class="num dim">—</td>
+          <td class="num dim">—</td>
+          <td class="dim">—</td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

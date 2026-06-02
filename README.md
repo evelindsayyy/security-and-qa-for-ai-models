@@ -1,157 +1,172 @@
 # Security & QA Tools for Duke's AI Models
-### Code+ 2026 — Duke Office of Information Technology
-> **Draft** — subject to change as scope is confirmed with stakeholders
+
+Code+ 2026 — Duke Office of Information Technology
 
 ---
 
 ## Overview
 
-As Duke deploys more AI models locally for privacy and cost reasons, three problems emerge around tracking and validating those models:
+Duke's AI Gateway publishes models to 40,000+ community members but lacks automated vetting before publication. This project produces a **nutrition label** per model across two pillars:
 
-1. **Security** — can a model do something nefarious *to us*? (compromise Duke's infrastructure)
-2. **Safety** — does a model allow users to do something nefarious? (harmful content, policy violations)
-3. **Efficacy** — how well does a model actually do the job asked of it? (performance across Duke use cases)
+| Pillar | Part | Question |
+|--------|------|----------|
+| **Security** | **Scanning** | Can model files or dependencies compromise Duke infrastructure? |
+| **Security** | **Safety** | Can the model be used to cause harm or violate policy at inference time? |
+| **Efficacy** | | How well does the model perform on Duke-relevant tasks (IT support, coursework help, research, med education, creative writing, summarization, and related MVP suites)? |
 
-This project builds the tooling to answer all three questions. The primary production use case is Duke's AI Gateway — the platform that publishes AI models to Duke's 40,000+ community members — which currently has no automated process for vetting models before they are published. This tool provides that missing piece, with a shared dashboard that Duke IT and AI Gateway teams can use to make informed, defensible decisions about AI model adoption.
+**Track A** (scanning + safety) delivers the **security** pillar. **Track B** delivers **efficacy**.
 
-The tool will eventually be designed to be generic enough for potential adoption by other institutions facing the same model vetting problem, but initially specific to Duke.
-
----
-
-## The Three Pillars
-
-### 1. Security
-Evaluates AI model artifacts downloaded from public repositories (primarily Hugging Face) before they touch Duke's systems. Happens at the file level, before a model is ever run. Checks include:
-- Malicious code hidden in model files (pickle/deserialization exploits)
-- Compromised or vulnerable dependencies
-- Supply chain and provenance risks
-- Exposed secrets or credentials in model repositories
-
-Produces a structured risk report with an overall score and per-finding breakdown.
-
-### 2. Safety
-Evaluates model outputs at inference time to determine whether a model can be used to cause harm or violate Duke policy. Checks include:
-- Harmful content generation (weapons, violence, self-harm)
-- Academic dishonesty facilitation
-- Sensitive information disclosure
-- Resistance to jailbreaks and prompt injection
-
-Produces a safety profile across hazard categories with pass/fail and severity ratings.
-
-### 3. Efficacy
-Benchmarks how well different models perform across Duke-relevant task categories and inference configurations. Checks include:
-- IT support and helpdesk Q&A accuracy
-- Document summarization quality
-- Duke policy question answering
-- Response latency and throughput
-
-Produces comparative analytics to help Duke OIT choose the right model for each use case.
+Deliverable: structured, publishable results for OIT and the AI Gateway — depth on ~10 gateway models today, with a path to on-prem open-source models later.
 
 ---
 
 ## Stakeholders
 
-| Name | Role |
-|---|---|
-| Alex Merck, Nick Tripp | Duke IT Security Office (ITSO) — primary |
-| Michael Faber | Duke AI Gateway / CoLab — primary |
-| David McAlpine | Research — TBD involvement |
-| Vanessa Simmons, George Bowen | Project leads |
+| Name | Role | Engagement |
+|------|------|------------|
+| Charley Kneifel | CTO, Duke OIT | Executive sponsor; variation-testing input |
+| Michael Faber | AI Gateway / Innovation Co-Lab | Primary product user; nutrition label for OIT site |
+| Alex Merck, Nick Tripp | Duke IT Security Office (ITSO) | Threat model, deployment-context requirements |
+| Michael Roman | ITSO (via Alex) | Security coordination |
+| Vanessa Simmons, George Bowen | Code+ project leads | Oversight and infrastructure |
 
 ---
 
-## Team
+## Team and tracks
 
-Grace Zhan · Jack Yi · Nithi Vechalapu · Raphael Karamagi
+| Track | Members | Focus |
+|-------|---------|-------|
+| **A — Scanning & Safety** | Raphael Karamagi, Nithi Vechalapu | Security pillar: HF scanning, CVEs, secrets; inference safety and red team |
+| **B — Evaluation** | Grace Zhan, Jack Yi | Efficacy benchmarks, task suites, metrics, operational performance |
 
----
+Docs: [`docs/README.md`](docs/README.md) · Track A: [`docs/track-a-framework.md`](docs/track-a-framework.md) · Track B: [`docs/track-b-framework.md`](docs/track-b-framework.md)
 
-## Tech Stack
-> Partially confirmed — final decisions pending stakeholder meeting
-
-- **Language:** Python 3.11+
-- **API layer:** TBD (likely FastAPI)
-- **Database:** TBD (likely PostgreSQL)
-- **Async jobs:** TBD (likely Celery + Redis — scanning and eval runs are long-running)
-- **Inference:** Duke AI Gateway via LiteLLM (OpenAI-compatible)
-- **Containerization:** Docker / Docker Compose
-- **CI/CD:** GitLab CI
-- **Dashboard:** TBD
-- **Deployment target:** TBD — potentially GPU VM provisioned by Duke OIT
+**Planning:** GitLab — [`.gitlab/README.md`](.gitlab/README.md); technical direction in `docs/`
 
 ---
 
-## Repo Structure (High Level)
+## Deployment context
+
+| Today | Coming |
+|-------|--------|
+| ~10 **gateway** models (Azure/OpenAI/Meta cloud APIs — see [`docs/gateway-models.md`](docs/gateway-models.md)) | On-prem HF hosting (then **scanning** + safety on those repos) |
+| **Safety** and efficacy run against gateway IDs via LiteLLM | **Scanning** on HF artifacts before deploy |
+| Mistral phased out — exclude from new tests | Confirm catalog with OIT |
+
+Evaluation is **deployment-aware** (chatbot vs agentic, tools, data access, guardrails, commercial vs OSS). See ITSO notes in [`docs/team-tracks.md`](docs/team-tracks.md).
+
+---
+
+## Repository layout
 
 ```
-scanner/        # Pillar 1: Security — artifact scanning, pure Python
-evaluator/      # Pillars 2+3: Safety + Efficacy — inference-time evaluation, pure Python
-tasks/          # YAML task suite definitions (Duke-specific prompts and safety probes)
-api/            # Web API layer wrapping all three pillars
-frontend/       # Dashboard UI (stack TBD)
-testing/        # Spike scripts and exploratory work
-docs/           # Architecture, data model, API spec
+scanner/        # Track A: scanning (HF artifacts)
+safety/         # Track A: safety (inference / red team)
+evaluator/      # Track B: efficacy evaluation via AI Gateway
+tasks/          # YAML task suites and rubrics
+models/         # Gateway catalog seed placeholder (week 3+)
+api/            # Flask REST API (week 5+)
+frontend/       # Nutrition label UI (Flask W3+)
+testing/        # Spikes: scanning/, eval/, gateway/
+docs/           # See docs/README.md
 ```
 
-See `docs/architecture.md` for system design and `docs/data-model.md` for DB schema (both in progress).
+Runtime data is gitignored (`testing/scanning/models|output`, `testing/eval/output`, `instance/`). Each has a README so the path is documented in git.
 
 ---
 
-## Getting Started
+## Tech stack
 
-> Full setup instructions will be added once the stack is finalized and Docker Compose is configured.
+| Layer | Choice |
+|-------|--------|
+| Language | Python 3.11+ |
+| Inference | LiteLLM to Duke AI Gateway (OpenAI-compatible) |
+| Security spike | ModelScan, Fickling, pip-audit, OSV API |
+| Containers | Docker Compose on DGX (`asus-dgx-04.oit.duke.edu`) |
+| API / DB / jobs | Flask, PostgreSQL, Celery + Redis (weeks 5+) |
+| UI | `frontend/` — Flask (W3+), full label W6 (mockups) |
+| CI | GitLab CI |
 
-For now, to run the gateway test script:
+Tool matrix: [`docs/tool-stack.md`](docs/tool-stack.md)
+
+---
+
+## Documentation
+
+See [`docs/README.md`](docs/README.md) for the full index.
+
+---
+
+## Getting started
+
+**Frontend (Flask):**
+
+```bash
+uv sync
+uv run flask --app frontend:create_app run --debug
+# or: python main.py  →  /  /dashboard  /models
+```
+
+See [`frontend/README.md`](frontend/README.md).
+
+**Gateway test (host or container):**
 
 ```bash
 cp .env.example .env
-# Add your Duke AI Gateway API key to .env
+# Set OPENAI_API_KEY / DUKE_AI_GATEWAY_API_KEY from dashboard.ai.duke.edu
 pip install -r requirements.txt
 python testing/test_gateway.py
 ```
 
+**TruthfulQA pilot (Track B):**
+
+```bash
+export DUKE_AI_GATEWAY_API_KEY=...
+cd testing/eval/truthfulqa
+python evaluate_truthfulqa_mcq.py --limit 50
+```
+
+**Security scanning spike (DGX, Docker only):**
+
+```bash
+cd testing/scanning
+# See README in that directory for UID/GID and docker compose steps
+```
+
 ---
 
-## Environment Variables
+## Environment variables
 
-See `.env.example` for all required variables. Never commit a real `.env` file.
+See `.env.example`. Never commit `.env`.
 
-Key variables will include:
-- `DUKE_GATEWAY_API_KEY` — Duke AI Gateway key from dashboard.ai.duke.edu
-- `HUGGINGFACE_TOKEN` — HuggingFace Hub API token
-- `DATABASE_URL` — PostgreSQL connection string (once DB is configured)
-- `REDIS_URL` — Redis connection string (once async jobs are configured)
+- `DUKE_AI_GATEWAY_API_KEY` / `OPENAI_API_KEY` — Duke AI Gateway (same token; see `.env.example`)
+- `HUGGINGFACE_TOKEN` — Hugging Face Hub (gated models)
+- `DATABASE_URL`, `REDIS_URL` — when API stack is live
 
 ---
 
-## Project Links
+## Links
 
-- Project page: https://codeplus.duke.edu/project/security-quality-assurance-tools-dukes-ai-models/
-- GitLab repo: https://gitlab.oit.duke.edu/codeplus/security-and-qa-for-ai-models
-- Duke AI Suite: https://oit.duke.edu/ai-suite
-- Duke AI Suite Models Guide: https://oit.duke.edu/help/articles/kb0038832/
-- Duke AI Gateway dashboard: https://dashboard.ai.duke.edu
+- [Code+ project page](https://codeplus.duke.edu/project/security-quality-assurance-tools-dukes-ai-models/)
+- [GitLab repository](https://gitlab.oit.duke.edu/codeplus/security-and-qa-for-ai-models)
+- [Duke AI Suite](https://oit.duke.edu/ai-suite)
+- [AI Gateway dashboard](https://dashboard.ai.duke.edu)
 
 ---
 
 ## Status
 
 | Milestone | Status |
-|---|---|
-| Gateway API tested | Done |
-| Stakeholder meeting — Alex + Nick (ITSO) | Pending |
-| Stakeholder meeting — Michael Faber (AI Gateway) | Pending |
-| Three-pillar framing confirmed | In progress |
-| Stack finalized | Pending stakeholder meetings |
-| GPU VM provisioned | Pending (George Bowen) |
-| Repo structure + CI | Week 2 |
-| Security scanner MVP | Weeks 3–4 |
-| Safety + efficacy evaluator MVP | Weeks 3–4 (parallel) |
-| API layer + dashboard | Weeks 5–6 |
-| Integration + deployment | Week 7 |
-| Polish + handoff | Weeks 8–9 |
-| Stretch goals (ML-BOM, scheduling, external packaging) | Week 10 |
-
----
-
-*This README will be updated as scope is confirmed and the project progresses.*
+|-----------|--------|
+| Stakeholder calls (Charley, Michael Faber) | Done |
+| ITSO call (Alex, Nick) | Done |
+| Gateway API test | Done |
+| Security scanning spike (ModelScan, Fickling, OSV/pip-audit) | Done |
+| Track / tool / evaluation docs | Done |
+| Week 2 scanning spike + TruthfulQA pilot | Done |
+| Safety schemas + promptfoo; Team Docker/CI | Week 3 |
+| Scanner + safety packages | Weeks 3–4 |
+| Evaluation (`evaluator/`) | W3: MVP suites, 1 gateway model; W4+: pilot scale |
+| API + persistence | Week 5 |
+| Dashboard + DGX deploy | Week 6 |
+| Stakeholder demo, scope freeze | Week 7 |
