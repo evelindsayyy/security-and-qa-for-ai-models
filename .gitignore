@@ -30,6 +30,9 @@ jack/
 # Flask local folder (auto-created at repo root: config.py, frontend.sqlite)
 instance/
 
+# Ignore tqa test results
+tqa_results/
+
 # Evaluator cache — regenerable, large, contains responses
 evaluator/cache/
 evaluator/results/
