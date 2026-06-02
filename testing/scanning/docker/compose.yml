@@ -1,14 +1,16 @@
+# Run from testing/scanning/: docker compose -f docker/compose.yml build
+
 services:
-  scanner-trivy:
+  scanner:
     build:
-      context: ../..
-      dockerfile: testing/security_scanning_tests/Dockerfile2
+      context: ../../..
+      dockerfile: testing/scanning/docker/Dockerfile
 
     user: "${UID}:${GID}"
 
     volumes:
-      - ./models:/models
-      - ./output:/output
+      - ../models:/models
+      - ../output:/output
 
     environment:
       - HF_TOKEN=${HF_TOKEN:-}

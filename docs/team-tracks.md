@@ -6,12 +6,12 @@ Code+ 2026 — Duke OIT. The nutrition label has two pillars — **security** (s
 
 | Doc | Contents |
 |-----|----------|
-| [`track-a-framework.md`](track-a-framework.md) | Track A: scanning, safety, security pillar |
-| [`gateway-models.md`](gateway-models.md) | Duke gateway catalog; HF scan list; test tiers |
-| [`data-model.md`](data-model.md) | Postgres sketch; structured outputs |
-| [`evaluation-framework.md`](evaluation-framework.md) | Track B task design |
-| [`tool-stack.md`](tool-stack.md) | Tools and rationale |
+| [`track-a-framework.md`](track-a-framework.md) | Track A: scanning, safety |
+| [`track-b-framework.md`](track-b-framework.md) | Track B: efficacy |
+| [`gateway-models.md`](gateway-models.md) | Gateway + HF catalogs |
+| [`data-model.md`](data-model.md) | Postgres sketch |
 | [`architecture.md`](architecture.md) | System design |
+| [`tool-stack.md`](tool-stack.md) | Tools |
 
 ---
 
@@ -19,26 +19,37 @@ Code+ 2026 — Duke OIT. The nutrition label has two pillars — **security** (s
 
 | Track | Members | Delivers | Code |
 |-------|---------|----------|------|
-| **A — Scanning & Safety** | Raphael Karamagi, Nithi Vechalapu | **Security** pillar (scanning + safety) | `scanner/`, `safety/` |
+| **A — Scanning & Safety** | Raphael Karamagi, Nithi Vechalapu | **Security** pillar | `scanner/`, `safety/` (W3+) |
 | **B — Evaluation** | Grace Zhan, Jack Yi | **Efficacy** pillar | `evaluator/`, `tasks/` |
 
-| Label part | Track A component | Question |
-|------------|-------------------|----------|
-| Security → **Scanning** | `scanner/` | Files, deps, secrets |
-| Security → **Safety** | `safety/` | Harm, policy, red team |
-| **Efficacy** | `evaluator/` | Task performance |
+---
+
+## Weekly outcomes 
+
+| Week | Focus | Track A | Track B |
+|------|------|---------|---------|
+| 1 | Scaffold | Tool research | Gateway test |
+| 2 | scan/eval spikes, `docs/data-model.md` sketch, gateway doc | HF scan spike; TruthfulQA pilot | Gateway smoke |
+| 3 | Docker, CI, catalog, `frontend/` | `scanner/` + `safety/`; 1-model safety | `evaluator/`; MVP suites, 1 gateway model |
+| 4 | E2E tests; frontend stubs | Scan E2E; safety 3 models | MVP suites on 3 pilot models |
+| 5 | Postgres + `api/` | `/scans`, `/safety` | `/evals` |
+| 6 | `frontend/` full UI | Scanning + safety views | Efficacy charts |
+| 7 | Demo freeze | Full gateway safety + HF samples | Gateway efficacy |
+| 8–9 | Hardening / handoff | FP study | Judge validation |
+| 10 | Stretch | Optional | Optional |
+
+Shared: `frontend/`, `api/` (W5+), Postgres, Celery, GitLab CI.
 
 ---
 
 ## Deployment context
 
-~10 cloud gateway models today; on-prem Hugging Face models coming. Store `deployment_context` per model (chatbot vs agentic, tools, guardrails). ITSO: safety and efficacy probes must match deployment type.
+~10 cloud gateway models today; on-prem HF coming. ITSO: probes must match deployment type (chatbot vs agentic, tools, guardrails).
 
 | Deployment | Scanning | Safety | Efficacy |
 |------------|----------|--------|----------|
-| Cloud gateway | Lower priority | Yes | Yes |
+| Cloud gateway | N/A (no HF repo) | Yes | Yes |
 | OSS on-prem | Yes | Yes | Yes |
-| Unknown HF repo | Yes | Yes | Optional |
 
 ---
 
@@ -48,27 +59,6 @@ Code+ 2026 — Duke OIT. The nutrition label has two pillars — **security** (s
 |-------|--------|
 | A — scanning | ModelScan, Fickling, pip-audit, OSV, TruffleHog |
 | A — safety | garak, promptfoo, Duke probes |
-| B | LiteLLM, Duke YAML suites, ROUGE-L, LLM-as-judge |
+| B | LiteLLM, Duke YAML, ROUGE-L, LLM-as-judge |
 
 Details: [`tool-stack.md`](tool-stack.md).
-
----
-
-## Weekly outcomes
-
-Tasks live in GitLab. High-level goals:
-
-| Week | Team | Track A (scanning & safety) | Track B (efficacy) |
-|------|------|----------------------------|---------------------|
-| 1 | Scaffold, architecture, gateway test | Tool research (done) | Gateway test (done) |
-| 2 | Data model, catalog, Docker, CI, mockups | HF scan regression; gap map; SafetyResult; promptfoo on **1 gateway** model | Schemas; loader; gateway smoke |
-| 3 | Structured output | scanner/ + safety/; safety on **1 gateway** model | Multi-model runner; IT support E2E |
-| 4 | E2E + unit tests | Scan E2E; garak + promptfoo on **3 gateway** models | Core suites; align pilot models with Track A |
-| 5 | **API, Celery, Postgres** | `/scans`, `/safety` | `/evals`, LLM-as-judge |
-| 6 | **Dashboard** | Scanning + safety UI | Efficacy charts |
-| 7 | Demo, **freeze** | Security pillar complete on gateway + HF samples | Gateway efficacy runs |
-| 8 | Hardening | Scanning FP study ~50 HF models | Judge validation |
-| 9 | Handoff | Limitations, ADRs | Eval limitations, runbooks |
-| 10 | Stretch (1–2) | Optional scanning/safety extras | Optional suites / benchmarks |
-
-Shared all weeks: `api/`, `frontend/`, Postgres, Celery, GitLab CI, nutrition label UI.

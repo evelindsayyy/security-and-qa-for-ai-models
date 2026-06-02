@@ -1,15 +1,34 @@
 # Ignore the python & local virtual environment
 venv/
+.venv/
+**/.venv/
 .env
-testing/security_scanning_tests/.env
+testing/scanning/.env
 
 # Ignore system files
 .DS_Store
 __pycache__/
 
-# security scanning test runtime data (large, machine-local — lives on dgx after bind mount)
-testing/security_scanning_tests/models/
-testing/security_scanning_tests/output/
+# scanning spike runtime data (DGX bind mount)
+testing/scanning/models/*
+!testing/scanning/models/README.md
+testing/scanning/output/*
+!testing/scanning/output/README.md
 
-# Ignore test results
+.gitlab/gitlab-transfer.md
+
+# eval spikes — regenerate locally
+testing/eval/output/*
+!testing/eval/output/README.md
+!testing/eval/output/samples/
+!testing/eval/output/samples/**
+
+# never commit keys
+**/sk-*.txt
+jack/
+
+# Flask local folder (auto-created at repo root: config.py, frontend.sqlite)
+instance/
+
+# Ignore tqa test results
 tqa_results/

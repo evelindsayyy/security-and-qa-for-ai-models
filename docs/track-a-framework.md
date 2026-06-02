@@ -2,7 +2,7 @@
 
 Track A delivers the nutrition label **security** pillar through two parts: **scanning** (artifacts) and **safety** (inference / red team).
 
-Track B: [`evaluation-framework.md`](evaluation-framework.md). Tools: [`tool-stack.md`](tool-stack.md). Schedule: [`team-tracks.md`](team-tracks.md).
+Track B: [`track-b-framework.md`](track-b-framework.md). Tools: [`tool-stack.md`](tool-stack.md). Schedule: [`team-tracks.md`](team-tracks.md).
 
 ---
 
@@ -20,7 +20,7 @@ Track B: [`evaluation-framework.md`](evaluation-framework.md). Tools: [`tool-sta
 ## Scanning (artifacts)
 
 When: before on-prem or HF weights are deployed.  
-Where: `scanner/` (production), `testing/security_scanning_tests/` (spike).
+Where: `scanner/` (production), `testing/scanning/` (spike).
 
 ```text
 model_id → metadata (optional) → download → ModelScan + Fickling
@@ -60,24 +60,16 @@ model_ids + deployment_context
 | [promptfoo](https://github.com/promptfoo/promptfoo) | Declarative red-team configs, graders, CI-friendly regression |
 | Duke probes | Duke-specific policy and academic-integrity scenarios |
 
-Academic-dishonesty and jailbreak testing belong here, not in Track B efficacy suites.
-
 ---
 
 ## Output
 
-| Part | Artifact | Location |
-|------|----------|----------|
-| Scanning | `ScanResult` | Spike: `testing/security_scanning_tests/output/`; production: Postgres via `scanner/` |
-| Safety | `SafetyResult` | Production: Postgres via `safety/` |
+Normalized shapes: [`data-model.md`](data-model.md) (`scans`/`findings`, `safety_runs`/`safety_findings`). Week 3: run tools, capture raw JSON, map into Pydantic in `scanner/` and `safety/` before Postgres (week 5).
 
-`ScanRequest`, `ScanResult`, `Finding` — `schemas.py` (spike). `SafetyResult` — see GitLab W2-2.
-
-| Field (scan spike) | Notes |
-|------------------|-------|
-| `severity_tier` | ModelScan-based until risk reconciler (week 3) |
-| `fickling_severity` | Merged in week 3 scorer |
-| `overall_risk_score` | Rubric TBD |
+| Part | Spike (learn tool output) | Production |
+|------|---------------------------|------------|
+| Scanning | `testing/scanning/` → `ScanResult` in `schemas.py` | `scanner/` → JSON then Postgres |
+| Safety | Run garak / promptfoo; sample output in issue | `safety/` → `SafetyResult` JSON |
 
 ---
 
@@ -108,13 +100,13 @@ Do not block deploy on Fickling alone. Risk scorer must merge ModelScan and Fick
 
 | Week | `scanner/` | `safety/` |
 |------|------------|-----------|
-| W2 | Spike only (`testing/security_scanning_tests/`) | Schemas only |
+| W2 | Spike only (`testing/scanning/`) | Schemas only (slipped) |
 | W3 | Extract package; `risk_scorer`, `pipeline` v0 | `garak_runner`, `promptfoo/`, probes v0 |
 | W4 | deps, secrets, E2E `scan_model()` | Pilot 3 gateway models |
 | W5 | Celery worker integration | Celery worker; writes `safety_runs` |
-| W6 | — | — (UI reads DB via API) |
+| W6 | — | UI in `frontend/` (reads `api/`) |
 
-Target layout documented in [`.gitlab/README.md`](../.gitlab/README.md) § Package structure.
+Target layout: [`scanner/README.md`](../scanner/README.md), [`docs/architecture.md`](architecture.md).
 
 ---
 

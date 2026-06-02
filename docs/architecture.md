@@ -1,6 +1,6 @@
 # Architecture
 
-> Draft
+> Draft — **components, flows, deployment.** Tables and field examples: [`data-model.md`](data-model.md).
 
 ## Overview
 
@@ -12,44 +12,79 @@ Two nutrition-label pillars (**security**, **efficacy**) — two development tra
 | **Security** | Safety | `safety/` | A | Raphael, Nithi |
 | **Efficacy** | | `evaluator/` | B | Grace, Jack |
 
-**Track A** delivers the **security** pillar: **scanning** (artifacts before deploy) and **safety** (inference harm, policy, red team). **Track B** delivers **efficacy** via Duke task suites and public benchmark subsets (see [`evaluation-framework.md`](evaluation-framework.md)), plus operational metrics (latency, tokens, cost, failure rate).
+**Track A** delivers the **security** pillar: **scanning** (artifacts before deploy) and **safety** (inference harm, policy, red team). **Track B** delivers **efficacy** via Duke task suites and public benchmark subsets (see [`track-b-framework.md`](track-b-framework.md)), plus operational metrics (latency, tokens, cost, failure rate).
 
-All tracks push structured results to a shared Postgres database. A FastAPI service exposes results to a Next.js dashboard.
+All tracks push structured results to a shared Postgres database. **`api/`** (Flask, week 5+) serves JSON; **`frontend/`** (Flask from week 3, full label UI by week 6) is the nutrition label UI per Grace's mockups.
 
-## System Context
+## System context
+
+### Write paths (one per job type)
+
+Each POST picks a Celery task, one external system, and one result family in Postgres. Redis is only the handoff from Flask to Celery.
+
+**Scan** — user submits a Hugging Face model repo (`POST /scans`). Artifact inspection does not use the Duke gateway.
 
 ```mermaid
-flowchart LR
-  User([Duke IT / Gateway team])
-  HF[(Hugging Face Hub)]
-  GW[Duke AI Gateway<br/>LiteLLM proxy]
-
-  subgraph VM[GPU VM — Duke OIT]
-    UI[Next.js + Tailwind<br/>Dashboard]
-    API[FastAPI<br/>API layer]
-    Q[Redis<br/>queue]
-    W[Celery workers]
-    Scanner[scanner/<br/>Scanning — Track A]
-    Safety[safety/<br/>Safety — Track A]
-    Evaluator[evaluator/<br/>Efficacy — Track B]
-    DB[(PostgreSQL)]
-  end
-
-  User -->|HTTPS| UI
-  UI -->|REST| API
-  API <--> DB
-  API -->|enqueue| Q
-  Q --> W
-  W --> Scanner
-  W --> Safety
-  W --> Evaluator
-  Scanner -->|fetch model| HF
-  Safety -->|safety probes| GW
-  Evaluator -->|efficacy tasks| GW
-  Scanner --> DB
-  Safety --> DB
-  Evaluator --> DB
+flowchart TD
+  UI1[Frontend] --> API1[Flask POST /scans]
+  API1 --> PGq1[Postgres: scan queued]
+  API1 --> R1[Redis]
+  API1 --> ID1[scan_id]
+  R1 --> CEL1[Celery: scanner]
+  CEL1 --> HF[Hugging Face Hub]
+  CEL1 --> PGs1[Postgres: scans + findings]
 ```
+
+**Safety** — user starts red-team / policy probes on gateway models (`POST /safety`). Probes call live models via chat API.
+
+```mermaid
+flowchart TD
+  UI2[Frontend] --> API2[Flask POST /safety]
+  API2 --> PGq2[Postgres: safety_run queued]
+  API2 --> R2[Redis]
+  API2 --> ID2[safety_run_id]
+  R2 --> CEL2[Celery: safety]
+  CEL2 --> GW1[Duke AI Gateway]
+  CEL2 --> PGs2[Postgres: safety_runs + safety_findings]
+```
+
+**Eval** — user runs a task suite against one or more gateway models (`POST /evals`). Scoring uses gateway inference, not HF downloads.
+
+```mermaid
+flowchart TD
+  UI3[Frontend] --> API3[Flask POST /evals]
+  API3 --> PGq3[Postgres: eval_run queued]
+  API3 --> R3[Redis]
+  API3 --> ID3[eval_run_id]
+  R3 --> CEL3[Celery: evaluator]
+  CEL3 --> GW2[Duke AI Gateway]
+  CEL3 --> PGs3[Postgres: eval_runs + eval_results]
+```
+
+| Job | POST | Celery package | External | Postgres tables |
+|-----|------|----------------|----------|-----------------|
+| Scan | `/scans` | `scanner/` | Hugging Face Hub (files) | `scans`, `findings` |
+| Safety | `/safety` | `safety/` | Duke AI Gateway (chat) | `safety_runs`, `safety_findings` |
+| Eval | `/evals` | `evaluator/` | Duke AI Gateway (chat) | `eval_runs`, `eval_results` |
+
+Track A: scanning + safety. Track B: evaluator.
+
+### Read path (GET)
+
+Same for all three job types: the frontend calls a GET endpoint with the job id (or model id for history); Flask returns JSON from Postgres.
+
+```mermaid
+flowchart TD
+  UI[Frontend] --> API[Flask GET]
+  API --> PGr[Postgres: read status + results]
+```
+
+| When | GET endpoint | What the user sees |
+|------|--------------|-------------------|
+| Poll a scan | `GET /scans/{id}` | `status`, risk level, findings |
+| Poll safety | `GET /safety/{id}` | probe pass/fail by category |
+| Poll eval | `GET /evals/{id}` | per-task scores, comparison |
+| Browse label | `GET /models`, `GET /models/{id}` | inventory + full scan/safety/eval history |
 
 ## Components
 
@@ -78,23 +113,11 @@ Output: `SafetyResult` in Postgres. See [`track-a-framework.md`](track-a-framewo
 
 ### Evaluator — `evaluator/` (efficacy — Track B)
 
-Pure-Python, inference-level **performance** evaluation. Calls Duke Gateway models through LiteLLM.
-
-- **Runner** — multiple models × multiple tasks × temperature variations, with timeouts and error handling.
-- **Task loader** — Duke YAML suites from `tasks/`; optional imported subsets from public benchmarks per [`evaluation-framework.md`](evaluation-framework.md).
-- **Three-layer eval model** — (1) Duke-custom tasks primary; (2) adapted benchmark subsets where task type matches; (3) published external scores as reference on nutrition label only.
-- **Efficacy metrics** — ROUGE-L for text overlap; LLM-as-judge for graded scoring (see `tasks/rubrics/`).
-- **Variation testing** — N rephrased prompts per task, measure response consistency (Charley Kneifel).
-- **Operational metrics** — latency, token usage, cost, failure rate per call (ITSO: availability is part of CIA).
-- **Comparator** — structured side-by-side output across N models.
-
-Output: `EvalRun` + `TaskResult` rows in Postgres (`provenance`: `duke` | `benchmark`).
-
-Full benchmark mapping (SWE-bench, MT-Bench, MMLU, function-calling leaderboards, etc.): [`evaluation-framework.md`](evaluation-framework.md).
+Gateway task evaluation via LiteLLM. Loads Duke suites from `tasks/`; records scores and operational metrics (latency, tokens, cost). Suite list and rollout: [`track-b-framework.md`](track-b-framework.md). Week 5: `eval_runs` / `eval_results` in Postgres.
 
 ### API — `api/`
 
-FastAPI service wrapping security (scanning + safety) and efficacy. Async-by-default: long-running scans and evals are enqueued, never block the request.
+Flask application (factory pattern) wrapping security (scanning + safety) and efficacy. Long-running scans and evals are enqueued to Celery; routes return a job id without blocking.
 
 | Endpoint | Purpose |
 |---|---|
@@ -107,76 +130,31 @@ FastAPI service wrapping security (scanning + safety) and efficacy. Async-by-def
 | `POST /evals` | submit an efficacy eval run (list of model IDs + task suite) |
 | `GET /evals/{id}` | results, including cross-model comparison |
 
-### Async jobs — Celery + Redis
+### Async jobs and database
 
-Scans and evaluations are long-running. The API enqueues a job in Redis; Celery workers pick it up, run the scanner or evaluator, and write results back to Postgres. The API never blocks. For GPU-bound eval jobs, the worker may shell out to a SLURM-scheduled batch process when the VM provides cluster access — TBD with Duke OIT.
-
-### Database — PostgreSQL
-
-Single Postgres instance on the GPU VM. **`models`** rows represent gateway catalog entries (and optional HF repos for on-prem). Full sketch: [`data-model.md`](data-model.md).
-
-Week 2: Team agrees `deployment_context` JSON and pillar field names. Week 5: migrations + API persistence for scans, safety runs, and eval runs.
+Long jobs: Flask → Redis → Celery → Postgres (see [System context](#system-context)). Schema: [`data-model.md`](data-model.md). Week 5: migrations and API persistence.
 
 ### Frontend — `frontend/`
 
-Next.js + Tailwind. Three pages for the prototype:
+Nutrition label UI. See [`frontend/README.md`](../frontend/README.md).
 
-- **Model list** — inventory with security (scanning + safety) and efficacy status
-- **Model detail** — scanning findings, safety heatmap, efficacy comparison charts
-- **Submit new scan** — form taking a HF URL
+| Week | Focus |
+|------|--------|
+| 3 | Flask app; model list (`/models`); align with mockups |
+| 4–5 | Model detail stubs; call `api/` when live |
+| 6 | Full label — list, detail (scan / safety / efficacy), submit-scan form |
 
-Recharts for charts. Duke Shibboleth via VM config; if blocked, skip auth for the prototype and document it as future work.
+Stack may add Next.js/Tailwind in the same directory; Recharts for charts. Auth: Duke Shibboleth if available, else VM firewall for prototype.
 
-## Scan request flow
+## Job flows (scan, safety, eval)
 
-```mermaid
-sequenceDiagram
-  participant U as User (Dashboard)
-  participant A as FastAPI
-  participant R as Redis
-  participant W as Celery worker
-  participant HF as Hugging Face
-  participant DB as Postgres
+End-to-end paths and GET pairing: [System context](#system-context). Summary:
 
-  U->>A: POST /scans { model_id }
-  A->>DB: insert scan(status=queued)
-  A->>R: enqueue scan job
-  A-->>U: 202 { scan_id }
-  W->>R: dequeue
-  W->>HF: download model artifacts
-  W->>W: format + pickle + deps + secrets
-  W->>W: risk scoring
-  W->>DB: update scan, insert findings
-  U->>A: GET /scans/{id}
-  A->>DB: read
-  A-->>U: ScanResult JSON
-```
-
-## Eval request flow
-
-```mermaid
-sequenceDiagram
-  participant U as User (Dashboard)
-  participant A as FastAPI
-  participant R as Redis
-  participant W as Celery worker
-  participant GW as Duke AI Gateway
-  participant DB as Postgres
-
-  U->>A: POST /evals { model_ids, task_suite }
-  A->>DB: insert eval_run(status=queued)
-  A->>R: enqueue eval job
-  A-->>U: 202 { eval_run_id }
-  W->>R: dequeue
-  loop for each model × task × temperature
-    W->>GW: chat/completions
-    GW-->>W: response + usage
-  end
-  W->>W: metrics + LLM-as-judge
-  W->>DB: insert eval_results
-  U->>A: GET /evals/{id}
-  A-->>U: results + comparison
-```
+| Job | Start (POST) | Poll / view (GET) |
+|-----|--------------|-------------------|
+| Scan | `POST /scans` → `scanner/` → Hugging Face Hub | `GET /scans/{id}` |
+| Safety | `POST /safety` → `safety/` → Duke AI Gateway | `GET /safety/{id}` |
+| Eval | `POST /evals` → `evaluator/` → Duke AI Gateway | `GET /evals/{id}` |
 
 ## Deployment
 
@@ -188,7 +166,7 @@ sequenceDiagram
 ## Open Questions
 
 - Async backend — Celery + Redis is the default; SLURM only if Duke OIT exposes the cluster scheduler from the GPU VM.
-- Frontend stack — Next.js + Tailwind is the working choice; Streamlit is a fallback if frontend ownership becomes a problem.
+- Frontend stack — Flask in `frontend/` now; Next.js + Tailwind possible week 6 in the same directory.
 - Auth — Duke Shibboleth preferred; prototype may run unauthenticated behind the VM firewall.
 - LiteLLM guardrail hooks — document integration path (week 5); prototype may ship without hooks.
-- Public benchmark pilot — IFEval vs DocBench-style subset (see evaluation-framework).
+- Public benchmark pilot — IFEval vs DocBench-style subset (see track-b-framework).

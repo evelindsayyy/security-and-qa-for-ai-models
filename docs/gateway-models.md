@@ -2,9 +2,14 @@
 
 Models available through the **Duke AI Gateway** (LiteLLM / Azure-backed). Used for **safety** (Track A) and **efficacy** (Track B). Not used for **scanning** — scanning uses Hugging Face repo IDs on DGX.
 
-Confirm exact **LiteLLM `model=` strings** with OIT (gateway display names may include spaces, e.g. `GPT 4.1 Mini` in `testing/test_gateway.py`).
+Confirm exact **LiteLLM `model=` strings** with OIT
 
-**Mistral:** being phased out — do not plan new tests on Mistral; remove from catalog when gateway drops it.
+| LiteLLM `model=` (spike) | Alias | Notes |
+|----------------------------|-------|-------|
+| `gpt-5.4` | duke-gpt54 | TruthfulQA, LiteLLM scripts |
+| `Llama 3.3` | duke-llama33 | |
+| `Mistral on-site` | duke-mistral | **Deprecated** — do not add new runs |
+| `GPT 4.1 Mini` | — | OpenAI SDK (`testing/test_gateway.py`) |
 
 ---
 
@@ -15,17 +20,13 @@ Confirm exact **LiteLLM `model=` strings** with OIT (gateway display names may i
 | **Cloud gateway** (closed weights via API) | N/A until model is hosted as HF on-prem | Primary now (~10 models) |
 | **On-prem OSS** (future) | Required before deploy | Same gateway or direct endpoint TBD |
 
-Store on each catalog row: `deployment_type`, `provider`, `gateway_model_id`, optional `hf_repo` (on-prem only).
-
 ---
 
 ## General chat models (cloud)
 
-Costs are per 1M tokens (input / output) — use for **budgeting** efficacy and large safety sweeps.
-
 | Gateway model (confirm ID) | Provider | Input | Output | Notes |
 |----------------------------|----------|-------|--------|-------|
-| GPT-5.4 | OpenAI | $2.50 | $15.00 | Flagship |
+| GPT-5.4 | OpenAI | $2.50 | $15.00 | Flagship* |
 | GPT-5.3-chat, GPT-5.2, GPT-5.2-chat | OpenAI | $1.75 | $14.00 | |
 | GPT-5.1, GPT-5.1-chat | OpenAI | $1.25 | $10.00 | |
 | GPT-5, GPT-5-chat | OpenAI | $1.25 | $10.00 | |
@@ -43,7 +44,7 @@ Costs are per 1M tokens (input / output) — use for **budgeting** efficacy and 
 
 ## Specialty models (cloud)
 
-Use only when a task explicitly requires them (Track B may own; Track A safety usually uses **general chat** models).
+Use only when a task explicitly requires them (Track B may use; Track A safety usually uses **general chat** models).
 
 | Model | Notes |
 |-------|--------|
@@ -58,7 +59,7 @@ Use only when a task explicitly requires them (Track B may own; Track A safety u
 
 ## Scanning test models (HF on DGX — not gateway)
 
-Separate catalog for **artifact scanning** spikes (`testing/security_scanning_tests/`):
+Separate catalog for **artifact scanning** spikes (`testing/scanning/`):
 
 | HF `MODEL_ID` | Role |
 |---------------|------|
@@ -72,19 +73,8 @@ On-prem pilot (week 7+): map gateway **Llama 4** / **GPT-OSS** to HF repos when 
 
 ---
 
-## Recommended test tiers (Track A safety)
 
-| Tier | When | Models (gateway IDs — confirm with OIT) |
-|------|------|------------------------------------------|
-| **Smoke** | W2–W3 | 1 × cheap chat (`GPT 4.1 Mini` or `GPT-5-nano`) |
-| **Pilot** | W4 | 3 models: 1 OpenAI mid-tier, 1 Llama 4, 1 mini/nano |
-| **Demo** | W7 | All general chat models in gateway catalog (exclude specialty unless required) |
-
-Record per run: `gateway_model_id`, `deployment_context`, token usage, latency, raw tool JSON paths.
-
----
-
-## Open decisions (confirm with Michael Faber / OIT)
+## Open decisions 
 
 - Canonical list of ~10 production gateway models for nutrition label v1
 - Exact LiteLLM model string for each row in this doc

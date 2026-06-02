@@ -5,6 +5,6 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY testing/security_scanning_tests/*.py /app/
+COPY testing/scanning/*.py /app/
 
 CMD ["bash"]
