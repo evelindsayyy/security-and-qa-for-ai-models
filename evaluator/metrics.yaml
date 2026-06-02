@@ -1,0 +1,256 @@
+# =============================================================================
+# Project Metric Taxonomy — v1
+# =============================================================================
+# Canonical list of what the Efficacy pillar measures, organized into the
+# three buckets HELM identified:
+#
+#   1. Response quality   — what the judge scores about a single response
+#   2. Operational        — measured by the system at call time, not judged
+#   3. Robustness         — derived from comparing scores under perturbation
+#
+# Each bucket is produced by a different part of the pipeline. Keeping them
+# distinct in the metric taxonomy (and on the dashboard) reflects HELM's
+# emphasis on multi-metric reporting: no single number collapses everything.
+#
+# Stakeholder mapping (so we can defend why we measure each):
+#   - Charley (Dr. Kneifel): continuous quality + dependency safety
+#   - Faber (AI Gateway): operational metrics matter for deployment decisions
+#   - HELM: robustness as a first-class metric, not afterthought
+#
+# DO NOT EDIT in place mid-project. Bump version to v2 in a new file if
+# the taxonomy changes; result rows reference this version.
+# =============================================================================
+
+taxonomy_version: "v1"
+description: |
+  Three-bucket metric taxonomy for the Efficacy pillar. The Safety pillar
+  (separate teammate) maintains its own metric set; this file does not
+  cover adversarial / red-team metrics.
+
+
+# -----------------------------------------------------------------------------
+# Bucket 1: Response quality metrics
+# -----------------------------------------------------------------------------
+# Produced by: the LLM-as-judge, per question, per candidate model.
+# Source of truth: the rubric YAML for each task type (e.g., it_support.yaml).
+# Stored in: EvaluationResult.scores (per-dimension) and .overall (weighted).
+#
+# These are the only metrics the judge produces. Everything else in this file
+# is measured or derived, not judged.
+
+response_quality:
+  produced_by: "llm_judge"
+  granularity: "per_question_per_model"
+  source: "tasks/rubrics/<task>.yaml"
+
+  dimensions:
+    # The dimensions below are the union across our task suites. Each task's
+    # rubric defines which subset applies to that task. The judge only scores
+    # dimensions present in the rubric it loads.
+
+    accuracy:
+      definition: "Factual correctness, especially Duke-specific facts."
+      scale: [1, 5]
+      applies_to: ["it_support", "policy_qa", "summarization"]
+
+    completeness:
+      definition: "Includes the steps and context the user needs to act."
+      scale: [1, 5]
+      applies_to: ["it_support", "policy_qa"]
+
+    policy_adherence:
+      definition: |
+        Avoids recommending actions that violate Duke policy in normal
+        (non-adversarial) use. Distinct from the Safety pillar's
+        adversarial harm-resistance metric.
+      scale: [1, 5]
+      applies_to: ["it_support", "policy_qa"]
+
+    tone:
+      definition: "Clear, professional, appropriate for IT support."
+      scale: [1, 3]
+      applies_to: ["it_support", "policy_qa"]
+
+    faithfulness:
+      definition: "For summarization: stays grounded in the source document."
+      scale: [1, 5]
+      applies_to: ["summarization"]
+
+    coverage:
+      definition: "For summarization: includes the main points of the source."
+      scale: [1, 5]
+      applies_to: ["summarization"]
+
+    concision:
+      definition: "For summarization: avoids unnecessary length."
+      scale: [1, 3]
+      applies_to: ["summarization"]
+
+
+# -----------------------------------------------------------------------------
+# Bucket 2: Operational metrics
+# -----------------------------------------------------------------------------
+# Produced by: the Gateway client wrapper, at the time of every candidate call.
+# Granularity: per call (then aggregated per-model in the summary).
+# Stored in: EvaluationResult.operational on every row.
+#
+# These are MEASURED, not judged. The judge never sees them. They go directly
+# from API response metadata into the result row.
+#
+# Why separate: Faber explicitly named these as deployment-decision inputs.
+# A model that scores 4.8/5 on quality but takes 12 seconds and costs $0.04
+# per response is not deployable for Gateway use cases that need real-time
+# responses. The dashboard MUST show these alongside quality scores.
+
+operational:
+  produced_by: "gateway_client"
+  granularity: "per_call"
+
+  metrics:
+    latency_ms:
+      definition: "Wall-clock time from request send to response received."
+      unit: "milliseconds"
+      aggregation: ["mean", "p50", "p95"]
+      stakeholder: "Faber — Gateway deployment decisions"
+
+    prompt_tokens:
+      definition: "Tokens consumed by the input prompt (system + user)."
+      unit: "tokens"
+      aggregation: ["mean", "sum"]
+      stakeholder: "Faber — cost projections"
+
+    completion_tokens:
+      definition: "Tokens produced in the response."
+      unit: "tokens"
+      aggregation: ["mean", "sum"]
+      stakeholder: "Faber — cost projections; also a verbosity-bias signal"
+
+    estimated_cost_usd:
+      definition: |
+        Estimated dollar cost of the call. Computed at call time using
+        the model's published per-token pricing; this is an estimate, not
+        an invoice.
+      unit: "USD"
+      aggregation: ["mean", "sum"]
+      stakeholder: "Faber — Gateway budget planning"
+
+    failure_rate:
+      definition: |
+        Fraction of calls that errored out (timeout, API error, malformed
+        response). Aggregated only, not per-row.
+      unit: "ratio"
+      granularity: "per_model_per_suite"
+      aggregation: ["mean"]
+      stakeholder: "Faber — reliability for production"
+
+    timeout_rate:
+      definition: "Fraction of calls that hit the timeout."
+      unit: "ratio"
+      granularity: "per_model_per_suite"
+      aggregation: ["mean"]
+      stakeholder: "Faber — reliability for production"
+
+
+# -----------------------------------------------------------------------------
+# Bucket 3: Robustness metrics
+# -----------------------------------------------------------------------------
+# Produced by: a post-processing step that compares quality scores between
+# original questions and their perturbed variants.
+# Granularity: per model, per suite (NOT per question — a single question
+# can't have a robustness score, only a question + its variants can).
+# Stored in: a separate robustness summary file, not in EvaluationResult rows.
+#
+# Why separate: robustness is inherently a comparison, not a measurement.
+# Forcing it into the per-row schema would create awkward null fields on
+# rows that don't have variants. Better to compute it after the fact from
+# pairs of result rows.
+#
+# HELM finding worth remembering: high accuracy does NOT imply high
+# robustness. Some models score well on clean prompts and crumble on
+# realistic user phrasing. This is the metric that surfaces that.
+
+robustness:
+  produced_by: "post_processing_from_paired_results"
+  granularity: "per_model_per_suite"
+
+  perturbation_types:
+    typo:
+      description: "Same question with realistic typos and casual capitalization."
+      example_original: "How do I reset my Duke NetID password?"
+      example_perturbed: "how do i reset my duke netid pwd"
+
+    informal:
+      description: "Same question in casual user voice, without IT terminology."
+      example_original: "How do I connect to eduroam wifi on my Mac?"
+      example_perturbed: "my duke wifi isn't working on my mac what do i do"
+
+    ambiguous:
+      description: |
+        Vague version where the user's actual need has to be inferred. Tests
+        whether the model asks the right clarifying question or makes a
+        reasonable assumption.
+      example_original: "How do I reset my Duke NetID password?"
+      example_perturbed: "I can't get into Duke stuff, help"
+
+  metrics:
+    score_drop:
+      definition: |
+        Mean quality score on perturbed variants minus mean quality score on
+        original questions, for the same model and same suite. Negative
+        values mean the model degraded under perturbation.
+      formula: "mean(quality_score_perturbed) - mean(quality_score_original)"
+      unit: "score points (on the dimension's scale)"
+      granularity: "per_model_per_suite_per_dimension"
+      interpretation: |
+        Reported per dimension. A drop on accuracy is more concerning than a
+        drop on tone. Models with small score drops are more robust.
+
+    robustness_ratio:
+      definition: |
+        Ratio of perturbed score to original score. 1.0 = perfectly robust,
+        0.0 = total collapse. Useful for cross-model comparison on a 0-1
+        scale regardless of the underlying dimension's range.
+      formula: "mean(quality_score_perturbed) / mean(quality_score_original)"
+      unit: "ratio"
+      granularity: "per_model_per_suite"
+
+    pass_rate_drop:
+      definition: |
+        Fraction of questions where the original passed (score >= 4) but the
+        perturbed version did not. Surfaces "this model is brittle on
+        realistic phrasing" as a discrete count.
+      unit: "ratio"
+      granularity: "per_model_per_suite"
+
+
+# -----------------------------------------------------------------------------
+# How the three buckets show up on the dashboard
+# -----------------------------------------------------------------------------
+# Per HELM, the dashboard must show all three categories side by side per
+# model, NOT collapse them. Stakeholders pick the model whose trade-offs
+# match their use case; the dashboard's job is to make the trade-offs
+# visible, not to hide them under a single "best model" score.
+
+dashboard_layout:
+  per_model_row:
+    - "Quality:     accuracy | completeness | policy_adherence | tone | (overall)"
+    - "Operational: latency p50 | latency p95 | tokens | cost | failure_rate"
+    - "Robustness:  score_drop | robustness_ratio | pass_rate_drop"
+  note: |
+    Each row is one (model, suite) pair. The overall quality score is
+    weighted per the rubric, but the per-dimension scores remain visible.
+    Operational and robustness metrics are reported alongside, never
+    folded into the quality overall.
+
+
+# -----------------------------------------------------------------------------
+# What this taxonomy does NOT include (per HELM honesty principle)
+# -----------------------------------------------------------------------------
+
+not_covered:
+  - "Adversarial safety / harm resistance — owned by the Safety pillar."
+  - "Multi-turn drift — out of scope for v1; flagged as stretch."
+  - "Fairness across demographic groups — explicitly out of scope; would require dedicated methodology."
+  - "Bias across user phrasings beyond the three perturbation types defined above."
+  - "Long-context handling — not in our task suites."
+  - "Training-data contamination detection — separate concern."

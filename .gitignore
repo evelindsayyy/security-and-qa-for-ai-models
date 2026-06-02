@@ -32,3 +32,11 @@ instance/
 
 # Ignore tqa test results
 tqa_results/
+
+# Evaluator cache — regenerable, large, contains responses
+evaluator/cache/
+evaluator/results/
+
+# AI-only briefings — personal notes for Claude, not project documentation
+evaluator/CLAUDE.md
+evaluator/TASK.md
