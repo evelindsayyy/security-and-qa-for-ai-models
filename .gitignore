@@ -40,3 +40,4 @@ evaluator/results/
 # AI-only briefings — personal notes for Claude, not project documentation
 evaluator/CLAUDE.md
 evaluator/TASK.md
+output/
