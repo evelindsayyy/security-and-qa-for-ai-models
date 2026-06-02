@@ -1,5 +1,5 @@
-# Models (catalog)
+# Gateway model catalog (placeholder)
 
-Placeholder for gateway **catalog seed** (YAML/SQL) before week 5 Postgres. Canonical list: [`docs/gateway-models.md`](../docs/gateway-models.md). Mapping agreed in week 3 Team issue.
+This directory is for **week 3+ gateway catalog seed data** (IDs, tiers, deployment context) — not Hugging Face download weights.
 
-**Not** Hugging Face weights — see [`testing/scanning/models/`](../testing/scanning/models/README.md).
+**HF weights** for artifact scanning live under [`scanner/models/`](../scanner/models/) (gitignored).

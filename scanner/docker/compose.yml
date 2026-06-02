@@ -1,0 +1,21 @@
+# from repo root: docker compose -f scanner/docker/compose.yml build
+# or: cd scanner/docker && docker compose build
+
+services:
+  scanner:
+    build:
+      context: ../..
+      dockerfile: scanner/docker/Dockerfile
+
+    user: "${UID:-1000}:${GID:-1000}"
+
+    volumes:
+      - ../models:/app/scanner/models
+      - ../output:/app/scanner/output
+
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+      - MODEL_ID=${MODEL_ID:-distilbert-base-uncased}
+
+    stdin_open: true
+    tty: true

@@ -57,7 +57,7 @@ Shared: `frontend/`, `api/` (W5+), Postgres, Celery, GitLab CI.
 
 | Track | Stack |
 |-------|--------|
-| A — scanning | ModelScan, Fickling, pip-audit, OSV, TruffleHog |
+| A — scanning | ModelScan, Fickling, ModelAudit, pip-audit, OSV, TruffleHog |
 | A — safety | garak, promptfoo, Duke probes |
 | B | LiteLLM, Duke YAML, ROUGE-L, LLM-as-judge |
 

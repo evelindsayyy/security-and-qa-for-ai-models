@@ -1,12 +1,24 @@
-# Testing (spikes)
+# Testing (manual spikes)
 
-Spikes only. Production code: `scanner/`, `safety/`, `evaluator/`, `frontend/`, `api/` (week 5).
+**Pre-production scripts** for gateway and eval — run tools, inspect output, learn formats.  
+**Not** automated unit tests → [`unit_tests/`](../unit_tests/).  
+**Not** HF scanning → [`scanner/`](../scanner/).
 
-| Directory | Track | Docs |
-|-----------|-------|------|
-| [`scanning/`](scanning/README.md) | A — scanning | [`docs/track-a-framework.md`](../docs/track-a-framework.md) |
-| [`eval/`](eval/README.md) | B — efficacy | [`docs/track-b-framework.md`](../docs/track-b-framework.md) |
-| [`gateway/`](gateway/README.md) | B / shared | [`docs/gateway-models.md`](../docs/gateway-models.md) |
-| [`test_gateway.py`](test_gateway.py) | B | OpenAI SDK smoke |
+## Layout
 
-GitLab: [`.gitlab/README.md`](../.gitlab/README.md).
+| Path | Purpose |
+|------|---------|
+| `test_gateway.py` | Gateway smoke (OpenAI SDK) |
+| `gateway/` | Gateway spike scripts |
+| `eval/` | Track B efficacy spikes (TruthfulQA, etc.) |
+| `basic_tests/` | Legacy TruthfulQA/compare scripts (optional) |
+
+## Gateway smoke
+
+```bash
+python testing/test_gateway.py
+```
+
+## Eval
+
+See [`eval/README.md`](eval/README.md).
