@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Home — flaskr{% endblock %}
+{% block title %}Home{% endblock %}
 
 {% block content %}
   <h1>{{ heading }}</h1>
@@ -11,4 +11,5 @@
       <li>{{ model }}</li>
     {% endfor %}
   </ul>
+  <p><a href="{{ url_for('dashboard') }}">Open efficacy mockup table</a></p>
 {% endblock %}

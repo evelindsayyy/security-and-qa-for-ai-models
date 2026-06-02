@@ -1,4 +1,4 @@
-"""Convenience dev entry: python main.py"""
+"""Run dev server: uv run python -m frontend.main"""
 
 from frontend import create_app
 

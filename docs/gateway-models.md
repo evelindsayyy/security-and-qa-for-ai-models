@@ -2,7 +2,7 @@
 
 Models available through the **Duke AI Gateway** (LiteLLM / Azure-backed). Used for **safety** (Track A) and **efficacy** (Track B). Not used for **scanning** — scanning uses Hugging Face repo IDs on DGX.
 
-Confirm exact **LiteLLM `model=` strings** with OIT. **Verified in W2 spikes:**
+Confirm exact **LiteLLM `model=` strings** with OIT
 
 | LiteLLM `model=` (spike) | Alias | Notes |
 |----------------------------|-------|-------|

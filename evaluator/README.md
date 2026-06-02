@@ -1,5 +1,3 @@
-# Evaluator (Track B — production)
+# Evaluator (Track B)
 
-Gateway efficacy runs against Duke YAML suites in `tasks/`. **Week 2–3 spike** lives in [`testing/eval/`](../testing/eval/) (TruthfulQA MCQ pilot).
-
-Target layout (week 3+): `runner.py`, `task_loader.py`, `schemas.py`, metrics modules. See [`docs/track-b-framework.md`](../docs/track-b-framework.md) and [`docs/architecture.md`](../docs/architecture.md).
+Gateway efficacy via LiteLLM. Spikes: [`testing/eval/`](../testing/eval/). **Week 3:** runner + task loader + **MVP suites** on one gateway model (see [`docs/track-b-framework.md`](../docs/track-b-framework.md)). Tasks: [`.gitlab/README.md`](../.gitlab/README.md).

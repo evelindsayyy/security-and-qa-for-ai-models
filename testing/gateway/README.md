@@ -1,6 +1,6 @@
 # Gateway testing (spike)
 
-LiteLLM scripts for Duke AI Gateway. Production code moves to `evaluator/` (Track B) and `safety/` (Track A) in week 3+.
+Gateway connectivity spikes. Production: `evaluator/` (Track B), `safety/` (Track A).
 
 | Script | Purpose |
 |--------|---------|

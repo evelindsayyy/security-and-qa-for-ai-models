@@ -2,7 +2,4 @@
 
 HF artifact pipeline: metadata, download, ModelScan, Fickling, deps, secrets, risk scoring → `ScanResult`.
 
-**Spike (now):** [`testing/scanning/`](../testing/scanning/)  
-**Target (W3+):** `metadata.py`, `download.py`, `pickle_scan.py`, `deps.py`, `secrets.py`, `risk_scorer.py`, `pipeline.py`, `schemas.py`
-
-See [`docs/track-a-framework.md`](../docs/track-a-framework.md) and [`docs/architecture.md`](../docs/architecture.md).
+Spike: [`testing/scanning/`](../testing/scanning/). Production: week 3+ in this package. [`docs/track-a-framework.md`](../docs/track-a-framework.md). Tasks: [`.gitlab/README.md`](../.gitlab/README.md).

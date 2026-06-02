@@ -1,6 +1,6 @@
 # Testing (spikes)
 
-Pre-production experiments. Production: `scanner/`, `safety/`, `evaluator/`.
+Spikes only. Production code: `scanner/`, `safety/`, `evaluator/`, `frontend/`, `api/` (week 5).
 
 | Directory | Track | Docs |
 |-----------|-------|------|

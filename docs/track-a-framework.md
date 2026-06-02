@@ -64,18 +64,12 @@ model_ids + deployment_context
 
 ## Output
 
-| Part | Artifact | Location |
-|------|----------|----------|
-| Scanning | `ScanResult` | Spike: `testing/scanning/output/`; production: Postgres via `scanner/` |
-| Safety | `SafetyResult` | Production: Postgres via `safety/` |
+Normalized shapes: [`data-model.md`](data-model.md) (`scans`/`findings`, `safety_runs`/`safety_findings`). Week 3: run tools, capture raw JSON, map into Pydantic in `scanner/` and `safety/` before Postgres (week 5).
 
-`ScanRequest`, `ScanResult`, `Finding` — `schemas.py` (spike). `SafetyResult` — see GitLab W2-2.
-
-| Field (scan spike) | Notes |
-|------------------|-------|
-| `severity_tier` | ModelScan-based until risk reconciler (week 3) |
-| `fickling_severity` | Merged in week 3 scorer |
-| `overall_risk_score` | Rubric TBD |
+| Part | Spike (learn tool output) | Production |
+|------|---------------------------|------------|
+| Scanning | `testing/scanning/` → `ScanResult` in `schemas.py` | `scanner/` → JSON then Postgres |
+| Safety | Run garak / promptfoo; sample output in issue | `safety/` → `SafetyResult` JSON |
 
 ---
 
@@ -110,7 +104,7 @@ Do not block deploy on Fickling alone. Risk scorer must merge ModelScan and Fick
 | W3 | Extract package; `risk_scorer`, `pipeline` v0 | `garak_runner`, `promptfoo/`, probes v0 |
 | W4 | deps, secrets, E2E `scan_model()` | Pilot 3 gateway models |
 | W5 | Celery worker integration | Celery worker; writes `safety_runs` |
-| W6 | — | — (UI reads DB via API) |
+| W6 | — | UI in `frontend/` (reads `api/`) |
 
 Target layout: [`scanner/README.md`](../scanner/README.md), [`docs/architecture.md`](architecture.md).
 

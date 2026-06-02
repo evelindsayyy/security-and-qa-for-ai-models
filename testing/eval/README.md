@@ -1,6 +1,6 @@
 # Efficacy evaluation spikes (Track B)
 
-Spike scripts before `evaluator/` package (week 3+). Structured outputs should align with [`docs/data-model.md`](../../docs/data-model.md).
+Spike scripts before `evaluator/` (week 3+). Goal: run tools, inspect output, map to [`docs/data-model.md`](../../docs/data-model.md) (`eval_runs`, `eval_results`).
 
 ## TruthfulQA MCQ (week 2)
 
@@ -26,6 +26,6 @@ cd testing/eval/truthfulqa
 python evaluate_truthfulqa_mcq.py --limit 50
 ```
 
-**Next (W3):** `EvalRun` / `EvalResult` Pydantic types; move runner into `evaluator/`; Duke YAML suites from `tasks/`.
+**Next (W3):** Move patterns into `evaluator/`; run **MVP suites** on one gateway model (not only IT support).
 
 Framework: [`docs/track-b-framework.md`](../../docs/track-b-framework.md). GitLab: [`.gitlab/README.md`](../../.gitlab/README.md).

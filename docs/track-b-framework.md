@@ -4,9 +4,7 @@ Track A (security pillar): [`track-a-framework.md`](track-a-framework.md). Tools
 
 Track B implements `tasks/` and `evaluator/`. Duke suites and benchmark references below.
 
-Gateway catalog: [`gateway-models.md`](gateway-models.md). Structured outputs: [`data-model.md`](data-model.md). GitLab: [`.gitlab/README.md`](../.gitlab/README.md).
-
-**Red team** (jailbreaks, academic dishonesty, harm) is Track A **safety** — not efficacy.
+Gateway catalog: [`gateway-models.md`](gateway-models.md). Structured outputs: [`data-model.md`](data-model.md) (`eval_runs`, `eval_results`). GitLab: [`.gitlab/README.md`](../.gitlab/README.md).
 
 ---
 
@@ -48,14 +46,27 @@ Record latency, tokens, cost, and failure rate on every run.
 
 ---
 
+## MVP suites 
+
+First wave for gateway eval — not the full table above. **Week 3:** run on **one** cheap gateway model (e.g. GPT 4.1 Mini). **Week 4+:** same suites or more on the **three-model pilot** with Track A.
+
+| Priority | Suite | Notes |
+|----------|-------|--------|
+| P0 | IT support | Rubric exists: `tasks/rubrics/it_support.yaml` |
+| P0 | Policy Q&A | Institutional policy |
+| P1 | Document summarization | ROUGE-L + judge |
+| P1 | Student study | Undergrad help — not graded submissions |
+
+Other suites (creative writing, med education, coding, etc.) follow in later weeks. GitLab: [`.gitlab/README.md`](../.gitlab/README.md).
+
 ## Rollout
 
-| When | Suites / work |
-|------|----------------|
-| **W3** | Eval schemas; `evaluator/` runner; IT support E2E; multi-model gateway |
-| **W4–5** | Summarization, student study, policy Q&A; align **3-model pilot** with Track A |
-| **W5–6** | Creative writing, research literature, med education, coding; dashboard charts |
-| Later | Research workflow, variation overlay, benchmark subsets |
+| When | Focus |
+|------|--------|
+| **W3** | `evaluator/` + schemas; **MVP suites** on **one** gateway model |
+| **W4** | MVP (+ more) suites on **three** pilot models (with Track A) |
+| **W5–6** | Remaining Duke suites; charts in `frontend/` |
+| Later | Benchmark subsets, variation overlay |
 
 ---
 

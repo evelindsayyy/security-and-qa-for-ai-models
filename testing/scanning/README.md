@@ -1,6 +1,6 @@
 # Scanning spike (Track A)
 
-Dockerized HF artifact scanning on DGX — ModelScan, Fickling, deps, optional Trivy. Production code: [`scanner/`](../../scanner/). Docs: [`docs/track-a-framework.md`](../../docs/track-a-framework.md).
+Dockerized HF artifact scanning on DGX — ModelScan, Fickling, deps, optional Trivy. **Purpose:** run tools, inspect raw output, map to [`docs/data-model.md`](../../docs/data-model.md) (`scans`, `findings`). Spike schemas: `schemas.py`. Production: [`scanner/`](../../scanner/).
 
 ---
 
