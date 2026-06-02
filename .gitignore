@@ -10,3 +10,6 @@ __pycache__/
 # security scanning test runtime data (large, machine-local — lives on dgx after bind mount)
 testing/security_scanning_tests/models/
 testing/security_scanning_tests/output/
+
+# Ignore test results
+tqa_results/
