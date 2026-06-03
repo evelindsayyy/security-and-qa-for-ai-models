@@ -17,10 +17,14 @@ scanner/output/*
 
 # legacy / repo-root output (remote + old scanning layout on disk)
 output/
-testing/scanning/models/*
-!testing/scanning/models/README.md
-testing/scanning/output/*
-!testing/scanning/output/README.md
+
+# HF weights under testing/ — never commit (canonical download dir: scanner/models/)
+testing/**/models/*
+!testing/**/models/README.md
+testing/**/output/*
+!testing/**/output/README.md
+# removed spike tree (OSV/pip-audit experiments lived elsewhere; no re-add)
+testing/security_scanning_tests/
 .gitlab/gitlab-transfer.md
 context.md
 
