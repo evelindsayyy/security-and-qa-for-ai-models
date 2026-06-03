@@ -1,0 +1,335 @@
+"""
+runner.py
+
+Orchestration: loops over the suite questions, calls generate_candidate
+(Monday's), then judge_response (Tuesday's) when the candidate succeeded,
+computes the rubric's weighted-normalized overall, and writes one
+EvaluationResult row per question to a results JSONL file.
+
+CLI (defaults make a normal invocation short):
+
+    python runner.py --candidate-model gpt-5-chat \\
+                     --judge-model "Llama 4 Maverick"
+
+Output, both inside results/:
+    <UTC-timestamp>_<suite>_<candidate>.jsonl       (one EvaluationResult per line)
+    <UTC-timestamp>_<suite>_<candidate>_trace.jsonl (raw responses for debugging)
+
+Hard rule from CLAUDE.md: the runner never crashes. A per-question
+failure is written to the row with the appropriate flag and error
+string; the loop keeps going. Re-runs are cheap because both
+generate_candidate and judge_response are cached.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+from pathlib import Path
+from typing import Optional
+
+import yaml
+
+from candidate import generate_candidate
+from judge import judge_response
+from schemas import (
+    SCHEMA_VERSION,
+    Adaptation,
+    DimensionScore,
+    EvaluationResult,
+    Operational,
+    new_run_id,
+    now_iso,
+)
+
+
+HERE = Path(__file__).parent
+
+
+# ---------------------------------------------------------------------------
+# Pricing table (Duke Gateway — snapshot 2026-06-03)
+# ---------------------------------------------------------------------------
+# Per 1M tokens, (input_rate_usd, output_rate_usd). Keys are the exact
+# Gateway model identifier strings (case- and space-sensitive). Models not
+# in this table get cost recorded as 0.0 with a stderr warning — better
+# honest zero than fabricated cost.
+#
+# When Duke updates the rate sheet, edit this dict. Past result rows keep
+# their original cost numbers (snapshot at write time).
+# ---------------------------------------------------------------------------
+
+_COST_PER_M_TOKENS: dict[str, tuple[float, float]] = {
+    # GPT-5 family
+    "gpt-5":          (1.25, 10.00),
+    "gpt-5-chat":     (1.25, 10.00),
+    "gpt-5-mini":     (0.25,  2.00),
+    "gpt-5-nano":     (0.05,  0.40),
+    "gpt-5.1":        (1.25, 10.00),
+    "gpt-5.1-chat":   (1.25, 10.00),
+    "gpt-5.2":        (1.75, 14.00),
+    "gpt-5.2-chat":   (1.75, 14.00),
+    "gpt-5.3-chat":   (1.75, 14.00),
+    "gpt-5.4":        (2.50, 15.00),
+    # GPT-OSS
+    "gpt-oss-120b":   (0.15,  0.60),
+    # Llama family (note: exact strings have spaces and capitals)
+    "Llama 3.3":          (0.71, 0.71),
+    "Llama 4 Maverick":   (0.35, 1.41),
+    "Llama 4 Scout":      (0.20, 0.78),
+}
+
+
+def _estimate_cost_usd(model: str, prompt_tokens: int, completion_tokens: int) -> float:
+    rates = _COST_PER_M_TOKENS.get(model)
+    if rates is None:
+        print(
+            f"  WARN: no pricing entry for model {model!r}; cost recorded as 0.0",
+            file=sys.stderr,
+        )
+        return 0.0
+    in_rate, out_rate = rates
+    return (prompt_tokens / 1_000_000) * in_rate + (completion_tokens / 1_000_000) * out_rate
+
+
+# ---------------------------------------------------------------------------
+# Rubric-driven weighted overall
+# ---------------------------------------------------------------------------
+
+
+def _weighted_overall(
+    scores: dict[str, DimensionScore], rubric: dict
+) -> Optional[float]:
+    """Apply the rubric's aggregation formula to per-dimension scores.
+
+    Formula (from rubric YAML):
+        overall = sum( weight_i * (score_i / max_i) )    # in [0, 1]
+        display = round(overall * display_scale, 2)
+
+    Returns None if any rubric dimension is missing from `scores`.
+    """
+    dim_blocks = rubric.get("dimensions", {})
+    if any(dim not in scores for dim in dim_blocks):
+        return None
+    normalized = 0.0
+    for dim, block in dim_blocks.items():
+        max_score = block["scale"][1]
+        weight = block["weight"]
+        normalized += weight * (scores[dim].score / max_score)
+    display_scale = rubric.get("aggregation", {}).get("display_scale", 5)
+    return round(normalized * display_scale, 2)
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Evaluator pipeline runner.")
+    p.add_argument("--candidate-model", required=True,
+                   help="Gateway model id (e.g. 'gpt-5-chat')")
+    p.add_argument("--judge-model", required=True,
+                   help="Gateway model id (e.g. 'Llama 4 Maverick')")
+    p.add_argument("--suite", type=Path,
+                   default=HERE / "tasks" / "it_support_v1.jsonl")
+    p.add_argument("--rubric", type=Path,
+                   default=HERE / "tasks" / "rubrics" / "it_support.yaml")
+    p.add_argument("--system-prompt", type=Path,
+                   default=HERE / "prompts" / "system" / "it_support_v1.txt")
+    p.add_argument("--judge-prompt", type=Path,
+                   default=HERE / "prompts" / "judge" / "reference_based_v1.txt")
+    p.add_argument("--temperature", type=float, default=0.2)
+    p.add_argument("--max-tokens", type=int, default=500)
+    p.add_argument("--output-dir", type=Path, default=HERE / "results")
+    return p.parse_args()
+
+
+def _safe_slug(s: str) -> str:
+    """Filename-safe version of a model id (spaces/specials → '-')."""
+    return "".join(c if c.isalnum() or c in "-_." else "-" for c in s)
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+
+def main() -> int:
+    args = _parse_args()
+
+    # ---- load contracts ----
+    suite_lines = args.suite.read_text(encoding="utf-8").splitlines()
+    metadata = json.loads(suite_lines[0])
+    suite_id = metadata.get("task_suite_version", args.suite.stem)
+    questions = [json.loads(line) for line in suite_lines[1:] if line.strip()]
+
+    rubric_raw = args.rubric.read_text(encoding="utf-8")
+    rubric = yaml.safe_load(rubric_raw)
+    rubric_version = rubric.get("rubric_version", args.rubric.stem)
+
+    system_prompt = args.system_prompt.read_text(encoding="utf-8")
+    system_prompt_version = args.system_prompt.stem
+    judge_prompt_version = args.judge_prompt.stem
+
+    # ---- prepare output paths ----
+    run_id = new_run_id()
+    run_started_filename = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    cand_slug = _safe_slug(args.candidate_model)
+    out_path = args.output_dir / f"{run_started_filename}_{suite_id}_{cand_slug}.jsonl"
+    trace_path = args.output_dir / f"{run_started_filename}_{suite_id}_{cand_slug}_trace.jsonl"
+
+    # ---- banner ----
+    print(f"Runner started  run_id={run_id}")
+    print(f"  candidate: {args.candidate_model}    judge: {args.judge_model}")
+    print(f"  suite: {suite_id} ({len(questions)} questions)    rubric: {rubric_version}")
+    print(f"  output: {out_path}")
+    print()
+
+    counts = {"ok": 0, "candidate_failed": 0, "judge_failed": 0}
+    t_run_start = time.perf_counter()
+    candidate_model_version = time.strftime("Gateway %Y-%m", time.gmtime())
+
+    with out_path.open("w", encoding="utf-8") as out_f, \
+         trace_path.open("w", encoding="utf-8") as trace_f:
+
+        for i, q in enumerate(questions, start=1):
+            qid = q.get("id", f"unknown-{i}")
+            try:
+                # ---- candidate ----
+                t0 = time.perf_counter()
+                cand = generate_candidate(
+                    question=q["question"],
+                    model=args.candidate_model,
+                    system_prompt=system_prompt,
+                    temperature=args.temperature,
+                    max_tokens=args.max_tokens,
+                )
+                cand_dur = time.perf_counter() - t0
+
+                # ---- judge (only if candidate succeeded) ----
+                judge_verdict = None
+                judge_dur = 0.0
+                if not cand.failed:
+                    t1 = time.perf_counter()
+                    judge_verdict = judge_response(
+                        question=q["question"],
+                        reference=q["reference"],
+                        candidate_response=cand.response,
+                        rubric_path=args.rubric,
+                        judge_model=args.judge_model,
+                        judge_prompt_path=args.judge_prompt,
+                    )
+                    judge_dur = time.perf_counter() - t1
+
+                # ---- aggregate ----
+                if cand.failed:
+                    scores: dict[str, DimensionScore] = {}
+                    overall: Optional[float] = None
+                    judge_failed_flag = False
+                    error = cand.error
+                elif judge_verdict is not None and judge_verdict.failed:
+                    scores = {}
+                    overall = None
+                    judge_failed_flag = True
+                    error = judge_verdict.error
+                else:
+                    scores = judge_verdict.scores  # type: ignore[union-attr]
+                    overall = _weighted_overall(scores, rubric)
+                    judge_failed_flag = False
+                    error = None
+
+                # ---- build row ----
+                adaptation = Adaptation(
+                    candidate_model=args.candidate_model,
+                    candidate_model_version=candidate_model_version,
+                    system_prompt_version=system_prompt_version,
+                    user_prompt_template_version="raw_question_v1",
+                    temperature=args.temperature,
+                    max_tokens=args.max_tokens,
+                    task_suite_version=suite_id,
+                    rubric_version=rubric_version,
+                    judge_model=args.judge_model,
+                    judge_prompt_version=judge_prompt_version,
+                )
+                operational = Operational(
+                    latency_ms=cand.latency_ms,
+                    prompt_tokens=cand.prompt_tokens,
+                    completion_tokens=cand.completion_tokens,
+                    estimated_cost_usd=_estimate_cost_usd(
+                        args.candidate_model, cand.prompt_tokens, cand.completion_tokens
+                    ),
+                )
+                row = EvaluationResult(
+                    evaluation_run_id=run_id,
+                    timestamp=now_iso(),
+                    question_id=qid,
+                    suite="it_support",
+                    schema_version=SCHEMA_VERSION,
+                    adaptation=adaptation,
+                    candidate_response=cand.response,
+                    scores=scores,
+                    overall=overall,
+                    operational=operational,
+                    candidate_failed=cand.failed,
+                    judge_failed=judge_failed_flag,
+                    error=error,
+                )
+                out_f.write(row.to_jsonl() + "\n")
+                out_f.flush()
+
+                # ---- trace (raw bytes for debugging) ----
+                trace_f.write(json.dumps({
+                    "question_id": qid,
+                    "candidate_response": cand.response,
+                    "judge_raw_response": (
+                        judge_verdict.raw_response if judge_verdict else ""
+                    ),
+                }, ensure_ascii=False) + "\n")
+                trace_f.flush()
+
+                # ---- bucket + progress line ----
+                if cand.failed:
+                    counts["candidate_failed"] += 1
+                    status = f"CAND_FAIL ({(cand.error or '')[:40]})"
+                elif judge_verdict is not None and judge_verdict.failed:
+                    counts["judge_failed"] += 1
+                    status = f"JUDGE_FAIL ({(judge_verdict.error or '')[:40]})"
+                else:
+                    counts["ok"] += 1
+                    status = f"overall={overall}"
+
+                print(
+                    f"[{i:>2}/{len(questions)}] {qid}  "
+                    f"cand={cand_dur:>4.1f}s tok={cand.prompt_tokens}/{cand.completion_tokens}  "
+                    f"judge={judge_dur:>4.1f}s  {status}"
+                )
+
+            except Exception as e:
+                # Defensive — generate_candidate / judge_response are documented
+                # as no-raise, so reaching here means something else went wrong.
+                # Record as a candidate failure (closest bucket) and continue.
+                counts["candidate_failed"] += 1
+                print(
+                    f"[{i:>2}/{len(questions)}] {qid}  RUNNER_EXC: {type(e).__name__}: {e}",
+                    file=sys.stderr,
+                )
+
+    # ---- final summary ----
+    elapsed = time.perf_counter() - t_run_start
+    print()
+    print(
+        f"Run complete in {elapsed:.1f}s — "
+        f"{counts['ok']} OK, "
+        f"{counts['candidate_failed']} candidate_failed, "
+        f"{counts['judge_failed']} judge_failed"
+    )
+    print(f"Results: {out_path}")
+    print(f"Trace:   {trace_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
