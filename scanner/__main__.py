@@ -2,11 +2,10 @@
 cli entrypoint — all production scan commands live here.
 
   python -m scanner scan gpt2
-  python -m scanner gap-map gpt2 distilbert-base-uncased
   python -m scanner metadata gpt2
   python -m scanner modelscan gpt2      # debug: modelscan only
   python -m scanner fickling gpt2       # debug: fickling only
-  python -m scanner modelaudit gpt2     # debug: modelaudit only (safetensors/onnx)
+  python -m scanner modelaudit gpt2     # debug: ModelAudit (content-routed, all candidate files)
   python -m scanner validate gpt2       # pydantic check on scan_result.json
 """
 
@@ -18,7 +17,6 @@ import sys
 from pathlib import Path
 
 from scanner.download import download_model
-from scanner.gap_map import format_markdown_table, write_gap_map
 from scanner.metadata import build_metadata_report
 from scanner.paths import dump_json, model_dir, output_dir
 from scanner.pickle_scan import (
@@ -66,13 +64,6 @@ def cmd_metadata(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_gap_map(args: argparse.Namespace) -> int:
-    report = write_gap_map(args.models)
-    print(format_markdown_table(report))
-    print("\njson: OUTPUT_ROOT/gap_map_summary.json")
-    return 0
-
-
 def cmd_modelscan(args: argparse.Namespace) -> int:
     for model_id in args.models:
         _ensure_model(model_id, args.no_download)
@@ -101,14 +92,15 @@ def cmd_fickling(args: argparse.Namespace) -> int:
 
 
 def cmd_modelaudit(args: argparse.Namespace) -> int:
-    """Debug: scoped ModelAudit (same paths as full scan — not whole repo tree)."""
+    """Debug: ModelAudit on files ModelScan/Fickling miss (same as full scan)."""
     for model_id in args.models:
         _ensure_model(model_id, args.no_download)
         mdir = model_dir(model_id)
         out = output_dir(model_id)
         fmt = format_summarize(mdir)
         ms = run_modelscan(mdir)
-        report = run_modelaudit_scoped(mdir, fmt, ms)
+        fick = run_fickling_if_applicable(mdir)
+        report = run_modelaudit_scoped(mdir, fmt, ms, fickling_report=fick)
         if not report:
             print(f"{model_id}: modelaudit unavailable or no report")
             continue
@@ -149,10 +141,9 @@ def main() -> int:
     for name, func, help_text in [
         ("scan", cmd_scan, "full pipeline -> scan_result.json"),
         ("metadata", cmd_metadata, "hf hub file list only"),
-        ("gap-map", cmd_gap_map, "scanned vs skipped table"),
         ("modelscan", cmd_modelscan, "modelscan only (debug)"),
         ("fickling", cmd_fickling, "fickling only (debug)"),
-        ("modelaudit", cmd_modelaudit, "modelaudit only (debug; safetensors/onnx)"),
+        ("modelaudit", cmd_modelaudit, "modelaudit only (debug; content-routed)"),
         ("validate", cmd_validate, "pydantic-check existing json"),
     ]:
         p = sub.add_parser(name, help=help_text, parents=[nd] if name != "validate" else [])

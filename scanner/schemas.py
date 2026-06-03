@@ -25,6 +25,8 @@ class Finding(BaseModel):
     description: str
     raw_tool_severity: str | None = None
     remediation: str | None = None
+    # Other tools that reported the same (file, signal) — defense-in-depth agreement
+    corroborated_by: list[str] | None = None
 
 
 class ScanRequest(BaseModel):

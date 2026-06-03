@@ -34,7 +34,7 @@ def format_fickling_text(report: dict) -> str:
 
 
 def format_modelaudit_text(report: dict) -> str:
-    """Scoped ModelAudit summary (safetensors/onnx paths only)."""
+    """ModelAudit summary (content-routed; defense-in-depth with other tools)."""
     paths = report.get("paths_scanned") or []
     lines = [
         f"paths_scanned: {len(paths)}",
@@ -48,7 +48,9 @@ def format_modelaudit_text(report: dict) -> str:
         lines.append("by_severity: " + ", ".join(f"{k}={v}" for k, v in sorted(by_sev.items())))
     if report.get("note"):
         lines.append(f"note: {report['note']}")
+    mode = report.get("scan_mode", "content_routed")
+    lines.append(f"scan_mode: {mode}")
     if not paths:
-        lines.append("(no safetensors/onnx — skipped)")
+        lines.append("(no candidate files)")
     lines.append("(detail: modelaudit_report.json)")
     return "\n".join(lines)

@@ -1,4 +1,4 @@
-"""classify files in a downloaded model dir — helps explain what modelscan skipped."""
+"""Classify files in a downloaded model dir — explains coverage and Fickling scope."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from scanner.paths import PICKLE_WEIGHT_NAMES
+from scanner.pickle_scan import _PICKLE_FAMILY_SUFFIXES
 
 CODE_EXTENSIONS = {".py", ".cpp", ".c", ".h", ".cu", ".rs", ".go"}
 CONFIG_NAMES = {
@@ -25,14 +26,20 @@ class FileFormatSummary(BaseModel):
     file_count: int = 0
 
 
+def _is_pickle_family_path(rel_path: str) -> bool:
+    name = Path(rel_path).name
+    lower = rel_path.lower()
+    if name in PICKLE_WEIGHT_NAMES:
+        return True
+    return lower.endswith(_PICKLE_FAMILY_SUFFIXES)
+
+
 def _category_for_file(rel_path: str) -> str:
     name = Path(rel_path).name
     lower = rel_path.lower()
 
-    if name in PICKLE_WEIGHT_NAMES or lower.endswith((".bin", ".pt", ".pth")):
-        # .bin might be pickle weights — fickling target
-        if name in PICKLE_WEIGHT_NAMES or lower.endswith((".bin", ".pt")):
-            return "pickle"
+    if _is_pickle_family_path(rel_path):
+        return "pickle"
     if lower.endswith(".safetensors"):
         return "safetensors"
     if lower.endswith(".onnx") or lower.endswith(".onnx_data"):
@@ -57,7 +64,6 @@ def summarize(model_dir: Path) -> FileFormatSummary:
         "other": [],
     }
 
-    # walk everything under model_dir (skip hf cache junk if any)
     for path in sorted(model_dir.rglob("*")):
         if not path.is_file():
             continue
@@ -76,6 +82,7 @@ def summarize(model_dir: Path) -> FileFormatSummary:
         "has_pickle_weights": has_pickle,
         "has_onnx": len(by_category["onnx"]) > 0,
         "safetensors_only": safetensors_only,
+        # True when any pickle-family file exists (all get Fickling in pipeline)
         "fickling_applicable": has_pickle,
     }
 

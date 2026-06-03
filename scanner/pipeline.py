@@ -30,7 +30,8 @@ def scan_model(
     """
     Download (if needed), run ModelScan + Fickling + ModelAudit, score, write JSON.
 
-    Output matches docs/data-model.md: scans row + findings[] for week 5 Postgres.
+    Tools run defense-in-depth; risk_scorer dedupes findings before write.
+    Output matches docs/data-model.md (ScanResult / findings[]).
     """
     mdir = model_dir(hf_repo)
     if not mdir.exists() and auto_download:
@@ -46,7 +47,9 @@ def scan_model(
     format_summary = format_summarize(mdir)
     modelscan_payload = run_modelscan(mdir)
     fickling = run_fickling_if_applicable(mdir)
-    modelaudit = run_modelaudit_scoped(mdir, format_summary, modelscan_payload)
+    modelaudit = run_modelaudit_scoped(
+        mdir, format_summary, modelscan_payload, fickling_report=fickling
+    )
 
     risk = risk_score(
         hf_repo,

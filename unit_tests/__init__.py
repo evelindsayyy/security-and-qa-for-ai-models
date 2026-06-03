@@ -1,1 +1,1 @@
-Not manual spikes — see testing/ and scanner/experiments/.
+"""Automated unit tests (not manual spikes — see testing/ and scanner/experiments/)."""

@@ -22,9 +22,9 @@ Pipelines: [`track-a-framework.md`](track-a-framework.md) (Track A) · [`track-b
 
 | Tool | Status | Role |
 |------|--------|------|
-| ModelScan | In use | Pickle / H5 / SavedModel; skips safetensors/onnx (see gap map) |
-| Fickling | In use | Pickle AST on `pytorch_model.bin`; paired with ModelScan |
-| ModelAudit | In use (W3) | Safetensors/onnx via `scanner/modelaudit_scan.py`; merged in risk scorer |
+| ModelScan | In use | Pickle / H5 / SavedModel; extension-routed (complemented by ModelAudit) |
+| Fickling | In use | Pickle AST on every pickle-family weight file; paired with ModelScan |
+| ModelAudit | In use | Content-routed directory scan (`scanner/modelaudit_scan.py`); findings deduped in risk scorer |
 | pip-audit | Spike → Planned | Dependency CVEs |
 | OSV API | Spike | CVE lookup with pip-audit |
 | TruffleHog | Planned | Secrets in model repos |
