@@ -17,6 +17,9 @@ Project guides & info. **GitLab:** [`.gitlab/README.md`](../.gitlab/README.md).
 
 | Path | Track |
 |------|-------|
-| [`testing/scanning/README.md`](../testing/scanning/README.md) | A — scanning |
+| [`scanner/README.md`](../scanner/README.md) | A — scanning package + DGX `models/` / `output/` |
+| [`unit_tests/README.md`](../unit_tests/README.md) | Automated unit tests (scanner) |
+| [`testing/README.md`](../testing/README.md) | Manual gateway/eval spikes |
+| [`scanner/experiments/README.md`](../scanner/experiments/README.md) | A — optional spikes (OSV, Trivy) |
 | [`testing/eval/README.md`](../testing/eval/README.md) | B — efficacy |
 | [`testing/gateway/README.md`](../testing/gateway/README.md) | B / shared gateway |

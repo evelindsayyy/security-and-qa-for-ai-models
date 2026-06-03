@@ -3,13 +3,20 @@ venv/
 .venv/
 **/.venv/
 .env
-testing/scanning/.env
+scanner/docker/.env
 
 # Ignore system files
 .DS_Store
 __pycache__/
 
-# scanning spike runtime data (DGX bind mount)
+# scanner runtime data (VM bind mount) — not in git except README
+scanner/models/*
+!scanner/models/README.md
+scanner/output/*
+!scanner/output/README.md
+
+# legacy / repo-root output (remote + old scanning layout on disk)
+output/
 testing/scanning/models/*
 !testing/scanning/models/README.md
 testing/scanning/output/*

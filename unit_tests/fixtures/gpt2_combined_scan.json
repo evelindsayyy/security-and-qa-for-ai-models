@@ -1,0 +1,27 @@
+{
+  "model_id": "gpt2",
+  "scanned_files": ["pytorch_model.bin", "config.json"],
+  "overall_risk_score": 0,
+  "severity_tier": "low",
+  "fickling_severity": "LIKELY_UNSAFE",
+  "findings": [],
+  "tool_results": {
+    "modelscan": {
+      "total_issues_by_severity": {},
+      "total_issues": 0,
+      "scanned_files": ["pytorch_model.bin", "config.json"],
+      "total_skipped": 212
+    },
+    "fickling": {
+      "file": "/models/gpt2/pytorch_model.bin",
+      "pytorch_format": "pytorch_stacked_pickle",
+      "stack_count": 6,
+      "is_likely_safe": false,
+      "severity": "LIKELY_UNSAFE",
+      "ast_node_count": 42
+    }
+  },
+  "scan_metadata": {
+    "note": "synthetic fixture for risk_scorer unit test"
+  }
+}

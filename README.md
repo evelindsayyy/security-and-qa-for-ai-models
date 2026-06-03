@@ -60,18 +60,19 @@ Evaluation is **deployment-aware** (chatbot vs agentic, tools, data access, guar
 ## Repository layout
 
 ```
-scanner/        # Track A: scanning (HF artifacts)
+scanner/        # Track A: scanning package (HF artifacts)
 safety/         # Track A: safety (inference / red team)
 evaluator/      # Track B: efficacy evaluation via AI Gateway
 tasks/          # YAML task suites and rubrics
 models/         # Gateway catalog seed placeholder (week 3+)
 api/            # Flask REST API (week 5+)
 frontend/       # Nutrition label UI (Flask W3+)
-testing/        # Spikes: scanning/, eval/, gateway/
+unit_tests/     # Automated unit tests 
+testing/        # Manual gateway/eval spikes; scanning → scanner/
 docs/           # See docs/README.md
 ```
 
-Runtime data is gitignored (`testing/scanning/models|output`, `testing/eval/output`, `instance/`). Each has a README so the path is documented in git.
+Runtime data is gitignored (`scanner/models`, `scanner/output`, `testing/eval/output`, `instance/`). Each has a README so the path is documented.
 
 ---
 
@@ -81,7 +82,7 @@ Runtime data is gitignored (`testing/scanning/models|output`, `testing/eval/outp
 |-------|--------|
 | Language | Python 3.11+ |
 | Inference | LiteLLM to Duke AI Gateway (OpenAI-compatible) |
-| Security spike | ModelScan, Fickling, pip-audit, OSV API |
+| Security spike | ModelScan, Fickling, ModelAudit, pip-audit, OSV API |
 | Containers | Docker Compose on DGX (`asus-dgx-04.oit.duke.edu`) |
 | API / DB / jobs | Flask, PostgreSQL, Celery + Redis (weeks 5+) |
 | UI | `frontend/` — Flask (W3+), full label W6 (mockups) |
@@ -118,20 +119,23 @@ pip install -r requirements.txt
 python testing/test_gateway.py
 ```
 
-**TruthfulQA pilot (Track B):**
+
+**Scanner unit test (host, no Docker):**
 
 ```bash
-export DUKE_AI_GATEWAY_API_KEY=...
-cd testing/eval/truthfulqa
-python evaluate_truthfulqa_mcq.py --limit 50
+uv run python -m unittest unit_tests.test_risk_scorer -v
 ```
 
-**Security scanning spike (DGX, Docker only):**
+**HF scanning (DGX/VM, Docker only):**
 
 ```bash
-cd testing/scanning
-# See README in that directory for UID/GID and docker compose steps
+cd scanner/docker
+cp .env.example .env && sed -i "s/^UID=.*/UID=$(id -u)/" .env && sed -i "s/^GID=.*/GID=$(id -g)/" .env
+docker compose build
+docker compose run --rm scanner python -m scanner scan gpt2
 ```
+
+See [`scanner/README.md`](scanner/README.md). Spikes: [`scanner/experiments/`](scanner/experiments/).
 
 ---
 

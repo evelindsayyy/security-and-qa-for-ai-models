@@ -59,7 +59,7 @@ Use only when a task explicitly requires them (Track B may use; Track A safety u
 
 ## Scanning test models (HF on DGX — not gateway)
 
-Separate catalog for **artifact scanning** spikes (`testing/scanning/`):
+Separate catalog for **artifact scanning** on DGX (`scanner/models/`, `scanner/output/`):
 
 | HF `MODEL_ID` | Role |
 |---------------|------|

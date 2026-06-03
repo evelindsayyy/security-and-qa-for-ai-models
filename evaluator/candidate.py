@@ -9,11 +9,7 @@ question. Captures wall-clock latency and token usage, returns a small
 dataclass, and never raises on API failure: per ``evaluator/CLAUDE.md`` a
 single bad call must not kill a 12-question run.
 
-Environment:
-    DUKE_GATEWAY_URL   OpenAI-compatible endpoint root for LiteLLM
-                       (typically ``https://litellm.oit.duke.edu/v1``).
-    DUKE_GATEWAY_KEY   LiteLLM API key. Loaded from .env via python-dotenv;
-                       a shell-exported value takes precedence.
+Environment is read by ``_gateway.py`` — see that module for env var names.
 
 File cache:
     ``evaluator/cache/candidates/<sha256>.json``  keyed on
@@ -28,23 +24,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
 
-from dotenv import load_dotenv
-from openai import OpenAI
-
-# Load .env once on import. ``override=False`` so a shell-exported env var
-# wins over .env — useful when a teammate wants to point at a different
-# Gateway without editing the file.
-load_dotenv(override=False)
-
-
-_GATEWAY_URL_ENV = "DUKE_GATEWAY_URL"
-_GATEWAY_KEY_ENV = "DUKE_GATEWAY_KEY"
+from _gateway import gateway_client
 
 _CACHE_DIR = Path(__file__).parent / "cache" / "candidates"
 
@@ -64,34 +49,6 @@ class CandidateResult:
     completion_tokens: int
     failed: bool = False
     error: Optional[str] = None
-
-
-# Client (lazy, module-scoped — one OpenAI client per process)
-
-
-_CLIENT: Optional[OpenAI] = None
-
-
-def _require_env(name: str) -> str:
-    val = os.environ.get(name)
-    if not val:
-        raise RuntimeError(
-            f"{name} is not set. Add it to .env (or export it in your shell) "
-            f"before calling generate_candidate(). See evaluator/CLAUDE.md."
-        )
-    return val
-
-
-def _client() -> OpenAI:
-    global _CLIENT
-    if _CLIENT is None:
-        # base_url should be the OpenAI-compatible endpoint root. LiteLLM
-        # convention is <host>/v1
-        _CLIENT = OpenAI(
-            base_url=_require_env(_GATEWAY_URL_ENV),
-            api_key=_require_env(_GATEWAY_KEY_ENV),
-        )
-    return _CLIENT
 
 
 # File cache
@@ -154,7 +111,7 @@ def generate_candidate(
 
     t0 = time.perf_counter()
     try: # otherwise call the Gateway API, and capture latency and token usage. If it fails, return a CandidateResult with failed=True and the error message.
-        client = _client().with_options(timeout=timeout_sec)
+        client = gateway_client().with_options(timeout=timeout_sec)
         resp = client.chat.completions.create(
             model=model,
             messages=[
