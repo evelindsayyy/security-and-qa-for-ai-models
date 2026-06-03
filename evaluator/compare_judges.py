@@ -42,7 +42,7 @@ def main() -> None:
     question = row["question"]
     reference = row["reference"]
 
-    # Candidate response (cached from Monday — no API call expected).
+    # Candidate response (cached from candidate.py — no API call expected).
     cand = generate_candidate(
         question=question,
         model=CANDIDATE_MODEL,
