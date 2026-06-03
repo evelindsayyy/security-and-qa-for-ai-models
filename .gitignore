@@ -41,3 +41,4 @@ evaluator/results/
 evaluator/CLAUDE.md
 evaluator/TASK.md
 output/
+gen_options.json
