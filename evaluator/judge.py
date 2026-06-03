@@ -296,7 +296,7 @@ def judge_response(
 
 
 # ---------------------------------------------------------------------------
-# Smoke test — proves Tuesday's deliverable: real judge scores from the Gateway.
+# Smoke test — deliverable: real judge scores from the Gateway.
 # Run:  cd evaluator && python judge.py
 # Requires DUKE_GATEWAY_URL and DUKE_GATEWAY_KEY in .env.
 # ---------------------------------------------------------------------------
