@@ -1,12 +1,19 @@
 """
-cli entrypoint — all production scan commands live here.
+CLI entry point for the ``scanner`` package.
+
+Production command (Docker or host with deps installed):
 
   python -m scanner scan gpt2
+
+Debug / partial runs (same download layout under ``scanner/models``):
+
   python -m scanner metadata gpt2
-  python -m scanner modelscan gpt2      # debug: modelscan only
-  python -m scanner fickling gpt2       # debug: fickling only
-  python -m scanner modelaudit gpt2     # debug: ModelAudit (content-routed, all candidate files)
-  python -m scanner validate gpt2       # pydantic check on scan_result.json
+  python -m scanner modelscan gpt2
+  python -m scanner fickling gpt2
+  python -m scanner modelaudit gpt2
+  python -m scanner validate gpt2
+
+See ``scanner/README.md`` for calibration examples and output paths.
 """
 
 from __future__ import annotations
@@ -37,6 +44,11 @@ from scanner.schemas import ScanResult, build_scan_result_from_combined
 
 
 def _ensure_model(model_id: str, no_download: bool) -> None:
+    """
+    Guarantee weights exist locally before a debug subcommand runs.
+
+    Raises FileNotFoundError when ``--no-download`` is set and ``models/<slug>`` is missing.
+    """
     if not model_dir(model_id).exists():
         if no_download:
             raise FileNotFoundError(f"{model_dir(model_id)} missing — drop --no-download to fetch")
@@ -44,6 +56,7 @@ def _ensure_model(model_id: str, no_download: bool) -> None:
 
 
 def cmd_scan(args: argparse.Namespace) -> int:
+    """Full pipeline: download (optional) → tools → ``scan_result.json``."""
     for model_id in args.models:
         print(f"scanning {model_id} ...")
         result = scan_model(model_id, auto_download=not args.no_download)
@@ -57,6 +70,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
 
 
 def cmd_metadata(args: argparse.Namespace) -> int:
+    """Hub inventory only — no ModelScan/Fickling (fast catalog check)."""
     for model_id in args.models:
         report = build_metadata_report(model_id)
         dump_json(output_dir(model_id) / "metadata.json", report)
@@ -65,6 +79,7 @@ def cmd_metadata(args: argparse.Namespace) -> int:
 
 
 def cmd_modelscan(args: argparse.Namespace) -> int:
+    """Debug: run ModelScan alone; write ``modelscan_report.json`` + ``.txt`` summary."""
     for model_id in args.models:
         _ensure_model(model_id, args.no_download)
         mdir = model_dir(model_id)
@@ -77,6 +92,7 @@ def cmd_modelscan(args: argparse.Namespace) -> int:
 
 
 def cmd_fickling(args: argparse.Namespace) -> int:
+    """Debug: run Fickling on all pickle-family weights in the repo."""
     for model_id in args.models:
         _ensure_model(model_id, args.no_download)
         mdir = model_dir(model_id)
@@ -92,7 +108,11 @@ def cmd_fickling(args: argparse.Namespace) -> int:
 
 
 def cmd_modelaudit(args: argparse.Namespace) -> int:
-    """Debug: ModelAudit on files ModelScan/Fickling miss (same as full scan)."""
+    """
+    Debug: ModelAudit with same scoping as full scan (content-routed, noise filtered).
+
+    Re-runs ModelScan + Fickling only to supply context for actionable filtering.
+    """
     for model_id in args.models:
         _ensure_model(model_id, args.no_download)
         mdir = model_dir(model_id)
@@ -112,10 +132,14 @@ def cmd_modelaudit(args: argparse.Namespace) -> int:
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
+    """
+    Pydantic-validate existing JSON on disk (CI / manual QA).
+
+    Accepts ``scan_result.json`` or legacy ``combined_scan.json``.
+    """
     for model_id in args.models:
         path = output_dir(model_id) / (args.file or "scan_result.json")
         if not path.is_file():
-            # fallback for old combined name
             path = output_dir(model_id) / "combined_scan.json"
         if not path.is_file():
             print(f"missing output for {model_id} — run: python -m scanner scan {model_id}", file=sys.stderr)
@@ -130,6 +154,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    """Parse argv and dispatch to subcommand handlers."""
     parser = argparse.ArgumentParser(
         prog="scanner",
         description="Track A HF artifact scanner (package: scanner/)",

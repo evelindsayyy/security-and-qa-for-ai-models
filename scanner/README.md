@@ -78,3 +78,19 @@ Hub `org/model` → `models/org--model/`, `output/org--model/scan_result.json`. 
 | `experiments/` | OSV, Trivy spikes |
 | `unit_tests/` | Host unit tests |
 | `models/`, `output/` | DGX data (gitignored) |
+
+## Source file map (for newcomers)
+
+| Module | Responsibility |
+|--------|----------------|
+| `__main__.py` | CLI: `scan`, `metadata`, debug subcommands, `validate` |
+| `pipeline.py` | Orchestrates download → tools → `scan_result.json` |
+| `download.py` | `snapshot_download` into `models/<slug>/` |
+| `metadata.py` | Hub file list without weights |
+| `format_detector.py` | File categories + `safetensors_only` / Fickling flags |
+| `pickle_scan.py` | ModelScan whole-repo + Fickling per pickle-family file |
+| `modelaudit_scan.py` | Content-routed ModelAudit + noise filtering |
+| `risk_scorer.py` | Merge tools → tier, score, deduped `findings[]` |
+| `schemas.py` | Pydantic `ScanResult` / `Finding` (Postgres-ready) |
+| `paths.py` | `MODELS_ROOT`, `OUTPUT_ROOT`, slug helpers |
+| `report_text.py` | Terminal summaries for debug commands |

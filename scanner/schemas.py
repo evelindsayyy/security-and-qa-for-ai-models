@@ -1,4 +1,12 @@
-"""pydantic shapes for scans — aligned with docs/data-model.md."""
+"""
+Pydantic contracts for HF scan output — aligned with ``docs/data-model.md``.
+
+These types are the bridge between tool JSON blobs and future Postgres rows:
+``ScanResult`` ≈ one ``scans`` row; each ``Finding`` ≈ one ``findings`` row.
+
+The API/UI should read normalized ``findings`` and ``severity_tier``; investigators
+can drill into ``tool_results`` for raw ModelScan/Fickling/ModelAudit payloads.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +18,8 @@ from pydantic import BaseModel, Field
 
 
 class Severity(str, Enum):
+    """Nutrition-label severity band (maps to ``scans.severity_tier``)."""
+
     low = "low"
     medium = "medium"
     high = "high"
@@ -17,6 +27,13 @@ class Severity(str, Enum):
 
 
 class Finding(BaseModel):
+    """
+    One actionable issue for reviewers (maps to ``findings`` table).
+
+    ``source`` is the tool that produced the primary row; ``corroborated_by``
+    lists other tools that reported the same file/signal (defense-in-depth merge).
+    """
+
     id: str
     source: str
     title: str
@@ -25,23 +42,33 @@ class Finding(BaseModel):
     description: str
     raw_tool_severity: str | None = None
     remediation: str | None = None
-    # Other tools that reported the same (file, signal) — defense-in-depth agreement
     corroborated_by: list[str] | None = None
 
 
 class ScanRequest(BaseModel):
+    """Future API/Celery job payload shape (not wired in CLI yet)."""
+
     model_id: str
     scan_types: list[str] = Field(default_factory=lambda: ["artifact"])
     deployment_context: dict[str, Any] | None = None
 
 
 class RiskScoreResult(BaseModel):
+    """Output of ``risk_scorer.score`` before wrapping in ``ScanResult``."""
+
     overall_risk_score: int
     severity_tier: Severity
     findings: list[Finding] = Field(default_factory=list)
 
 
 class ScanResult(BaseModel):
+    """
+    Primary artifact written to ``output/<slug>/scan_result.json``.
+
+    ``status`` will support queued/running when Celery workers land (week 5).
+    ``fickling_severity`` is kept at top level for quick UI badges on benign pickles.
+    """
+
     model_id: str
     status: str
     overall_risk_score: int = 0
@@ -54,6 +81,7 @@ class ScanResult(BaseModel):
 
 
 def severity_from_tier(tier: str | Severity) -> Severity:
+    """Coerce string tier from legacy JSON into ``Severity`` enum."""
     if isinstance(tier, Severity):
         return tier
     return Severity(tier.lower())
@@ -67,6 +95,7 @@ def build_scan_result(
     scan_metadata: dict[str, Any],
     fickling_severity: str | None = None,
 ) -> ScanResult:
+    """Assemble final ``ScanResult`` after ``risk_scorer`` and tool runs."""
     return ScanResult(
         model_id=model_id,
         status="complete",
@@ -81,7 +110,12 @@ def build_scan_result(
 
 
 def build_scan_result_from_combined(combined: dict[str, Any]) -> ScanResult:
-    """legacy spike json — prefer pipeline build_scan_result when risk block present."""
+    """
+    Upgrade legacy ``combined_scan.json`` (week 2 spike) into ``ScanResult``.
+
+    Prefer ``pipeline.scan_model`` + ``build_scan_result`` for new runs.
+    Synthesizes a Fickling finding when only ``fickling_severity`` was present.
+    """
     tier = combined.get("severity_tier", "low")
     findings: list[Finding] = []
     for raw in combined.get("findings", []):

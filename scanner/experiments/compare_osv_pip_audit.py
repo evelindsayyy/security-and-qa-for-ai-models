@@ -28,6 +28,7 @@ OSV_QUERY_URL = "https://api.osv.dev/v1/query"
 
 
 def query_osv(name: str, version: str) -> dict:
+    """POST a single PyPI package version to the OSV query API."""
     payload = {"package": {"name": name, "ecosystem": "PyPI"}, "version": version}
     resp = requests.post(OSV_QUERY_URL, json=payload, timeout=30)
     resp.raise_for_status()
@@ -35,6 +36,7 @@ def query_osv(name: str, version: str) -> dict:
 
 
 def extract_osv_summary(osv_response: dict) -> list[dict]:
+    """Flatten OSV vuln list to id + short summary for console comparison."""
     rows = []
     for vuln in osv_response.get("vulns", []):
         rows.append({"id": vuln.get("id", "?"), "summary": vuln.get("summary", "")[:80]})
@@ -42,6 +44,7 @@ def extract_osv_summary(osv_response: dict) -> list[dict]:
 
 
 def run_pip_audit(requirement_line: str) -> tuple[list[dict], str]:
+    """Run pip-audit in a temp requirements file; return (vuln rows, stderr)."""
     with tempfile.TemporaryDirectory() as tmp:
         req_path = Path(tmp) / "requirements.txt"
         req_path.write_text(requirement_line + "\n")
@@ -70,6 +73,7 @@ def run_pip_audit(requirement_line: str) -> tuple[list[dict], str]:
 
 
 def extract_pip_audit_ids(audit_rows: list[dict]) -> set[str]:
+    """Collect CVE/GHSA/PYSEC ids from pip-audit JSON for overlap stats."""
     ids: set[str] = set()
     for row in audit_rows:
         if row.get("id"):
@@ -81,6 +85,7 @@ def extract_pip_audit_ids(audit_rows: list[dict]) -> set[str]:
 
 
 def main() -> None:
+    """Compare OSV vs pip-audit on pillow==8.1.0 and write spike JSON under output/."""
     osv_raw = query_osv(PACKAGE_NAME, PACKAGE_VERSION)
     osv_rows = extract_osv_summary(osv_raw)
     pip_rows, _ = run_pip_audit(REQUIREMENT_LINE)

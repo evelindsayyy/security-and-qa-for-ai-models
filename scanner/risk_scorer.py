@@ -1,15 +1,18 @@
 """
 Merge ModelScan, Fickling, and ModelAudit into one nutrition-label grade.
 
-Precedence (tier is max across tools, not additive):
+This is the policy layer between raw tool JSON and ``ScanResult`` / Postgres ``findings``.
+See calibration table in ``scanner/README.md`` (gpt2 → low/18, extension-mismatch PoC → critical/95).
+
+Precedence (tier is **max** across tools, not additive):
   - ModelScan: extension-routed pickle/H5/SavedModel; primary when it fires
-  - Fickling: pickle AST on every pickle-family file; LIKELY_UNSAFE alone stays low
+  - Fickling: pickle AST on every pickle-family file; LIKELY_UNSAFE alone stays **low**
     when ModelScan is clean (benign PyTorch stacked pickles)
-  - ModelAudit: content-routed on all candidate files; actionable issues raise tier
+  - ModelAudit: content-routed on candidate files; actionable issues raise tier
 
 Defense-in-depth: the same threat may appear in multiple tools. Dedupe findings
-by (normalized_file_path, signal) and record corroborated_by — agreement increases
-confidence for reviewers, not the numeric score.
+by ``(normalized_file_path, signal)`` and record ``corroborated_by`` — agreement
+increases reviewer confidence; it does not add to the numeric score.
 """
 
 from __future__ import annotations
@@ -24,16 +27,19 @@ from scanner.modelaudit_scan import modelaudit_tier, normalize_issue_path
 from scanner.pickle_scan import modelscan_tier
 from scanner.schemas import Finding, RiskScoreResult, Severity
 
+# Default score anchors per tier (overridden by explicit CRITICAL/HIGH counts).
 _TIER_SCORE = {"low": 10, "medium": 40, "high": 70, "critical": 95}
 _TIER_RANK = {Severity.low: 0, Severity.medium: 1, Severity.high: 2, Severity.critical: 3}
 
 
 def _finding_id(source: str, file_path: str | None, title: str) -> str:
+    """Stable 16-char hex id for UI/DB (not a UUID — deterministic from content)."""
     raw = f"{source}:{file_path or ''}:{title}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
 def _severity_enum(tier: str) -> Severity:
+    """Parse tier string; unknown values downgrade to low."""
     try:
         return Severity(tier.lower())
     except ValueError:
@@ -41,23 +47,33 @@ def _severity_enum(tier: str) -> Severity:
 
 
 def _max_tier(a: Severity, b: Severity) -> Severity:
+    """Return the more severe of two tier enums."""
     return a if _TIER_RANK[a] >= _TIER_RANK[b] else b
 
 
 def _max_severity(a: Severity, b: Severity) -> Severity:
+    """Alias for finding merge — same as ``_max_tier``."""
     return _max_tier(a, b)
 
 
 def _normalize_path_for_dedupe(file_path: str | None) -> str:
+    """
+    Normalize paths so ModelAudit absolute paths match Fickling relative paths.
+
+    Falls back to basename when prefixes differ between tools.
+    """
     if not file_path:
         return ""
     p = normalize_issue_path(file_path)
-    # basename-only fallback when paths are absolute vs relative
     return Path(p).name if p else ""
 
 
 def _signal_from_finding(f: Finding) -> str:
-    """Dedupe key fragment: dangerous global, fickling class, or title stem."""
+    """
+    Extract a dedupe key fragment from description/title/raw_tool_severity.
+
+    Aligns Fickling "dangerous global" messages with ModelAudit import_reference fields.
+    """
     desc = (f.description or "").lower()
     for pat in (
         r"dangerous global:\s*([\w.]+)",
@@ -73,6 +89,7 @@ def _signal_from_finding(f: Finding) -> str:
 
 
 def _dedupe_key(f: Finding) -> tuple[str, str]:
+    """Bucket key: normalized file + semantic signal."""
     return (_normalize_path_for_dedupe(f.file_path), _signal_from_finding(f))
 
 
@@ -80,7 +97,8 @@ def _merge_findings(findings: list[Finding]) -> list[Finding]:
     """
     Collapse duplicate (file, signal) rows from different tools.
 
-    Keeps highest severity; primary source stays on `source`; others go to corroborated_by.
+    Keeps highest severity; primary ``source`` stays; other tools → ``corroborated_by``.
+    Preserves the longer description when merging.
     """
     buckets: dict[tuple[str, str], Finding] = {}
     order: list[tuple[str, str]] = []
@@ -114,6 +132,7 @@ def _merge_findings(findings: list[Finding]) -> list[Finding]:
 def _findings_from_modelscan_issues(
     issues: list[Any], default_tier: Severity
 ) -> list[Finding]:
+    """Map ModelScan ``issues[]`` entries into normalized ``Finding`` rows."""
     out: list[Finding] = []
     for i, issue in enumerate(issues):
         if not isinstance(issue, dict):
@@ -144,6 +163,7 @@ def _findings_from_modelscan_issues(
 
 
 def _findings_from_modelaudit(summary: dict[str, Any]) -> list[Finding]:
+    """Map actionable ModelAudit issues (already noise-filtered) to ``Finding`` rows."""
     out: list[Finding] = []
     for i, issue in enumerate(summary.get("issues") or []):
         if not isinstance(issue, dict):
@@ -176,7 +196,12 @@ def _findings_from_modelaudit(summary: dict[str, Any]) -> list[Finding]:
 
 
 def _findings_from_fickling(fickling_report: dict[str, Any]) -> list[Finding]:
-    """One finding per analyzed file at worst; aggregate severity on parent report."""
+    """
+    One finding per analyzed file at worst; uses ``per_file`` when present.
+
+    LIKELY_UNSAFE → low severity finding (benign PyTorch calibration).
+    LIKELY_OVERTLY_MALICIOUS → high severity finding.
+    """
     out: list[Finding] = []
     per_file = fickling_report.get("per_file") or [fickling_report]
 
@@ -225,6 +250,19 @@ def score(
     format_summary: FileFormatSummary | None = None,
     modelaudit_summary: dict[str, Any] | None = None,
 ) -> RiskScoreResult:
+    """
+    Compute ``overall_risk_score``, ``severity_tier``, and deduped ``findings``.
+
+    Args:
+        model_id: HF repo id (reserved for future per-model policy hooks).
+        modelscan_payload: Raw ModelScan output dict.
+        fickling_report: Aggregate Fickling report or None if no pickle files.
+        format_summary: From ``format_detector`` — ``safetensors_only`` skips Fickling tier bumps.
+        modelaudit_summary: Filtered ModelAudit summary from ``run_modelaudit_scoped``.
+
+    Returns:
+        ``RiskScoreResult`` consumed by ``schemas.build_scan_result``.
+    """
     ms_tier_str = modelscan_tier(modelscan_payload)
     ms_tier = _severity_enum(ms_tier_str)
     counts = modelscan_payload.get("summary", {}).get("total_issues_by_severity", {})
@@ -234,6 +272,7 @@ def score(
     tier = ms_tier
     score_val = _TIER_SCORE[ms_tier.value]
 
+    # ModelScan severity counts can raise tier/score even when issues[] is sparse.
     if counts.get("CRITICAL", 0):
         tier = Severity.critical
         score_val = 95
@@ -256,9 +295,9 @@ def score(
             tier = _max_tier(tier, Severity.high)
             score_val = max(score_val, 75)
         elif fick_sev in ("LIKELY_UNSAFE", "POSSIBLY_UNSAFE"):
+            # Benign PyTorch calibration: tier stays low if ModelScan is clean.
             if tier == Severity.low and not counts.get("HIGH") and not counts.get("CRITICAL"):
                 score_val = max(score_val, 18 if fick_sev == "LIKELY_UNSAFE" else 28)
-            # per-file findings stay low unless tier already raised
 
     if modelaudit_summary and modelaudit_summary.get("actionable_issue_count", 0) > 0:
         ma_tier_str = modelaudit_tier(modelaudit_summary)
@@ -267,7 +306,7 @@ def score(
         score_val = max(score_val, _TIER_SCORE.get(ma_tier.value, score_val))
         findings.extend(_findings_from_modelaudit(modelaudit_summary))
 
-    # Re-apply low fickling severity after modelaudit tier (fickling findings default low)
+    # After ModelAudit, clamp Fickling finding severities to low when label tier is still low.
     if tier == Severity.low and fickling_report:
         for i, f in enumerate(findings):
             if f.source == "fickling" and f.severity != Severity.low:

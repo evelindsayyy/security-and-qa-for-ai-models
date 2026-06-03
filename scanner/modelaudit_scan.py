@@ -1,13 +1,13 @@
 """
-ModelAudit — content-routed scan of every candidate file in a model directory.
+ModelAudit integration — content-routed scan of candidate model byte files.
 
-ModelScan routes by extension and may skip .bin/.pt or never open a file.
-Fickling analyzes pickle AST on discovered pickle-family paths.
-ModelAudit uses magic-byte / structural detection (45+ scanners) so renamed or
-extensionless artifacts still reach the right scanner — see extension-mismatch PoCs.
+Why this layer exists (see ``docs/tool-stack.md``):
+  - ModelScan routes by extension and may skip ``.bin``/``.pt`` or never open a path.
+  - Fickling only runs on discovered pickle-family paths.
+  - ModelAudit inspects file *content* (magic bytes, 45+ format scanners), so renamed or
+    extensionless malicious payloads still get analyzed (e.g. extension-mismatch PoCs).
 
-Overlap with ModelScan/Fickling is intentional (defense-in-depth);
-the risk scorer dedupes correlated findings.
+Overlapping findings with ModelScan/Fickling are expected; ``risk_scorer`` dedupes them.
 """
 
 from __future__ import annotations
@@ -20,12 +20,12 @@ from typing import Any
 
 from scanner.format_detector import FileFormatSummary
 
-# ModelScan "clean" + these rules on pickle paths = partial-scan noise, not threats
+# When ModelScan already reported issues, these pickle partial-scan rules are noise.
 _PICKLE_NOISE_RULES = frozenset({"S901", "S902", "S212"})
 
 _TIER_ORDER = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 
-# Files we never send to ModelAudit (configs, docs, source — not model bytes)
+# Never treat these as weight/tensor streams (configs, docs, tokenizer vocab, code).
 _NON_MODEL_SUFFIXES = frozenset({
     ".json",
     ".txt",
@@ -53,7 +53,6 @@ _NON_MODEL_SUFFIXES = frozenset({
     ".ps1",
 })
 
-# Basename patterns that are never weight artifacts (tokenizer vocab, etc.)
 _NON_MODEL_BASENAMES = frozenset({
     "merges.txt",
     "vocab.txt",
@@ -65,9 +64,9 @@ _NON_MODEL_BASENAMES = frozenset({
 
 def _should_skip_path(rel_path: str) -> bool:
     """
-    Return True if this path cannot be a model artifact (speed + fewer FP configs).
+    Return True if this repo-relative path cannot be a model artifact.
 
-    Extensionless files are NOT skipped — ModelAudit may detect pickle inside.
+    Extensionless files are NOT skipped — ModelAudit may still detect pickle inside.
     """
     lower = rel_path.lower()
     name = Path(lower).name
@@ -76,7 +75,6 @@ def _should_skip_path(rel_path: str) -> bool:
     suffix = Path(lower).suffix
     if suffix in _NON_MODEL_SUFFIXES:
         return True
-    # Hugging Face tokenizer spiece — not a weight tensor file
     if suffix == ".model" and "spiece" in lower:
         return True
     return False
@@ -89,10 +87,11 @@ def collect_modelaudit_targets(
     fickling_report: dict[str, Any] | None = None,
 ) -> list[Path]:
     """
-    Every file under model_dir that might be a model byte stream.
+    List every on-disk file that might be a model byte stream for ModelAudit CLI.
 
-    Includes paths ModelScan already scanned and paths Fickling already analyzed.
-    ModelAudit content detection decides whether a file is in scope.
+    Includes paths ModelScan already scanned and paths Fickling already analyzed —
+    ModelAudit's internal routers decide applicability. Optional args reserved for
+    future narrowing; currently scans all non-skipped files under ``model_dir``.
     """
     _ = format_summary, modelscan_payload, fickling_report
 
@@ -110,6 +109,7 @@ def collect_modelaudit_targets(
 
 
 def _run_cli(paths: list[Path]) -> dict[str, Any]:
+    """Invoke ``python -m modelaudit scan`` and parse JSON stdout."""
     if not paths:
         return {"issues": [], "bytes_scanned": 0}
 
@@ -132,18 +132,23 @@ def _run_cli(paths: list[Path]) -> dict[str, Any]:
 
 
 def _issue_location(issue: dict[str, Any]) -> str:
+    """Extract file path from a ModelAudit issue dict."""
     return str(issue.get("location") or issue.get("file") or "")
 
 
 def normalize_issue_path(loc: str) -> str:
-    """Strip ModelAudit suffix like ' (pos 76)' for cross-tool matching."""
+    """
+    Normalize ModelAudit location strings for cross-tool dedupe in ``risk_scorer``.
+
+    Strips byte-offset suffixes like ``' (pos 76)'`` so Fickling and ModelAudit align.
+    """
     if " (pos " in loc:
         return loc.split(" (pos ", 1)[0].strip()
     return loc.strip()
 
 
 def _issue_signal_key(issue: dict[str, Any]) -> str:
-    """Stable key for dedupe: dangerous global, rule, or message stem."""
+    """Stable key fragment for dedupe: import global, rule code, or message stem."""
     details = issue.get("details") or {}
     if isinstance(details, dict):
         imp = details.get("import_reference") or details.get("associated_global")
@@ -160,7 +165,7 @@ def _issue_signal_key(issue: dict[str, Any]) -> str:
 
 
 def _is_pickle_family_signal(issue: dict[str, Any], loc: str) -> bool:
-    """True if issue describes pickle deserialization risk."""
+    """True if the issue describes pickle deserialization risk (not generic format warn)."""
     lower = (loc + " " + (issue.get("message") or "") + " " + str(issue.get("type") or "")).lower()
     if issue.get("type") == "pickle_check":
         return True
@@ -176,6 +181,7 @@ def _is_pickle_family_signal(issue: dict[str, Any], loc: str) -> bool:
 
 
 def _install_missing_noise(issue: dict[str, Any]) -> bool:
+    """True for optional-scanner install hints (ONNX/H5 backends not installed)."""
     msg = (issue.get("message") or "").lower()
     return "not installed" in msg or "install with" in msg
 
@@ -184,11 +190,14 @@ def is_actionable_modelaudit_issue(
     issue: dict[str, Any], *, modelscan_total_issues: int
 ) -> bool:
     """
-    Drop install-missing ONNX/H5 noise; drop S901/S902 partial-scan on pickle
-    only when ModelScan already reported issues on this repo.
+    Decide whether an issue should affect the nutrition label.
 
-    Real pickle/globals: critical/high always; medium when message is explicit.
-    Other formats: medium+ is actionable.
+    Filters:
+      - Install-missing optional backend messages
+      - Pickle partial-scan rules S901/S902 when ModelScan already found issues
+      - Low-severity pickle noise unless message explicitly indicates exploit patterns
+
+    Non-pickle formats: medium+ severities are actionable.
     """
     sev = (issue.get("severity") or "").lower()
     loc = _issue_location(issue)
@@ -218,7 +227,12 @@ def run_modelaudit_scoped(
     modelscan_payload: dict[str, Any],
     fickling_report: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
-    """Run ModelAudit on all candidate files; content routing inside ModelAudit."""
+    """
+    Run ModelAudit on all candidate files; return summary for ``tool_results``.
+
+    Raises ImportError if ``modelaudit`` package is not installed (required in Docker image).
+    Caps stored actionable issues at 50; full counts remain in ``issue_count``.
+    """
     try:
         import modelaudit  # noqa: F401
     except ImportError as exc:
@@ -273,7 +287,7 @@ def run_modelaudit_scoped(
 
 
 def modelaudit_tier(summary: dict[str, Any] | None) -> str:
-    """Worst tier implied by actionable ModelAudit issues only."""
+    """Worst severity tier among actionable ModelAudit issues (for ``risk_scorer``)."""
     if not summary or not summary.get("issues"):
         return "low"
     worst = "low"
