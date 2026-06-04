@@ -1,6 +1,6 @@
 # Documentation
 
-Project guides & info. **GitLab:** [`.gitlab/README.md`](../.gitlab/README.md).
+Project guides & info. **GitLab:** [`.gitlab/README.md`](../.gitlab/README.md). **Planning detail (local):** `.gitlab/gitlab-transfer.md` (gitignored).
 
 | Document | Role |
 |----------|------|
@@ -21,5 +21,6 @@ Project guides & info. **GitLab:** [`.gitlab/README.md`](../.gitlab/README.md).
 | [`unit_tests/README.md`](../unit_tests/README.md) | Automated unit tests (scanner) |
 | [`testing/README.md`](../testing/README.md) | Manual gateway/eval spikes |
 | [`scanner/experiments/README.md`](../scanner/experiments/README.md) | A — optional spikes (OSV, Trivy) |
-| [`testing/eval/README.md`](../testing/eval/README.md) | B — efficacy |
+| [`evaluator/README.md`](../evaluator/README.md) | B — efficacy package |
+| [`testing/eval/README.md`](../testing/eval/README.md) | B — W2 spikes (TruthfulQA) |
 | [`testing/gateway/README.md`](../testing/gateway/README.md) | B / shared gateway |

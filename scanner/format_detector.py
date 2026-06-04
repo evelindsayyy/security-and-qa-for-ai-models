@@ -1,4 +1,13 @@
-"""classify files in a downloaded model dir — helps explain what modelscan skipped."""
+"""
+Classify files in a downloaded Hugging Face model directory.
+
+Runs before scanners so ``pipeline`` and ``risk_scorer`` know:
+  - whether Fickling applies (any pickle-family weight present)
+  - whether the repo is safetensors-only (Fickling omitted from label logic)
+  - what file categories exist for ``scan_metadata.file_formats``
+
+Does not perform security analysis — only inventory by extension/name patterns.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +17,9 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from scanner.paths import PICKLE_WEIGHT_NAMES
+from scanner.pickle_scan import _PICKLE_FAMILY_SUFFIXES
 
+# Source files in repos — tracked for coverage, not sent to ModelAudit as weights.
 CODE_EXTENSIONS = {".py", ".cpp", ".c", ".h", ".cu", ".rs", ".go"}
 CONFIG_NAMES = {
     "config.json",
@@ -20,19 +31,33 @@ CONFIG_NAMES = {
 
 
 class FileFormatSummary(BaseModel):
+    """
+    Aggregated file inventory for one model directory.
+
+    ``by_category`` maps category → relative paths; ``flags`` drive pipeline branches.
+    """
+
     by_category: dict[str, list[str]] = Field(default_factory=dict)
     flags: dict[str, bool] = Field(default_factory=dict)
     file_count: int = 0
 
 
+def _is_pickle_family_path(rel_path: str) -> bool:
+    """True if path looks like a PyTorch/pickle weight (see also ``pickle_scan``)."""
+    name = Path(rel_path).name
+    lower = rel_path.lower()
+    if name in PICKLE_WEIGHT_NAMES:
+        return True
+    return lower.endswith(_PICKLE_FAMILY_SUFFIXES)
+
+
 def _category_for_file(rel_path: str) -> str:
+    """Assign one category label per repo-relative path."""
     name = Path(rel_path).name
     lower = rel_path.lower()
 
-    if name in PICKLE_WEIGHT_NAMES or lower.endswith((".bin", ".pt", ".pth")):
-        # .bin might be pickle weights — fickling target
-        if name in PICKLE_WEIGHT_NAMES or lower.endswith((".bin", ".pt")):
-            return "pickle"
+    if _is_pickle_family_path(rel_path):
+        return "pickle"
     if lower.endswith(".safetensors"):
         return "safetensors"
     if lower.endswith(".onnx") or lower.endswith(".onnx_data"):
@@ -45,6 +70,12 @@ def _category_for_file(rel_path: str) -> str:
 
 
 def summarize(model_dir: Path) -> FileFormatSummary:
+    """
+    Walk ``model_dir`` (skip ``.cache``) and build category lists + boolean flags.
+
+    Raises:
+        FileNotFoundError: if ``model_dir`` is missing (caller should download first).
+    """
     if not model_dir.is_dir():
         raise FileNotFoundError(f"model dir missing: {model_dir}")
 
@@ -57,7 +88,6 @@ def summarize(model_dir: Path) -> FileFormatSummary:
         "other": [],
     }
 
-    # walk everything under model_dir (skip hf cache junk if any)
     for path in sorted(model_dir.rglob("*")):
         if not path.is_file():
             continue
@@ -87,4 +117,5 @@ def summarize(model_dir: Path) -> FileFormatSummary:
 
 
 def summary_to_metadata_dict(summary: FileFormatSummary) -> dict[str, Any]:
+    """Serialize ``FileFormatSummary`` into ``scan_metadata.file_formats``."""
     return summary.model_dump()

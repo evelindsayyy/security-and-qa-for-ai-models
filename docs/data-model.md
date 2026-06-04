@@ -70,6 +70,7 @@ One HF repo inspection job.
 | `description` | text |
 | `raw_tool_severity` | `LIKELY_UNSAFE` |
 | `remediation` | nullable text |
+| `corroborated_by` | string array, nullable | `["fickling"]` when ModelAudit and Fickling agree on same file/signal |
 
 Shapes: `scanner/schemas.py` (`ScanResult`, `Finding`).
 

@@ -1,13 +1,19 @@
 """
-cli entrypoint — all production scan commands live here.
+CLI entry point for the ``scanner`` package.
+
+Production command (Docker or host with deps installed):
 
   python -m scanner scan gpt2
-  python -m scanner gap-map gpt2 distilbert-base-uncased
+
+Debug / partial runs (same download layout under ``scanner/models``):
+
   python -m scanner metadata gpt2
-  python -m scanner modelscan gpt2      # debug: modelscan only
-  python -m scanner fickling gpt2       # debug: fickling only
-  python -m scanner modelaudit gpt2     # debug: modelaudit only (safetensors/onnx)
-  python -m scanner validate gpt2       # pydantic check on scan_result.json
+  python -m scanner modelscan gpt2
+  python -m scanner fickling gpt2
+  python -m scanner modelaudit gpt2
+  python -m scanner validate gpt2
+
+See ``scanner/README.md`` for calibration examples and output paths.
 """
 
 from __future__ import annotations
@@ -18,7 +24,6 @@ import sys
 from pathlib import Path
 
 from scanner.download import download_model
-from scanner.gap_map import format_markdown_table, write_gap_map
 from scanner.metadata import build_metadata_report
 from scanner.paths import dump_json, model_dir, output_dir
 from scanner.pickle_scan import (
@@ -39,6 +44,11 @@ from scanner.schemas import ScanResult, build_scan_result_from_combined
 
 
 def _ensure_model(model_id: str, no_download: bool) -> None:
+    """
+    Guarantee weights exist locally before a debug subcommand runs.
+
+    Raises FileNotFoundError when ``--no-download`` is set and ``models/<slug>`` is missing.
+    """
     if not model_dir(model_id).exists():
         if no_download:
             raise FileNotFoundError(f"{model_dir(model_id)} missing — drop --no-download to fetch")
@@ -46,6 +56,7 @@ def _ensure_model(model_id: str, no_download: bool) -> None:
 
 
 def cmd_scan(args: argparse.Namespace) -> int:
+    """Full pipeline: download (optional) → tools → ``scan_result.json``."""
     for model_id in args.models:
         print(f"scanning {model_id} ...")
         result = scan_model(model_id, auto_download=not args.no_download)
@@ -59,6 +70,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
 
 
 def cmd_metadata(args: argparse.Namespace) -> int:
+    """Hub inventory only — no ModelScan/Fickling (fast catalog check)."""
     for model_id in args.models:
         report = build_metadata_report(model_id)
         dump_json(output_dir(model_id) / "metadata.json", report)
@@ -66,14 +78,8 @@ def cmd_metadata(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_gap_map(args: argparse.Namespace) -> int:
-    report = write_gap_map(args.models)
-    print(format_markdown_table(report))
-    print("\njson: OUTPUT_ROOT/gap_map_summary.json")
-    return 0
-
-
 def cmd_modelscan(args: argparse.Namespace) -> int:
+    """Debug: run ModelScan alone; write ``modelscan_report.json`` + ``.txt`` summary."""
     for model_id in args.models:
         _ensure_model(model_id, args.no_download)
         mdir = model_dir(model_id)
@@ -86,6 +92,7 @@ def cmd_modelscan(args: argparse.Namespace) -> int:
 
 
 def cmd_fickling(args: argparse.Namespace) -> int:
+    """Debug: run Fickling on all pickle-family weights in the repo."""
     for model_id in args.models:
         _ensure_model(model_id, args.no_download)
         mdir = model_dir(model_id)
@@ -101,14 +108,19 @@ def cmd_fickling(args: argparse.Namespace) -> int:
 
 
 def cmd_modelaudit(args: argparse.Namespace) -> int:
-    """Debug: scoped ModelAudit (same paths as full scan — not whole repo tree)."""
+    """
+    Debug: ModelAudit with same scoping as full scan (content-routed, noise filtered).
+
+    Re-runs ModelScan + Fickling only to supply context for actionable filtering.
+    """
     for model_id in args.models:
         _ensure_model(model_id, args.no_download)
         mdir = model_dir(model_id)
         out = output_dir(model_id)
         fmt = format_summarize(mdir)
         ms = run_modelscan(mdir)
-        report = run_modelaudit_scoped(mdir, fmt, ms)
+        fick = run_fickling_if_applicable(mdir)
+        report = run_modelaudit_scoped(mdir, fmt, ms, fickling_report=fick)
         if not report:
             print(f"{model_id}: modelaudit unavailable or no report")
             continue
@@ -120,10 +132,14 @@ def cmd_modelaudit(args: argparse.Namespace) -> int:
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
+    """
+    Pydantic-validate existing JSON on disk (CI / manual QA).
+
+    Accepts ``scan_result.json`` or legacy ``combined_scan.json``.
+    """
     for model_id in args.models:
         path = output_dir(model_id) / (args.file or "scan_result.json")
         if not path.is_file():
-            # fallback for old combined name
             path = output_dir(model_id) / "combined_scan.json"
         if not path.is_file():
             print(f"missing output for {model_id} — run: python -m scanner scan {model_id}", file=sys.stderr)
@@ -138,6 +154,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    """Parse argv and dispatch to subcommand handlers."""
     parser = argparse.ArgumentParser(
         prog="scanner",
         description="Track A HF artifact scanner (package: scanner/)",
@@ -149,10 +166,9 @@ def main() -> int:
     for name, func, help_text in [
         ("scan", cmd_scan, "full pipeline -> scan_result.json"),
         ("metadata", cmd_metadata, "hf hub file list only"),
-        ("gap-map", cmd_gap_map, "scanned vs skipped table"),
         ("modelscan", cmd_modelscan, "modelscan only (debug)"),
         ("fickling", cmd_fickling, "fickling only (debug)"),
-        ("modelaudit", cmd_modelaudit, "modelaudit only (debug; safetensors/onnx)"),
+        ("modelaudit", cmd_modelaudit, "modelaudit only (debug; content-routed)"),
         ("validate", cmd_validate, "pydantic-check existing json"),
     ]:
         p = sub.add_parser(name, help=help_text, parents=[nd] if name != "validate" else [])

@@ -1,7 +1,13 @@
-"""human-readable summaries for cli / debug (optional)."""
+"""
+Human-readable scan summaries for terminal output and ``*_report.txt`` files.
+
+These formatters are optional — canonical machine output is JSON under
+``scanner/output/<slug>/``. Used by debug CLI commands (modelscan, fickling, modelaudit).
+"""
 
 
 def format_modelscan_text(payload: dict) -> str:
+    """Short ModelScan issue counts and skip stats (detail lives in JSON)."""
     summary = payload.get("summary", {})
     counts = summary.get("total_issues_by_severity", {})
     lines = [f"total issues: {summary.get('total_issues', 0)}"]
@@ -16,6 +22,11 @@ def format_modelscan_text(payload: dict) -> str:
 
 
 def format_fickling_text(report: dict) -> str:
+    """
+    Summarize worst-case Fickling result across analyzed pickle-family files.
+
+    Reminds operators that LIKELY_UNSAFE alone is often benign PyTorch stacking.
+    """
     lines = [
         f"file: {report['file']}",
         f"pytorch_format: {report['pytorch_format']}",
@@ -34,7 +45,7 @@ def format_fickling_text(report: dict) -> str:
 
 
 def format_modelaudit_text(report: dict) -> str:
-    """Scoped ModelAudit summary (safetensors/onnx paths only)."""
+    """ModelAudit path list, actionable vs noise-filtered counts, scan mode."""
     paths = report.get("paths_scanned") or []
     lines = [
         f"paths_scanned: {len(paths)}",
@@ -48,7 +59,9 @@ def format_modelaudit_text(report: dict) -> str:
         lines.append("by_severity: " + ", ".join(f"{k}={v}" for k, v in sorted(by_sev.items())))
     if report.get("note"):
         lines.append(f"note: {report['note']}")
+    mode = report.get("scan_mode", "content_routed")
+    lines.append(f"scan_mode: {mode}")
     if not paths:
-        lines.append("(no safetensors/onnx — skipped)")
+        lines.append("(no candidate files)")
     lines.append("(detail: modelaudit_report.json)")
     return "\n".join(lines)
