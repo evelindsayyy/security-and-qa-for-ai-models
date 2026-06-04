@@ -133,7 +133,7 @@ def cmd_modelaudit(args: argparse.Namespace) -> int:
 
 def cmd_validate(args: argparse.Namespace) -> int:
     """
-    Pydantic-validate existing JSON on disk (CI / manual QA).
+    Pydantic-validate existing JSON on disk.
 
     Accepts ``scan_result.json`` or legacy ``combined_scan.json``.
     """

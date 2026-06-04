@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Model catalog{% endblock %}
+
+{% block content %}
+<div class="catalog-page">
+  <h1>Model catalog</h1>
+  <p class="sub">
+    {{ gateway|length }} gateway model{{ "" if gateway|length == 1 else "s" }} ·
+    {{ hf|length }} hf scan target{{ "" if hf|length == 1 else "" }} ·
+    source: <code>docs/gateway-models.md</code>
+  </p>
+
+  <h2 class="section-title">Gateway models (safety + efficacy)</h2>
+  <p class="section-hint">
+    liteLLM <code>model=</code> strings for duke ai gateway — do not run artifact scanning on these ids.
+  </p>
+  <table class="run-table">
+    <thead>
+      <tr>
+        <th>Model id</th>
+        <th>Alias</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in gateway %}
+      <tr>
+        <td><span class="model">{{ m.id }}</span></td>
+        <td class="dim">{{ m.alias or "—" }}</td>
+        <td>{{ m.notes or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2 class="section-title">HF scan models (artifact scanning)</h2>
+  <p class="section-hint">
+    hugging face repo ids — results under <code>scanner/output/&lt;slug&gt;/scan_result.json</code>.
+  </p>
+  <table class="run-table">
+    <thead>
+      <tr>
+        <th>HF repo</th>
+        <th>Output slug</th>
+        <th>Notes</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in hf %}
+      <tr class="{% if 'poc' in m.id.lower() or 'malicious' in (m.notes or '').lower() %}row-warn{% endif %}">
+        <td><span class="model">{{ m.id }}</span></td>
+        <td><code>{{ m.slug }}</code></td>
+        <td>{{ m.notes or "—" }}</td>
+        <td><a href="{{ url_for('scan_detail', slug=m.slug) }}">scan</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <section class="key">
+    <h2>how to use this catalog</h2>
+    <ul>
+      <li><b>gateway</b> rows are for safety red-team and efficacy eval (<a href="{{ url_for('eval_run') }}">eval runs</a>).</li>
+      <li><b>hf</b> rows are for pre-deploy file scanning (<a href="{{ url_for('scans') }}">scan results</a>).</li>
+      <li>confirm exact litellm strings with oit before production runs.</li>
+    </ul>
+  </section>
+</div>
+{% endblock %}
