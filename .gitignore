@@ -14,6 +14,8 @@ testing/scanning/models/*
 !testing/scanning/models/README.md
 testing/scanning/output/*
 !testing/scanning/output/README.md
+safety/promptfoo_testing/output/*
+!safety/promptfoo_testing/output/README.md
 
 .gitlab/gitlab-transfer.md
 
@@ -40,5 +42,5 @@ evaluator/results/
 # AI-only briefings — personal notes for Claude, not project documentation
 evaluator/CLAUDE.md
 evaluator/TASK.md
-output/
+/output/
 gen_options.json
