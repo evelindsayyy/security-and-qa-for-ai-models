@@ -46,3 +46,9 @@ def register_routes(app):
     @app.route("/models")
     def models_catalog():
         return render_template_string(_CATALOG, models=GATEWAY_MODELS)
+
+    @app.route("/eval-demo")
+    def eval_demo():
+        # Lazy import so booting the app doesn't pull in evaluator/openai.
+        from frontend.eval_demo_data import get_demo_data
+        return render_template("eval_demo.html", **get_demo_data())
