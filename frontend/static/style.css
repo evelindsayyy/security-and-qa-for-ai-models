@@ -1,7 +1,53 @@
-body { font-family: -apple-system, system-ui, sans-serif; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; color: #222; }
-header nav a { margin-right: 1rem; }
-h1 { margin-top: 0; margin-bottom: 0.25rem; }
+/* base */
+body {
+  font-family: -apple-system, system-ui, sans-serif;
+  max-width: 1100px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  color: #222;
+  line-height: 1.55;
+  background: #fcfcfc;
+}
+
+h1 {
+  margin-top: 0;
+  margin-bottom: 0.25rem;
+  font-size: 1.8rem;
+  letter-spacing: -0.01em;
+  color: #012169;  /* Duke blue, used sparingly as accent */
+}
+h2 {
+  font-size: 1.15rem;
+  margin-top: 1.75rem;
+  color: #333;
+}
+p, li { font-size: 14px; }
 ul { padding-left: 1.2rem; }
+
+a { color: #012169; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* header / nav */
+header {
+  border-bottom: 1px solid #e5e5e5;
+  padding-bottom: 0.6rem;
+  margin-bottom: 1.5rem;
+}
+header nav { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+header nav a {
+  color: #555;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 4px 0;
+  border-bottom: 2px solid transparent;
+  transition: color 0.12s, border-color 0.12s;
+  text-decoration: none;
+}
+header nav a:hover {
+  color: #012169;
+  border-bottom-color: #012169;
+  text-decoration: none;
+}
 
 /* dashboard */
 .dashboard .sub { color: #666; font-size: 14px; margin-bottom: 1.5rem; }
@@ -13,3 +59,69 @@ ul { padding-left: 1.2rem; }
 .uncovered { color: #b07000; }
 .none { color: #a02020; }
 .dim { color: #aaa; }
+
+/* model comparison page */
+.eval-comparison .sub { color: #666; font-size: 14px; margin-bottom: 1.5rem; }
+.eval-comparison .sub b { color: #333; }
+
+.run-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 1.75rem; }
+.run-table th, .run-table td { padding: 10px 12px; border-bottom: 1px solid #eee; vertical-align: middle; }
+.run-table thead th {
+  background: #fafafa;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #666;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+.run-table thead th.num { text-align: right; }
+.run-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.run-table td.overall { font-weight: 700; font-size: 14px; color: #222; }
+.run-table .model { font-weight: 600; }
+
+.run-table tbody tr:hover { background: #fafbfc; }
+.run-table tr.row-best { background: #f3faf3; }
+.run-table tr.row-best:hover { background: #ecf6ec; }
+.run-table tr.row-warn { background: #fdf6f0; color: #6a6a6a; }
+.run-table tr.row-warn:hover { background: #faeee2; }
+.run-table tr.row-warn td.overall { color: #6a6a6a; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+.badge-best { background: #dff1df; color: #1f6b1f; margin-left: 0.5rem; }
+.badge-warn { background: #fde2c8; color: #a35200; }
+.status-ok { color: #2a7a2a; font-size: 12px; font-weight: 600; }
+
+.eval-comparison .key {
+  background: #fafafa;
+  padding: 1rem 1.25rem;
+  border-left: 3px solid #ddd;
+  font-size: 13px;
+  color: #555;
+  border-radius: 2px;
+}
+.eval-comparison .key h2 {
+  font-size: 12px;
+  margin: 0 0 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #444;
+}
+.eval-comparison .key ul { padding-left: 1.2rem; margin: 0; }
+.eval-comparison .key li { margin-bottom: 0.4rem; }
+.eval-comparison .key li:last-child { margin-bottom: 0; }
+.eval-comparison code {
+  background: #f0f0f0;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
