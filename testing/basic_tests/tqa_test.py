@@ -100,7 +100,7 @@ MODELS_TO_TEST = [
 ]
 
 TEST_LIMIT = 50  # Set to None to test all questions, or a number to limit
-OUTPUT_DIR = "./tqa_results"
+OUTPUT_DIR = "./test_results"
 
 
 class TruthfulQATestRunner:

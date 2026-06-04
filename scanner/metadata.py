@@ -1,4 +1,11 @@
-"""hf hub metadata only — no weight download."""
+"""
+Hugging Face Hub metadata without downloading weights.
+
+Answers inventory questions for the nutrition label and tells operators whether
+a full artifact scan is worthwhile (pickle vs safetensors-only, requirements.txt).
+
+CLI: ``python -m scanner metadata <HF_REPO_ID>`` → ``output/<slug>/metadata.json``.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +17,12 @@ from scanner.paths import PICKLE_WEIGHT_NAMES
 
 
 def build_metadata_report(model_id: str) -> dict[str, Any]:
+    """
+    Query Hub API for repo file list, sizes, tags, and scan-oriented hints.
+
+    ``scan_hints`` flags which downstream tools need a local download:
+    ModelScan/Fickling need weights on disk; dependency scanners need requirements.txt.
+    """
     api = HfApi()
     info = api.model_info(repo_id=model_id)
     files = api.list_repo_files(repo_id=model_id)

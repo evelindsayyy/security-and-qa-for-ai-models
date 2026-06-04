@@ -39,7 +39,7 @@ Deliverable: structured, publishable results for OIT and the AI Gateway — dept
 | **A — Scanning & Safety** | Raphael Karamagi, Nithi Vechalapu | Security pillar: HF scanning, CVEs, secrets; inference safety and red team |
 | **B — Evaluation** | Grace Zhan, Jack Yi | Efficacy benchmarks, task suites, metrics, operational performance |
 
-Docs: [`docs/README.md`](docs/README.md) · Track A: [`docs/track-a-framework.md`](docs/track-a-framework.md) · Track B: [`docs/track-b-framework.md`](docs/track-b-framework.md)
+Docs: [`docs/README.md`](docs/README.md) · Track A: [`docs/track-a-framework.md`](docs/track-a-framework.md) · Track B: [`docs/track-b-framework.md`](docs/track-b-framework.md) · GitLab: [`.gitlab/README.md`](.gitlab/README.md)
 
 **Planning:** GitLab — [`.gitlab/README.md`](.gitlab/README.md); technical direction in `docs/`
 
@@ -82,7 +82,7 @@ Runtime data is gitignored (`scanner/models`, `scanner/output`, `testing/eval/ou
 |-------|--------|
 | Language | Python 3.11+ |
 | Inference | LiteLLM to Duke AI Gateway (OpenAI-compatible) |
-| Security spike | ModelScan, Fickling, ModelAudit, pip-audit, OSV API |
+| Security scanning | ModelScan, Fickling, ModelAudit (content-routed); pip-audit/OSV planned |
 | Containers | Docker Compose on DGX (`asus-dgx-04.oit.duke.edu`) |
 | API / DB / jobs | Flask, PostgreSQL, Celery + Redis (weeks 5+) |
 | UI | `frontend/` — Flask (W3+), full label W6 (mockups) |
@@ -167,7 +167,7 @@ See `.env.example`. Never commit `.env`.
 | Gateway API test | Done |
 | Security scanning spike (ModelScan, Fickling, OSV/pip-audit) | Done |
 | Track / tool / evaluation docs | Done |
-| Week 2 scanning spike + TruthfulQA pilot | Done |
+| Scanning spikes + TruthfulQA pilot | Done |
 | Safety schemas + promptfoo; Team Docker/CI | Week 3 |
 | Scanner + safety packages | Weeks 3–4 |
 | Evaluation (`evaluator/`) | W3: MVP suites, 1 gateway model; W4+: pilot scale |

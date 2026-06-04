@@ -17,12 +17,16 @@ scanner/output/*
 
 # legacy / repo-root output (remote + old scanning layout on disk)
 output/
-testing/scanning/models/*
-!testing/scanning/models/README.md
-testing/scanning/output/*
-!testing/scanning/output/README.md
 
+# HF weights under testing/ — never commit (canonical download dir: scanner/models/)
+testing/**/models/*
+!testing/**/models/README.md
+testing/**/output/*
+!testing/**/output/README.md
+# removed spike tree (OSV/pip-audit experiments lived elsewhere; no re-add)
+testing/security_scanning_tests/
 .gitlab/gitlab-transfer.md
+context.md
 
 # eval spikes — regenerate locally
 testing/eval/output/*
@@ -38,7 +42,7 @@ jack/
 instance/
 
 # Ignore tqa test results
-tqa_results/
+test_results/
 
 # Evaluator cache — regenerable, large, contains responses
 evaluator/cache/
@@ -47,3 +51,8 @@ evaluator/results/
 # AI-only briefings — personal notes for Claude, not project documentation
 evaluator/CLAUDE.md
 evaluator/TASK.md
+output/
+gen_options.json
+
+# Model caches
+.cache/

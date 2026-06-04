@@ -92,11 +92,12 @@ flowchart TD
 
 Pure-Python, artifact-level. Given a Hugging Face model ID, it pulls files via the HF Hub library and runs:
 
-- **Format detector** — classifies files (safetensors, pickle/PyTorch, ONNX, config JSON, code) and flags anything that needs deeper inspection.
+- **Format detector** — classifies files (safetensors, pickle/PyTorch, ONNX, config, code, other).
+- **ModelAudit** — content-routed scan of candidate model files (defense-in-depth with ModelScan/Fickling).
 - **Pickle inspector** — uses [fickling](https://github.com/trailofbits/fickling) to walk the serialization AST and flag dangerous operations (designed to catch attacks like nullifAI).
 - **Dependency scanner** — `pip-audit` + direct OSV API queries against `requirements.txt` / `pyproject.toml` shipped alongside the model.
 - **Secret scanner** — [TruffleHog](tool-stack.md) wrapper for credentials accidentally committed to model repos.
-- **Risk scorer** — maps ModelScan, Fickling, and ModelAudit into one tier/score; reconciles tool disagreements (e.g. benign pickle noise).
+- **Risk scorer** — max tier across ModelScan, Fickling, and ModelAudit; dedupes correlated findings (`corroborated_by`).
 
 Output: a `ScanResult` document persisted to Postgres. Details: [`track-a-framework.md`](track-a-framework.md). Tools: [`tool-stack.md`](tool-stack.md).
 

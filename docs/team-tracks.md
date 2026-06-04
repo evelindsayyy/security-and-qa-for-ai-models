@@ -30,7 +30,7 @@ Code+ 2026 — Duke OIT. The nutrition label has two pillars — **security** (s
 |------|------|---------|---------|
 | 1 | Scaffold | Tool research | Gateway test |
 | 2 | scan/eval spikes, `docs/data-model.md` sketch, gateway doc | HF scan spike; TruthfulQA pilot | Gateway smoke |
-| 3 | Docker, CI, catalog, `frontend/` | `scanner/` + `safety/`; 1-model safety | `evaluator/`; MVP suites, 1 gateway model |
+| 3 | Docker, CI, catalog, `frontend/` | `scanner/` three-tool pipeline done; safety + 1-model efficacy (Fri) | `evaluator/` schemas + judge (Grace); runner + 1 model |
 | 4 | E2E tests; frontend stubs | Scan E2E; safety 3 models | MVP suites on 3 pilot models |
 | 5 | Postgres + `api/` | `/scans`, `/safety` | `/evals` |
 | 6 | `frontend/` full UI | Scanning + safety views | Efficacy charts |

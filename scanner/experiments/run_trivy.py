@@ -16,6 +16,7 @@ from scanner.paths import dump_json, model_dir, output_dir
 
 
 def run_trivy(model_dir: Path) -> dict:
+    """Filesystem CVE scan via Trivy CLI (exit 0 or 1 still yields JSON)."""
     result = subprocess.run(
         ["trivy", "fs", "--format", "json", "--quiet", str(model_dir)],
         capture_output=True,
@@ -27,6 +28,7 @@ def run_trivy(model_dir: Path) -> dict:
 
 
 def main() -> None:
+    """Scan MODEL_ID weights dir and write trivy_report.json next to other scan outputs."""
     model_id = os.environ.get("MODEL_ID", "distilbert-base-uncased")
     mdir = model_dir(model_id)
     out = output_dir(model_id)

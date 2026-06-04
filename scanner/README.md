@@ -6,29 +6,37 @@ Track A — HF artifact scanning: **ModelScan** + **Fickling** + **ModelAudit** 
 
 ```text
 download → format_detector
-         → ModelScan (pickle/H5/SavedModel; whole repo)
-         → Fickling (pytorch_model.bin if present)
-         → ModelAudit (safetensors + .onnx only — fills ModelScan gaps)
-         → risk_scorer → scan_result.json + findings[]
+         → ModelScan (whole repo; extension-routed)
+         → Fickling (every pickle-family weight file)
+         → ModelAudit (all candidate files; content-routed inside ModelAudit)
+         → risk_scorer (deduped findings) → scan_result.json
 ```
 
-| Tool | Scope | In `tool_results` |
-|------|--------|-------------------|
-| ModelScan | Repo; skips safetensors/onnx | `modelscan` + `modelscan_report.json` |
-| Fickling | Legacy pickle weights | `fickling` |
-| ModelAudit | `format_detector` safetensors/onnx paths | `modelaudit` |
-| Risk scorer | Single tier + score | top-level + `findings[]` (`source` per tool) |
+| Tool | Role |
+|------|------|
+| **ModelScan** | Pickle / H5 / SavedModel paths; may skip `.bin`/`.pt` by extension |
+| **Fickling** | Pickle AST on each pickle-family file (`per_file` in `tool_results`) |
+| **ModelAudit** | Magic-byte routing across 45+ formats; overlaps ModelScan/Fickling by design |
+| **Risk scorer** | Max severity across tools; dedupes `(file, signal)`; `corroborated_by` when tools agree |
+
+Defense-in-depth: the same payload may be reported by more than one tool. Correlated findings merge into one row.
 
 ## Risk scorer
 
 | Input | Effect on label |
 |-------|-----------------|
-| ModelScan HIGH/CRITICAL | Raises tier/score; `source: modelscan` findings |
-| Fickling on `.bin`, ModelScan clean | Stays **low**, score ~18; one low fickling finding |
-| ModelAudit on safetensors/onnx | Only **actionable** issues (medium+); pickle-bin noise filtered |
-| `safetensors_only` | Fickling skipped |
+| ModelScan HIGH/CRITICAL | Raises tier/score |
+| Fickling LIKELY_UNSAFE, ModelScan clean | Stays **low**, score ~18 (benign PyTorch pickles) |
+| Fickling LIKELY_OVERTLY_MALICIOUS | **high** tier signal |
+| ModelAudit actionable (medium+) | Raises tier; install-missing warnings filtered |
+| `safetensors_only` | Fickling omitted from label |
 
-gpt2 baseline: **low / 18**, ModelScan 0 issues, ModelAudit 0 on `model.safetensors`, one fickling finding.
+**Calibration**
+
+| Model | Tier / score | Notes |
+|-------|----------------|-------|
+| gpt2, distilbert, BAAI/bge-small-en-v1.5 | low / 18 | Benign stacked pickle; ModelAudit warnings filtered |
+| neimasilk/modelscan-extension-mismatch-poc | critical / 95 | ModelScan 0 issues; Fickling + ModelAudit flag disguised pickles |
 
 ## DGX/VM setup
 
@@ -57,11 +65,10 @@ Hub `org/model` → `models/org--model/`, `output/org--model/scan_result.json`. 
 |---------|---------|
 | `scan` | Full pipeline → `scan_result.json` |
 | `validate` | Check existing JSON |
-| `gap-map` | ModelScan coverage table |
 | `metadata` | Hub file list only |
 | `modelscan` | Debug: ModelScan only |
 | `fickling` | Debug: Fickling only |
-| `modelaudit` | Debug: ModelAudit only (safetensors/onnx) |
+| `modelaudit` | Debug: ModelAudit only (content-routed) |
 
 ## Layout
 
@@ -71,3 +78,19 @@ Hub `org/model` → `models/org--model/`, `output/org--model/scan_result.json`. 
 | `experiments/` | OSV, Trivy spikes |
 | `unit_tests/` | Host unit tests |
 | `models/`, `output/` | DGX data (gitignored) |
+
+## Source file map (for newcomers)
+
+| Module | Responsibility |
+|--------|----------------|
+| `__main__.py` | CLI: `scan`, `metadata`, debug subcommands, `validate` |
+| `pipeline.py` | Orchestrates download → tools → `scan_result.json` |
+| `download.py` | `snapshot_download` into `models/<slug>/` |
+| `metadata.py` | Hub file list without weights |
+| `format_detector.py` | File categories + `safetensors_only` / Fickling flags |
+| `pickle_scan.py` | ModelScan whole-repo + Fickling per pickle-family file |
+| `modelaudit_scan.py` | Content-routed ModelAudit + noise filtering |
+| `risk_scorer.py` | Merge tools → tier, score, deduped `findings[]` |
+| `schemas.py` | Pydantic `ScanResult` / `Finding` (Postgres-ready) |
+| `paths.py` | `MODELS_ROOT`, `OUTPUT_ROOT`, slug helpers |
+| `report_text.py` | Terminal summaries for debug commands |

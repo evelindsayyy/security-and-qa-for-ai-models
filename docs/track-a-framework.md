@@ -31,7 +31,7 @@ model_id → metadata (optional) → download → ModelScan + Fickling + ModelAu
 |------|----------------|
 | Metadata | `scanner/metadata.py` (`python -m scanner metadata`) |
 | Download | `scanner/download.py` (via `python -m scanner scan`) |
-| Pickle / format | ModelScan + Fickling + ModelAudit (safetensors/onnx) |
+| Pickle / format | ModelScan + Fickling (all pickle-family files) + ModelAudit (content-routed); merged in risk scorer |
 | Dependencies | pip-audit + OSV |
 | Secrets | TruffleHog |
 
@@ -78,11 +78,12 @@ Normalized shapes: [`data-model.md`](data-model.md) (`scans`/`findings`, `safety
 | Signal | Result |
 |--------|--------|
 | `scan_result.json` | `severity_tier`: low, `overall_risk_score`: 18 |
-| ModelScan 0.8.8 | 0 issues; 212 skipped (see gap map) |
+| ModelScan 0.8.8 | 0 issues on gpt2; many paths skipped by extension (ModelAudit covers gaps) |
 | Fickling | LIKELY_UNSAFE on `pytorch_model.bin` (benign stacked pickle) |
 | distilbert-base-uncased | Same pattern (score 18, low) |
+| `neimasilk/modelscan-extension-mismatch-poc` | critical / 95; ModelScan 0 issues; extensionless payload flagged |
 
-Do not block deploy on Fickling alone. Gap map: [`modelscan-gap-map.md`](modelscan-gap-map.md).
+Do not block deploy on Fickling alone when ModelScan and ModelAudit are clean. See `scan_metadata.coverage` in `scan_result.json` for per-run tool reach.
 
 ---
 
@@ -111,4 +112,4 @@ Target layout: [`scanner/README.md`](../scanner/README.md), [`docs/architecture.
 
 ## Known limitations (scanning)
 
-ModelScan 0.8.x skips many file types — see **[`modelscan-gap-map.md`](modelscan-gap-map.md)**. Fickling flags benign PyTorch weight pickles. **Safetensors-only** repos: Fickling does not apply; use format flags in `scan_metadata.file_formats`. **ModelAudit** (safetensors/onnx) in pipeline week 3. Risk merge: **[`scanner/README.md`](../scanner/README.md)**. Static scanning does not detect poisoned weights or all obfuscated payloads.
+ModelScan 0.8.x is extension-routed; **ModelAudit** adds content-based coverage on candidate files. Fickling flags benign PyTorch weight pickles. **Safetensors-only** repos: Fickling does not apply; use format flags in `scan_metadata.file_formats`. **ModelAudit** uses content detection (including extensionless/rename bypass cases). Overlapping tool output is deduped in `risk_scorer.py`; tier is max across tools. Risk merge: **[`scanner/README.md`](../scanner/README.md)**. Static scanning does not detect poisoned weights or all obfuscated payloads.
