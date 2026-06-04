@@ -1,4 +1,4 @@
-/* base */
+/* base layout — draft frontend only; week 6 may move to a different stack */
 body {
   font-family: -apple-system, system-ui, sans-serif;
   max-width: 1100px;
@@ -14,7 +14,7 @@ h1 {
   margin-bottom: 0.25rem;
   font-size: 1.8rem;
   letter-spacing: -0.01em;
-  color: #012169;  /* Duke blue, used sparingly as accent */
+  color: #012169;
 }
 h2 {
   font-size: 1.15rem;
@@ -26,6 +26,12 @@ ul { padding-left: 1.2rem; }
 
 a { color: #012169; text-decoration: none; }
 a:hover { text-decoration: underline; }
+
+.sub { color: #666; font-size: 14px; margin-bottom: 1.5rem; }
+.sub b { color: #333; }
+.empty { color: #888; font-style: italic; }
+.dim { color: #aaa; font-size: 12px; }
+.back { margin-bottom: 0.5rem; font-size: 13px; }
 
 /* header / nav */
 header {
@@ -49,21 +55,7 @@ header nav a:hover {
   text-decoration: none;
 }
 
-/* dashboard */
-.dashboard .sub { color: #666; font-size: 14px; margin-bottom: 1.5rem; }
-.model-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.model-table th, .model-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; }
-.model-table th { background: #f5f5f5; font-weight: 600; font-size: 12px; }
-.model-table td.num { text-align: center; }
-.covered { color: #2a7a2a; }
-.uncovered { color: #b07000; }
-.none { color: #a02020; }
-.dim { color: #aaa; }
-
-/* model comparison page */
-.eval-comparison .sub { color: #666; font-size: 14px; margin-bottom: 1.5rem; }
-.eval-comparison .sub b { color: #333; }
-
+/* shared tables (eval + scan pages use the same class names) */
 .run-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 1.75rem; }
 .run-table th, .run-table td { padding: 10px 12px; border-bottom: 1px solid #eee; vertical-align: middle; }
 .run-table thead th {
@@ -80,13 +72,29 @@ header nav a:hover {
 .run-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .run-table td.overall { font-weight: 700; font-size: 14px; color: #222; }
 .run-table .model { font-weight: 600; }
+.run-table .snippet { font-size: 12px; color: #555; max-width: 280px; }
 
 .run-table tbody tr:hover { background: #fafbfc; }
 .run-table tr.row-best { background: #f3faf3; }
 .run-table tr.row-best:hover { background: #ecf6ec; }
-.run-table tr.row-warn { background: #fdf6f0; color: #6a6a6a; }
+.run-table tr.row-warn { background: #fdf6f0; }
 .run-table tr.row-warn:hover { background: #faeee2; }
-.run-table tr.row-warn td.overall { color: #6a6a6a; }
+
+/* severity tier badges */
+.tier {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.tier-low { background: #e8f4e8; color: #2a6b2a; }
+.tier-medium { background: #fff3cd; color: #856404; }
+.tier-high { background: #fde2c8; color: #a35200; }
+.tier-critical { background: #f8d7da; color: #842029; }
+.tier-unknown { background: #eee; color: #666; }
 
 .badge {
   display: inline-block;
@@ -101,7 +109,81 @@ header nav a:hover {
 .badge-warn { background: #fde2c8; color: #a35200; }
 .status-ok { color: #2a7a2a; font-size: 12px; font-weight: 600; }
 
-.eval-comparison .key {
+/* home hub — three pillar cards */
+.pillars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.pillar-card {
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  padding: 1rem 1.15rem;
+  background: #fff;
+}
+.pillar-card h2 { margin-top: 0; font-size: 1rem; }
+.pillar-meta { font-size: 12px; color: #888; margin: 0 0 0.75rem; }
+.pillar-stat { margin: 0.35rem 0; font-size: 14px; }
+.pillar-pending { background: #fafafa; border-style: dashed; }
+.catalog-preview { margin-top: 2rem; }
+.model-list { font-size: 13px; }
+.model-list code { font-size: 12px; }
+
+/* scan detail summary line */
+.summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding: 0.75rem 1rem;
+  background: #fafafa;
+  border-radius: 4px;
+}
+.summary-score { font-size: 15px; }
+
+/* json debug blocks on detail pages */
+.json-block {
+  background: #f5f5f5;
+  border: 1px solid #e5e5e5;
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  font-size: 12px;
+  overflow-x: auto;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* page wrappers — scans, eval, catalog share the same rhythm */
+.eval-comparison .sub,
+.scan-list .sub,
+.catalog-page .sub {
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 1.5rem;
+}
+.catalog-page .section-title {
+  font-size: 1rem;
+  margin: 1.75rem 0 0.35rem;
+  color: #333;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.catalog-page .section-title:first-of-type {
+  margin-top: 0.5rem;
+}
+.catalog-page .section-hint {
+  font-size: 13px;
+  color: #777;
+  margin: 0 0 0.75rem;
+}
+
+/* eval comparison page extras */
+.eval-comparison .key,
+.scan-list .key,
+.scan-detail .key,
+.catalog-page .key {
   background: #fafafa;
   padding: 1rem 1.25rem;
   border-left: 3px solid #ddd;
@@ -109,17 +191,22 @@ header nav a:hover {
   color: #555;
   border-radius: 2px;
 }
-.eval-comparison .key h2 {
+.eval-comparison .key h2,
+.scan-list .key h2,
+.catalog-page .key h2 {
   font-size: 12px;
   margin: 0 0 0.6rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #444;
 }
-.eval-comparison .key ul { padding-left: 1.2rem; margin: 0; }
-.eval-comparison .key li { margin-bottom: 0.4rem; }
-.eval-comparison .key li:last-child { margin-bottom: 0; }
-.eval-comparison code {
+.eval-comparison .key ul,
+.scan-list .key ul,
+.catalog-page .key ul { padding-left: 1.2rem; margin: 0; }
+.eval-comparison code,
+.scan-list code,
+.scan-detail code,
+.catalog-page code {
   background: #f0f0f0;
   padding: 1px 5px;
   border-radius: 3px;

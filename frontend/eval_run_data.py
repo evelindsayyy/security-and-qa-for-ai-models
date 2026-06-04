@@ -20,7 +20,7 @@ ROOT = Path(__file__).parent.parent
 EVALUATOR = ROOT / "evaluator"
 RESULTS_DIR = EVALUATOR / "results"
 
-# evaluator/ isn't a package; reuse the sys.path trick eval_demo_data uses.
+# evaluator/ isn't a package; add it to sys.path so we can import schemas.
 sys.path.insert(0, str(EVALUATOR))
 
 from schemas import EvaluationResult  # noqa: E402

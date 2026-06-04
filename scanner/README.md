@@ -79,7 +79,7 @@ Hub `org/model` → `models/org--model/`, `output/org--model/scan_result.json`. 
 | `unit_tests/` | Host unit tests |
 | `models/`, `output/` | DGX data (gitignored) |
 
-## Source file map (for newcomers)
+## Source file map 
 
 | Module | Responsibility |
 |--------|----------------|

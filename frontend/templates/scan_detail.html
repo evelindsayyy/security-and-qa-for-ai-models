@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}{% if missing %}Scan not found{% else %}{{ model_id }} — scan{% endif %}{% endblock %}
+
+{% block content %}
+<div class="scan-detail">
+  {% if missing %}
+    <h1>Scan not found</h1>
+    <p class="sub empty">no <code>scan_result.json</code> for slug <code>{{ slug }}</code>.</p>
+    <p><a href="{{ url_for('scans') }}">← all scans</a></p>
+  {% else %}
+    <p class="back"><a href="{{ url_for('scans') }}">← all scans</a></p>
+    <h1>{{ model_id }}</h1>
+    <p class="sub">
+      slug <code>{{ slug }}</code> ·
+      status {{ status }} ·
+      scanned {{ scanned_at }} ·
+      scanner {{ scanner_version }}
+    </p>
+
+    <div class="summary-row">
+      <span class="tier tier-{{ severity_tier }}">{{ severity_tier }}</span>
+      <span class="summary-score">risk score <b>{{ overall_risk_score }}</b></span>
+      <span class="dim">{{ scanned_files|length }} paths in scanned_files list</span>
+    </div>
+
+    <h2>Findings ({{ findings|length }})</h2>
+    {% if findings %}
+    <table class="run-table">
+      <thead>
+        <tr>
+          <th>Severity</th>
+          <th>Source</th>
+          <th>Title</th>
+          <th>File</th>
+          <th>Corroborated</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in findings %}
+        <tr>
+          <td><span class="tier tier-{{ f.severity }}">{{ f.severity }}</span></td>
+          <td>{{ f.source }}</td>
+          <td>{{ f.title }}</td>
+          <td><code>{{ f.file_path or "—" }}</code></td>
+          <td class="dim">{{ f.corroborated_by|join(", ") if f.corroborated_by else "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">no normalized findings — check tool_results below.</p>
+    {% endif %}
+
+    <h2>Coverage</h2>
+    <pre class="json-block">{{ coverage|tojson(indent=2) }}</pre>
+
+    <h2>File formats</h2>
+    <pre class="json-block">{{ file_formats|tojson(indent=2) }}</pre>
+
+    <h2>Tool results (trimmed)</h2>
+    <pre class="json-block">{{ tool_results|tojson(indent=2) }}</pre>
+
+    <details>
+      <summary>scanned_files ({{ scanned_files|length }})</summary>
+      <pre class="json-block">{{ scanned_files|tojson(indent=2) }}</pre>
+    </details>
+  {% endif %}
+</div>
+{% endblock %}

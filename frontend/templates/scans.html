@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}HF artifact scans{% endblock %}
+
+{% block content %}
+<div class="scan-list">
+  <h1>HF artifact scans</h1>
+
+  {% if not has_scans %}
+    <p class="sub empty">
+      no <code>scan_result.json</code> under <code>{{ output_dir }}</code>.
+      run on dgx: <code>python -m scanner scan gpt2</code> (see <code>scanner/README.md</code>).
+    </p>
+  {% else %}
+    <p class="sub">
+      {{ scans|length }} model{{ "" if scans|length == 1 else "s" }} ·
+      tiers: {{ tier_summary or "—" }} ·
+      reads <code>scanner/output/</code> (local, gitignored)
+    </p>
+
+    <table class="run-table">
+      <thead>
+        <tr>
+          <th>HF model</th>
+          <th>Tier</th>
+          <th class="num">Risk</th>
+          <th class="num">Findings</th>
+          <th>Tools</th>
+          <th>Scanned at</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in scans %}
+        <tr class="{% if s.severity_tier == 'critical' %}row-warn{% endif %}">
+          <td><span class="model">{{ s.model_id }}</span></td>
+          <td><span class="tier tier-{{ s.severity_tier }}">{{ s.severity_tier }}</span></td>
+          <td class="num"><b>{{ s.overall_risk_score }}</b></td>
+          <td class="num">{{ s.n_findings }}</td>
+          <td class="snippet">{{ s.tool_snippet }}</td>
+          <td class="dim">{{ s.scanned_at[:19] if s.scanned_at != "—" else "—" }}</td>
+          <td><a href="{{ url_for('scan_detail', slug=s.slug) }}">detail</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <section class="key">
+      <h2>how to read this</h2>
+      <ul>
+        <li><b>risk</b> 0–100 from merged modelscan + fickling + modelaudit (see <code>scanner/risk_scorer.py</code>).</li>
+        <li><b>critical</b> rows (e.g. extension-mismatch poc) sort to the top for review.</li>
+        <li>benign pytorch pickles often show fickling <code>LIKELY_UNSAFE</code> with tier still <b>low</b>.</li>
+      </ul>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}
