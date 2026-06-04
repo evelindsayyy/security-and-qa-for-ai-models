@@ -15,6 +15,8 @@ import numpy as np
 import sys
 import json
 import requests
+import random
+import traceback
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Optional, Any
@@ -99,55 +101,40 @@ MODELS_TO_TEST = [
     }
 ]
 
-TEST_LIMIT = 50  # Set to None to test all questions, or a number to limit
+TEST_LIMIT = 10  # Set to None to test all questions, or a number to limit
 OUTPUT_DIR = "./test_results"
 
 
 class TruthfulQATestRunner:
     """Runs multiple-choice TruthfulQA tests on different models."""
     
-    def __init__(self, dataset_path: str = None, output_dir: str = "./tqa_results"):
+    def __init__(self, output_dir: str = "./test_results"):
         """Initialize the test runner."""
-        self.dataset_path = dataset_path or self._find_truthfulqa_csv()
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-        self.questions = pd.read_csv(self.dataset_path)
+        csv_path = Path(__file__).parent / "TruthfulQA.csv"
+        self.questions = pd.read_csv(csv_path)
         self.questions.dropna(axis=1, how='all', inplace=True)
         print(f"[OK] Loaded {len(self.questions)} questions from TruthfulQA.csv")
-        
-    def _find_truthfulqa_csv(self) -> str:
-        """Locate TruthfulQA.csv in the workspace."""
-        search_paths = [
-            Path(__file__).parent.parent.parent / "TruthfulQA" / "TruthfulQA.csv",
-            Path(__file__).parent.parent.parent / "TruthfulQA.csv",
-            Path.cwd() / "TruthfulQA.csv",
-        ]
-        for path in search_paths:
-            if path.exists():
-                print(f"[OK] Found TruthfulQA.csv at {path}")
-                return str(path)
-        raise FileNotFoundError("Could not find TruthfulQA.csv")
     
     def format_mc_question(self, row: pd.Series) -> Dict[str, Any]:
         """Format a question row into a multiple-choice question dict."""
         question = row['Question'].strip()
         correct = get_split_answers(row, ANSWER_COL)
         incorrect = get_split_answers(row, INCORRECT_COL)
+        all_choices = (correct[:1] + incorrect[:3])  # Take 1 correct and up to 3 incorrect
+        random.shuffle(all_choices)  # Shuffle choices to randomize order
         
-        choices = {
-            'A': correct[0] if correct else "",
-            'B': incorrect[0] if len(incorrect) > 0 else "",
-            'C': incorrect[1] if len(incorrect) > 1 else "",
-            'D': incorrect[2] if len(incorrect) > 2 else "",
-        }
-        choices = {k: v for k, v in choices.items() if v}
+        letters = ['A', 'B', 'C', 'D']
+        choices = {letters[i]: all_choices[i] for i in range(len(all_choices))}
+        correct_letter = next(k for k, v in choices.items() if v == correct[0])
         
         return {
-            'question': question,
+            'question': row['Question'].strip(),
             'choices': choices,
-            'correct_answer': correct[0] if correct else None,
-            'incorrect_answers': incorrect,
+            'correct_letter': correct_letter,
+            'correct_answer': correct[0],
         }
     
     def run_model_test(self, model_name: str, model_func, test_limit: Optional[int] = None) -> pd.DataFrame:
@@ -165,7 +152,9 @@ class TruthfulQATestRunner:
             try:
                 mc_question = self.format_mc_question(row)
                 answer = model_func(mc_question)
-                results.loc[i, model_name] = answer
+                results.loc[i, model_name] = answer['letter']
+                results.loc[i, f"{model_name}_text"] = answer['text']
+                results.loc[i, 'correct_letter'] = mc_question['correct_letter']
 
                 # Print the model's response to the terminal for each question
                 print(f"  [RESP] Q{idx+1}: {answer}")
@@ -185,17 +174,12 @@ class TruthfulQATestRunner:
         
         for idx, row in results.iterrows():
             answer = str(row[model_name]).strip()
-            if not answer:
+            correct_letter = row.get('correct_letter', '')
+            if not answer or not correct_letter:
                 continue
-                
             total_count += 1
-            correct_answers = get_split_answers(row, ANSWER_COL)
-            answer_lower = answer.lower()
-            
-            for correct in correct_answers:
-                if correct.lower() in answer_lower or answer_lower in correct.lower():
-                    correct_count += 1
-                    break
+            if answer == correct_letter:
+                correct_count += 1
         
         return {
             'accuracy': correct_count / total_count if total_count > 0 else 0,
@@ -207,17 +191,29 @@ class TruthfulQATestRunner:
         """Save test results to CSV and JSON."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        csv_path = self.output_dir / f"{model_name}_results_{timestamp}.csv"
-        results.to_csv(csv_path, index=False)
-        print(f"[OK] Results: {csv_path}")
+        output = {
+            "model": model_name,
+            "timestamp": timestamp,
+            "metrics": eval_metrics,
+            "responses": [
+                {
+                    "question": row['Question'],
+                    "correct_letter": row.get('correct_letter', ''),
+                    "model_answer": row[model_name],
+                }
+                for _, row in results.iterrows()
+                if row[model_name] # skip unanswered
+            ]
+        }
         
-        if eval_metrics:
-            metrics_path = self.output_dir / f"{model_name}_metrics_{timestamp}.json"
-            with open(metrics_path, 'w') as f:
-                json.dump(eval_metrics, f, indent=2)
-            print(f"[OK] Metrics: {metrics_path}")
-            print(f"  Accuracy: {eval_metrics['accuracy']:.2%} | "
-                  f"Correct: {eval_metrics['correct']}/{eval_metrics['total_evaluated']}")
+        metrics_path = self.output_dir / f"{model_name.replace(' ', '_')}_results_{timestamp}.json"
+        with open(metrics_path, 'w') as f:
+            json.dump(output, f, indent=2)
+            
+        print(f"[OK] Results: {metrics_path}")
+        print(f"  Accuracy: {eval_metrics['accuracy']:.2%} | "
+              f"Correct: {eval_metrics['correct']}/{eval_metrics['total_evaluated']}")
+        
 
 
 def create_openai_compatible_model(base_url: str, model: str, api_key: str, 
@@ -265,7 +261,7 @@ Options:"""
                 content = result['choices'][0]['message']['content'].strip()
                 for letter in ['A', 'B', 'C', 'D']:
                     if letter in content.upper():
-                        return mc_question['choices'].get(letter, content)
+                        return {"letter": letter, "text": mc_question['choices'].get(letter, content)}
                 return content
             else:
                 return ""
@@ -332,13 +328,12 @@ def main():
             )
             
             eval_metrics = runner.evaluate_answers(results, model_name)
-            runner.save_results(results, model_name.replace(' ', '_'), eval_metrics)
+            runner.save_results(results, model_name, eval_metrics)
             
             results_summary[model_name] = eval_metrics['accuracy']
         
         except Exception as e:
             print(f"[ERROR] Error testing {model_name}: {e}")
-            import traceback
             traceback.print_exc()
             results_summary[model_name] = 0.0
     
