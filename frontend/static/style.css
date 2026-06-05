@@ -72,7 +72,15 @@ header nav a:hover {
 .run-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .run-table td.overall { font-weight: 700; font-size: 15px; color: #222; }
 .run-table .model { font-weight: 600; }
-.run-table .snippet { font-size: 13px; color: #555; max-width: 280px; }
+.run-table .snippet {
+  font-size: 13px;
+  color: #555;
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.run-table td.snippet code { font-size: 12px; }
 
 .run-table tbody tr:hover { background: #fafbfc; }
 .run-table tr.row-best { background: #f3faf3; }
@@ -108,6 +116,16 @@ header nav a:hover {
 .badge-best { background: #dff1df; color: #1f6b1f; margin-left: 0.5rem; }
 .badge-warn { background: #fde2c8; color: #a35200; }
 .status-ok { color: #2a7a2a; font-size: 13px; font-weight: 600; }
+
+/* benchmark-type badges — distinct per kind */
+.badge-tqa         { background: #e6edf7; color: #1b3a6e; }
+.badge-ifeval      { background: #e8f4e8; color: #2a6b2a; }
+.badge-consistency { background: #fff3cd; color: #856404; }
+
+/* conditional headline-metric color by performance threshold */
+.run-table td.score-strong { color: #1f6b1f; }
+.run-table td.score-mid    { color: #856404; }
+.run-table td.score-weak   { color: #842029; }
 
 /* home hub — three pillar cards */
 .pillars {
