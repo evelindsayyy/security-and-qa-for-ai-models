@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}{% if missing %}Run not found{% else %}{{ candidate_model }} — run{% endif %}{% endblock %}
+
+{% block content %}
+<div class="scan-detail">
+  {% if missing %}
+    <h1>Run not found</h1>
+    <p class="sub empty">no results JSONL for slug <code>{{ slug }}</code>.</p>
+    <p><a href="{{ url_for('eval_run') }}">← all runs</a></p>
+  {% else %}
+    <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
+    <h1>{{ candidate_model }}</h1>
+    <p class="sub">
+      slug <code>{{ slug }}</code> ·
+      run <code>{{ run_id }}</code> ·
+      {{ timestamp }}
+    </p>
+
+    <div class="summary-row">
+      {% if mean_overall is not none %}
+        <span class="summary-score">overall <b>{{ "%.2f"|format(mean_overall) }}</b> / 5</span>
+      {% else %}
+        <span class="summary-score">overall <b>—</b></span>
+      {% endif %}
+      <span class="dim">mean latency {{ mean_latency_ms }} ms · p95 {{ p95_latency_ms }} ms</span>
+      <span class="dim">total cost ${{ "%.4f"|format(total_cost_usd) }}</span>
+      <span class="dim">{{ ok }}/{{ n }} OK · {{ cand_fail }} cand_fail · {{ judge_fail }} judge_fail</span>
+    </div>
+
+    <h2>Per question ({{ n }})</h2>
+    <table class="run-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Question</th>
+          <th class="num">Acc</th>
+          <th class="num">Comp</th>
+          <th class="num">Pol</th>
+          <th class="num">Tone</th>
+          <th class="num">Overall</th>
+          <th class="num">Latency</th>
+          <th class="num">Cost</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for q in questions %}
+        <tr class="{% if q.status != 'OK' or q.candidate_empty %}row-warn{% endif %}">
+          <td><code>{{ q.question_id }}</code></td>
+          <td class="snippet">{{ q.question or "—" }}</td>
+          <td class="num">{{ "%.1f"|format(q.accuracy) if q.accuracy is not none else "—" }}</td>
+          <td class="num">{{ "%.1f"|format(q.completeness) if q.completeness is not none else "—" }}</td>
+          <td class="num">{{ "%.1f"|format(q.policy) if q.policy is not none else "—" }}</td>
+          <td class="num">{{ "%.1f"|format(q.tone) if q.tone is not none else "—" }}</td>
+          <td class="num overall">{{ "%.2f"|format(q.overall) if q.overall is not none else "—" }}</td>
+          <td class="num">{{ q.latency_ms }} ms</td>
+          <td class="num">${{ "%.5f"|format(q.cost_usd) }}</td>
+          <td>
+            {% if q.status == 'OK' and not q.candidate_empty %}
+              <span class="status-ok">OK</span>
+            {% elif q.candidate_empty %}
+              <span class="badge badge-warn">empty resp</span>
+            {% else %}
+              <span class="badge badge-warn">{{ q.status }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h2>Judge rationales</h2>
+    <p class="dim">one sentence per dimension per question; click to expand.</p>
+    {% for q in questions %}
+      <details>
+        <summary>
+          <code>{{ q.question_id }}</code>
+          {% if q.overall is not none %}
+            · overall <b>{{ "%.2f"|format(q.overall) }}</b>
+          {% endif %}
+          {% if q.question %} · {{ q.question }}{% endif %}
+        </summary>
+        {% if q.rationales %}
+        <table class="run-table">
+          <thead>
+            <tr><th>Dimension</th><th class="num">Score</th><th>Rationale</th></tr>
+          </thead>
+          <tbody>
+            {% for dim, rationale in q.rationales.items() %}
+            <tr>
+              <td>{{ dim }}</td>
+              <td class="num">
+                {% if dim == 'accuracy' %}{{ "%.1f"|format(q.accuracy) if q.accuracy is not none else "—" }}
+                {% elif dim == 'completeness' %}{{ "%.1f"|format(q.completeness) if q.completeness is not none else "—" }}
+                {% elif dim == 'policy_adherence' %}{{ "%.1f"|format(q.policy) if q.policy is not none else "—" }}
+                {% elif dim == 'tone' %}{{ "%.1f"|format(q.tone) if q.tone is not none else "—" }}
+                {% else %}—{% endif %}
+              </td>
+              <td>{{ rationale }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="empty">no rationales — {{ q.error or "judge produced no scores" }}</p>
+        {% endif %}
+      </details>
+    {% endfor %}
+
+    <h2>Adaptation</h2>
+    <pre class="json-block">{
+  "candidate_model": {{ candidate_model|tojson }},
+  "candidate_model_version": {{ candidate_model_version|tojson }},
+  "judge_model": {{ judge_model|tojson }},
+  "suite_version": {{ suite_version|tojson }},
+  "rubric_version": {{ rubric_version|tojson }},
+  "system_prompt_version": {{ system_prompt_version|tojson }},
+  "judge_prompt_version": {{ judge_prompt_version|tojson }},
+  "temperature": {{ temperature|tojson }},
+  "max_tokens": {{ max_tokens|tojson }}
+}</pre>
+  {% endif %}
+</div>
+{% endblock %}
