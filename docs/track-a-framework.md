@@ -20,18 +20,18 @@ Track B: [`track-b-framework.md`](track-b-framework.md). Tools: [`tool-stack.md`
 ## Scanning (artifacts)
 
 When: before on-prem or HF weights are deployed.  
-Where: `scanner/` (production), `testing/scanning/` (spike).
+Where: **`scanner/`** only (code, `models/`, `output/` on DGX; spikes in `scanner/experiments/`).
 
 ```text
-model_id → metadata (optional) → download → ModelScan + Fickling
+model_id → metadata (optional) → download → ModelScan + Fickling + ModelAudit
          → pip-audit / OSV → TruffleHog → risk scorer → ScanResult
 ```
 
 | Step | Implementation |
 |------|----------------|
-| Metadata | `list_model_metadata.py` |
-| Download | `download_model.py` |
-| Pickle / format | ModelScan + Fickling |
+| Metadata | `scanner/metadata.py` (`python -m scanner metadata`) |
+| Download | `scanner/download.py` (via `python -m scanner scan`) |
+| Pickle / format | ModelScan + Fickling (all pickle-family files) + ModelAudit (content-routed); merged in risk scorer |
 | Dependencies | pip-audit + OSV |
 | Secrets | TruffleHog |
 
@@ -68,22 +68,22 @@ Normalized shapes: [`data-model.md`](data-model.md) (`scans`/`findings`, `safety
 
 | Part | Spike (learn tool output) | Production |
 |------|---------------------------|------------|
-| Scanning | `testing/scanning/` → `ScanResult` in `schemas.py` | `scanner/` → JSON then Postgres |
+| Scanning | `scanner/` → `scanner/output/<slug>/scan_result.json` (Docker: `scanner/docker/`) | Postgres week 5 |
 | Safety | Run garak / promptfoo; sample output in issue | `safety/` → `SafetyResult` JSON |
 
 ---
 
-## Calibration (GPT-2, 2026-05-27)
-
-Known-safe baseline on DGX (scanning).
+## Calibration (gpt2, DGX 2026-06-02)
 
 | Signal | Result |
 |--------|--------|
-| ModelScan | 0 issues on scanned pickles |
-| ModelScan | 212 files skipped (gap map in progress) |
-| Fickling | LIKELY_UNSAFE on `pytorch_model.bin` (benign legacy pickle) |
+| `scan_result.json` | `severity_tier`: low, `overall_risk_score`: 18 |
+| ModelScan 0.8.8 | 0 issues on gpt2; many paths skipped by extension (ModelAudit covers gaps) |
+| Fickling | LIKELY_UNSAFE on `pytorch_model.bin` (benign stacked pickle) |
+| distilbert-base-uncased | Same pattern (score 18, low) |
+| `neimasilk/modelscan-extension-mismatch-poc` | critical / 95; ModelScan 0 issues; extensionless payload flagged |
 
-Do not block deploy on Fickling alone. Risk scorer must merge ModelScan and Fickling. Distilbert shows the same pattern.
+Do not block deploy on Fickling alone when ModelScan and ModelAudit are clean. See `scan_metadata.coverage` in `scan_result.json` for per-run tool reach.
 
 ---
 
@@ -100,8 +100,8 @@ Do not block deploy on Fickling alone. Risk scorer must merge ModelScan and Fick
 
 | Week | `scanner/` | `safety/` |
 |------|------------|-----------|
-| W2 | Spike only (`testing/scanning/`) | Schemas only (slipped) |
-| W3 | Extract package; `risk_scorer`, `pipeline` v0 | `garak_runner`, `promptfoo/`, probes v0 |
+| W2 | Spike in Docker workspace | Safety schemas slipped |
+| W3 | **`scanner/`** package + CLI | `garak_runner`, `promptfoo/`, probes v0 |
 | W4 | deps, secrets, E2E `scan_model()` | Pilot 3 gateway models |
 | W5 | Celery worker integration | Celery worker; writes `safety_runs` |
 | W6 | — | UI in `frontend/` (reads `api/`) |
@@ -112,4 +112,4 @@ Target layout: [`scanner/README.md`](../scanner/README.md), [`docs/architecture.
 
 ## Known limitations (scanning)
 
-ModelScan 0.8.x skips many file types. Fickling flags benign PyTorch weight pickles. Static scanning does not detect poisoned weights, trigger backdoors, or heavily obfuscated payloads. Document fully by handoff (week 9).
+ModelScan 0.8.x is extension-routed; **ModelAudit** adds content-based coverage on candidate files. Fickling flags benign PyTorch weight pickles. **Safetensors-only** repos: Fickling does not apply; use format flags in `scan_metadata.file_formats`. **ModelAudit** uses content detection (including extensionless/rename bypass cases). Overlapping tool output is deduped in `risk_scorer.py`; tier is max across tools. Risk merge: **[`scanner/README.md`](../scanner/README.md)**. Static scanning does not detect poisoned weights or all obfuscated payloads.

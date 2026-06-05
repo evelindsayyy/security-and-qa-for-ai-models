@@ -1,0 +1,2 @@
+# Deprecated — modelaudit is in repo requirements.txt for the pipeline.
+# Kept for optional extras: pip install "modelaudit[onnx,tflite]"

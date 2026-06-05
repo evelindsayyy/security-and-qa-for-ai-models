@@ -39,7 +39,7 @@ Deliverable: structured, publishable results for OIT and the AI Gateway — dept
 | **A — Scanning & Safety** | Raphael Karamagi, Nithi Vechalapu | Security pillar: HF scanning, CVEs, secrets; inference safety and red team |
 | **B — Evaluation** | Grace Zhan, Jack Yi | Efficacy benchmarks, task suites, metrics, operational performance |
 
-Docs: [`docs/README.md`](docs/README.md) · Track A: [`docs/track-a-framework.md`](docs/track-a-framework.md) · Track B: [`docs/track-b-framework.md`](docs/track-b-framework.md)
+Docs: [`docs/README.md`](docs/README.md) · Track A: [`docs/track-a-framework.md`](docs/track-a-framework.md) · Track B: [`docs/track-b-framework.md`](docs/track-b-framework.md) · GitLab: [`.gitlab/README.md`](.gitlab/README.md)
 
 **Planning:** GitLab — [`.gitlab/README.md`](.gitlab/README.md); technical direction in `docs/`
 
@@ -60,18 +60,19 @@ Evaluation is **deployment-aware** (chatbot vs agentic, tools, data access, guar
 ## Repository layout
 
 ```
-scanner/        # Track A: scanning (HF artifacts)
+scanner/        # Track A: scanning package (HF artifacts)
 safety/         # Track A: safety (inference / red team)
 evaluator/      # Track B: efficacy evaluation via AI Gateway
 tasks/          # YAML task suites and rubrics
 models/         # Gateway catalog seed placeholder (week 3+)
 api/            # Flask REST API (week 5+)
 frontend/       # Nutrition label UI (Flask W3+)
-testing/        # Spikes: scanning/, eval/, gateway/
+unit_tests/     # Automated unit tests 
+testing/        # Manual gateway/eval spikes; scanning → scanner/
 docs/           # See docs/README.md
 ```
 
-Runtime data is gitignored (`testing/scanning/models|output`, `testing/eval/output`, `instance/`). Each has a README so the path is documented in git.
+Runtime data is gitignored (`scanner/models`, `scanner/output`, `testing/eval/output`, `instance/`). Each has a README so the path is documented.
 
 ---
 
@@ -81,7 +82,7 @@ Runtime data is gitignored (`testing/scanning/models|output`, `testing/eval/outp
 |-------|--------|
 | Language | Python 3.11+ |
 | Inference | LiteLLM to Duke AI Gateway (OpenAI-compatible) |
-| Security spike | ModelScan, Fickling, pip-audit, OSV API |
+| Security scanning | ModelScan, Fickling, ModelAudit (content-routed); pip-audit/OSV planned |
 | Containers | Docker Compose on DGX (`asus-dgx-04.oit.duke.edu`) |
 | API / DB / jobs | Flask, PostgreSQL, Celery + Redis (weeks 5+) |
 | UI | `frontend/` — Flask (W3+), full label W6 (mockups) |
@@ -118,20 +119,23 @@ pip install -r requirements.txt
 python testing/test_gateway.py
 ```
 
-**TruthfulQA pilot (Track B):**
+
+**Scanner unit test (host, no Docker):**
 
 ```bash
-export DUKE_AI_GATEWAY_API_KEY=...
-cd testing/eval/truthfulqa
-python evaluate_truthfulqa_mcq.py --limit 50
+uv run python -m unittest unit_tests.test_risk_scorer -v
 ```
 
-**Security scanning spike (DGX, Docker only):**
+**HF scanning (DGX/VM, Docker only):**
 
 ```bash
-cd testing/scanning
-# See README in that directory for UID/GID and docker compose steps
+cd scanner/docker
+cp .env.example .env && sed -i "s/^UID=.*/UID=$(id -u)/" .env && sed -i "s/^GID=.*/GID=$(id -g)/" .env
+docker compose build
+docker compose run --rm scanner python -m scanner scan gpt2
 ```
+
+See [`scanner/README.md`](scanner/README.md). Spikes: [`scanner/experiments/`](scanner/experiments/).
 
 ---
 
@@ -163,7 +167,7 @@ See `.env.example`. Never commit `.env`.
 | Gateway API test | Done |
 | Security scanning spike (ModelScan, Fickling, OSV/pip-audit) | Done |
 | Track / tool / evaluation docs | Done |
-| Week 2 scanning spike + TruthfulQA pilot | Done |
+| Scanning spikes + TruthfulQA pilot | Done |
 | Safety schemas + promptfoo; Team Docker/CI | Week 3 |
 | Scanner + safety packages | Weeks 3–4 |
 | Evaluation (`evaluator/`) | W3: MVP suites, 1 gateway model; W4+: pilot scale |

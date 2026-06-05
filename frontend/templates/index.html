@@ -1,15 +1,59 @@
 {% extends "base.html" %}
 
-{% block title %}Home{% endblock %}
+{% block title %}Home — nutrition label (draft){% endblock %}
 
 {% block content %}
-  <h1>{{ heading }}</h1>
+<div class="hub">
+  <h1>Nutrition label</h1>
+  <p class="sub">
+    draft progress viewer — reads local json only (not interactive).
+    week 6 ui will use <code>api/</code> + postgres.
+  </p>
 
-  <h2>Models on the gateway</h2>
-  <ul>
-    {% for model in models %}
-      <li>{{ model }}</li>
-    {% endfor %}
-  </ul>
-  <p><a href="{{ url_for('dashboard') }}">Open efficacy mockup table</a></p>
+  <section class="pillars">
+    <div class="pillar-card">
+      <h2>Scanning</h2>
+      <p class="pillar-meta">hf artifacts · <code>scanner/output/</code></p>
+      {% if scan_has %}
+        <p class="pillar-stat"><b>{{ scan_count }}</b> model{{ "s" if scan_count != 1 else "" }} scanned</p>
+        <p class="pillar-stat">highest risk: <span class="tier tier-{{ scan_worst_tier }}">{{ scan_worst_tier }}</span> ({{ scan_worst_score }})</p>
+        <p><a href="{{ url_for('scans') }}">View scans →</a></p>
+      {% else %}
+        <p class="empty">no scan_result.json found — run <code>python -m scanner scan &lt;hf_id&gt;</code> on dgx</p>
+        <p><a href="{{ url_for('scans') }}">Scans page →</a></p>
+      {% endif %}
+    </div>
+
+    <div class="pillar-card">
+      <h2>Efficacy</h2>
+      <p class="pillar-meta">gateway tasks · <code>evaluator/results/</code></p>
+      {% if eval_has %}
+        <p class="pillar-stat"><b>{{ eval_count }}</b> run{{ "s" if eval_count != 1 else "" }} on disk</p>
+        {% if eval_best_overall is not none %}
+          <p class="pillar-stat">best overall (mean): <b>{{ "%.2f"|format(eval_best_overall) }}</b></p>
+        {% endif %}
+        <p><a href="{{ url_for('eval_run') }}">View eval runs →</a></p>
+      {% else %}
+        <p class="empty">no results jsonl — run <code>evaluator/runner.py</code> with gateway env set</p>
+        <p><a href="{{ url_for('eval_run') }}">Eval runs page →</a></p>
+      {% endif %}
+    </div>
+
+    <div class="pillar-card pillar-pending">
+      <h2>Safety</h2>
+      <p class="pillar-meta">garak · promptfoo · duke probes</p>
+      <p class="empty">pending — no safety_result.json yet</p>
+    </div>
+  </section>
+
+  <section class="catalog-preview">
+    <h2>Gateway models (reference)</h2>
+    <p class="sub">full list on <a href="{{ url_for('models_catalog') }}">catalog page</a></p>
+    <ul class="model-list">
+      {% for m in gateway_models %}
+        <li><code>{{ m.id }}</code>{% if m.notes %} — {{ m.notes }}{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
 {% endblock %}

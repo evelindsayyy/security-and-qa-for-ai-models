@@ -8,15 +8,6 @@ Gateway catalog: [`gateway-models.md`](gateway-models.md). Structured outputs: [
 
 ---
 
-## Spike vs production
-
-| Phase | Location |
-|-------|----------|
-| W2–W3 spikes | `testing/eval/`, `testing/gateway/` |
-| W3+ production | `evaluator/` |
-
----
-
 ## Layers
 
 ```text

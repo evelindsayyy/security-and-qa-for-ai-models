@@ -1,0 +1,20 @@
+# trivy spike: docker compose -f scanner/docker/compose.trivy.yml run --rm scanner-trivy bash
+
+services:
+  scanner-trivy:
+    build:
+      context: ../..
+      dockerfile: scanner/docker/Dockerfile.trivy
+
+    user: "${UID:-1000}:${GID:-1000}"
+
+    volumes:
+      - ../models:/app/scanner/models
+      - ../output:/app/scanner/output
+
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+      - MODEL_ID=${MODEL_ID:-distilbert-base-uncased}
+
+    stdin_open: true
+    tty: true

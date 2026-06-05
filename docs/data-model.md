@@ -53,7 +53,7 @@ One HF repo inspection job.
 | `overall_risk_score` | `42` (0–100) |
 | `severity_tier` | `low` \| `medium` \| `high` \| `critical` |
 | `scanned_files` | JSON array | `["pytorch_model.bin", "config.json"]` |
-| `tool_results` | JSONB | `{"modelscan": {...}, "fickling": {...}, "pip_audit": [...]}` |
+| `tool_results` | JSONB | `{"modelscan": {...}, "fickling": {...}, "modelaudit": {...}}` |
 | `scan_metadata` | JSONB | `{"duration_s": 120, "worker": "dgx-01"}` |
 | `started_at` / `completed_at` | timestamptz | |
 
@@ -63,15 +63,16 @@ One HF repo inspection job.
 |--------|---------|
 | `id` | UUID |
 | `scan_id` | FK |
-| `source` | `modelscan` \| `fickling` \| `pip_audit` \| `trufflehog` |
+| `source` | `modelscan` \| `fickling` \| `modelaudit` \| `pip_audit` \| `trufflehog` |
 | `title` | `pickle safety signal from fickling` |
 | `severity` | `low` |
 | `file_path` | `pytorch_model.bin` |
 | `description` | text |
 | `raw_tool_severity` | `LIKELY_UNSAFE` |
 | `remediation` | nullable text |
+| `corroborated_by` | string array, nullable | `["fickling"]` when ModelAudit and Fickling agree on same file/signal |
 
-W2 spike shape: `testing/scanning/schemas.py` (`ScanResult`, `Finding`) — production moves to `scanner/schemas.py`.
+Shapes: `scanner/schemas.py` (`ScanResult`, `Finding`).
 
 ---
 
