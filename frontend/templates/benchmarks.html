@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Benchmark results{% endblock %}
+
+{% block content %}
+<div class="eval-comparison">
+  <h1>Benchmark results</h1>
+
+  {% if not has_runs %}
+    <p class="sub empty">
+      no benchmark output found in:
+      <ul>
+        {% for p in search_paths %}<li><code>{{ p }}</code></li>{% endfor %}
+      </ul>
+      run one of <code>testing/basic_tests/tqa_test.py</code>,
+      <code>if_test.py</code>, or <code>consistency_test.py</code> to produce output.
+    </p>
+  {% else %}
+    <p class="sub">
+      {{ runs|length }} result file{{ "" if runs|length == 1 else "s" }} ·
+      benchmarks: <b>{{ kinds|join(" · ") }}</b> ·
+      reads <code>testing/basic_tests/test_results/</code> (local, gitignored)
+    </p>
+
+    <table class="run-table">
+      <thead>
+        <tr>
+          <th>Benchmark</th>
+          <th>Model</th>
+          <th class="num">Headline metric</th>
+          <th class="num">n</th>
+          <th>When</th>
+          <th>File</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in runs %}
+        {% set badge_class = {'truthfulqa': 'badge-tqa',
+                              'ifeval': 'badge-ifeval',
+                              'consistency': 'badge-consistency'}.get(r.kind, 'badge-pilot') %}
+        {% set v = r.headline_value or 0 %}
+        {% if v >= 0.8 %}{% set score_class = 'score-strong' %}
+        {% elif v >= 0.6 %}{% set score_class = 'score-mid' %}
+        {% else %}{% set score_class = 'score-weak' %}{% endif %}
+        <tr>
+          <td><span class="badge {{ badge_class }}">{{ r.kind_label }}</span></td>
+          <td><span class="model">{{ r.model }}</span></td>
+          <td class="num overall {{ score_class }}">
+            {{ r.headline_display }}
+            <span class="dim"> {{ r.headline_metric }}</span>
+          </td>
+          <td class="num">{{ r.n }}</td>
+          <td class="dim">{{ r.timestamp }}</td>
+          <td class="snippet" title="{{ r.filename }}"><code>{{ r.filename }}</code></td>
+          <td><a href="{{ url_for('benchmark_detail', slug=r.slug) }}">detail</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <section class="key">
+      <h2>how to read this</h2>
+      <ul>
+        <li><b>TruthfulQA</b> — multiple-choice accuracy. Higher = the model picks the truthful answer more often.</li>
+        <li><b>IFEval</b> — fraction of prompts whose constraints (e.g. "include 3 bullet points") the response satisfied. Higher = better instruction following.</li>
+        <li><b>Consistency</b> — mean BERTScore F1 between responses to rephrasings of the same question. Higher = more semantically consistent across phrasings.</li>
+        <li>This page is read-only — outputs come from <code>testing/basic_tests/test_results/</code> (gitignored). To produce more, run Jack's test scripts locally.</li>
+      </ul>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

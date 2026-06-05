@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}{% if missing %}Benchmark not found{% else %}{{ kind_label }} — {{ model }}{% endif %}{% endblock %}
+
+{% block content %}
+<div class="scan-detail">
+  {% if missing %}
+    <h1>Benchmark not found</h1>
+    <p class="sub empty">no file matching slug <code>{{ slug }}</code> in <code>testing/basic_tests/test_results/</code>.</p>
+    <p><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
+  {% else %}
+    <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
+    <h1>{{ kind_label }} — {{ model }}</h1>
+    <p class="sub">
+      slug <code>{{ slug }}</code> ·
+      file <code>{{ filename }}</code> ·
+      {{ timestamp }}
+    </p>
+
+    <div class="summary-row">
+      <span class="badge badge-pilot">{{ kind_label }}</span>
+      <span class="summary-score">
+        {{ headline_metric }} <b>{{ headline_display }}</b>
+      </span>
+      <span class="dim">n = {{ n }}</span>
+      {% if raw_row_count and raw_row_count > 50 %}
+        <span class="dim">showing first 50 of {{ raw_row_count }} rows</span>
+      {% endif %}
+    </div>
+
+    {# ---- TruthfulQA branch ---- #}
+    {% if kind == 'truthfulqa' %}
+      <h2>Per-question responses</h2>
+      {% if responses %}
+      <table class="run-table">
+        <thead>
+          <tr>
+            <th>Question</th>
+            <th class="num">Correct</th>
+            <th class="num">Model answer</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in responses %}
+          <tr class="{% if r.model_answer != r.correct_letter %}row-warn{% endif %}">
+            <td class="snippet">{{ r.question }}</td>
+            <td class="num">{{ r.correct_letter or '—' }}</td>
+            <td class="num">{{ r.model_answer or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty">no responses recorded.</p>
+      {% endif %}
+    {% endif %}
+
+    {# ---- IFEval branch ---- #}
+    {% if kind == 'ifeval' %}
+      <h2>Per-prompt judgments</h2>
+      {% if raw_rows %}
+      <table class="run-table">
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Instructions</th>
+            <th>Prompt (truncated)</th>
+            <th>Pass?</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in raw_rows %}
+          <tr class="{% if not r.judge.passed %}row-warn{% endif %}">
+            <td class="dim"><code>{{ r.key }}</code></td>
+            <td class="dim">{{ r.instruction_id_list|join(", ") if r.instruction_id_list else '—' }}</td>
+            <td class="snippet">{{ r.prompt[:120] }}{% if r.prompt|length > 120 %}…{% endif %}</td>
+            <td>
+              {% if r.judge.passed %}
+                <span class="status-ok">PASS</span>
+              {% else %}
+                <span class="badge badge-warn">FAIL</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty">no rows in this jsonl.</p>
+      {% endif %}
+    {% endif %}
+
+    {# ---- Consistency branch ---- #}
+    {% if kind == 'consistency' %}
+      <h2>Per-question consistency (mean F1)</h2>
+      {% if questions %}
+      <table class="run-table">
+        <thead>
+          <tr>
+            <th>Question</th>
+            <th class="num">F1</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for q in questions %}
+          <tr class="{% if (q.mean_f1 or 0) < 0.7 %}row-warn{% endif %}">
+            <td class="snippet">
+              {% if q.question %}{{ q.question }}
+              {% elif q.id %}<code>{{ q.id }}</code>
+              {% else %}—{% endif %}
+            </td>
+            <td class="num">
+              {% if q.mean_f1 is not none %}
+                {{ "%.3f"|format(q.mean_f1) }}
+              {% elif q.f1 is not none %}
+                {{ "%.3f"|format(q.f1) }}
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty">no per-question data.</p>
+      {% endif %}
+    {% endif %}
+
+    <details>
+      <summary>Raw summary fields</summary>
+      <pre class="json-block">{{ {
+          "kind": kind,
+          "model": model,
+          "headline_metric": headline_metric,
+          "headline_value": headline_value,
+          "n": n,
+          "extras": extras,
+        }|tojson(indent=2) }}</pre>
+    </details>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,141 @@
+# =============================================================================
+# IT Support Evaluation Rubric — v1.1 (DRAFT — not yet wired to the runner)
+# =============================================================================
+# Same semantics as the locked it_support.yaml (v1) — accuracy/completeness/
+# policy_adherence/tone with the same weights and scales — but refactored
+# to reference the shared dimension library at _shared_dimensions.yaml
+# instead of inlining each definition.
+#
+# Why a v1.1 not a v2:
+#   - This is a STRUCTURAL refactor (where the definitions live), not a
+#     SEMANTIC change (what they mean). Numbers produced under v1 and v1.1
+#     should be identical for the same (candidate, judge, question).
+#   - Bumping to v2 would imply a real revision and break comparability.
+#
+# Status: DRAFT. Not yet loaded by the runner. The runner currently reads
+# the locked it_support.yaml. Switching the runner to load v1.1 requires
+# updating evaluator/judge.py's rubric loader to resolve `{from: shared,
+# name: <dim>}` references against _shared_dimensions.yaml.
+#
+# Empty-response branch added: see evaluation_steps below.
+# =============================================================================
+
+rubric_version: "it_support_v1.1"
+task_type: "it_support"
+shared_dimensions_lib: "_shared_dimensions.yaml"
+shared_dimensions_version: "shared_v1"
+
+description: |
+  Evaluation rubric for Duke IT support question answering. Same scoring
+  semantics as it_support_v1; restructured to reference the shared
+  dimension library. Designed to be applied by an LLM-as-judge with
+  access to a reference answer, validated against human raters using
+  the same anchors.
+
+# -----------------------------------------------------------------------------
+# Dimensions — assembled from the shared library + task-specific weights
+# -----------------------------------------------------------------------------
+# Each entry names a dimension in _shared_dimensions.yaml and sets the
+# weight for THIS task. Definitions, scales, and anchors are inherited
+# from the shared file — to revise them, edit _shared_dimensions.yaml
+# (additively; existing dimensions are immutable per the versioning rule).
+
+dimensions:
+
+  accuracy:
+    from: shared
+    weight: 0.35
+    # IT-support-specific note for the judge — appears in eval_steps below
+    task_note: >
+      Duke-specific facts (NetID URLs, Cisco AnyConnect endpoints, Duo
+      flow, OIT Service Desk 919-684-2200, DHTS 919-684-2243, SecureW2
+      JoinNow, eduroam, Dukeblue, ePrint, Box). Wrong fact = wrong, no
+      partial credit for "close enough to a real Duke service."
+
+  completeness:
+    from: shared
+    weight: 0.25
+    task_note: >
+      For IT support, the relevant missing-element list is: the action,
+      the URL/endpoint, any prerequisite, the MFA step where applicable,
+      and a fallback ("contact OIT if X").
+
+  policy_adherence:
+    from: shared
+    weight: 0.30
+    task_note: >
+      IT-support-specific policy concerns: credential sharing, approving
+      unexpected Duo prompts, sharing protected data via non-approved
+      channels, using non-Duke-covered AI tools with student/PHI data.
+
+  tone:
+    from: shared
+    weight: 0.10
+    task_note: >
+      Audience: Duke community member (students, faculty, staff). Tone
+      should match a competent OIT Service Desk staff member writing.
+
+# -----------------------------------------------------------------------------
+# Aggregation (unchanged from v1)
+# -----------------------------------------------------------------------------
+
+aggregation:
+  method: "weighted_normalized"
+  weights_sum_to: 1.0
+  display_scale: 5
+  note: |
+    Per HELM, the per-dimension scores remain the headline. The weighted
+    overall exists so the dashboard can sort/rank models, NOT so it can
+    obscure trade-offs. Any cell showing an overall should also show
+    the per-dimension breakdown.
+
+# -----------------------------------------------------------------------------
+# Evaluation steps (G-Eval CoT for the judge)
+# -----------------------------------------------------------------------------
+# Same flow as v1 with two additions:
+#   - explicit empty-response branch (fixes the gpt-5-mini artifact)
+#   - explicit "use task_note above for what counts as Duke-specific"
+
+evaluation_steps:
+  - "If the candidate response is empty, whitespace-only, or a bare refusal that does not engage the question, score 1 on every dimension and write 'empty response' or 'refusal without engagement' as the rationale. Do not confabulate. Skip the rest of these steps."
+  - "Read the user question and identify what the user is actually trying to do."
+  - "Read the reference answer and identify the essential Duke-specific facts and required steps."
+  - "Read the candidate response."
+  - "For ACCURACY (see task_note for the Duke-specific fact set), check each Duke-specific fact in the candidate against the reference. Different wording is fine if the substance is right. Wrong URLs, phone numbers, or service names are not fine."
+  - "For COMPLETENESS, identify whether any meaningful step or piece of context from the reference is missing. A user trying to follow the candidate alone — would they succeed?"
+  - "For POLICY ADHERENCE, check whether the candidate gives advice that would violate Duke policy or put the user at risk. Also check whether the question contained an implicit policy signal (e.g., a likely phishing scenario) that the candidate failed to flag."
+  - "For TONE, judge whether the response reads like a competent Duke IT Service Desk staff member wrote it."
+  - "Assign each dimension's score based on the shared library's anchored scale. When between anchors, pick the LOWER score and explain why in the rationale."
+  - "Provide a one-sentence rationale per dimension. Be specific about which fact, step, or behavior drove the score."
+  - "Output valid JSON matching the schema. No prose outside the JSON. No markdown fences."
+
+# -----------------------------------------------------------------------------
+# Validation (unchanged from v1)
+# -----------------------------------------------------------------------------
+
+validation:
+  sample_size_min: 30
+  sample_size_target: 50
+  raters_min: 2
+  metrics_to_report:
+    - "Pearson correlation per dimension (judge vs. human mean)"
+    - "Cohen's Kappa per dimension (treating scores as ordinal categories)"
+    - "Agreement within one point (percentage of cases where |judge - human| <= 1)"
+  expected_outcome_note: |
+    Agreement is typically higher on factual dimensions (accuracy,
+    policy_adherence) and lower on subjective ones (tone, completeness).
+    If the inverse holds, that's a signal something is wrong with the
+    rubric or judge prompt and needs investigation, not papered over.
+
+# -----------------------------------------------------------------------------
+# Limitations
+# -----------------------------------------------------------------------------
+# Per HELM, name what we are NOT measuring so stakeholders aren't misled.
+
+limitations:
+  - "Single-turn only. Multi-turn conversational drift is not evaluated."
+  - "Reference-based. Open-ended questions where multiple very different answers are valid are not handled well."
+  - "Judge bias not corrected (MT-Bench). Position, verbosity, and self-preference biases are documented but not algorithmically corrected. Weeks 7-8 validation study will quantify them."
+  - "Tone scale is 1-3 (coarser than 1-5). Low judge-human agreement on tone is expected; do not over-interpret tone deltas."
+  - "References in tasks/it_support_v1.jsonl are PLACEHOLDER. Scores depend on reference quality; OIT-staff-written references are required before scores are reported as authoritative."
+  - "Tone anchor 3 may be too easy to clear for GPT-family candidates. Observed in week-3 runs: all GPT-5 / GPT-4.1 candidates scored 3/3. Reconsider the '3' anchor description before declaring tone discriminating."
