@@ -27,6 +27,7 @@ testing/**/output/*
 testing/security_scanning_tests/
 .gitlab/gitlab-transfer.md
 context.md
+PROJECT_GUIDE.md
 
 # eval spikes — regenerate locally
 testing/eval/output/*

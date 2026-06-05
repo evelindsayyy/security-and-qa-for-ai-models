@@ -20,7 +20,7 @@ uv run flask --app frontend:create_app run --debug
 | `/scans` | All HF `scan_result.json` rows from `scanner/output/` |
 | `/scans/<slug>` | One scan detail (findings, coverage, tool_results) |
 | `/eval-run` | Aggregated efficacy runs from `evaluator/results/*.jsonl` |
-| `/models` | Canonical gateway + HF catalog (`docs/gateway-models.md`) |
+| `/models` | Live gateway catalog (`GET /v1/models`) + static HF scan list |
 
 ## Populate data (read-only UI — run tools separately)
 
@@ -49,7 +49,8 @@ Refresh the browser after new files appear; no restart needed.
 
 | Module | Role |
 |--------|------|
-| `catalog.py` | Gateway + HF model ids (sync with `docs/gateway-models.md`) |
+| `gateway_catalog.py` | Live gateway ids via `GET /v1/models` (5 min cache) |
+| `hf_scan_catalog.py` | HF scan rows from `scanner/output/*/scan_result.json` |
 | `scan_data.py` | Load and summarize `scanner/output/*/scan_result.json` |
 | `eval_run_data.py` | Load and summarize `evaluator/results/*.jsonl` |
 | `routes.py` | Flask routes (lazy imports for eval/scanner loaders) |

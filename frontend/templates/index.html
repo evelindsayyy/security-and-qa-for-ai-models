@@ -47,13 +47,24 @@
   </section>
 
   <section class="catalog-preview">
-    <h2>Gateway models (reference)</h2>
-    <p class="sub">full list on <a href="{{ url_for('models_catalog') }}">catalog page</a></p>
-    <ul class="model-list">
-      {% for m in gateway_models %}
-        <li><code>{{ m.id }}</code>{% if m.notes %} — {{ m.notes }}{% endif %}</li>
-      {% endfor %}
-    </ul>
+    <h2>Gateway models (live)</h2>
+    <p class="sub">
+      {% if gateway_count %}
+        <b>{{ gateway_count }}</b> models from gateway —
+      {% endif %}
+      <a href="{{ url_for('models_catalog') }}">full catalog</a>
+    </p>
+    {% if gateway_error %}
+      <p class="empty">{{ gateway_error }}</p>
+    {% elif gateway_models %}
+      <ul class="model-list">
+        {% for m in gateway_models %}
+          <li><code>{{ m.id }}</code>{% if m.notes %} — {{ m.notes }}{% endif %}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty">no models returned — check gateway credentials in .env</p>
+    {% endif %}
   </section>
 </div>
 {% endblock %}
