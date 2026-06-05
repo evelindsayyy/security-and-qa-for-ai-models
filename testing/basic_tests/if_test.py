@@ -116,6 +116,7 @@ def main():
     ds = load_dataset('google/IFEval', split='train')
     sample = ds.shuffle(seed=SEED).select(range(SAMPLE_SIZE)) if SAMPLE_SIZE > 0 else ds
 
+    print(f"testing model {MODEL}")
     results = []
     for row in tqdm(sample, desc='IFEval'):
         response = completion(
@@ -123,12 +124,13 @@ def main():
             api_base=BASE_URL,
             api_key=API_KEY,
             messages=[{'role':'user','content': row['prompt'] }],
-            temperature=0,
+            temperature=1,
         )
         text = safe_get_response(response)
         judge_res = judge(row['prompt'], text, row.get('instruction_id_list', []), row.get('kwargs', []))
 
         results.append({
+            'model': MODEL,
             'key': row.get('key'),
             'prompt': row['prompt'],
             'response': text,
