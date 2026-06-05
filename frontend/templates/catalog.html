@@ -2,31 +2,83 @@
 
 {% block title %}Model catalog{% endblock %}
 
+{% set vendor_of = {
+  'gpt-5': 'OpenAI', 'gpt-5-chat': 'OpenAI', 'gpt-5-mini': 'OpenAI',
+  'gpt-5-nano': 'OpenAI', 'gpt-5.4': 'OpenAI', 'gpt-4.1 mini': 'OpenAI',
+  'gpt 4.1 mini': 'OpenAI', 'gpt-oss 120b': 'OpenAI', 'o4 mini': 'OpenAI',
+  'llama 3.3': 'Meta', 'llama 4 maverick': 'Meta', 'llama 4 scout': 'Meta'
+} %}
+
+{% macro vendor_pill(model_id) %}
+  {% set key = model_id.lower() %}
+  {% if 'gpt' in key or 'o4' in key %}
+    <span class="vendor vendor-openai">OpenAI</span>
+  {% elif 'llama' in key %}
+    <span class="vendor vendor-meta">Meta</span>
+  {% elif 'mistral' in key %}
+    <span class="vendor vendor-mistral">Mistral</span>
+  {% else %}
+    <span class="vendor">—</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro role_badge(notes) %}
+  {% set n = (notes or "").lower() %}
+  {% if 'judge' in n %}
+    <span class="badge badge-judge">judge</span>
+  {% elif 'candidate' in n %}
+    <span class="badge badge-candidate">candidate</span>
+  {% elif 'smoke' in n %}
+    <span class="badge badge-smoke">smoke test</span>
+  {% elif 'truthfulqa' in n or 'pilot' in n %}
+    <span class="badge badge-pilot">pilot</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro hf_kind(notes, model_id) %}
+  {% set n = (notes or "").lower() %}
+  {% set i = (model_id or "").lower() %}
+  {% if 'malicious' in n or 'poc' in i %}
+    <span class="tier tier-critical">malicious poc</span>
+  {% elif 'calibration' in n or 'baseline' in n %}
+    <span class="tier tier-low">calibration</span>
+  {% elif 'regression' in n %}
+    <span class="tier tier-low">regression</span>
+  {% else %}
+    <span class="tier tier-unknown">benign</span>
+  {% endif %}
+{% endmacro %}
+
 {% block content %}
 <div class="catalog-page">
   <h1>Model catalog</h1>
   <p class="sub">
     {{ gateway|length }} gateway model{{ "" if gateway|length == 1 else "s" }} ·
-    {{ hf|length }} hf scan target{{ "" if hf|length == 1 else "" }} ·
+    {{ hf|length }} hf scan target{{ "" if hf|length == 1 else "s" }} ·
     source: <code>docs/gateway-models.md</code>
   </p>
 
-  <h2 class="section-title">Gateway models (safety + efficacy)</h2>
+  <h2 class="section-title section-gateway">Gateway models</h2>
   <p class="section-hint">
-    liteLLM <code>model=</code> strings for duke ai gateway — do not run artifact scanning on these ids.
+    liteLLM <code>model=</code> strings for the duke ai gateway — used by safety red-teaming and efficacy eval. Do <b>not</b> run artifact scanning on these ids.
   </p>
-  <table class="run-table">
+  <table class="run-table catalog-table">
     <thead>
       <tr>
-        <th>Model id</th>
+        <th>Model</th>
+        <th>Vendor</th>
+        <th>Role</th>
         <th>Alias</th>
         <th>Notes</th>
       </tr>
     </thead>
     <tbody>
       {% for m in gateway %}
-      <tr>
+      {% set role_note = (m.notes or "").lower() %}
+      <tr class="{% if 'judge' in role_note or 'candidate' in role_note %}row-best{% endif %}">
         <td><span class="model">{{ m.id }}</span></td>
+        <td>{{ vendor_pill(m.id) }}</td>
+        <td>{{ role_badge(m.notes) }}</td>
         <td class="dim">{{ m.alias or "—" }}</td>
         <td>{{ m.notes or "—" }}</td>
       </tr>
@@ -34,14 +86,15 @@
     </tbody>
   </table>
 
-  <h2 class="section-title">HF scan models (artifact scanning)</h2>
+  <h2 class="section-title section-hf">HF scan models</h2>
   <p class="section-hint">
-    hugging face repo ids — results under <code>scanner/output/&lt;slug&gt;/scan_result.json</code>.
+    hugging face repo ids for pre-deploy artifact scanning — results land at <code>scanner/output/&lt;slug&gt;/scan_result.json</code>.
   </p>
-  <table class="run-table">
+  <table class="run-table catalog-table">
     <thead>
       <tr>
         <th>HF repo</th>
+        <th>Kind</th>
         <th>Output slug</th>
         <th>Notes</th>
         <th></th>
@@ -51,6 +104,7 @@
       {% for m in hf %}
       <tr class="{% if 'poc' in m.id.lower() or 'malicious' in (m.notes or '').lower() %}row-warn{% endif %}">
         <td><span class="model">{{ m.id }}</span></td>
+        <td>{{ hf_kind(m.notes, m.id) }}</td>
         <td><code>{{ m.slug }}</code></td>
         <td>{{ m.notes or "—" }}</td>
         <td><a href="{{ url_for('scan_detail', slug=m.slug) }}">scan</a></td>
@@ -62,8 +116,8 @@
   <section class="key">
     <h2>how to use this catalog</h2>
     <ul>
-      <li><b>gateway</b> rows are for safety red-team and efficacy eval (<a href="{{ url_for('eval_run') }}">eval runs</a>).</li>
-      <li><b>hf</b> rows are for pre-deploy file scanning (<a href="{{ url_for('scans') }}">scan results</a>).</li>
+      <li><b>gateway</b> rows feed safety red-teaming and efficacy eval (<a href="{{ url_for('eval_run') }}">eval runs</a>). Rows with a role badge are actively in use.</li>
+      <li><b>hf</b> rows are for pre-deploy file scanning (<a href="{{ url_for('scans') }}">scan results</a>). The <span class="tier tier-critical">malicious poc</span> row is the calibration target that proves the scanner catches extension-mismatch attacks.</li>
       <li>confirm exact litellm strings with oit before production runs.</li>
     </ul>
   </section>

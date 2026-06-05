@@ -2,16 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>{% block title %}Nutrition label{% endblock %}</title>
+  <title>{% block title %}AI Model Security & QA{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <header>
     <nav>
       <a href="{{ url_for('index') }}">Home</a>
+      <a href="{{ url_for('models_catalog') }}">Model catalog</a>
       <a href="{{ url_for('scans') }}">Scans</a>
-      <a href="{{ url_for('eval_run') }}">Eval runs</a>
-      <a href="{{ url_for('models_catalog') }}">Catalog</a>
+      <a href="{{ url_for('eval_run') }}">Eval</a>
     </nav>
   </header>
 
