@@ -37,7 +37,7 @@
         {% for r in runs %}
         <tr class="{% if r.is_best %}row-best{% endif %}{% if r.note %}row-warn{% endif %}">
           <td>
-            <span class="model">{{ r.candidate_model }}</span>
+            <a href="{{ url_for('eval_run_detail', slug=r.slug) }}" class="model">{{ r.candidate_model }}</a>
             {% if r.is_best %}<span class="badge badge-best">best</span>{% endif %}
           </td>
           <td class="num">{{ "%.2f"|format(r.accuracy) if r.accuracy is not none else "—" }}</td>

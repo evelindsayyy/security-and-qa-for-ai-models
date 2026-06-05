@@ -92,6 +92,19 @@ def register_routes(app):
 
         return render_template("eval_run.html", **get_runs_data())
 
+    @app.route("/eval-run/<slug>")
+    def eval_run_detail(slug: str):
+        from frontend.eval_run_data import get_run_detail
+
+        detail = get_run_detail(slug)
+        if detail is None:
+            return render_template(
+                "eval_run_detail.html",
+                missing=True,
+                slug=slug,
+            )
+        return render_template("eval_run_detail.html", missing=False, **detail)
+
     @app.route("/models")
     def models_catalog():
         # same template pattern as /scans and /eval-run (extends base.html)
