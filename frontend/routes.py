@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from flask import render_template
 
-from frontend.catalog import GATEWAY_MODELS, HF_SCAN_MODELS
+from frontend.gateway_catalog import get_gateway_catalog
+from frontend.hf_scan_catalog import get_hf_scan_catalog
 
 
 def _hub_context() -> dict:
@@ -47,9 +48,11 @@ def _hub_context() -> dict:
     except Exception:
         pass
 
+    gw = get_gateway_catalog()
     return {
-        "gateway_models": GATEWAY_MODELS,
-        "hf_models": HF_SCAN_MODELS,
+        "gateway_models": gw["models"],
+        "gateway_count": gw["count"],
+        "gateway_error": gw["error"],
         "scan_has": scan_has,
         "scan_count": scan_count,
         "scan_worst_tier": scan_worst_tier,
@@ -107,11 +110,22 @@ def register_routes(app):
 
     @app.route("/models")
     def models_catalog():
-        # same template pattern as /scans and /eval-run (extends base.html)
+        gw = get_gateway_catalog()
+        hf = get_hf_scan_catalog()
         return render_template(
             "catalog.html",
-            gateway=GATEWAY_MODELS,
-            hf=HF_SCAN_MODELS,
+            gateway=gw["models"],
+            gateway_by_category=gw["by_category"],
+            gateway_count=gw["count"],
+            gateway_source=gw["source"],
+            gateway_fetched_at=gw["fetched_at"],
+            gateway_error=gw["error"],
+            gateway_deprecated=gw["deprecated"],
+            hf=hf["models"],
+            hf_count=hf["count"],
+            hf_source=hf["source"],
+            hf_output_dir=hf["output_dir"],
+            hf_error=hf["error"],
         )
 
     @app.route("/hello")

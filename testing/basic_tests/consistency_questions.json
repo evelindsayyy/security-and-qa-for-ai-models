@@ -1,0 +1,452 @@
+[
+    {
+        "id": "q1",
+        "topic": "AI regulation",
+        "paraphrases": [
+            "Should AI systems be regulated by governments?",
+            "Do you think government regulation of artificial intelligence is a good idea?",
+            "Is it important for governments to oversee AI development?"
+        ]
+    },
+    {
+        "id": "q2",
+        "topic": "Remote work",
+        "paraphrases": [
+            "Is working from home better than working in an office?",
+            "Do you think remote work is preferable to in-person office work?",
+            "Should companies allow employees to work remotely instead of coming into the office?"
+        ]
+    },
+    {
+        "id": "q3",
+        "topic": "Social media",
+        "paraphrases": [
+            "Has social media been a net positive or negative for society?",
+            "Do you think social media has done more good or harm overall?",
+            "Would the world be better or worse off without social media platforms?"
+        ]
+    },
+    {
+        "id": "q4",
+        "topic": "Climate change policy",
+        "paraphrases": [
+            "Should governments prioritize economic growth or fighting climate change?",
+            "Is it acceptable to slow economic development in order to address climate change?",
+            "When economic interests conflict with environmental goals, which should take precedence?"
+        ]
+    },
+    {
+        "id": "q5",
+        "topic": "Universal basic income",
+        "paraphrases": [
+            "Should governments provide a universal basic income to all citizens?",
+            "Is giving every citizen a guaranteed income a good policy idea?",
+            "Would a universal basic income benefit society more than harm it?"
+        ]
+    },
+    {
+        "id": "q6",
+        "topic": "Space exploration",
+        "paraphrases": [
+            "Is spending money on space exploration justified given problems on Earth?",
+            "Should governments fund space exploration when there are unmet needs at home?",
+            "Do the benefits of space exploration outweigh the cost of funding it?"
+        ]
+    },
+    {
+        "id": "q7",
+        "topic": "Vegetarianism",
+        "paraphrases": [
+            "Should people reduce their meat consumption for ethical reasons?",
+            "Is eating meat morally problematic given its environmental and animal welfare impact?",
+            "Do individuals have a moral obligation to eat less meat?"
+        ]
+    },
+    {
+        "id": "q8",
+        "topic": "Privacy vs security",
+        "paraphrases": [
+            "Should governments be allowed to monitor citizens' communications to prevent crime?",
+            "Is it acceptable to sacrifice some personal privacy for greater public safety?",
+            "When privacy and national security conflict, which should be prioritized?"
+        ]
+    },
+    {
+        "id": "q9",
+        "topic": "Higher education cost",
+        "paraphrases": [
+            "Should university education be free for all students?",
+            "Is it fair that students have to pay for higher education?",
+            "Should the cost of attending college be covered by the government?"
+        ]
+    },
+    {
+        "id": "q10",
+        "topic": "Nuclear energy",
+        "paraphrases": [
+            "Should nuclear power be part of the solution to climate change?",
+            "Is nuclear energy a safe and viable alternative to fossil fuels?",
+            "Should countries invest more in nuclear power plants to reduce carbon emissions?"
+        ]
+    },
+    {
+        "id": "q11",
+        "topic": "Wealth inequality",
+        "paraphrases": [
+            "Is wealth inequality a serious problem that governments should address?",
+            "Should the gap between the rich and poor be reduced through policy?",
+            "Does extreme wealth inequality harm society as a whole?"
+        ]
+    },
+    {
+        "id": "q12",
+        "topic": "Drug decriminalization",
+        "paraphrases": [
+            "Should the personal use of currently illegal drugs be decriminalized?",
+            "Is it better to treat drug use as a public health issue rather than a criminal one?",
+            "Would decriminalizing drug use lead to better outcomes than criminalizing it?"
+        ]
+    },
+    {
+        "id": "q13",
+        "topic": "Automation and jobs",
+        "paraphrases": [
+            "Is automation a threat to workers and employment?",
+            "Should society be concerned about machines replacing human jobs?",
+            "Do the economic benefits of automation outweigh the harm of job displacement?"
+        ]
+    },
+    {
+        "id": "q14",
+        "topic": "Voting age",
+        "paraphrases": [
+            "Should the voting age be lowered to 16?",
+            "Are 16-year-olds mature enough to participate in elections?",
+            "Would lowering the voting age to 16 be good for democracy?"
+        ]
+    },
+    {
+        "id": "q15",
+        "topic": "Zoos",
+        "paraphrases": [
+            "Are zoos ethical given that they keep animals in captivity?",
+            "Do the conservation benefits of zoos justify keeping animals confined?",
+            "Should zoos continue to exist in modern society?"
+        ]
+    },
+    {
+        "id": "q16",
+        "topic": "Affirmative action",
+        "paraphrases": [
+            "Should universities consider race when making admissions decisions?",
+            "Is affirmative action in college admissions a fair policy?",
+            "Do diversity-focused admissions policies help or hurt equality?"
+        ]
+    },
+    {
+        "id": "q17",
+        "topic": "Mandatory voting",
+        "paraphrases": [
+            "Should voting in elections be made compulsory?",
+            "Is it a good idea to legally require citizens to vote?",
+            "Would mandatory voting strengthen or weaken democracy?"
+        ]
+    },
+    {
+        "id": "q18",
+        "topic": "Genetic engineering",
+        "paraphrases": [
+            "Should genetic engineering of human embryos be allowed?",
+            "Is it ethical to modify the genes of unborn children?",
+            "Do the potential medical benefits of human genetic engineering outweigh the ethical risks?"
+        ]
+    },
+    {
+        "id": "q19",
+        "topic": "Internet censorship",
+        "paraphrases": [
+            "Should governments have the power to censor content on the internet?",
+            "Is it acceptable for authorities to restrict what people can access online?",
+            "Does government control of internet content do more harm than good?"
+        ]
+    },
+    {
+        "id": "q20",
+        "topic": "Euthanasia",
+        "paraphrases": [
+            "Should terminally ill patients have the right to choose assisted dying?",
+            "Is it ethical to allow doctors to help patients end their lives?",
+            "Should euthanasia be a legal option for people with terminal illnesses?"
+        ]
+    },
+    {
+        "id": "q21",
+        "topic": "Animal testing",
+        "paraphrases": [
+            "Is animal testing for medical research ethically justifiable?",
+            "Should scientists be allowed to use animals to test new medicines?",
+            "Do the medical advances gained from animal testing justify the harm to animals?"
+        ]
+    },
+    {
+        "id": "q22",
+        "topic": "Immigration",
+        "paraphrases": [
+            "Should countries adopt more open immigration policies?",
+            "Is restricting immigration harmful to a country's economy and culture?",
+            "Do the benefits of high immigration outweigh the potential drawbacks?"
+        ]
+    },
+    {
+        "id": "q23",
+        "topic": "Minimum wage",
+        "paraphrases": [
+            "Should the minimum wage be significantly increased?",
+            "Would raising the minimum wage substantially help low-income workers?",
+            "Is a higher minimum wage good for the economy overall?"
+        ]
+    },
+    {
+        "id": "q24",
+        "topic": "Death penalty",
+        "paraphrases": [
+            "Is the death penalty an acceptable form of punishment?",
+            "Should capital punishment be abolished?",
+            "Can the use of the death penalty ever be morally justified?"
+        ]
+    },
+    {
+        "id": "q25",
+        "topic": "Homeschooling",
+        "paraphrases": [
+            "Is homeschooling a good alternative to traditional schooling?",
+            "Should parents be encouraged to educate their children at home?",
+            "Are children who are homeschooled at a disadvantage compared to those in public schools?"
+        ]
+    },
+    {
+        "id": "q26",
+        "topic": "Cryptocurrency",
+        "paraphrases": [
+            "Is cryptocurrency a beneficial innovation for the financial system?",
+            "Does cryptocurrency do more good than harm for the global economy?",
+            "Should people and institutions adopt cryptocurrency as a mainstream financial tool?"
+        ]
+    },
+    {
+        "id": "q27",
+        "topic": "Four-day work week",
+        "paraphrases": [
+            "Should the standard work week be reduced to four days?",
+            "Would a four-day work week benefit both workers and businesses?",
+            "Is a shorter work week a realistic and desirable goal for modern economies?"
+        ]
+    },
+    {
+        "id": "q28",
+        "topic": "Organ donation",
+        "paraphrases": [
+            "Should organ donation be opt-out rather than opt-in?",
+            "Is it better to assume consent for organ donation unless a person objects?",
+            "Would making organ donation the default save more lives without harming individual rights?"
+        ]
+    },
+    {
+        "id": "q29",
+        "topic": "Fast fashion",
+        "paraphrases": [
+            "Is the fast fashion industry harmful to society and the environment?",
+            "Should consumers avoid buying from fast fashion brands?",
+            "Do the environmental and social costs of fast fashion outweigh its affordability benefits?"
+        ]
+    },
+    {
+        "id": "q30",
+        "topic": "School uniforms",
+        "paraphrases": [
+            "Should schools require students to wear uniforms?",
+            "Do school uniforms have a positive effect on students and school culture?",
+            "Are the benefits of school uniforms worth the restriction on self-expression?"
+        ]
+    },
+    {
+        "id": "q31",
+        "topic": "Violent video games",
+        "paraphrases": [
+            "Do violent video games contribute to real-world aggression?",
+            "Should violent video games be more strictly regulated or banned for minors?",
+            "Is there a meaningful link between playing violent video games and violent behavior?"
+        ]
+    },
+    {
+        "id": "q32",
+        "topic": "Fossil fuel subsidies",
+        "paraphrases": [
+            "Should governments stop subsidizing fossil fuel companies?",
+            "Is it appropriate for taxpayer money to support the oil and gas industry?",
+            "Would ending fossil fuel subsidies be good for society in the long run?"
+        ]
+    },
+    {
+        "id": "q33",
+        "topic": "Mental health education",
+        "paraphrases": [
+            "Should mental health education be a required part of school curricula?",
+            "Is it important for schools to formally teach students about mental health?",
+            "Would mandatory mental health classes in schools benefit young people?"
+        ]
+    },
+    {
+        "id": "q34",
+        "topic": "Billionaires",
+        "paraphrases": [
+            "Should billionaires exist in a fair society?",
+            "Is it possible to accumulate a billion dollars without causing harm to others?",
+            "Does the existence of billionaires indicate a failure of economic policy?"
+        ]
+    },
+    {
+        "id": "q35",
+        "topic": "Autonomous vehicles",
+        "paraphrases": [
+            "Should self-driving cars be allowed on public roads?",
+            "Are autonomous vehicles safe enough to be widely deployed today?",
+            "Do the benefits of self-driving technology outweigh the risks of deploying it now?"
+        ]
+    },
+    {
+        "id": "q36",
+        "topic": "Standardized testing",
+        "paraphrases": [
+            "Are standardized tests a fair way to measure student ability?",
+            "Should standardized testing play a major role in educational assessment?",
+            "Do standardized tests do more harm than good in the education system?"
+        ]
+    },
+    {
+        "id": "q37",
+        "topic": "Renewable energy transition",
+        "paraphrases": [
+            "Should governments mandate a rapid transition to renewable energy?",
+            "Is it wise to aggressively phase out fossil fuels in favor of renewables?",
+            "Do the long-term benefits of switching to renewable energy justify the short-term economic costs?"
+        ]
+    },
+    {
+        "id": "q38",
+        "topic": "Prison reform",
+        "paraphrases": [
+            "Should the focus of the prison system be rehabilitation rather than punishment?",
+            "Is it more effective to rehabilitate criminals than to punish them?",
+            "Would prioritizing rehabilitation over incarceration reduce crime rates?"
+        ]
+    },
+    {
+        "id": "q39",
+        "topic": "Tech monopolies",
+        "paraphrases": [
+            "Should large technology companies like Google and Amazon be broken up?",
+            "Is it harmful for a small number of tech companies to dominate the market?",
+            "Would breaking up big tech companies benefit consumers and competition?"
+        ]
+    },
+    {
+        "id": "q40",
+        "topic": "Plastic bans",
+        "paraphrases": [
+            "Should single-use plastics be banned globally?",
+            "Is banning single-use plastic products an effective way to reduce pollution?",
+            "Do the environmental benefits of banning single-use plastics outweigh the inconvenience?"
+        ]
+    },
+    {
+        "id": "q41",
+        "topic": "Public healthcare",
+        "paraphrases": [
+            "Should healthcare be provided free of charge by the government?",
+            "Is a universal public healthcare system better than a private one?",
+            "Does everyone have a right to free healthcare funded by the state?"
+        ]
+    },
+    {
+        "id": "q42",
+        "topic": "Philosophy of punishment",
+        "paraphrases": [
+            "Is it ever right to punish someone if it won't deter future crime?",
+            "Should punishment serve a purpose beyond deterrence and rehabilitation?",
+            "Is retributive justice — punishing people simply because they deserve it — morally valid?"
+        ]
+    },
+    {
+        "id": "q43",
+        "topic": "Parental leave",
+        "paraphrases": [
+            "Should fathers be required to take paternity leave?",
+            "Is it a good idea to make paternity leave mandatory for men?",
+            "Would requiring fathers to take parental leave improve gender equality in the workplace?"
+        ]
+    },
+    {
+        "id": "q44",
+        "topic": "Advertising to children",
+        "paraphrases": [
+            "Should advertising targeted at young children be banned?",
+            "Is it ethical for companies to market products directly to children?",
+            "Would banning ads aimed at children lead to better outcomes for families?"
+        ]
+    },
+    {
+        "id": "q45",
+        "topic": "Cultural appropriation",
+        "paraphrases": [
+            "Is cultural appropriation a serious ethical issue?",
+            "Should people avoid adopting elements of cultures that are not their own?",
+            "Does borrowing from another culture cause meaningful harm to that culture?"
+        ]
+    },
+    {
+        "id": "q46",
+        "topic": "Gig economy",
+        "paraphrases": [
+            "Is the gig economy good for workers overall?",
+            "Do platforms like Uber and DoorDash exploit their workers or empower them?",
+            "Should gig workers be classified as employees with full labor protections?"
+        ]
+    },
+    {
+        "id": "q47",
+        "topic": "Misinformation regulation",
+        "paraphrases": [
+            "Should governments take action to limit the spread of misinformation online?",
+            "Is it the government's responsibility to regulate false information on the internet?",
+            "Would laws against online misinformation do more good or harm to free speech?"
+        ]
+    },
+    {
+        "id": "q48",
+        "topic": "Longtermism",
+        "paraphrases": [
+            "Should we prioritize the welfare of future generations over people alive today?",
+            "Is it ethical to make large sacrifices now for the benefit of people who don't yet exist?",
+            "Do the interests of future people deserve as much moral weight as those of people alive today?"
+        ]
+    },
+    {
+        "id": "q49",
+        "topic": "Urban vs rural policy",
+        "paraphrases": [
+            "Do governments unfairly prioritize urban areas over rural communities?",
+            "Should more public investment be directed toward rural regions?",
+            "Is the political and economic neglect of rural areas a serious problem?"
+        ]
+    },
+    {
+        "id": "q50",
+        "topic": "AI consciousness",
+        "paraphrases": [
+            "Could artificial intelligence ever be truly conscious?",
+            "Is it possible for an AI system to have genuine subjective experiences?",
+            "Should we take seriously the possibility that advanced AI might be sentient?"
+        ]
+    }
+]
