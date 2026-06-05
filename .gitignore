@@ -63,8 +63,10 @@ testing/scanning/models/*
 !testing/scanning/models/README.md
 testing/scanning/output/*
 !testing/scanning/output/README.md
+safety/promptfoo_testing/docker/.env
 safety/promptfoo_testing/output/*
 !safety/promptfoo_testing/output/README.md
+safety/garak_testing/docker/.env
 safety/promptfoo_testing/.promptfoo/
 safety/garak_testing/output/*
 !safety/garak_testing/output/README.md
