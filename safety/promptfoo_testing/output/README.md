@@ -1,14 +1,15 @@
-# Promptfoo Output
+# Promptfoo Output (smoke spike)
 
-This directory stores generated Promptfoo evaluation results for safety/red-team testing against Duke AI Gateway models.
+Gitignored except this README. Filenames use **`smoke_`** to distinguish from scanner `scan_result.json` and other production artifacts.
 
-Large output files in this directory are intentionally ignored by Git. Keep only this README tracked so the directory exists after cloning or pulling the repo.
+| File | Step |
+|------|------|
+| `smoke_eval.json` | 1 — raw smoke eval |
+| `smoke_safety_result.json` | 1b — normalized (`export_safety_result.py`) |
+| `smoke_redteam_eval.json` | 2 — raw red-team eval |
+| `.promptfoo/` | 1 or 2 — web UI database |
+| `logs/` | runtime logs |
 
-Typical generated files may include:
+Input configs: `../promptfooconfig.yaml`, `../promptfooconfig.redteam.yaml`.
 
-- generated red-team test cases
-- Promptfoo local eval/report state in `.promptfoo/`
-- report logs in `logs/`
-- HTML, JSON, JSONL, YAML, or CSV result exports
-
-Do not commit generated Promptfoo outputs unless a small, reviewed sample is intentionally needed for documentation or an issue.
+Legacy names (`smoke.json`, `redteam.json`, `safety_result.json`, `redteam.yaml`) are old runs — safe to delete.

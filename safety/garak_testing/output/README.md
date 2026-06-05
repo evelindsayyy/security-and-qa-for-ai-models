@@ -1,14 +1,22 @@
 # Garak Output
 
-This directory stores generated Garak safety/red-team results for Duke AI Gateway model testing.
+Generated Garak artifacts. Everything here except this README is **gitignored**.
 
-Large output files in this directory are intentionally ignored by Git. Keep only this README tracked so the directory exists after cloning or pulling the repo.
+## Expected files (after a scan)
 
-Typical generated files may include:
+| File / directory | Use |
+|------------------|-----|
+| `garak-gpt41mini-low-guardrail.report.jsonl` | Raw per-attempt log — feed to `export_safety_result.py` |
+| `garak-gpt41mini-low-guardrail.report.html` | Interactive HTML report (open in browser) |
+| `safety_result.json` | `SafetyResult`-shaped export (`docs/data-model.md`) |
+| `.garak-data/` | Garak logs (`garak.log`) |
+| `.garak-cache/` | Detector model cache (torch, HF datasets) |
+| `.garak-home/` | Container HOME for ML libs |
+| `.garak-config/` | Optional site config |
 
-- Garak report files
-- run logs
-- model response artifacts
-- JSONL or JSON result summaries
+## Viewing results
 
-Do not commit generated Garak outputs unless a small, reviewed sample is intentionally needed for documentation or an issue.
+1. **Quick pass/fail:** `safety_result.json` or the HTML report.
+2. **Live progress:** `tail -f .garak-data/garak/garak.log`
+
+Do not commit generated outputs unless a small reviewed sample is intentionally needed.

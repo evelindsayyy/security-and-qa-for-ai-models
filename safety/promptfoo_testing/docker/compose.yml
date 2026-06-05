@@ -1,6 +1,13 @@
-# from repo root:
-#   docker compose --env-file safety/promptfoo_testing/docker/.env -f safety/promptfoo_testing/docker/compose.yml build
-#   docker compose --env-file safety/promptfoo_testing/docker/.env -f safety/promptfoo_testing/docker/compose.yml run --rm promptfoo bash
+# Run from repo root. See ../README.md for smoke, red-team, view, and export commands.
+#
+#   docker compose --env-file safety/promptfoo_testing/docker/.env \
+#     -f safety/promptfoo_testing/docker/compose.yml build
+#
+#   docker compose --env-file safety/promptfoo_testing/docker/.env \
+#     -f safety/promptfoo_testing/docker/compose.yml run --rm promptfoo \
+#     promptfoo eval -c promptfooconfig.yaml -o output/smoke_eval.json
+#
+#   docker compose ... run --rm --service-ports promptfoo promptfoo view -p 15500
 
 name: promptfoo-testing
 
