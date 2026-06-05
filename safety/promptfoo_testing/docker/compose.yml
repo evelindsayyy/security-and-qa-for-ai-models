@@ -1,0 +1,31 @@
+# from repo root:
+#   docker compose --env-file safety/promptfoo_testing/docker/.env -f safety/promptfoo_testing/docker/compose.yml build
+#   docker compose --env-file safety/promptfoo_testing/docker/.env -f safety/promptfoo_testing/docker/compose.yml run --rm promptfoo bash
+
+name: promptfoo-testing
+
+services:
+  promptfoo:
+    build:
+      context: ../../..
+      dockerfile: safety/promptfoo_testing/docker/Dockerfile
+      args:
+        PROMPTFOO_VERSION: ${PROMPTFOO_VERSION:-latest}
+
+    user: "${UID:-1000}:${GID:-1000}"
+
+    volumes:
+      - ../:/app/safety/promptfoo_testing
+
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://litellm.oit.duke.edu/v1}
+      - PROMPTFOO_CONFIG_DIR=/app/safety/promptfoo_testing/output/.promptfoo
+      - PROMPTFOO_LOG_DIR=/app/safety/promptfoo_testing/output/logs
+      - PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=${PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION:-true}
+
+    ports:
+      - "${PROMPTFOO_REPORT_PORT:-15500}:15500"
+
+    stdin_open: true
+    tty: true
