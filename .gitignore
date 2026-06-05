@@ -17,6 +17,8 @@ testing/scanning/output/*
 safety/promptfoo_testing/output/*
 !safety/promptfoo_testing/output/README.md
 safety/promptfoo_testing/.promptfoo/
+safety/garak_testing/output/*
+!safety/garak_testing/output/README.md
 
 .gitlab/gitlab-transfer.md
 
