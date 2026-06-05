@@ -80,6 +80,7 @@ def _aggregate_file(path: Path) -> dict | None:
 
     return {
         "filename": path.name,
+        "slug": path.stem,  # used by /eval-run/<slug>
         "timestamp": first.timestamp,
         "candidate_model": first.adaptation.candidate_model,
         "judge_model": first.adaptation.judge_model,
@@ -96,6 +97,131 @@ def _aggregate_file(path: Path) -> dict | None:
         "p95_latency_ms": int(p95_latency),
         "total_cost_usd": total_cost,
         "note": note,
+    }
+
+
+def _truncate(text: str, limit: int = 90) -> str:
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _load_suite_questions(suite_version: str) -> dict[str, str]:
+    """Map question_id -> question text by reading the locked suite JSONL.
+
+    The runner records ``adaptation.task_suite_version`` per row; we use
+    that string as the suite filename stem (e.g. 'it_support_v1' →
+    'evaluator/tasks/it_support_v1.jsonl'). Empty dict if the file is
+    missing — the detail page degrades to id-only.
+    """
+    suite_path = EVALUATOR / "tasks" / f"{suite_version}.jsonl"
+    questions: dict[str, str] = {}
+    if not suite_path.is_file():
+        return questions
+    with suite_path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if "id" in row and "question" in row:
+                questions[row["id"]] = row["question"]
+    return questions
+
+
+def get_run_detail(slug: str) -> dict | None:
+    """Full payload for one results JSONL — per-question rows with rationales.
+
+    Slug is the JSONL filename without the .jsonl extension. Returns None
+    if the file is missing or unreadable.
+    """
+    path = RESULTS_DIR / f"{slug}.jsonl"
+    if not path.is_file():
+        return None
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            rows = [
+                EvaluationResult.from_dict(json.loads(line))
+                for line in f
+                if line.strip()
+            ]
+    except Exception:
+        return None
+    if not rows:
+        return None
+
+    first = rows[0]
+    n = len(rows)
+    questions_by_id = _load_suite_questions(first.adaptation.task_suite_version)
+
+    # Aggregates — same shape as the comparison row, computed locally so
+    # this helper doesn't depend on _aggregate_file's row dict.
+    ok = sum(1 for r in rows if not r.candidate_failed and not r.judge_failed)
+    cand_fail = sum(1 for r in rows if r.candidate_failed)
+    judge_fail = sum(1 for r in rows if r.judge_failed)
+    latencies = [r.operational.latency_ms for r in rows]
+    mean_latency = int(statistics.mean(latencies)) if latencies else 0
+    p95_latency = int(_percentile(latencies, 95))
+    total_cost = sum(r.operational.estimated_cost_usd for r in rows)
+    total_prompt = sum(r.operational.prompt_tokens for r in rows)
+    total_completion = sum(r.operational.completion_tokens for r in rows)
+    overall_vals = [r.overall for r in rows if r.overall is not None]
+    mean_overall = round(statistics.mean(overall_vals), 2) if overall_vals else None
+
+    # Per-question rows for the detail table.
+    questions_rows: list[dict] = []
+    for r in rows:
+        scores = r.scores
+        if r.candidate_failed:
+            status = "CAND_FAIL"
+        elif r.judge_failed:
+            status = "JUDGE_FAIL"
+        else:
+            status = "OK"
+        questions_rows.append({
+            "question_id": r.question_id,
+            "question": _truncate(questions_by_id.get(r.question_id, ""), 90),
+            "candidate_empty": not (r.candidate_response or "").strip(),
+            "accuracy": scores["accuracy"].score if "accuracy" in scores else None,
+            "completeness": scores["completeness"].score if "completeness" in scores else None,
+            "policy": scores["policy_adherence"].score if "policy_adherence" in scores else None,
+            "tone": scores["tone"].score if "tone" in scores else None,
+            "rationales": {
+                dim: scores[dim].rationale for dim in scores
+            },
+            "overall": r.overall,
+            "latency_ms": r.operational.latency_ms,
+            "cost_usd": r.operational.estimated_cost_usd,
+            "status": status,
+            "error": r.error,
+        })
+
+    return {
+        "slug": slug,
+        "filename": path.name,
+        "run_id": first.evaluation_run_id,
+        "timestamp": first.timestamp,
+        "candidate_model": first.adaptation.candidate_model,
+        "candidate_model_version": first.adaptation.candidate_model_version,
+        "judge_model": first.adaptation.judge_model,
+        "suite_version": first.adaptation.task_suite_version,
+        "rubric_version": first.adaptation.rubric_version,
+        "system_prompt_version": first.adaptation.system_prompt_version,
+        "judge_prompt_version": first.adaptation.judge_prompt_version,
+        "temperature": first.adaptation.temperature,
+        "max_tokens": first.adaptation.max_tokens,
+        "n": n,
+        "ok": ok,
+        "cand_fail": cand_fail,
+        "judge_fail": judge_fail,
+        "mean_overall": mean_overall,
+        "mean_latency_ms": mean_latency,
+        "p95_latency_ms": p95_latency,
+        "total_cost_usd": round(total_cost, 4),
+        "total_prompt_tokens": total_prompt,
+        "total_completion_tokens": total_completion,
+        "questions": questions_rows,
     }
 
 

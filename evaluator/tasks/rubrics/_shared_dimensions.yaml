@@ -1,0 +1,246 @@
+# =============================================================================
+# Shared Rubric Dimensions — v1 (DRAFT — not yet wired to the runner)
+# =============================================================================
+# Reusable dimension definitions that per-task rubrics reference instead of
+# redefining. Each task rubric (it_support, policy_qa, summarization, etc.)
+# picks the dimensions it needs from this file, assigns task-specific
+# weights, and may add task-specific dimensions inline.
+#
+# This file holds the *definitions, scales, and anchors* — the parts that
+# don't change between tasks. Weights are task-specific and live in each
+# task's rubric file.
+#
+# Design lineage:
+#   - HELM (arXiv 2211.09110): metrics are task-conditional. Pull a
+#     common library; pick the relevant subset per task.
+#   - G-Eval (arXiv 2303.16634): every dimension has definition + scale
+#     + anchored anchors + (in the task rubric) evaluation_steps.
+#   - MT-Bench (Zheng et al. NeurIPS 2023): document known judge biases
+#     in the per-task rubric's limitations section.
+#
+# Versioning rule (matches CLAUDE.md): new dimensions can be ADDED to this
+# file with a bumped library_version. Existing dimensions are immutable
+# once a task rubric depends on them — to revise an existing dimension,
+# add a v2 entry alongside (e.g. accuracy_v2) and migrate task rubrics
+# explicitly. This preserves score comparability across runs.
+#
+# Status: DRAFT. Not yet loaded by the runner — the runner still reads
+# the per-task self-contained YAML (e.g. it_support.yaml). When ready to
+# wire this in, update evaluator/judge.py's rubric loader to resolve
+# {from: shared, name: <dim>} references.
+# =============================================================================
+
+library_version: "shared_v1"
+description: |
+  Core rubric dimension library. Task rubrics under
+  evaluator/tasks/rubrics/<task>.yaml reference these by name and add
+  their own task-specific dimensions + weights + evaluation_steps.
+
+
+# -----------------------------------------------------------------------------
+# Quality-of-response dimensions (most tasks)
+# -----------------------------------------------------------------------------
+
+dimensions:
+
+  accuracy:
+    definition: >
+      Factual correctness of the response, especially on domain-specific
+      facts (Duke services, policies, products, etc.). Generic correctness
+      is not enough; domain-specific facts must check out.
+    scale: [1, 5]
+    anchors:
+      1: >
+        Contains factually wrong information that would actively mislead
+        the user — wrong URL, invented service name, fabricated policy
+        section, incorrect contact number.
+      3: >
+        Mostly correct in spirit but missing or imprecise on at least one
+        domain-specific fact (e.g., right service named but wrong step
+        order; correct policy area but vague citation).
+      5: >
+        All domain-specific facts are correct. URLs, citations, named
+        entities, and required steps match the reference answer or an
+        equally valid alternative pathway.
+
+  completeness:
+    definition: >
+      Does the response include the steps, context, and caveats the user
+      actually needs? Missing a critical element (a required step, a
+      fallback, a relevant warning) counts against completeness even if
+      everything stated is accurate.
+    scale: [1, 5]
+    anchors:
+      1: >
+        Major required step or piece of context missing — following the
+        response alone, the user could not complete the task or would be
+        materially unprepared.
+      3: >
+        Covers the main action but misses a meaningful detail — a
+        troubleshooting note, an alternate path, a "contact X if Y"
+        fallback, a known edge case.
+      5: >
+        Includes the required action AND the relevant context, fallbacks,
+        or troubleshooting a user would realistically need. Matches the
+        reference's coverage or exceeds it appropriately.
+
+  policy_adherence:
+    definition: >
+      Does the response avoid recommending actions that violate Duke
+      policy or that would put the user at risk in a normal (non-
+      adversarial) context? Includes: not encouraging credential sharing,
+      not bypassing security controls, correctly flagging suspected
+      phishing or compromise, not violating data classification policy.
+
+      Note: this is distinct from the adversarial safety / red-teaming
+      evaluation performed in the Safety pillar. Policy adherence
+      measures responses to benign questions; the Safety pillar measures
+      responses to adversarial probes. A model can score well on one
+      and poorly on the other.
+    scale: [1, 5]
+    anchors:
+      1: >
+        Actively policy-violating — recommends sharing credentials,
+        bypassing MFA, sharing protected data through non-approved
+        channels, or similar.
+      3: >
+        Neutral — gives the user the requested information without
+        flagging a clear policy concern that the question implied (e.g.,
+        question described a likely phishing scenario; response just
+        helped them log in without flagging the risk).
+      5: >
+        Affirmatively follows policy: avoids risky advice, flags policy
+        concerns where appropriate, and recommends the right channel for
+        sensitive situations.
+
+  tone:
+    definition: >
+      Is the response clear, professional, and appropriate for the
+      audience? Includes readability, avoiding unnecessary jargon, and
+      being respectful. Task rubrics may override the audience target
+      (e.g., student-facing vs. staff-facing) in their evaluation_steps.
+    scale: [1, 3]
+    anchors:
+      1: >
+        Confusing, dismissive, condescending, or unprofessional. Heavy
+        jargon without explanation. Likely to frustrate or alienate.
+      2: >
+        Acceptable but unremarkable. Gets the information across; may be
+        terse, stiff, or mildly off-register for the audience.
+      3: >
+        Clear, friendly, professional. Tone matches what a good staff
+        member in this domain would write for this audience.
+
+
+  # ---------------------------------------------------------------------------
+  # Summarization-specific dimensions
+  # ---------------------------------------------------------------------------
+
+  faithfulness:
+    definition: >
+      For summarization tasks: does every claim in the summary follow
+      from the source document, without fabrication, distortion, or
+      unsupported inference?
+    scale: [1, 5]
+    anchors:
+      1: >
+        Summary contains at least one claim that is contradicted by the
+        source or has no basis in it. Hallucinated facts.
+      3: >
+        Summary mostly faithful but includes a minor inference the
+        source doesn't directly support, or paraphrases in a way that
+        slightly shifts meaning.
+      5: >
+        Every claim in the summary is directly traceable to the source.
+        No hallucination, no unsupported inference.
+
+  coverage:
+    definition: >
+      For summarization tasks: does the summary include the main points
+      a reasonable reader would expect? Missing major topics counts
+      even if what is included is faithful.
+    scale: [1, 5]
+    anchors:
+      1: >
+        Major topic from the source is missing — summary leaves out
+        what a reader would need to know to act.
+      3: >
+        Covers the headline points but skips one important supporting
+        topic or qualifier.
+      5: >
+        Includes all main points appropriate to the summary's intended
+        length and audience.
+
+  concision:
+    definition: >
+      For summarization tasks: does the summary avoid unnecessary
+      length, padding, or repetition?
+    scale: [1, 3]
+    anchors:
+      1: >
+        Wordy or repetitive — could be cut to half its length without
+        losing information.
+      2: >
+        Acceptable length but some passages could be tightened.
+      3: >
+        Crisp. Every sentence carries information.
+
+
+  # ---------------------------------------------------------------------------
+  # QA / advising dimensions
+  # ---------------------------------------------------------------------------
+
+  citation_precision:
+    definition: >
+      For policy-QA and reference-heavy tasks: does the response cite
+      the correct, specific policy section / document / version, rather
+      than gesturing at a general topic area?
+    scale: [1, 5]
+    anchors:
+      1: >
+        No citation, or cites the wrong document / wrong section / a
+        document that doesn't exist.
+      3: >
+        Cites the correct general area (right policy family, right
+        category) but not the specific section the question requires.
+      5: >
+        Cites the exact section relevant to the question, including
+        version or effective date if applicable.
+
+  contextualization:
+    definition: >
+      For advising / decision-support tasks: does the response take
+      into account the specifics of the user's situation rather than
+      giving a generic answer?
+    scale: [1, 5]
+    anchors:
+      1: >
+        Generic response that ignores stated user context (role,
+        department, prior action, deadline).
+      3: >
+        Acknowledges user context but doesn't substantively adapt the
+        recommendation.
+      5: >
+        Recommendation is tailored to the user's stated context —
+        different details from the stated specifics would change the
+        recommendation.
+
+
+# -----------------------------------------------------------------------------
+# Empty-response branch (applies to ALL dimensions for ALL tasks)
+# -----------------------------------------------------------------------------
+# This block is referenced by every task rubric's evaluation_steps.
+# It exists here to keep the rule consistent across rubrics.
+
+empty_response_branch:
+  rule: |
+    If the candidate response is empty, whitespace-only, or consists
+    solely of refusal text without addressing the question, score 1
+    on every dimension. The rationale field must explicitly say
+    "empty response" or "refusal without engagement" so the result
+    row is distinguishable from a genuine 1.
+  rationale: |
+    Without this rule, the judge confabulates plausible-sounding
+    scores for empty inputs. Observed in week-3 runs with reasoning
+    models that spent their max_tokens budget on hidden tokens and
+    emitted no visible text.

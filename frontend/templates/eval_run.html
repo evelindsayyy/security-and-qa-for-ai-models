@@ -31,6 +31,7 @@
           <th class="num">Latency (mean / p95)</th>
           <th class="num">Cost</th>
           <th>Status</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -56,6 +57,7 @@
               <span class="status-ok">OK</span>
             {% endif %}
           </td>
+          <td><a href="{{ url_for('eval_run_detail', slug=r.slug) }}">detail</a></td>
         </tr>
         {% endfor %}
       </tbody>

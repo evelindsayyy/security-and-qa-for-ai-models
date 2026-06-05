@@ -17,21 +17,21 @@ h1 {
   color: #012169;
 }
 h2 {
-  font-size: 1.15rem;
+  font-size: 1.25rem;
   margin-top: 1.75rem;
   color: #333;
 }
-p, li { font-size: 14px; }
+p, li { font-size: 15px; }
 ul { padding-left: 1.2rem; }
 
 a { color: #012169; text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-.sub { color: #666; font-size: 14px; margin-bottom: 1.5rem; }
+.sub { color: #666; font-size: 15px; margin-bottom: 1.5rem; }
 .sub b { color: #333; }
 .empty { color: #888; font-style: italic; }
-.dim { color: #aaa; font-size: 12px; }
-.back { margin-bottom: 0.5rem; font-size: 13px; }
+.dim { color: #aaa; font-size: 13px; }
+.back { margin-bottom: 0.5rem; font-size: 14px; }
 
 /* header / nav */
 header {
@@ -39,10 +39,10 @@ header {
   padding-bottom: 0.6rem;
   margin-bottom: 1.5rem;
 }
-header nav { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+header nav { display: flex; gap: 2.75rem; flex-wrap: wrap; }
 header nav a {
   color: #555;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
   padding: 4px 0;
   border-bottom: 2px solid transparent;
@@ -56,12 +56,12 @@ header nav a:hover {
 }
 
 /* shared tables (eval + scan pages use the same class names) */
-.run-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 1.75rem; }
+.run-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 1.75rem; }
 .run-table th, .run-table td { padding: 10px 12px; border-bottom: 1px solid #eee; vertical-align: middle; }
 .run-table thead th {
   background: #fafafa;
   font-weight: 600;
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #666;
@@ -70,9 +70,17 @@ header nav a:hover {
 }
 .run-table thead th.num { text-align: right; }
 .run-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
-.run-table td.overall { font-weight: 700; font-size: 14px; color: #222; }
+.run-table td.overall { font-weight: 700; font-size: 15px; color: #222; }
 .run-table .model { font-weight: 600; }
-.run-table .snippet { font-size: 12px; color: #555; max-width: 280px; }
+.run-table .snippet {
+  font-size: 13px;
+  color: #555;
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.run-table td.snippet code { font-size: 12px; }
 
 .run-table tbody tr:hover { background: #fafbfc; }
 .run-table tr.row-best { background: #f3faf3; }
@@ -85,7 +93,7 @@ header nav a:hover {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -100,35 +108,79 @@ header nav a:hover {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
   vertical-align: middle;
 }
 .badge-best { background: #dff1df; color: #1f6b1f; margin-left: 0.5rem; }
 .badge-warn { background: #fde2c8; color: #a35200; }
-.status-ok { color: #2a7a2a; font-size: 12px; font-weight: 600; }
+.status-ok { color: #2a7a2a; font-size: 13px; font-weight: 600; }
+
+/* benchmark-type badges — distinct per kind */
+.badge-tqa         { background: #e6edf7; color: #1b3a6e; }
+.badge-ifeval      { background: #e8f4e8; color: #2a6b2a; }
+.badge-consistency { background: #fff3cd; color: #856404; }
+
+/* conditional headline-metric color by performance threshold */
+.run-table td.score-strong { color: #1f6b1f; }
+.run-table td.score-mid    { color: #856404; }
+.run-table td.score-weak   { color: #842029; }
 
 /* home hub — three pillar cards */
 .pillars {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
   margin-bottom: 2rem;
 }
 .pillar-card {
+  position: relative;
   border: 1px solid #e5e5e5;
+  border-top: 3px solid #012169;
   border-radius: 6px;
-  padding: 1rem 1.15rem;
+  padding: 1.15rem 1.35rem 1.25rem;
   background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
-.pillar-card h2 { margin-top: 0; font-size: 1rem; }
-.pillar-meta { font-size: 12px; color: #888; margin: 0 0 0.75rem; }
-.pillar-stat { margin: 0.35rem 0; font-size: 14px; }
-.pillar-pending { background: #fafafa; border-style: dashed; }
+.pillar-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(1, 33, 105, 0.08);
+}
+.pillar-card h2 {
+  margin: 0 0 0.15rem;
+  font-size: 1.25rem;
+  color: #012169;
+  letter-spacing: -0.01em;
+}
+.pillar-meta {
+  font-size: 13px;
+  color: #888;
+  margin: 0 0 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pillar-stat { margin: 0.4rem 0; font-size: 15px; color: #333; }
+.pillar-stat b { color: #012169; font-size: 16px; }
+.pillar-card p:last-of-type { margin-bottom: 0; }
+.pillar-card a {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-weight: 600;
+  font-size: 14px;
+}
+.pillar-pending {
+  background: #fafafa;
+  border-style: dashed;
+  border-top-color: #c0c0c0;
+  box-shadow: none;
+}
+.pillar-pending:hover { transform: none; box-shadow: none; }
+.pillar-pending h2 { color: #777; }
 .catalog-preview { margin-top: 2rem; }
-.model-list { font-size: 13px; }
-.model-list code { font-size: 12px; }
+.model-list { font-size: 14px; }
+.model-list code { font-size: 13px; }
 
 /* scan detail summary line */
 .summary-row {
@@ -141,7 +193,7 @@ header nav a:hover {
   background: #fafafa;
   border-radius: 4px;
 }
-.summary-score { font-size: 15px; }
+.summary-score { font-size: 16px; }
 
 /* json debug blocks on detail pages */
 .json-block {
@@ -149,7 +201,7 @@ header nav a:hover {
   border: 1px solid #e5e5e5;
   border-radius: 4px;
   padding: 0.75rem 1rem;
-  font-size: 12px;
+  font-size: 13px;
   overflow-x: auto;
   max-height: 320px;
   overflow-y: auto;
@@ -160,24 +212,56 @@ header nav a:hover {
 .scan-list .sub,
 .catalog-page .sub {
   color: #666;
-  font-size: 14px;
+  font-size: 15px;
   margin-bottom: 1.5rem;
 }
 .catalog-page .section-title {
-  font-size: 1rem;
-  margin: 1.75rem 0 0.35rem;
-  color: #333;
+  font-size: 1.2rem;
+  margin: 2rem 0 0.35rem;
+  color: #012169;
   text-transform: none;
-  letter-spacing: normal;
+  letter-spacing: -0.005em;
+  padding-left: 0.6rem;
+  border-left: 3px solid #012169;
 }
 .catalog-page .section-title:first-of-type {
   margin-top: 0.5rem;
 }
-.catalog-page .section-hint {
-  font-size: 13px;
-  color: #777;
-  margin: 0 0 0.75rem;
+.catalog-page .section-hf {
+  color: #a35200;
+  border-left-color: #d68a3f;
 }
+.catalog-page .section-hint {
+  font-size: 14px;
+  color: #777;
+  margin: 0 0 1rem;
+  padding-left: 0.6rem;
+}
+
+.catalog-table { font-size: 14px; }
+.catalog-table td { vertical-align: middle; }
+
+/* small vendor pill (OpenAI / Meta) */
+.vendor {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  background: #f0f0f0;
+  color: #555;
+}
+.vendor-openai { background: #e7f3ef; color: #155742; }
+.vendor-meta { background: #e6edf7; color: #1b3a6e; }
+.vendor-mistral { background: #fdecec; color: #842029; }
+
+/* role badges on the gateway catalog */
+.badge-judge { background: #e6edf7; color: #1b3a6e; }
+.badge-candidate { background: #dff1df; color: #1f6b1f; }
+.badge-smoke { background: #fff3cd; color: #856404; }
+.badge-pilot { background: #f0f0f0; color: #555; }
 
 /* eval comparison page extras */
 .eval-comparison .key,
@@ -187,14 +271,14 @@ header nav a:hover {
   background: #fafafa;
   padding: 1rem 1.25rem;
   border-left: 3px solid #ddd;
-  font-size: 13px;
+  font-size: 14px;
   color: #555;
   border-radius: 2px;
 }
 .eval-comparison .key h2,
 .scan-list .key h2,
 .catalog-page .key h2 {
-  font-size: 12px;
+  font-size: 13px;
   margin: 0 0 0.6rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -210,5 +294,5 @@ header nav a:hover {
   background: #f0f0f0;
   padding: 1px 5px;
   border-radius: 3px;
-  font-size: 12px;
+  font-size: 13px;
 }

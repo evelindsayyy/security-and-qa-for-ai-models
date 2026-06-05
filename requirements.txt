@@ -9,4 +9,5 @@ modelaudit>=0.2.45
 pip-audit
 pydantic>=2.0
 requests
+nltk>=3.9.0
 pytest>=8.0
