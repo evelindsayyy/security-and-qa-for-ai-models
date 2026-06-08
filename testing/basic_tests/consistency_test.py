@@ -199,7 +199,7 @@ def save_results(results: Dict, output_dir: str):
     out.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     model_slug = results["model"].replace(" ", "_").replace("/", "_")
-    path = out / f"{model_slug}_consistency_{timestamp}.json"
+    path = out / f"consistency_{model_slug}_{timestamp}.json"
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
     print(f"\n[OK] Results saved to {path}")

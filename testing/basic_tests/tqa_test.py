@@ -6,7 +6,7 @@ It loads MC questions from TruthfulQA.csv, queries models, evaluates answers,
 and outputs results with truthfulness and informativeness scores.
 
 USAGE:
-    1. Edit the MODEL CONFIGURATION section below
+    1. Configure the model in .env using TQA_MODEL, TQA_BASE_URL, TQA_API_KEY, etc.
     2. Run: python tqa_test.py
 """
 
@@ -63,46 +63,16 @@ def get_split_answers(row, col):
 
 
 # ============================================================================
-# MODEL CONFIGURATION - EDIT THESE VARIABLES
+# MODEL CONFIGURATION - ENVIRONMENT VARIABLES
 # ============================================================================
 
-MODELS_TO_TEST = [
-    # Add your model configurations here, e.g.:
-    # {
-    #     "name": "GPT-4",
-    #     "type": "openai_compatible",
-    #     "base_url": "https://api.openai.com/v1",
-    #     "model": "gpt-4",
-    #     "api_key": "sk-your-key-here",
-    # },
-        
-    {
-        "name": "Duke GPT 5.1 Chat",
-        "type": "openai_compatible",
-        "base_url": "https://litellm.oit.duke.edu/v1",
-        "model": "gpt-5.1-chat",
-        "api_key": os.getenv("LITELLM_API_KEY")
-    },
-    
-    {
-        "name": "Duke Llama 3.3",
-        "type": "openai_compatible",
-        "base_url": "https://litellm.oit.duke.edu/v1",
-        "model": "Llama 3.3",
-        "api_key": os.getenv("LITELLM_API_KEY")
-    },
-    
-    {
-        "name": "Duke GPT 5.4",
-        "type": "openai_compatible",
-        "base_url": "https://litellm.oit.duke.edu/v1",
-        "model": "gpt-5.4",
-        "api_key": os.getenv("LITELLM_API_KEY")
-    }
-]
-
-TEST_LIMIT = 10  # Set to None to test all questions, or a number to limit
-OUTPUT_DIR = "./test_results"
+BASE_URL = os.getenv("TQA_BASE_URL", "https://litellm.oit.duke.edu/v1")
+API_KEY = os.getenv("TQA_API_KEY") or os.getenv("LITELLM_API_KEY")
+MODEL = os.getenv("TQA_MODEL", "Llama 4 Scout")
+API_VERSION = os.getenv("TQA_API_VERSION")
+OUTPUT_DIR = os.getenv("TQA_OUTPUT_DIR", "test_results")
+TQA_LIMIT = os.getenv("TQA_LIMIT", "25")
+TEST_LIMIT = int(TQA_LIMIT) if TQA_LIMIT.isdigit() and int(TQA_LIMIT) > 0 else None
 
 
 class TruthfulQATestRunner:
@@ -152,13 +122,22 @@ class TruthfulQATestRunner:
             try:
                 mc_question = self.format_mc_question(row)
                 answer = model_func(mc_question)
-                results.loc[i, model_name] = answer['letter']
-                results.loc[i, f"{model_name}_text"] = answer['text']
+
+                answer_letter = ""
+                answer_text = ""
+                if isinstance(answer, dict):
+                    answer_letter = str(answer.get('letter', '')).strip().upper()
+                    answer_text = str(answer.get('text', '')).strip()
+                else:
+                    answer_text = str(answer).strip()
+                    candidate = answer_text.upper().strip()
+                    answer_letter = candidate[0] if candidate and candidate[0] in ['A', 'B', 'C', 'D'] else ""
+
+                results.loc[i, model_name] = answer_letter
+                results.loc[i, f"{model_name}_text"] = answer_text
                 results.loc[i, 'correct_letter'] = mc_question['correct_letter']
 
-                # Print the model's response to the terminal for each question
-                print(f"  [RESP] Q{idx+1}: {answer}")
-                
+                print(f"  [RESP] Q{idx+1}: letter={answer_letter} text={answer_text}")
                 if (idx + 1) % 10 == 0:
                     print(f"  [OK] {idx + 1}/{len(questions_to_test)} questions")
             except Exception as e:
@@ -188,31 +167,34 @@ class TruthfulQATestRunner:
         }
     
     def save_results(self, results: pd.DataFrame, model_name: str, eval_metrics: Optional[Dict] = None):
-        """Save test results to CSV and JSON."""
+        """Save test results to a JSON file."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
+        model_slug = model_name.replace(" ", "_").replace("/", "_")
+        output_path = self.output_dir / f"tqa_{model_slug}_{timestamp}.json"
+
         output = {
             "model": model_name,
             "timestamp": timestamp,
-            "metrics": eval_metrics,
+            "summary": eval_metrics,
             "responses": [
                 {
                     "question": row['Question'],
                     "correct_letter": row.get('correct_letter', ''),
                     "model_answer": row[model_name],
+                    "answer_text": row.get(f"{model_name}_text", ""),
                 }
                 for _, row in results.iterrows()
-                if row[model_name] # skip unanswered
+                if row.get(model_name)
             ]
         }
-        
-        metrics_path = self.output_dir / f"{model_name.replace(' ', '_')}_results_{timestamp}.json"
-        with open(metrics_path, 'w') as f:
-            json.dump(output, f, indent=2)
-            
-        print(f"[OK] Results: {metrics_path}")
-        print(f"  Accuracy: {eval_metrics['accuracy']:.2%} | "
-              f"Correct: {eval_metrics['correct']}/{eval_metrics['total_evaluated']}")
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
+
+        print(f"[OK] Results saved to {output_path}")
+        if eval_metrics:
+            print(f"  Accuracy: {eval_metrics['accuracy']:.2%} | "
+                  f"Correct: {eval_metrics['correct']}/{eval_metrics['total_evaluated']}")
         
 
 
@@ -281,73 +263,57 @@ Options:"""
 # ============================================================================
 
 def main():
-    """Run TruthfulQA tests on configured models."""
+    """Run TruthfulQA tests on the configured model."""
     print("\n" + "="*70)
     print("TruthfulQA Multiple-Choice Model Testing")
     print("="*70)
-    
-    if not MODELS_TO_TEST:
-        print("\n[ERROR] No models configured. Edit MODELS_TO_TEST in the script.")
+
+    if not API_KEY:
+        print("\n[ERROR] No API key configured. Set TQA_API_KEY or LITELLM_API_KEY in .env.")
         return
-    
+
     runner = TruthfulQATestRunner(output_dir=OUTPUT_DIR)
-    results_summary = {}
-    
-    for model_config in MODELS_TO_TEST:
-        model_name = model_config['name']
-        model_type = model_config['type']
-        
-        print(f"\n{'#'*70}")
-        print(f"# {model_name}")
-        print(f"{'#'*70}")
-        
-        try:
-            if model_type == "openai_compatible":
-                base_url = model_config['base_url']
-                model = model_config['model']
-                api_key = model_config['api_key']
-                api_version = model_config.get('api_version')
-                
-                print(f"  Base URL: {base_url}")
-                print(f"  Model: {model}")
-                
-                model_func = create_openai_compatible_model(
-                    base_url=base_url,
-                    model=model,
-                    api_key=api_key,
-                    api_version=api_version
-                )
-            else:
-                print(f"[ERROR] Unknown model type: {model_type}")
-                continue
-            
-            results = runner.run_model_test(
-                model_name=model_name,
-                model_func=model_func,
-                test_limit=TEST_LIMIT
-            )
-            
-            eval_metrics = runner.evaluate_answers(results, model_name)
-            runner.save_results(results, model_name, eval_metrics)
-            
-            results_summary[model_name] = eval_metrics['accuracy']
-        
-        except Exception as e:
-            print(f"[ERROR] Error testing {model_name}: {e}")
-            traceback.print_exc()
-            results_summary[model_name] = 0.0
-    
-    print("\n" + "="*70)
-    print("SUMMARY")
-    print("="*70)
-    
-    sorted_results = sorted(results_summary.items(), key=lambda x: x[1], reverse=True)
-    for rank, (name, accuracy) in enumerate(sorted_results, 1):
-        bar_length = int(accuracy * 40)
+
+    print(f"\n{'#'*70}")
+    print(f"# {MODEL}")
+    print(f"{'#'*70}")
+    print(f"  Base URL: {BASE_URL}")
+    print(f"  Model: {MODEL}")
+    if API_VERSION:
+        print(f"  API version: {API_VERSION}")
+    if TEST_LIMIT is None:
+        print("  Test limit: all questions")
+    else:
+        print(f"  Test limit: {TEST_LIMIT}")
+
+    model_func = create_openai_compatible_model(
+        base_url=BASE_URL,
+        model=MODEL,
+        api_key=API_KEY,
+        api_version=API_VERSION
+    )
+
+    try:
+        results = runner.run_model_test(
+            model_name=MODEL,
+            model_func=model_func,
+            test_limit=TEST_LIMIT
+        )
+        eval_metrics = runner.evaluate_answers(results, MODEL)
+        runner.save_results(results, MODEL, eval_metrics)
+
+        print("\n" + "="*70)
+        print("SUMMARY")
+        print("="*70)
+        bar_length = int(eval_metrics['accuracy'] * 40)
         bar = '[' + '=' * bar_length + '-' * (40 - bar_length) + ']'
-        print(f"{rank}. {name:35s} {bar} {accuracy:.1%}")
-    
-    print(f"\n[OK] Results saved to: {OUTPUT_DIR}/")
+        print(f"{MODEL:35s} {bar} {eval_metrics['accuracy']:.1%} "
+              f"({eval_metrics['correct']}/{eval_metrics['total_evaluated']})")
+        print(f"\n[OK] Results saved to: {OUTPUT_DIR}/")
+
+    except Exception as e:
+        print(f"[ERROR] Error testing {MODEL}: {e}")
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
