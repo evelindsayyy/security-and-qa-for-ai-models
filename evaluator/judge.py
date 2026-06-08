@@ -164,6 +164,83 @@ def _parse_scores(raw: str) -> dict[str, DimensionScore]:
 
 
 # ---------------------------------------------------------------------------
+# Rubric loader — resolves {from: shared} references against the shared lib
+# ---------------------------------------------------------------------------
+
+
+def resolve_rubric(rubric_path: Path) -> tuple[dict, str]:
+    """Load a rubric YAML and inline any shared-dimension references.
+
+    A rubric can reference reusable dimensions defined in a sibling shared
+    library file (``_shared_dimensions.yaml``). When a dimension body has
+    ``from: shared``, this resolver copies the ``definition`` / ``scale`` /
+    ``anchors`` from the shared library and layers the per-task ``weight``
+    and ``task_note`` over them.
+
+    Returns a tuple of (resolved_rubric_dict, resolved_yaml_text). The
+    YAML text is what gets inlined into the judge prompt template; the
+    dict is what the runner reads ``rubric_version`` / ``aggregation`` /
+    etc. from.
+
+    Backward-compatible: rubrics without a ``shared_dimensions_lib`` key
+    (e.g. the locked ``it_support_v1.yaml``) pass through unchanged — the
+    original YAML text is returned as-is so this refactor is a no-op for
+    inline rubrics.
+    """
+    raw = rubric_path.read_text(encoding="utf-8")
+    rubric = yaml.safe_load(raw)
+
+    shared_lib_name = rubric.get("shared_dimensions_lib")
+    if not shared_lib_name:
+        # Pure inline rubric — return as-is.
+        return rubric, raw
+
+    shared_lib_path = rubric_path.parent / shared_lib_name
+    if not shared_lib_path.is_file():
+        raise FileNotFoundError(
+            f"Rubric {rubric_path.name!r} references shared library "
+            f"{shared_lib_name!r} but it was not found at {shared_lib_path}"
+        )
+    shared = yaml.safe_load(shared_lib_path.read_text(encoding="utf-8"))
+    shared_dims = (shared or {}).get("dimensions") or {}
+
+    resolved_dims: dict[str, dict] = {}
+    for dim_name, dim_body in (rubric.get("dimensions") or {}).items():
+        if isinstance(dim_body, dict) and dim_body.get("from") == "shared":
+            if dim_name not in shared_dims:
+                raise KeyError(
+                    f"Dimension {dim_name!r} in {rubric_path.name} is marked "
+                    f"from:shared but is not defined in {shared_lib_name}"
+                )
+            # Start from the shared definition; overlay rubric's task fields.
+            merged = dict(shared_dims[dim_name])
+            for key, val in dim_body.items():
+                if key == "from":
+                    continue
+                merged[key] = val
+            resolved_dims[dim_name] = merged
+        else:
+            # Inline dimension — keep verbatim.
+            resolved_dims[dim_name] = dim_body
+
+    # Build the resolved rubric dict. Drop shared-lib metadata once
+    # resolution is done so the judge prompt isn't littered with it.
+    resolved = dict(rubric)
+    resolved["dimensions"] = resolved_dims
+    resolved.pop("shared_dimensions_lib", None)
+    resolved.pop("shared_dimensions_version", None)
+
+    resolved_yaml = yaml.safe_dump(
+        resolved,
+        sort_keys=False,
+        allow_unicode=True,
+        default_flow_style=False,
+        width=4096,
+    )
+    return resolved, resolved_yaml
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -193,9 +270,10 @@ def judge_response(
      rubric_version). Cache hit returns the saved scores without any API call.
     """
     # ----- load contracts (rubric + template version come from these files) -----
-    with rubric_path.open("r", encoding="utf-8") as f:
-        rubric_raw = f.read()
-    rubric = yaml.safe_load(rubric_raw)
+    # resolve_rubric returns the rubric YAML with any {from: shared} references
+    # inlined against _shared_dimensions.yaml. For inline rubrics like the locked
+    # it_support_v1.yaml this is a no-op (original YAML returned unchanged).
+    rubric, rubric_raw = resolve_rubric(rubric_path)
     rubric_version: str = str(rubric.get("rubric_version", rubric_path.stem))
 
     template = judge_prompt_path.read_text(encoding="utf-8")

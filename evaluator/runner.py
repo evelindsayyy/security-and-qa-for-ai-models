@@ -33,7 +33,7 @@ from typing import Optional
 import yaml
 
 from candidate import generate_candidate
-from judge import judge_response
+from judge import judge_response, resolve_rubric
 from schemas import (
     SCHEMA_VERSION,
     Adaptation,
@@ -171,8 +171,11 @@ def main() -> int:
     suite_id = metadata.get("task_suite_version", args.suite.stem)
     questions = [json.loads(line) for line in suite_lines[1:] if line.strip()]
 
-    rubric_raw = args.rubric.read_text(encoding="utf-8")
-    rubric = yaml.safe_load(rubric_raw)
+    # resolve_rubric inlines any {from: shared} references against
+    # _shared_dimensions.yaml so rubric["dimensions"][dim] always has the
+    # full scale/weight/anchors block _weighted_overall expects. For inline
+    # rubrics (like the locked it_support_v1.yaml) this is a no-op.
+    rubric, rubric_raw = resolve_rubric(args.rubric)
     rubric_version = rubric.get("rubric_version", args.rubric.stem)
 
     system_prompt = args.system_prompt.read_text(encoding="utf-8")
