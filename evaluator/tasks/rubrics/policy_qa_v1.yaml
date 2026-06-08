@@ -1,0 +1,187 @@
+# =============================================================================
+# Policy QA Evaluation Rubric — v1 (DRAFT — anchors not yet expert-calibrated)
+# =============================================================================
+# For tasks where a Duke community member asks "what does Duke policy say
+# about X?" and expects an accurate, well-cited answer grounded in a
+# specific policy document.
+#
+# Example questions this rubric is designed for:
+#   - "Can faculty store student grade data in personal Google Drive?"
+#   - "What's the Duke policy on AI use in graded coursework?"
+#   - "Is it OK to use Duke Box for an external collaborator's PHI?"
+#   - "What's the data classification for a Zoom recording of a class?"
+#
+# Distinct from it_support:
+#   - The user needs the right policy citation, not a how-to.
+#   - Wrong answers can have compliance / legal consequences, so
+#     citation_precision is weighted heavily.
+#   - Tone weight is lower (this is an authoritative reference response,
+#     not a friendly walkthrough).
+#
+# Status: DRAFT. Anchors are starting points calibrated against
+# methodology, NOT against expert references yet. Step 2 of the rubric
+# design process (collect 5-10 expert reference responses) must happen
+# before this rubric produces authoritative scores. The associated task
+# suite tasks/policy_qa_v1.jsonl does not exist yet.
+#
+# Design lineage:
+#   - HELM: task-conditional dimension set (citation_precision is
+#     policy-specific; doesn't appear in it_support)
+#   - G-Eval: anchored scale + evaluation_steps + JSON output
+#   - MT-Bench: judge biases named in limitations; validation study
+#     applies same protocol as it_support
+# =============================================================================
+
+rubric_version: "policy_qa_v1"
+task_type: "policy_qa"
+shared_dimensions_lib: "_shared_dimensions.yaml"
+shared_dimensions_version: "shared_v1"
+
+description: |
+  Evaluation rubric for Duke policy Q&A. Designed to be applied by an
+  LLM-as-judge that has access to a reference answer citing the
+  authoritative Duke policy section. Validated against human raters
+  (Duke policy office staff) using the same anchors.
+
+
+# -----------------------------------------------------------------------------
+# Dimensions
+# -----------------------------------------------------------------------------
+# Three shared dimensions + two task-specific. Citation precision is
+# weighted heavier than in it_support because a wrong citation in this
+# domain has compliance implications.
+
+dimensions:
+
+  accuracy:
+    from: shared
+    weight: 0.25
+    task_note: >
+      Duke policy facts: which policy applies, what it actually says,
+      what its effective date is, who it covers, what exceptions exist.
+      Quoting a policy that was superseded counts as inaccurate.
+
+  citation_precision:
+    from: shared
+    weight: 0.30
+    task_note: >
+      The user needs to be able to FIND the cited policy. A response
+      that says "per the Duke acceptable use policy" without naming the
+      specific document or section forces the user to do the lookup.
+      Reference responses always include enough to navigate to the
+      relevant text (document name AND section number where applicable).
+
+  policy_adherence:
+    from: shared
+    weight: 0.20
+    task_note: >
+      Distinct from citation_precision: a response can cite the right
+      section AND THEN recommend something the policy forbids (e.g.,
+      "the policy says X, but you could just do Y instead"). Score 1
+      on policy_adherence if the response recommends a workaround that
+      violates the cited policy.
+
+  contextualization:
+    from: shared
+    weight: 0.15
+    task_note: >
+      Did the response take into account the user's stated role,
+      department, or data type? A faculty-asked question about student
+      data should get a different answer than a researcher-asked
+      question about consented research data. Generic "it depends" is
+      not contextualization — it must adapt to the stated specifics.
+
+  tone:
+    from: shared
+    weight: 0.10
+    task_note: >
+      Audience: Duke community member who needs an authoritative
+      reference. Tone target is "policy office staff writing for a
+      colleague" — formal, precise, no chattiness. Different from
+      it_support's "friendly IT desk" tone target.
+
+
+# -----------------------------------------------------------------------------
+# Aggregation
+# -----------------------------------------------------------------------------
+
+aggregation:
+  method: "weighted_normalized"
+  weights_sum_to: 1.0
+  display_scale: 5
+  note: |
+    Per HELM, the per-dimension scores remain the headline. The
+    weighted overall exists for dashboard sortability.
+
+    Weight rationale (record for v2 conversations):
+      citation_precision 0.30 — wrong citation has compliance cost
+      accuracy           0.25 — facts about the policy itself
+      policy_adherence   0.20 — does it recommend within-policy actions
+      contextualization  0.15 — adapts to stated user situation
+      tone               0.10 — secondary; coarser scale
+
+
+# -----------------------------------------------------------------------------
+# Evaluation steps (G-Eval CoT)
+# -----------------------------------------------------------------------------
+
+evaluation_steps:
+  - "If the candidate response is empty, whitespace-only, or a bare refusal that does not engage the question, score 1 on every dimension and write 'empty response' or 'refusal without engagement' as the rationale. Do not confabulate. Skip the rest of these steps."
+  - "Read the user question and identify the specific Duke policy area the user is asking about, plus any stated context about the user (role, department, data type)."
+  - "Read the reference answer and identify (a) which Duke policy section it cites, (b) the substantive answer it gives, and (c) any qualifiers it adds based on user context."
+  - "Read the candidate response."
+  - "For ACCURACY, check the policy facts in the candidate against the reference. Is the policy citation actually the relevant one? Does the candidate misrepresent what the policy says?"
+  - "For CITATION_PRECISION, check whether the candidate names a specific Duke policy section (document name AND section/clause). Vague references like 'per Duke policy' or 'the IT acceptable use policy' without identifying the specific section are below 3."
+  - "For POLICY_ADHERENCE, check whether the candidate recommends an action that aligns with the policy it cited. If the candidate cited a policy and then suggested a workaround that violates it, score 1."
+  - "For CONTEXTUALIZATION, check whether the response adapts to the user's stated role / department / data type. A generic answer that ignores stated specifics scores lower than one that builds on them."
+  - "For TONE, judge whether the response reads like Duke policy office staff would write it — authoritative, formal, precise."
+  - "Assign each dimension's score based on the shared library's anchored scale. When between anchors, pick the LOWER score and explain why in the rationale."
+  - "Provide a one-sentence rationale per dimension. For citation_precision and accuracy, cite the specific aspect of the candidate that drove the score (e.g., 'cites OIT 100 §3 but the relevant section is §4')."
+  - "Output valid JSON matching the schema. No prose outside the JSON. No markdown fences."
+
+
+# -----------------------------------------------------------------------------
+# Validation
+# -----------------------------------------------------------------------------
+# Same protocol as it_support_v1.1. Raters for policy_qa should be Duke
+# policy office staff or compliance officers, not OIT Service Desk staff —
+# the relevant expertise is different.
+
+validation:
+  sample_size_min: 30
+  sample_size_target: 50
+  raters_min: 2
+  rater_expertise_required: "Duke policy office or compliance role"
+  metrics_to_report:
+    - "Pearson correlation per dimension (judge vs. human mean)"
+    - "Cohen's Kappa per dimension (treating scores as ordinal categories)"
+    - "Agreement within one point (percentage of cases where |judge - human| <= 1)"
+  expected_outcome_note: |
+    Citation_precision is the discriminating dimension here. If the
+    judge and human raters disagree heavily on citation_precision but
+    agree on accuracy, the anchors for citation_precision are unclear.
+
+
+# -----------------------------------------------------------------------------
+# Known limitations (v1)
+# -----------------------------------------------------------------------------
+
+limitations:
+  - "Reference-based. Assumes a single authoritative policy citation exists. Questions where multiple policies overlap (e.g., HIPAA + Duke + FERPA simultaneously) need a v2 anchor for partial-credit citation."
+  - "Policy versions drift. Reference answers locked to a specific Duke policy version; if Duke updates the policy mid-evaluation, scores on that question are no longer valid until the reference is updated."
+  - "Citation precision is rater-dependent — what counts as 'specific enough' varies. Pilot with at least 3 raters to surface anchor disagreements before locking."
+  - "Judge bias not corrected. Same MT-Bench caveats as other rubrics."
+  - "Tone anchor coarse (1-3). Expect lower judge-human agreement on tone than on factual dimensions."
+  - "Anchors NOT YET expert-calibrated. Step 2 of the rubric design process (collect expert reference responses) is required before locking this version."
+
+
+# -----------------------------------------------------------------------------
+# Open design questions (for the mentor / Duke policy office conversation)
+# -----------------------------------------------------------------------------
+# These need to be resolved before this rubric leaves draft.
+
+open_questions:
+  - "Should citation_precision distinguish between 'cited the right policy area but wrong section' vs. 'cited a related but inapplicable policy'? Currently anchored as the same score (3); these may deserve different treatment."
+  - "Is contextualization the right name? Alternatives considered: 'adaptation', 'situational fit'. Pick something stakeholders will recognize."
+  - "Should there be a 'risk-flagging' dimension separate from policy_adherence? Some policy QA questions involve a user describing a situation that's already non-compliant — does the response surface that?"
+  - "Weight distribution is intuition-based, not data-based. Re-weight after pilot if validation study reveals one dimension dominates human judgments."
