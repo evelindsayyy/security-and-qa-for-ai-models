@@ -18,6 +18,9 @@ scanner/output/*
 # legacy / repo-root output (remote + old scanning layout on disk)
 output/
 
+# Generated report HTML files at the repo root
+/*.html
+
 # HF weights under testing/ — never commit (canonical download dir: scanner/models/)
 testing/**/models/*
 !testing/**/models/README.md
