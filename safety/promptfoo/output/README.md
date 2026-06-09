@@ -1,15 +1,13 @@
-# Promptfoo Output (smoke spike)
+# Promptfoo output
 
-Gitignored except this README. Filenames use **`smoke_`** to distinguish from scanner `scan_result.json` and other production artifacts.
+Gitignored except this README.
 
 | File | Step |
 |------|------|
-| `smoke_eval.json` | 1 — raw smoke eval |
-| `smoke_safety_result.json` | 1b — normalized (`export_safety_result.py`) |
-| `smoke_redteam_eval.json` | 2 — raw red-team eval |
-| `.promptfoo/` | 1 or 2 — web UI database |
-| `logs/` | runtime logs |
+| `eval.json` | 1 — raw policy eval |
+| `redteam_eval.json` | 2 — raw red-team eval |
+| `safety_result.json` | 1b — policy `SafetyRunResult` export |
+| `redteam_safety_result.json` | 2b — red-team `SafetyRunResult` export |
+| `.promptfoo/` | web UI database |
 
-Input configs: `../promptfooconfig.yaml`, `../promptfooconfig.redteam.yaml`.
-
-Legacy names (`smoke.json`, `redteam.json`, `safety_result.json`, `redteam.yaml`) are old runs — safe to delete.
+Configs: `../promptfooconfig.yaml`, `../promptfooconfig.redteam.yaml`. Probes: `safety_result.json` → `tool_results.promptfoo.probe_ids`.

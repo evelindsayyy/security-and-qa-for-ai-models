@@ -14,19 +14,39 @@
     <p class="sub">
       slug <code>{{ slug }}</code> ·
       status {{ status }} ·
-      scanned {{ scanned_at }} ·
+      scanned {{ scanned_at[:19] if scanned_at != "—" else "—" }} ·
       scanner {{ scanner_version }}
     </p>
 
     <div class="summary-row">
       <span class="tier tier-{{ severity_tier }}">{{ severity_tier }}</span>
       <span class="summary-score">risk score <b>{{ overall_risk_score }}</b></span>
-      <span class="dim">{{ scanned_files|length }} paths in scanned_files list</span>
+      <span class="dim">{{ n_findings }} finding{{ "" if n_findings == 1 else "s" }}</span>
+      {% if severity_summary != "—" %}
+        <span class="dim">{{ severity_summary }}</span>
+      {% endif %}
+      {% if fickling_severity %}
+        <span class="badge badge-fickling">{{ fickling_severity }}</span>
+      {% endif %}
+      <span class="dim snippet">{{ tool_snippet }}</span>
     </div>
 
-    <h2>Findings ({{ findings|length }})</h2>
+    <h2>Findings ({{ n_findings }})</h2>
     {% if findings %}
-    <table class="run-table">
+    <div class="filter-row">
+      <label for="finding-filter" class="dim">Show</label>
+      <select id="finding-filter" class="scan-filter">
+        <option value="all">All findings</option>
+        <option value="critical">Critical only</option>
+        <option value="high">High only</option>
+        <option value="medium">Medium only</option>
+        <option value="low">Low only</option>
+        <option value="modelscan">Source: modelscan</option>
+        <option value="fickling">Source: fickling</option>
+        <option value="modelaudit">Source: modelaudit</option>
+      </select>
+    </div>
+    <table class="run-table" id="findings-table">
       <thead>
         <tr>
           <th>Severity</th>
@@ -38,9 +58,11 @@
       </thead>
       <tbody>
         {% for f in findings %}
-        <tr>
+        <tr class="finding-row {% if f.severity in ('critical', 'high') %}row-warn{% endif %}"
+            data-finding-severity="{{ f.severity }}"
+            data-finding-source="{{ f.source }}">
           <td><span class="tier tier-{{ f.severity }}">{{ f.severity }}</span></td>
-          <td>{{ f.source }}</td>
+          <td><span class="badge badge-{{ f.source }}">{{ f.source }}</span></td>
           <td>{{ f.title }}</td>
           <td><code>{{ f.file_path or "—" }}</code></td>
           <td class="dim">{{ f.corroborated_by|join(", ") if f.corroborated_by else "—" }}</td>
@@ -48,23 +70,191 @@
         {% endfor %}
       </tbody>
     </table>
+
+    <h2>Finding details</h2>
+    <p class="dim">click a row to expand description and remediation.</p>
+    {% for f in findings %}
+    <details class="finding-detail"
+             data-finding-severity="{{ f.severity }}"
+             data-finding-source="{{ f.source }}">
+      <summary>
+        <span class="tier tier-{{ f.severity }}">{{ f.severity }}</span>
+        <span class="badge badge-{{ f.source }}">{{ f.source }}</span>
+        <b>{{ f.title }}</b>
+        {% if f.file_path %} · <code>{{ f.file_path }}</code>{% endif %}
+      </summary>
+      {% if f.description %}
+        <p class="finding-desc">{{ f.description }}</p>
+      {% endif %}
+      {% if f.remediation %}
+        <p class="finding-remediation"><b>Remediation:</b> {{ f.remediation }}</p>
+      {% endif %}
+      {% if f.raw_tool_severity %}
+        <p class="dim">raw tool severity: {{ f.raw_tool_severity }}</p>
+      {% endif %}
+      {% if f.corroborated_by %}
+        <p class="dim">corroborated by: {{ f.corroborated_by|join(", ") }}</p>
+      {% endif %}
+      {% if not f.description and not f.remediation %}
+        <p class="empty">no extra detail on this finding.</p>
+      {% endif %}
+    </details>
+    {% endfor %}
     {% else %}
-    <p class="empty">no normalized findings — check tool_results below.</p>
+    <p class="empty">no normalized findings — check scanner tools below (benign pytorch pickles often show fickling signal with tier still low).</p>
     {% endif %}
 
+    <h2>Scanner tools</h2>
+    <p class="dim">three-tool defense-in-depth merge; expand each tool for specifics.</p>
+
+    {% if tool_panels.modelscan %}
+    <details class="tool-panel" open>
+      <summary>
+        <span class="badge badge-modelscan">ModelScan</span>
+        <b>{{ tool_panels.modelscan.total_issues }}</b> issue{{ "" if tool_panels.modelscan.total_issues == 1 else "s" }}
+        · {{ tool_panels.modelscan.scanned_count }} scanned
+        · {{ tool_panels.modelscan.skipped }} skipped
+      </summary>
+      {% if tool_panels.modelscan.severity_rows %}
+      <table class="run-table compact-table">
+        <thead><tr><th>Severity</th><th class="num">Count</th></tr></thead>
+        <tbody>
+          {% for sev, count in tool_panels.modelscan.severity_rows %}
+          <tr><td>{{ sev }}</td><td class="num">{{ count }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+      {% if tool_panels.modelscan.sample_files %}
+        <p class="dim">sample files: {{ tool_panels.modelscan.sample_files|join(", ") }}</p>
+      {% endif %}
+      {% if tool_panels.modelscan.version %}
+        <p class="dim">version {{ tool_panels.modelscan.version }}</p>
+      {% endif %}
+    </details>
+    {% endif %}
+
+    {% if tool_panels.fickling %}
+    <details class="tool-panel" {% if tool_panels.fickling.headline and tool_panels.fickling.headline != 'LIKELY_SAFE' %}open{% endif %}>
+      <summary>
+        <span class="badge badge-fickling">Fickling</span>
+        signal <b>{{ tool_panels.fickling.headline }}</b>
+        · {{ tool_panels.fickling.entries|length }} file{{ "" if tool_panels.fickling.entries|length == 1 else "s" }}
+      </summary>
+      <table class="run-table compact-table">
+        <thead>
+          <tr><th>File</th><th>Severity</th><th>Format</th><th class="num">Stacks</th></tr>
+        </thead>
+        <tbody>
+          {% for e in tool_panels.fickling.entries %}
+          <tr class="{% if e.severity == 'LIKELY_OVERTLY_MALICIOUS' %}row-warn{% endif %}">
+            <td><code>{{ e.file or "—" }}</code></td>
+            <td>{{ e.severity }}</td>
+            <td class="dim">{{ e.pytorch_format }}</td>
+            <td class="num">{{ e.stack_count if e.stack_count is not none else "—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
+    {% endif %}
+
+    {% if tool_panels.modelaudit %}
+    <details class="tool-panel" {% if tool_panels.modelaudit.actionable_issue_count %}open{% endif %}>
+      <summary>
+        <span class="badge badge-modelaudit">ModelAudit</span>
+        <b>{{ tool_panels.modelaudit.actionable_issue_count }}</b> actionable
+        · {{ tool_panels.modelaudit.issue_count }} raw
+        · {{ tool_panels.modelaudit.noise_filtered_count }} noise-filtered
+        · mode {{ tool_panels.modelaudit.scan_mode }}
+      </summary>
+      {% if tool_panels.modelaudit.issues %}
+      <table class="run-table">
+        <thead>
+          <tr><th>Location</th><th>Severity</th><th>Rule</th><th>Message</th></tr>
+        </thead>
+        <tbody>
+          {% for i in tool_panels.modelaudit.issues %}
+          <tr class="{% if i.severity in ('critical', 'high') %}row-warn{% endif %}">
+            <td><code>{{ i.location or "—" }}</code></td>
+            <td><span class="tier tier-{{ i.severity }}">{{ i.severity }}</span></td>
+            <td class="dim"><code>{{ i.rule_code }}</code></td>
+            <td class="snippet" title="{{ i.message }}">{{ i.message }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+        <p class="empty">no actionable modelaudit issues in this run.</p>
+      {% endif %}
+      {% if tool_panels.modelaudit.sample_paths %}
+        <p class="dim">paths scanned: {{ tool_panels.modelaudit.sample_paths|join(", ") }}</p>
+      {% endif %}
+    </details>
+    {% endif %}
+
+    {% if coverage_stats %}
     <h2>Coverage</h2>
-    <pre class="json-block">{{ coverage|tojson(indent=2) }}</pre>
+    <table class="run-table compact-table">
+      <tbody>
+        {% for s in coverage_stats %}
+        <tr><td class="dim">{{ s.label }}</td><td><b>{{ s.value }}</b></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
 
-    <h2>File formats</h2>
-    <pre class="json-block">{{ file_formats|tojson(indent=2) }}</pre>
-
-    <h2>Tool results (trimmed)</h2>
-    <pre class="json-block">{{ tool_results|tojson(indent=2) }}</pre>
+    {% if file_format_rows %}
+    <h2>File inventory</h2>
+    <table class="run-table compact-table">
+      <thead><tr><th>Category</th><th>File</th></tr></thead>
+      <tbody>
+        {% for r in file_format_rows %}
+        <tr><td class="dim">{{ r.category }}</td><td><code>{{ r.file }}</code></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
 
     <details>
-      <summary>scanned_files ({{ scanned_files|length }})</summary>
-      <pre class="json-block">{{ scanned_files|tojson(indent=2) }}</pre>
+      <summary>scanned_files ({{ scanned_file_count }})</summary>
+      {% if scanned_files %}
+      <ul class="file-list">
+        {% for f in scanned_files %}
+        <li><code>{{ f }}</code></li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="empty">none recorded.</p>
+      {% endif %}
+    </details>
+
+    <details>
+      <summary>Raw scan summary</summary>
+      <pre class="json-block">{{ raw_summary|tojson(indent=2) }}</pre>
     </details>
   {% endif %}
 </div>
+
+{% if not missing and findings %}
+<script>
+(function () {
+  const sel = document.getElementById("finding-filter");
+  if (!sel) return;
+  const rows = document.querySelectorAll(".finding-row, .finding-detail");
+  sel.addEventListener("change", function () {
+    const v = sel.value;
+    rows.forEach(function (el) {
+      const sev = el.getAttribute("data-finding-severity");
+      const src = el.getAttribute("data-finding-source");
+      const show =
+        v === "all" ||
+        v === sev ||
+        v === src;
+      el.style.display = show ? "" : "none";
+    });
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

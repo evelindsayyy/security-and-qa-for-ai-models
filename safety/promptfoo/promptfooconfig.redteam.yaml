@@ -5,7 +5,7 @@
 # off-topic is omitted — it requires Promptfoo remote generation (not enabled).
 #
 # After `redteam run`, view results via `promptfoo view` (reads output/.promptfoo/).
-# Do not confuse output/smoke_redteam_eval.json (results export) with this config file.
+# Red-team output: -o output/redteam_eval.json (not this config file).
 
 description: promptfoo_duke_redteam_v1 — GPT 4.1 Mini adversarial probes
 

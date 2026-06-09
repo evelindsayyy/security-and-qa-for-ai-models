@@ -1,34 +1,32 @@
-# Run from repo root. See ../README.md for smoke, red-team, view, and export commands.
+# Run from repo root — see ../README.md
 #
-#   docker compose --env-file safety/promptfoo_testing/docker/.env \
-#     -f safety/promptfoo_testing/docker/compose.yml build
+#   docker compose --env-file safety/promptfoo/docker/.env \
+#     -f safety/promptfoo/docker/compose.yml build
 #
-#   docker compose --env-file safety/promptfoo_testing/docker/.env \
-#     -f safety/promptfoo_testing/docker/compose.yml run --rm promptfoo \
-#     promptfoo eval -c promptfooconfig.yaml -o output/smoke_eval.json
-#
-#   docker compose ... run --rm --service-ports promptfoo promptfoo view -p 15500
+#   docker compose --env-file safety/promptfoo/docker/.env \
+#     -f safety/promptfoo/docker/compose.yml run --rm promptfoo \
+#     promptfoo eval -c promptfooconfig.yaml -o output/eval.json
 
-name: promptfoo-testing
+name: promptfoo
 
 services:
   promptfoo:
     build:
       context: ../../..
-      dockerfile: safety/promptfoo_testing/docker/Dockerfile
+      dockerfile: safety/promptfoo/docker/Dockerfile
       args:
         PROMPTFOO_VERSION: ${PROMPTFOO_VERSION:-latest}
 
     user: "${UID:-1000}:${GID:-1000}"
 
     volumes:
-      - ../:/app/safety/promptfoo_testing
+      - ../:/app/safety/promptfoo
 
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://litellm.oit.duke.edu/v1}
-      - PROMPTFOO_CONFIG_DIR=/app/safety/promptfoo_testing/output/.promptfoo
-      - PROMPTFOO_LOG_DIR=/app/safety/promptfoo_testing/output/logs
+      - PROMPTFOO_CONFIG_DIR=/app/safety/promptfoo/output/.promptfoo
+      - PROMPTFOO_LOG_DIR=/app/safety/promptfoo/output/logs
       - PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=${PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION:-true}
 
     ports:

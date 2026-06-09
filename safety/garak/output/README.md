@@ -1,22 +1,12 @@
-# Garak Output
+# Garak output
 
-Generated Garak artifacts. Everything here except this README is **gitignored**.
+Gitignored except this README.
 
-## Expected files (after a scan)
+| File | Step |
+|------|------|
+| `garak-gpt41mini-low-guardrail.report.jsonl` | 1 — raw scan |
+| `garak-gpt41mini-low-guardrail.report.html` | 1 — HTML report |
+| `safety_result.json` | 2 — `SafetyRunResult` export |
+| `.garak-*` | cache / logs |
 
-| File / directory | Use |
-|------------------|-----|
-| `garak-gpt41mini-low-guardrail.report.jsonl` | Raw per-attempt log — feed to `export_safety_result.py` |
-| `garak-gpt41mini-low-guardrail.report.html` | Interactive HTML report (open in browser) |
-| `safety_result.json` | `SafetyResult`-shaped export (`docs/data-model.md`) |
-| `.garak-data/` | Garak logs (`garak.log`) |
-| `.garak-cache/` | Detector model cache (torch, HF datasets) |
-| `.garak-home/` | Container HOME for ML libs |
-| `.garak-config/` | Optional site config |
-
-## Viewing results
-
-1. **Quick pass/fail:** `safety_result.json` or the HTML report.
-2. **Live progress:** `tail -f .garak-data/garak/garak.log`
-
-Do not commit generated outputs unless a small reviewed sample is intentionally needed.
+Config: `../garak_gpt41mini_low_guardrail.yaml`. Probes in export: `safety_result.json` → `tool_results.garak.probe_ids`.

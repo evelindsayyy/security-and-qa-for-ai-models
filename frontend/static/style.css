@@ -122,6 +122,78 @@ header nav a:hover {
 .badge-ifeval      { background: #e8f4e8; color: #2a6b2a; }
 .badge-consistency { background: #fff3cd; color: #856404; }
 
+/* scan tool / source badges */
+.badge-modelscan  { background: #e6edf7; color: #1b3a6e; }
+.badge-fickling   { background: #fff3cd; color: #856404; }
+.badge-modelaudit { background: #fdecec; color: #842029; }
+
+/* safety tool / source badges */
+.badge-promptfoo { background: #e6edf7; color: #1b3a6e; }
+.badge-garak     { background: #fdecec; color: #842029; }
+
+.status-fail {
+  color: #842029;
+  font-size: 13px;
+  font-weight: 600;
+}
+.finding-detail.finding-fail {
+  border-color: #f0d4c8;
+  background: #fdf8f5;
+}
+.summary-score.score-strong { color: #1f6b1f; }
+.summary-score.score-mid    { color: #856404; }
+.summary-score.score-weak   { color: #842029; }
+
+/* scan detail — filter + expandable findings */
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.scan-filter {
+  font-size: 14px;
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+}
+.finding-detail {
+  margin-bottom: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: #fafafa;
+  border-radius: 4px;
+  border: 1px solid #eee;
+}
+.finding-detail summary {
+  cursor: pointer;
+  font-size: 14px;
+  list-style-position: outside;
+}
+.finding-detail summary .tier,
+.finding-detail summary .badge {
+  margin-right: 0.35rem;
+}
+.finding-desc { margin: 0.5rem 0 0.25rem; font-size: 14px; color: #444; }
+.finding-remediation { margin: 0.25rem 0; font-size: 14px; color: #555; }
+.tool-panel {
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: #fafafa;
+  border-radius: 4px;
+  border: 1px solid #eee;
+}
+.tool-panel summary { cursor: pointer; font-size: 14px; }
+.tool-panel summary .badge { margin-right: 0.35rem; }
+.compact-table { margin-top: 0.5rem; margin-bottom: 0.5rem; }
+.compact-table td, .compact-table th { padding: 6px 10px; }
+.file-list {
+  font-size: 13px;
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0.5rem 0;
+}
+
 /* conditional headline-metric color by performance threshold */
 .run-table td.score-strong { color: #1f6b1f; }
 .run-table td.score-mid    { color: #856404; }

@@ -16,7 +16,9 @@ uv run flask --app frontend:create_app run --debug
 
 | Route | Purpose |
 |-------|---------|
-| `/` | Hub — scan/eval counts, safety placeholder, gateway model list |
+| `/` | Hub — scan/eval/safety counts, gateway model list |
+| `/safety` | Merged safety labels from `safety/output/*/merged_safety_result.json` |
+| `/safety/<slug>` | One model safety detail (findings, suites, deployment context) |
 | `/scans` | All HF `scan_result.json` rows from `scanner/output/` |
 | `/scans/<slug>` | One scan detail (findings, coverage, tool_results) |
 | `/eval-run` | Aggregated efficacy runs from `evaluator/results/*.jsonl` |
@@ -51,8 +53,9 @@ Refresh the browser after new files appear; no restart needed.
 |--------|------|
 | `gateway_catalog.py` | Live gateway ids via `GET /v1/models` (5 min cache) |
 | `hf_scan_catalog.py` | HF scan rows from `scanner/output/*/scan_result.json` |
-| `scan_data.py` | Load and summarize `scanner/output/*/scan_result.json` |
+| `scan_data.py` | Load `scanner/output/*/scan_result.json`; detail view uses findings tables, tool panels, and filters (like eval/benchmarks) |
 | `eval_run_data.py` | Load and summarize `evaluator/results/*.jsonl` |
+| `safety_data.py` | Load `safety/output/*/merged_safety_result.json`; detail uses findings tables, suite panels, filters (like scans) |
 | `routes.py` | Flask routes (lazy imports for eval/scanner loaders) |
 | `templates/` | Jinja HTML |
 | `static/style.css` | Shared table + tier badge styles |
@@ -63,3 +66,15 @@ Refresh the browser after new files appear; no restart needed.
 - [`docs/data-model.md`](../docs/data-model.md) — Postgres shapes
 - [`scanner/README.md`](../scanner/README.md) — artifact scanning
 - [`evaluator/README.md`](../evaluator/README.md) — efficacy runner
+- [`safety/README.md`](../safety/README.md) — promptfoo + garak red-team pipeline
+
+**Safety (gateway env required):**
+
+```bash
+# see safety/README.md — promptfoo eval, garak scan, then merge
+PYTHONPATH=. uv run python -m safety.merge \
+  --promptfoo safety/promptfoo/output/safety_result.json \
+  --promptfoo safety/promptfoo/output/redteam_safety_result.json \
+  --garak safety/garak/output/safety_result.json \
+  -o safety/output/gpt-4.1-mini/merged_safety_result.json
+```

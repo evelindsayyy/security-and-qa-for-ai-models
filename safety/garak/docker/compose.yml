@@ -1,40 +1,35 @@
-# Run from repo root. See ../README.md for scan and report commands.
+# Run from repo root — see ../README.md
 #
-#   docker compose --env-file safety/garak_testing/docker/.env \
-#     -f safety/garak_testing/docker/compose.yml build
+#   docker compose --env-file safety/garak/docker/.env \
+#     -f safety/garak/docker/compose.yml build
 #
-#   docker compose --env-file safety/garak_testing/docker/.env \
-#     -f safety/garak_testing/docker/compose.yml run --rm garak \
+#   docker compose --env-file safety/garak/docker/.env \
+#     -f safety/garak/docker/compose.yml run --rm garak \
 #     python -m garak --config garak_gpt41mini_low_guardrail.yaml
 
-name: garak-testing
+name: garak
 
 services:
   garak:
     build:
       context: ../../..
-      dockerfile: safety/garak_testing/docker/Dockerfile
+      dockerfile: safety/garak/docker/Dockerfile
       args:
         GARAK_VERSION: ${GARAK_VERSION:-}
 
-    # No user: override — garak ML detectors (torch/transformers) call getpass.getuser()
-    # and fail when the host UID is not in /etc/passwd. Fix ownership after runs if needed:
-    #   chown -R "$(id -u):$(id -g)" safety/garak_testing/output
-
     volumes:
-      - ../:/app/safety/garak_testing
+      - ../:/app/safety/garak
 
     environment:
-      # Garak OpenAICompatible generator reads this (see YAML header comments).
       - OPENAICOMPATIBLE_API_KEY=${OPENAICOMPATIBLE_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - HOME=/app/safety/garak_testing/output/.garak-home
+      - HOME=/app/safety/garak/output/.garak-home
       - USER=garak
       - LOGNAME=garak
-      - TORCHINDUCTOR_CACHE_DIR=/app/safety/garak_testing/output/.garak-cache/torchinductor
-      - XDG_DATA_HOME=/app/safety/garak_testing/output/.garak-data
-      - XDG_CACHE_HOME=/app/safety/garak_testing/output/.garak-cache
-      - XDG_CONFIG_HOME=/app/safety/garak_testing/output/.garak-config
+      - TORCHINDUCTOR_CACHE_DIR=/app/safety/garak/output/.garak-cache/torchinductor
+      - XDG_DATA_HOME=/app/safety/garak/output/.garak-data
+      - XDG_CACHE_HOME=/app/safety/garak/output/.garak-cache
+      - XDG_CONFIG_HOME=/app/safety/garak/output/.garak-config
 
     stdin_open: true
     tty: true

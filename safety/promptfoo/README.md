@@ -1,175 +1,108 @@
-# Promptfoo Testing
+# Promptfoo
 
-Safety **smoke** runs against Duke AI Gateway **GPT 4.1 Mini**. Output names use a `smoke_` prefix so they stay distinct from production scanner artifacts (`scan_result.json`, etc.). Run everything from the **repo root**.
+Duke policy probes against AI Gateway. Run from **repo root**. Maps to `probe_suite: promptfoo_duke_policy_v1` ([`docs/data-model.md`](../../docs/data-model.md)).
 
 ## Files
 
+| Path | Role |
+|------|------|
+| `promptfooconfig.yaml` | **Input** — 10 Duke probes |
+| `promptfooconfig.redteam.yaml` | **Input** — red-team plugins |
+| `export_safety_result.py` | `eval.json` → `output/safety_result.json` |
+| `output/eval.json` | Raw eval |
+| `output/redteam_eval.json` | Raw red-team eval |
+| `output/safety_result.json` | Normalized policy export (`SafetyRunResult`) |
+| `output/redteam_safety_result.json` | Normalized red-team export |
 
-| Path                              | What it is                                              |
-| --------------------------------- | ------------------------------------------------------- |
-| `promptfooconfig.yaml`            | **Input** — smoke + Duke policy (5 tests)               |
-| `promptfooconfig.redteam.yaml`    | **Input** — red-team plugins                            |
-| `export_safety_result.py`         | Converts `smoke_eval.json` → `smoke_safety_result.json` |
-| `output/smoke_eval.json`          | **Output** — raw smoke eval                             |
-| `output/smoke_redteam_eval.json`  | **Output** — raw red-team eval                          |
-| `output/smoke_safety_result.json` | **Output** — normalized for data model (smoke only)     |
-| `output/.promptfoo/`              | **Output** — DB for web UI (not a config)               |
+`-c` = YAML config only. Never `promptfoo eval -c output/*.json`.
 
-
-`-c` = input YAML. `-o` = results path you choose (use the `smoke_`* names above). Never `promptfoo eval -c output/*.json`.
-
----
-
-## Step 0 — Setup (once)
+## Setup
 
 ```bash
-cp safety/promptfoo_testing/docker/.env.example safety/promptfoo_testing/docker/.env
+cp safety/promptfoo/docker/.env.example safety/promptfoo/docker/.env
+# set OPENAI_API_KEY (= DUKE_GATEWAY_KEY)
+
+docker compose --env-file safety/promptfoo/docker/.env \
+  -f safety/promptfoo/docker/compose.yml build
+
+export DC="docker compose --env-file safety/promptfoo/docker/.env -f safety/promptfoo/docker/compose.yml"
 ```
 
-Edit `safety/promptfoo_testing/docker/.env`: set `OPENAI_API_KEY` (same as `DUKE_GATEWAY_KEY`).
-
-On DGX, set UID/GID so you can edit `output/`:
+## 1. Policy eval
 
 ```bash
-sed -i "s/^UID=.*/UID=$(id -u)/" safety/promptfoo_testing/docker/.env
-sed -i "s/^GID=.*/GID=$(id -g)/" safety/promptfoo_testing/docker/.env
+$DC run --rm promptfoo promptfoo eval -c promptfooconfig.yaml -o output/eval.json
 ```
 
-Build image:
+## 1b. Export
 
 ```bash
-docker compose --env-file safety/promptfoo_testing/docker/.env \
-  -f safety/promptfoo_testing/docker/compose.yml build
+$DC run --rm promptfoo python3 export_safety_result.py output/eval.json
 ```
 
-Shortcut (use in Steps 1–3):
+## 2. Red-team (optional)
 
-```bash
-export DC="docker compose --env-file safety/promptfoo_testing/docker/.env -f safety/promptfoo_testing/docker/compose.yml"
-```
-
-**Fresh output folder** (optional):
-
-```bash
-rm -rf safety/promptfoo_testing/output/.promptfoo safety/promptfoo_testing/output/logs
-rm -f safety/promptfoo_testing/output/smoke_eval.json \
-      safety/promptfoo_testing/output/smoke_redteam_eval.json \
-      safety/promptfoo_testing/output/smoke_safety_result.json
-```
-
----
-
-## Step 1 — Smoke + Duke policy
-
-**Config:** `promptfooconfig.yaml` — 5 fixed probes, `probe_suite: promptfoo_duke_policy_v1`.
-
-```bash
-$DC run --rm promptfoo promptfoo eval \
-  -c promptfooconfig.yaml \
-  -o output/smoke_eval.json
-```
-
-
-| Flag                        | Does                       |
-| --------------------------- | -------------------------- |
-| `-c promptfooconfig.yaml`   | Input config               |
-| `-o output/smoke_eval.json` | Writes raw smoke eval JSON |
-
-
-**Expect:** ~5–15 s. Terminal table with pass/fail per probe. Creates `output/smoke_eval.json` and updates `output/.promptfoo/`. Non-zero exit if any test failed — file is still written.
-
----
-
-## Step 1b — Export to data-model JSON
-
-**When:** Right after Step 1. **Input:** `output/smoke_eval.json` only.
-
-```bash
-$DC run --rm promptfoo python3 export_safety_result.py \
-  output/smoke_eval.json \
-  -o output/smoke_safety_result.json
-```
-
-Or on the host:
-
-```bash
-python3 safety/promptfoo_testing/export_safety_result.py \
-  safety/promptfoo_testing/output/smoke_eval.json \
-  -o safety/promptfoo_testing/output/smoke_safety_result.json
-```
-
-**Expect:** Prints `pass_rate=… findings=5`. Open `output/smoke_safety_result.json` — one `findings[]` row per probe (`duke.smoke.001` … `duke.policy.004`).
-
-**Not exported yet:** red-team (`output/smoke_redteam_eval.json`) — use Step 3 or `jq` on raw JSON.
-
----
-
-## Step 2 — Red-team
-
-**Config:** `promptfooconfig.redteam.yaml`. Needs `PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=true` in `docker/.env`.
+Needs `PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=true` in `docker/.env`.
 
 ```bash
 $DC run --rm promptfoo promptfoo redteam run \
-  -c promptfooconfig.redteam.yaml \
-  -o output/smoke_redteam_eval.json \
-  --delay 500 \
-  --max-concurrency 1 \
-  --force
+  -c promptfooconfig.redteam.yaml -o output/redteam_eval.json \
+  --delay 500 --max-concurrency 1 --force
 ```
 
+## 2b. Export red-team
 
-| Flag                                | Does                                                     |
-| ----------------------------------- | -------------------------------------------------------- |
-| `-o output/smoke_redteam_eval.json` | Raw red-team eval results (JSON)                         |
-| `--delay 500`                       | 500 ms between gateway calls                             |
-| `--max-concurrency 1`               | Serial requests                                          |
-| `--force`                           | Regenerate attacks; omit to reuse cache in `.promptfoo/` |
+```bash
+$DC run --rm promptfoo python3 export_safety_result.py output/redteam_eval.json
+# writes output/redteam_safety_result.json (auto-detects red-team suite)
+```
 
+Probe ids: `promptfoo.redteam.<plugin>.<nnn>` (e.g. `promptfoo.redteam.hallucination.002`).
 
-**Expect:** ~1–3 min. Writes `output/smoke_redteam_eval.json` + updates `output/.promptfoo/`.
-
----
-
-## Step 3 — View in browser (optional)
-
-After Step 1 and/or 2. Uses `output/.promptfoo/`, not the `smoke_*.json` files.
+## 3. View (optional)
 
 ```bash
 $DC run --rm --service-ports promptfoo promptfoo view -p 15500
 ```
 
-Open [http://localhost:15500](http://localhost:15500) while the command runs.
+## Changing probes
 
-**DGX:** `ssh -L 15500:localhost:15500 <host>` on laptop, then run on DGX.
+Edit `tests:` in `promptfooconfig.yaml`. Each case needs:
 
-**Port busy:** `PROMPTFOO_REPORT_PORT=15501 $DC run --rm --service-ports promptfoo promptfoo view -p 15500` → [http://localhost:15501](http://localhost:15501)
+```yaml
+  - description: Human-readable title
+    vars:
+      probe_id: duke.policy.003    # safety_findings.probe_id
+      category: policy             # smoke | policy | jailbreak | leakage
+      severity: high
+      question: "User prompt here"
+    assert:
+      - type: ...
+```
 
----
+| Field | Location | Maps to |
+|-------|----------|---------|
+| Model | `providers[].id` | `openai:chat:GPT 4.1 Mini` ([`gateway-models.md`](../../docs/gateway-models.md)) |
+| `probe_id` | `tests[].vars` | `safety_findings.probe_id` |
+| `category` / `severity` | `tests[].vars` | `safety_findings` columns |
 
-## Probes (smoke)
+Probe list appears in export: `tool_results.promptfoo.probe_ids`.
 
+`duke.policy.004` (jailbreak): Azure block counts as **pass** in export.
 
-| `probe_id`        | `category` |
-| ----------------- | ---------- |
-| `duke.smoke.001`  | smoke      |
-| `duke.policy.001` | policy     |
-| `duke.policy.002` | leakage    |
-| `duke.policy.003` | policy     |
-| `duke.policy.004` | jailbreak  |
+## Default probes
 
+| `probe_id` | `category` |
+|------------|------------|
+| `duke.smoke.001` | smoke |
+| `duke.policy.001` | policy |
+| `duke.policy.002` | leakage |
+| `duke.policy.003` | policy |
+| `duke.policy.004` | jailbreak |
+| `duke.policy.005` | policy (phishing) |
+| `duke.policy.006` | policy (MFA/Duo) |
+| `duke.policy.007` | policy (VPN) |
+| `duke.policy.008` | policy (harmful use) |
+| `duke.policy.009` | policy (Duke contact accuracy) |
 
-`duke.policy.004` may show ERROR (Azure block); export still marks it passed.
-
----
-
-## Troubleshooting
-
-
-| Symptom                                 | Fix                                                          |
-| --------------------------------------- | ------------------------------------------------------------ |
-| 401 / 403                               | `OPENAI_API_KEY` in `docker/.env`; model id `GPT 4.1 Mini`   |
-| `providers` / `targets` missing on `-c` | You used `output/*.json` — use `promptfooconfig*.yaml`       |
-| Empty web UI                            | Run Step 1 or 2 first                                        |
-| Red-team 0 tests                        | `PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=true` in `.env` |
-
-
+Merge: [`../README.md`](../README.md).

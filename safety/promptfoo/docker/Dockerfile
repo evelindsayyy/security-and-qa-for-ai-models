@@ -8,10 +8,10 @@ RUN apt-get update && \
     npm cache clean --force && \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app/safety/promptfoo_testing
+WORKDIR /app/safety/promptfoo
 
-ENV PROMPTFOO_CONFIG_DIR=/app/safety/promptfoo_testing/output/.promptfoo
-ENV PROMPTFOO_LOG_DIR=/app/safety/promptfoo_testing/output/logs
+ENV PROMPTFOO_CONFIG_DIR=/app/safety/promptfoo/output/.promptfoo
+ENV PROMPTFOO_LOG_DIR=/app/safety/promptfoo/output/logs
 
 EXPOSE 15500
 

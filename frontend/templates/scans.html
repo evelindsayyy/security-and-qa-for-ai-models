@@ -3,7 +3,7 @@
 {% block title %}HF artifact scans{% endblock %}
 
 {% block content %}
-<div class="scan-list">
+<div class="eval-comparison">
   <h1>HF artifact scans</h1>
 
   {% if not has_scans %}
@@ -25,6 +25,7 @@
           <th>Tier</th>
           <th class="num">Risk</th>
           <th class="num">Findings</th>
+          <th>Breakdown</th>
           <th>Tools</th>
           <th>Scanned at</th>
           <th></th>
@@ -32,12 +33,13 @@
       </thead>
       <tbody>
         {% for s in scans %}
-        <tr class="{% if s.severity_tier == 'critical' %}row-warn{% endif %}">
+        <tr class="{% if s.severity_tier == 'critical' %}row-warn{% elif s.severity_tier == 'high' %}row-warn{% endif %}">
           <td><span class="model">{{ s.model_id }}</span></td>
           <td><span class="tier tier-{{ s.severity_tier }}">{{ s.severity_tier }}</span></td>
           <td class="num"><b>{{ s.overall_risk_score }}</b></td>
           <td class="num">{{ s.n_findings }}</td>
-          <td class="snippet">{{ s.tool_snippet }}</td>
+          <td class="dim snippet">{{ s.severity_summary }}</td>
+          <td class="snippet" title="{{ s.tool_snippet }}">{{ s.tool_snippet }}</td>
           <td class="dim">{{ s.scanned_at[:19] if s.scanned_at != "—" else "—" }}</td>
           <td><a href="{{ url_for('scan_detail', slug=s.slug) }}">detail</a></td>
         </tr>
@@ -49,8 +51,9 @@
       <h2>how to read this</h2>
       <ul>
         <li><b>risk</b> 0–100 from merged modelscan + fickling + modelaudit (see <code>scanner/risk_scorer.py</code>).</li>
-        <li><b>critical</b> rows (e.g. extension-mismatch poc) sort to the top for review.</li>
+        <li><b>critical</b> / <b>high</b> rows sort to the top — open <b>detail</b> for per-finding descriptions and tool breakdowns.</li>
         <li>benign pytorch pickles often show fickling <code>LIKELY_UNSAFE</code> with tier still <b>low</b>.</li>
+        <li>detail pages use the same expandable layout as eval and benchmarks — filter findings by severity or source.</li>
       </ul>
     </section>
   {% endif %}
