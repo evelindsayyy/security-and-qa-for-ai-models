@@ -123,8 +123,16 @@ def _strip_fences(text: str) -> str:
     return fence_pat.sub("", text).strip()
 
 
-def _parse_scores(raw: str) -> dict[str, DimensionScore]:
+def _parse_scores(
+    raw: str,
+    expected_dims: tuple[str, ...] = _EXPECTED_DIMENSIONS,
+) -> dict[str, DimensionScore]:
     """Parse a JSON judge response into a {dim: DimensionScore} dict.
+
+    ``expected_dims`` lets the caller pin which dimension keys must appear
+    in the JSON. Defaults to the original IT-support set for backward
+    compatibility; the runner now passes the actual rubric's dimension
+    list (derived from the resolved rubric).
 
     Raises ValueError with a specific message on any structural issue so the
     retry path can include it in the follow-up message to the judge.
@@ -138,16 +146,16 @@ def _parse_scores(raw: str) -> dict[str, DimensionScore]:
     if not isinstance(obj, dict):
         raise ValueError("response JSON must be an object, got a different type")
 
-    missing = [d for d in _EXPECTED_DIMENSIONS if d not in obj]
+    missing = [d for d in expected_dims if d not in obj]
     if missing:
         raise ValueError(f"missing required dimension(s): {missing}")
 
-    extra = [k for k in obj if k not in _EXPECTED_DIMENSIONS]
+    extra = [k for k in obj if k not in expected_dims]
     if extra:
         raise ValueError(f"unexpected key(s) in response: {extra}")
 
     scores: dict[str, DimensionScore] = {}
-    for dim in _EXPECTED_DIMENSIONS:
+    for dim in expected_dims:
         entry = obj[dim]
         if not isinstance(entry, dict):
             raise ValueError(f"dimension '{dim}' must be an object")
@@ -291,12 +299,37 @@ def judge_response(
     if cached is not None:
         return cached
 
+    # ----- derive rubric-specific output schema -----
+    # The dimension keys the judge must produce. For backward compat with
+    # the hardcoded reference_based_v1.txt template, _EXPECTED_DIMENSIONS
+    # still works; v2 template uses these to build {output_schema}.
+    expected_dims: tuple[str, ...] = tuple((rubric.get("dimensions") or {}).keys())
+    if not expected_dims:
+        expected_dims = _EXPECTED_DIMENSIONS
+
+    output_schema_lines = ["{"]
+    max_dim_len = max(len(d) for d in expected_dims)
+    for i, dim in enumerate(expected_dims):
+        scale = (rubric.get("dimensions") or {}).get(dim, {}).get("scale", [1, 5])
+        comma = "," if i < len(expected_dims) - 1 else ""
+        pad = " " * (max_dim_len - len(dim) + 2)
+        output_schema_lines.append(
+            f'  "{dim}":{pad}{{"score": <int {scale[0]}-{scale[1]}>, '
+            f'"rationale": "<one sentence>"}}{comma}'
+        )
+    output_schema_lines.append("}")
+    output_schema = "\n".join(output_schema_lines)
+
     # ----- format the user message -----
+    # Extra kwargs (like output_schema) are silently ignored by templates
+    # that don't reference them — so this is backward-compatible with
+    # the hardcoded reference_based_v1.txt template.
     user_message = template.format(
         question=question,
         reference=reference,
         candidate=candidate_response,
         rubric_yaml=rubric_raw,
+        output_schema=output_schema,
     )
 
     client = gateway_client().with_options(timeout=timeout_sec)
@@ -319,7 +352,7 @@ def judge_response(
         )
 
     try:
-        scores = _parse_scores(raw1)
+        scores = _parse_scores(raw1, expected_dims=expected_dims)
         result = JudgeResult(scores=scores, raw_response=raw1)
         _cache_write(key, result)
         return result
@@ -336,8 +369,8 @@ def judge_response(
                     "Your previous response failed JSON parsing: "
                     f"{first_error}. Reply with ONLY the JSON object specified "
                     "in the OUTPUT FORMAT section — no prose, no code fences, "
-                    "no leading or trailing text. Use the exact four keys: "
-                    "accuracy, completeness, policy_adherence, tone."
+                    "no leading or trailing text. Use these exact dimension "
+                    f"keys: {', '.join(expected_dims)}."
                 ),
             },
         ]
@@ -358,7 +391,7 @@ def judge_response(
         )
 
     try:
-        scores = _parse_scores(raw2)
+        scores = _parse_scores(raw2, expected_dims=expected_dims)
         result = JudgeResult(scores=scores, raw_response=raw2)
         _cache_write(key, result)
         return result

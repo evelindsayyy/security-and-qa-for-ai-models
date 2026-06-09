@@ -176,12 +176,38 @@ limitations:
 
 
 # -----------------------------------------------------------------------------
-# Open design questions (for the mentor / Duke policy office conversation)
+# Design decisions (resolved Tuesday week 4)
 # -----------------------------------------------------------------------------
-# These need to be resolved before this rubric leaves draft.
+# Resolutions to the open questions raised when this rubric was drafted
+# Friday of week 3. Each decision is held until pilot data either confirms
+# it or surfaces a reason to revisit in v2.
 
-open_questions:
-  - "Should citation_precision distinguish between 'cited the right policy area but wrong section' vs. 'cited a related but inapplicable policy'? Currently anchored as the same score (3); these may deserve different treatment."
-  - "Is contextualization the right name? Alternatives considered: 'adaptation', 'situational fit'. Pick something stakeholders will recognize."
-  - "Should there be a 'risk-flagging' dimension separate from policy_adherence? Some policy QA questions involve a user describing a situation that's already non-compliant — does the response surface that?"
-  - "Weight distribution is intuition-based, not data-based. Re-weight after pilot if validation study reveals one dimension dominates human judgments."
+decisions:
+  citation_precision_granularity: |
+    DECISION (v1): keep as a single dimension; both "right policy area,
+    wrong section" and "related but inapplicable policy" map to score 3.
+    Distinguishing them requires extra anchor work and pilot data we
+    don't have yet. Revisit in v2 if human raters consistently
+    disagree on score 3 (suggesting they want finer granularity).
+
+  contextualization_naming: |
+    DECISION (v1): keep "contextualization". Alternatives "adaptation"
+    and "situational fit" aren't clearer to a Duke audience.
+    Compliance / policy office staff are the target raters; they read
+    "contextualization" as "tailored to the asker's situation," which
+    is what we mean.
+
+  risk_flagging_dimension: |
+    DECISION (v1): NOT a separate dimension. Risk-flagging is folded
+    into policy_adherence anchor 5: "flags policy concerns when the
+    question implies one." This keeps the dimension count manageable
+    and matches the locked it_support_v1.yaml structure. Revisit in
+    v2 if pilot data shows risk-flagging and policy-recommendation
+    are independent signals.
+
+  weight_distribution: |
+    DECISION (v1): current weights (citation 0.30, accuracy 0.25,
+    policy 0.20, contextualization 0.15, tone 0.10) reflect domain
+    reasoning, not measured human judgment. Standard methodology:
+    re-weight after the validation study (weeks 7-8) if Pearson
+    correlations show one dimension dominates the human-rater overall.
