@@ -13,11 +13,14 @@ Environment is read by ``_gateway.py`` — see that module for env var names.
 
 File cache:
     ``evaluator/cache/candidates/<sha256>.json``  keyed on
-    ``(model, system_prompt, question, temperature)``.  Re-runs with the
-    same inputs return the cached row WITHOUT calling the API. The cached
-    ``latency_ms`` is the original call's wall-clock, not the cache-read
-    time, so operational metrics survive across re-runs. Failed calls are
-    NOT cached (transient errors get retried on re-run).
+    ``(model, system_prompt, question, temperature, max_tokens)``.  Re-runs
+    with the same inputs return the cached row WITHOUT calling the API. The
+    cached ``latency_ms`` is the original call's wall-clock, not the
+    cache-read time, so operational metrics survive across re-runs. Failed
+    calls are NOT cached (transient errors get retried on re-run) — and
+    that includes empty visible responses, which reasoning models produce
+    when hidden thinking consumes the whole max_tokens budget; re-running
+    with a bigger budget must retry, not replay the cached empty text.
 """
 
 from __future__ import annotations
@@ -56,9 +59,15 @@ class CandidateResult:
 # File cache
 
 def _cache_key( # hash the inputs that should produce identical outputs
-    *, model: str, system_prompt: str, question: str, temperature: float
+    *, model: str, system_prompt: str, question: str, temperature: float,
+    max_tokens: int,
 ) -> str:
-    raw = f"{model}|{system_prompt}|{question}|{temperature:.4f}".encode("utf-8")
+    # max_tokens is part of the key: for reasoning models the budget changes
+    # the visible output (a starved budget yields empty text), so a re-run
+    # with a different budget must miss the cache and call the API.
+    raw = (
+        f"{model}|{system_prompt}|{question}|{temperature:.4f}|{max_tokens}"
+    ).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
 
 
@@ -125,6 +134,7 @@ def generate_candidate(
         system_prompt=system_prompt,
         question=question,
         temperature=temperature,
+        max_tokens=max_tokens,
     )
     cached = _cache_read(key) # look in the cache for that key; if found, return it immediately without calling the API
     if cached is not None:
@@ -155,10 +165,42 @@ def generate_candidate(
 
     # if successful, parse the response and token usage. 
 
-    text = (resp.choices[0].message.content or "").strip()
-    usage = resp.usage
-    prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
-    completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+    try:
+        text = (resp.choices[0].message.content or "").strip()
+        usage = resp.usage
+        prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+        completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+    except Exception as e:
+        # A response without choices/usage (gateway hiccup) must not raise:
+        # generate_candidate's contract is no-raise, failure rows instead.
+        return CandidateResult(
+            response="",
+            latency_ms=latency_ms,
+            prompt_tokens=0,
+            completion_tokens=0,
+            failed=True,
+            error=f"malformed API response: {type(e).__name__}: {e}",
+        )
+
+    if not text:
+        # Reasoning models (gpt-5-mini, gpt-oss, ...) spend hidden thinking
+        # tokens from the same max_tokens budget; when it runs out the call
+        # "succeeds" with empty visible text. Treat that as a failure so the
+        # runner skips the judge (no paid calls scoring an empty string) and
+        # the row is honestly candidate_failed. NOT cached: a re-run with a
+        # bigger --max-tokens must retry the API call.
+        return CandidateResult(
+            response="",
+            latency_ms=latency_ms,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            failed=True,
+            error=(
+                "empty response: completion budget likely consumed by hidden "
+                f"reasoning tokens (completion_tokens={completion_tokens}/"
+                f"{max_tokens}); re-run with a larger --max-tokens"
+            ),
+        )
 
     result = CandidateResult(
         response=text,

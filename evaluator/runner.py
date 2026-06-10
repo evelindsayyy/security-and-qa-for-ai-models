@@ -151,6 +151,12 @@ def _parse_args() -> argparse.Namespace:
                    default=HERE / "prompts" / "judge" / "reference_based_v1.txt")
     p.add_argument("--temperature", type=float, default=0.2)
     p.add_argument("--max-tokens", type=int, default=500)
+    # Reasoning judges (e.g. gpt-oss-120b) spend hidden thinking tokens from
+    # the same budget; 600 leaves them no room for the ~200-token JSON verdict
+    # and they come back empty/truncated. Raise to ~2000 for those judges.
+    p.add_argument("--judge-max-tokens", type=int, default=600,
+                   help="completion budget for judge calls (default 600; "
+                        "use 2000+ for reasoning-model judges)")
     p.add_argument("--output-dir", type=Path, default=HERE / "results")
     return p.parse_args()
 
@@ -257,6 +263,7 @@ def main() -> int:
                         rubric_path=args.rubric,
                         judge_model=args.judge_model,
                         judge_prompt_path=args.judge_prompt,
+                        max_tokens=args.judge_max_tokens,
                     )
                     judge_dur = time.perf_counter() - t1
 

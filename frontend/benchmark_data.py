@@ -27,7 +27,6 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from frontend.path_safety import is_safe_slug
 
