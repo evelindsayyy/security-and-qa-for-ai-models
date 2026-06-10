@@ -5,7 +5,7 @@
 {% block content %}
 <div class="eval-comparison">
   <h1>Model comparison</h1>
-  <p><a href="{{ url_for('eval_run_new') }}"><button type="button">▶ Start a new run</button></a></p>
+  <p><a class="btn-primary" href="{{ url_for('eval_run_new') }}">▶ Start a new run</a></p>
 
   {% if not has_runs %}
     <p class="sub">

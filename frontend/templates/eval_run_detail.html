@@ -11,14 +11,16 @@
   {% elif running %}
     <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
     <h1>Run in progress</h1>
-    <p class="sub">slug <code>{{ slug }}</code></p>
-    <div style="max-width: 480px;">
-      <div style="background: #eee; border-radius: 6px; overflow: hidden; height: 18px;">
-        <div id="prog-bar" style="background: #2b6cb0; height: 100%; width: {{ (100 * run_status.progress / run_status.total) if run_status.total else 0 }}%; transition: width 0.5s;"></div>
+    <p class="sub">slug <code>{{ slug }}</code> · this page updates itself every 5 seconds</p>
+    <div class="progress-card">
+      <div class="progress-track">
+        <div id="prog-bar" class="progress-fill" style="width: {{ (100 * run_status.progress / run_status.total) if run_status.total else 0 }}%;"></div>
       </div>
-      <p><span id="prog-text">{{ run_status.progress }}/{{ run_status.total }}</span>
-         questions · <span id="prog-state">{{ run_status.status }}</span></p>
-      <p class="dim" id="fail-hint" style="display: {{ 'block' if run_status.status == 'failed' else 'none' }};">
+      <p class="progress-meta">
+        <b id="prog-text">{{ run_status.progress }}/{{ run_status.total }}</b> questions ·
+        <span id="prog-state" class="progress-state">{{ run_status.status }}</span>
+      </p>
+      <p class="progress-fail" id="fail-hint" style="display: {{ 'block' if run_status.status == 'failed' else 'none' }};">
         Run failed — check <code>evaluator/results/{{ slug }}.log</code> for the runner output.
       </p>
     </div>

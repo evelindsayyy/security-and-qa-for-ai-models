@@ -11,29 +11,29 @@
     an identical in-flight request returns the existing run.
   </p>
 
-  <form method="post" action="{{ url_for('eval_run_start') }}" class="launch-form"
-        style="max-width: 480px; display: grid; gap: 0.9rem;">
+  <form method="post" action="{{ url_for('eval_run_start') }}" class="launch-form">
 
     <label>Candidate model
-      <select name="candidate" id="candidate" style="width: 100%;">
+      <select name="candidate" id="candidate">
         {% for m in candidates %}
         <option value="{{ m }}" {% if m == 'gpt-5-chat' %}selected{% endif %}>{{ m }}</option>
         {% endfor %}
       </select>
     </label>
 
-    <label>Judge model <span class="dim">(must be a different family — MT-Bench rule)</span>
-      <select name="judge" id="judge" style="width: 100%;">
+    <label>Judge model
+      <select name="judge" id="judge">
         {% for m in judges %}
         <option value="{{ m }}">{{ m }}</option>
         {% endfor %}
       </select>
+      <span class="form-hint">must be a different model family than the candidate (MT-Bench rule)</span>
     </label>
 
-    <fieldset style="border: none; padding: 0; margin: 0;">
+    <fieldset>
       <legend>Task suite</legend>
       {% for s in suites %}
-      <label style="display: block;">
+      <label>
         <input type="radio" name="suite" value="{{ s.key }}"
                data-n="{{ s.n }}" {% if loop.first %}checked{% endif %}>
         {{ s.label }}
@@ -43,20 +43,20 @@
 
     <label>Max tokens (candidate completion budget)
       <input type="number" name="max_tokens" id="max_tokens" value="500"
-             min="{{ max_tokens_min }}" max="{{ max_tokens_max }}" style="width: 100%;">
-      <span class="dim">reasoning models spend this budget on hidden thinking first:
+             min="{{ max_tokens_min }}" max="{{ max_tokens_max }}">
+      <span class="form-hint">reasoning models spend this budget on hidden thinking first:
         gpt-5-mini needs 2000+, gpt-5-nano needs 4000 (measured week 4)</span>
     </label>
 
-    <p id="family-warning" style="color: #b00; display: none;">
+    <p id="family-warning" class="form-warning" style="display: none;">
       Judge and candidate are the same model family — the server will reject this.
     </p>
 
-    <p>Estimated candidate cost: <b id="cost-preview">$—</b>
-      <span class="dim">(upper bound: n × (250 prompt + max_tokens completion) at list rates; judge cost not included)</span>
+    <p class="cost-line">Estimated candidate cost: <b id="cost-preview">$—</b>
+      <span class="form-hint">upper bound: n × (250 prompt + max_tokens completion) at list rates; judge cost not included</span>
     </p>
 
-    <button type="submit" id="submit-btn">Start run</button>
+    <button type="submit" id="submit-btn" class="btn-primary">▶ Start run</button>
   </form>
 </div>
 
