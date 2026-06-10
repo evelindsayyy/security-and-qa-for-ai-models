@@ -2,7 +2,7 @@
 IFEval quick runner — single-file self-contained script.
 
 Run: open the file in your editor and press Run (uses LITELLM_API_KEY env).
-Outputs: ifeval_results.jsonl in the current working directory.
+Outputs: auto-named JSONL files under test_results, e.g. ifeval_<model>_<timestamp>.jsonl.
 """
 
 from datasets import load_dataset
@@ -22,8 +22,9 @@ load_dotenv()
 BASE_URL = os.getenv("LITELLM_BASE_URL", "https://litellm.oit.duke.edu/v1")
 API_KEY = os.getenv("LITELLM_API_KEY")
 MODEL = os.getenv("IFEVAL_MODEL", "openai/gpt-5.4")
-OUTPUT_FILE = os.getenv("IFEVAL_OUTPUT", "test_results/ifeval_results.jsonl")
-SAMPLE_SIZE = int(os.getenv("IFEVAL_SAMPLE", "50"))
+OUTPUT_FILE = os.getenv("IFEVAL_OUTPUT")
+OUTPUT_DIR = os.getenv("IFEVAL_OUTPUT_DIR", "test_results")
+SAMPLE_SIZE = int(os.getenv("IFEVAL_SAMPLE", "10"))
 SEED = int(os.getenv("IFEVAL_SEED", "42"))
 
 def safe_get_response(response):
@@ -103,10 +104,21 @@ def judge(prompt, response_text, instruction_id_list, kwargs_list):
 
 
 def save_jsonl(rows, path):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    dirname = os.path.dirname(path)
+    if dirname:
+        os.makedirs(dirname, exist_ok=True)
     with open(path, 'w', encoding='utf-8') as f:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + '\n')
+
+
+def get_output_path(model: str) -> str:
+    if OUTPUT_FILE:
+        return OUTPUT_FILE
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    model_slug = model.replace(" ", "_").replace("/", "_")
+    return os.path.join(OUTPUT_DIR, f"ifeval_{model_slug}_{timestamp}.jsonl")
 
 
 def main():
@@ -140,11 +152,12 @@ def main():
             'ts': datetime.now(timezone.utc).isoformat()
         })
 
-    save_jsonl(results, OUTPUT_FILE)
+    output_path = get_output_path(MODEL)
+    save_jsonl(results, output_path)
 
     passed = sum(1 for r in results if r['judge']['passed'])
     total = len(results)
-    print(f"Saved {len(results)} rows to {OUTPUT_FILE}")
+    print(f"Saved {len(results)} rows to {output_path}")
     print(f"Passed: {passed}/{total} ({(passed/total*100) if total else 0:.1f}%)")
     
     # Instruction-level accuracy
