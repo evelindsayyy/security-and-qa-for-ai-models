@@ -20,7 +20,7 @@
       judge: <b>{{ judge_summary }}</b>
     </p>
 
-    <p class="table-controls" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+    <div class="table-controls">
       <label>Suite <select id="f-suite"><option value="">all</option></select></label>
       <label>Candidate <select id="f-candidate"><option value="">all</option></select></label>
       <label>Judge <select id="f-judge"><option value="">all</option></select></label>
@@ -32,8 +32,8 @@
           <option value="suite">suite</option>
         </select>
       </label>
-      <span class="dim">click Overall / Latency / Cost headers to sort</span>
-    </p>
+      <span class="controls-hint">click Overall / Latency / Cost headers to sort ⇅</span>
+    </div>
 
     <table class="run-table" id="runs-table">
       <thead>
@@ -145,11 +145,11 @@
             if (groupBy && r.dataset[groupBy] !== lastGroup) {
               lastGroup = r.dataset[groupBy];
               const tr = document.createElement("tr");
+              tr.className = "group-row";
               const td = document.createElement("td");
               td.colSpan = nCols;
-              td.style.cssText = "background: #f2f4f8; font-weight: 600; padding: 0.4rem 0.6rem;";
               td.textContent = groupBy + ": " + lastGroup +
-                " (" + visible.filter(x => x.dataset[groupBy] === lastGroup).length + ")";
+                " (" + visible.filter(x => x.dataset[groupBy] === lastGroup).length + " runs)";
               tr.appendChild(td);
               tbody.appendChild(tr);
             }

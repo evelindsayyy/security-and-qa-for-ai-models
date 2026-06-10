@@ -377,3 +377,55 @@ header nav a:hover {
 .progress-meta b { font-variant-numeric: tabular-nums; color: #222; }
 .progress-state { text-transform: uppercase; font-size: 12px; letter-spacing: 0.04em; color: #1b3a6e; font-weight: 700; }
 .progress-fail { color: #842029; font-size: 13.5px; }
+
+/* eval-run table controls — filter / group-by toolbar + sortable headers */
+.table-controls {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 1px 3px rgba(1, 33, 105, 0.05);
+}
+.table-controls label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #777;
+}
+.table-controls select {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: #222;
+  background: #fcfcfc;
+  border: 1px solid #d5d9e2;
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+.table-controls select:focus { outline: 2px solid #012169; outline-offset: 1px; }
+.table-controls .controls-hint { color: #aaa; font-size: 12.5px; margin-left: auto; }
+
+.run-table thead th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.run-table thead th.sortable:hover { color: #012169; }
+.run-table thead th.sortable .s-ind { color: #012169; font-size: 11px; }
+
+.run-table tr.group-row td {
+  background: #eef1f7;
+  color: #1b3a6e;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  padding: 6px 12px;
+  border-bottom: 1px solid #dde3ee;
+}
