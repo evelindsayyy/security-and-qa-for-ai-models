@@ -15,34 +15,57 @@
     </p>
   {% else %}
     <p class="sub">
-      {{ runs|length }} candidate{{ "" if runs|length == 1 else "s" }} ·
+      {{ runs|length }} run{{ "" if runs|length == 1 else "s" }} ·
       {{ n_summary }} question{{ "" if n_summary == "1" else "s" }} ·
       judge: <b>{{ judge_summary }}</b>
     </p>
 
-    <table class="run-table">
+    <p class="table-controls" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+      <label>Suite <select id="f-suite"><option value="">all</option></select></label>
+      <label>Candidate <select id="f-candidate"><option value="">all</option></select></label>
+      <label>Judge <select id="f-judge"><option value="">all</option></select></label>
+      <label>Group by
+        <select id="g-by">
+          <option value="">none</option>
+          <option value="candidate">candidate</option>
+          <option value="judge">judge</option>
+          <option value="suite">suite</option>
+        </select>
+      </label>
+      <span class="dim">click Overall / Latency / Cost headers to sort</span>
+    </p>
+
+    <table class="run-table" id="runs-table">
       <thead>
         <tr>
           <th>Candidate</th>
           <th>Judge</th>
+          <th>Suite</th>
           {% for dim in dim_columns %}
           <th class="num">{{ dim|replace("_", " ") }}</th>
           {% endfor %}
-          <th class="num">Overall</th>
-          <th class="num">Latency (mean / p95)</th>
-          <th class="num">Cost</th>
+          <th class="num sortable" data-sort="overall" style="cursor: pointer;">Overall <span class="s-ind">▼</span></th>
+          <th class="num sortable" data-sort="latency" style="cursor: pointer;">Latency (mean / p95) <span class="s-ind"></span></th>
+          <th class="num sortable" data-sort="cost" style="cursor: pointer;">Cost <span class="s-ind"></span></th>
           <th>Status</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
         {% for r in runs %}
-        <tr class="{% if r.is_best %}row-best{% endif %}{% if r.note %}row-warn{% endif %}">
+        <tr class="{% if r.is_best %}row-best{% endif %}{% if r.note %}row-warn{% endif %}"
+            data-suite="{{ r.suite }}"
+            data-candidate="{{ r.candidate_model }}"
+            data-judge="{{ r.judge_model }}"
+            data-overall="{{ r.overall if r.overall is not none else '' }}"
+            data-latency="{{ r.mean_latency_ms }}"
+            data-cost="{{ r.total_cost_usd }}">
           <td>
             <span class="model">{{ r.candidate_model }}</span>
             {% if r.is_best %}<span class="badge badge-best">best</span>{% endif %}
           </td>
           <td><span class="dim">{{ r.judge_model }}</span></td>
+          <td><span class="dim">{{ r.suite }}</span></td>
           {% for dim in dim_columns %}
           <td class="num">{{ "%.2f"|format(r.dim_means[dim]) if r.dim_means.get(dim) is not none else "—" }}</td>
           {% endfor %}
@@ -63,6 +86,78 @@
         {% endfor %}
       </tbody>
     </table>
+
+    <script>
+      (function () {
+        const tbody = document.querySelector("#runs-table tbody");
+        const rows = Array.from(tbody.querySelectorAll("tr"));
+        const nCols = document.querySelectorAll("#runs-table thead th").length;
+        let sortKey = "overall", sortDir = -1, groupBy = "";
+
+        // populate filter dropdowns from the rows themselves
+        for (const [id, key] of [["f-suite", "suite"], ["f-candidate", "candidate"], ["f-judge", "judge"]]) {
+          const sel = document.getElementById(id);
+          [...new Set(rows.map(r => r.dataset[key]))].sort().forEach(v => {
+            const o = document.createElement("option");
+            o.value = v; o.textContent = v;
+            sel.appendChild(o);
+          });
+          sel.addEventListener("change", render);
+        }
+        document.getElementById("g-by").addEventListener("change", function () {
+          groupBy = this.value; render();
+        });
+
+        document.querySelectorAll("th.sortable").forEach(th => {
+          th.addEventListener("click", () => {
+            const key = th.dataset.sort;
+            sortDir = (key === sortKey) ? -sortDir : (key === "overall" ? -1 : 1);
+            sortKey = key;
+            document.querySelectorAll(".s-ind").forEach(s => s.textContent = "");
+            th.querySelector(".s-ind").textContent = sortDir === -1 ? "▼" : "▲";
+            render();
+          });
+        });
+
+        function num(row, key) {
+          const v = parseFloat(row.dataset[key]);
+          return isNaN(v) ? -Infinity : v;
+        }
+
+        function render() {
+          const fs = document.getElementById("f-suite").value;
+          const fc = document.getElementById("f-candidate").value;
+          const fj = document.getElementById("f-judge").value;
+
+          let visible = rows.filter(r =>
+            (!fs || r.dataset.suite === fs) &&
+            (!fc || r.dataset.candidate === fc) &&
+            (!fj || r.dataset.judge === fj));
+
+          visible.sort((a, b) => sortDir * (num(a, sortKey) - num(b, sortKey)));
+          if (groupBy) {
+            visible.sort((a, b) => a.dataset[groupBy].localeCompare(b.dataset[groupBy]));
+          }
+
+          tbody.innerHTML = "";
+          let lastGroup = null;
+          for (const r of visible) {
+            if (groupBy && r.dataset[groupBy] !== lastGroup) {
+              lastGroup = r.dataset[groupBy];
+              const tr = document.createElement("tr");
+              const td = document.createElement("td");
+              td.colSpan = nCols;
+              td.style.cssText = "background: #f2f4f8; font-weight: 600; padding: 0.4rem 0.6rem;";
+              td.textContent = groupBy + ": " + lastGroup +
+                " (" + visible.filter(x => x.dataset[groupBy] === lastGroup).length + ")";
+              tr.appendChild(td);
+              tbody.appendChild(tr);
+            }
+            tbody.appendChild(r);
+          }
+        }
+      })();
+    </script>
 
     <section class="key">
       <h2>How to read this</h2>

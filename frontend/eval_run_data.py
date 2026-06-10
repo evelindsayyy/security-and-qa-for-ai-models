@@ -86,6 +86,7 @@ def _aggregate_file(path: Path) -> dict | None:
         "filename": path.name,
         "slug": path.stem,  # used by /eval-run/<slug>
         "timestamp": first.timestamp,
+        "suite": first.adaptation.task_suite_version,
         "candidate_model": first.adaptation.candidate_model,
         "judge_model": first.adaptation.judge_model,
         "n": n,

@@ -44,7 +44,8 @@
     <label>Max tokens (candidate completion budget)
       <input type="number" name="max_tokens" id="max_tokens" value="500"
              min="{{ max_tokens_min }}" max="{{ max_tokens_max }}" style="width: 100%;">
-      <span class="dim">reasoning models (gpt-5-mini, gpt-5.x non-chat) need 2000+</span>
+      <span class="dim">reasoning models spend this budget on hidden thinking first:
+        gpt-5-mini needs 2000+, gpt-5-nano needs 4000 (measured week 4)</span>
     </label>
 
     <p id="family-warning" style="color: #b00; display: none;">
