@@ -296,3 +296,158 @@ header nav a:hover {
   border-radius: 3px;
   font-size: 13px;
 }
+
+/* launch flow — "Start a new run" button, form, and live progress page */
+.btn-primary {
+  display: inline-block;
+  background: #012169;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 18px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.12s, transform 0.06s;
+}
+.btn-primary:hover { background: #1a3a8a; text-decoration: none; color: #fff; }
+.btn-primary:active { transform: translateY(1px); }
+.btn-primary:disabled { background: #b9c2d6; cursor: not-allowed; }
+
+.launch-form {
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  padding: 1.5rem 1.75rem;
+  max-width: 480px;
+  display: grid;
+  gap: 1rem;
+  box-shadow: 0 1px 3px rgba(1, 33, 105, 0.05);
+}
+.launch-form label { font-size: 14px; font-weight: 600; color: #333; }
+.launch-form select,
+.launch-form input[type="number"] {
+  display: block;
+  width: 100%;
+  margin-top: 0.3rem;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: #222;
+  background: #fcfcfc;
+  border: 1px solid #d5d9e2;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+.launch-form select:focus,
+.launch-form input[type="number"]:focus {
+  outline: 2px solid #012169;
+  outline-offset: 1px;
+}
+.launch-form fieldset { border: none; padding: 0; margin: 0; }
+.launch-form legend { font-size: 14px; font-weight: 600; color: #333; padding: 0 0 0.3rem; }
+.launch-form fieldset label { display: block; font-weight: 400; padding: 2px 0; }
+.form-hint { display: block; color: #888; font-size: 12.5px; font-weight: 400; margin-top: 0.25rem; }
+.form-warning { color: #842029; background: #fdf0f0; border-radius: 6px; padding: 8px 12px; font-size: 14px; margin: 0; }
+.cost-line { font-size: 14px; color: #333; margin: 0; }
+.cost-line b { font-size: 16px; color: #012169; }
+
+.progress-card {
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  padding: 1.5rem 1.75rem;
+  max-width: 520px;
+  box-shadow: 0 1px 3px rgba(1, 33, 105, 0.05);
+}
+.progress-track {
+  background: #e9edf3;
+  border-radius: 999px;
+  overflow: hidden;
+  height: 14px;
+}
+.progress-fill {
+  background: linear-gradient(90deg, #012169, #2b6cb0);
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.6s ease;
+}
+.progress-meta { font-size: 14px; color: #555; margin: 0.75rem 0 0; }
+.progress-meta b { font-variant-numeric: tabular-nums; color: #222; }
+.progress-state { text-transform: uppercase; font-size: 12px; letter-spacing: 0.04em; color: #1b3a6e; font-weight: 700; }
+.progress-fail { color: #842029; font-size: 13.5px; }
+
+/* eval-run table controls — filter / group-by toolbar + sortable headers */
+.table-controls {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 1px 3px rgba(1, 33, 105, 0.05);
+}
+.table-controls label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #777;
+}
+.table-controls select {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: #222;
+  background: #fcfcfc;
+  border: 1px solid #d5d9e2;
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+.table-controls select:focus { outline: 2px solid #012169; outline-offset: 1px; }
+.table-controls .controls-hint { color: #aaa; font-size: 12.5px; margin-left: auto; }
+
+.run-table thead th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.run-table thead th.sortable:hover { color: #012169; }
+.run-table thead th.sortable .s-ind { color: #012169; font-size: 11px; }
+
+.run-table tr.group-row td {
+  background: #eef1f7;
+  color: #1b3a6e;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  padding: 6px 12px;
+  border-bottom: 1px solid #dde3ee;
+}
+
+/* legend grid — term -> explanation pairs inside the .key card */
+.legend-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 1.5rem;
+  row-gap: 0.65rem;
+  margin: 0;
+  align-items: baseline;
+}
+.legend-grid dt {
+  font-weight: 600;
+  color: #333;
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+.legend-grid dt.num-sample { font-weight: 700; color: #222; }
+.legend-grid dd { margin: 0; color: #555; max-width: 64ch; }
+@media (max-width: 640px) {
+  .legend-grid { grid-template-columns: 1fr; row-gap: 0.2rem; }
+  .legend-grid dd { margin-bottom: 0.6rem; }
+}

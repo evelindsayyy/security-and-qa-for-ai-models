@@ -8,6 +8,39 @@
     <h1>Run not found</h1>
     <p class="sub empty">no results JSONL for slug <code>{{ slug }}</code>.</p>
     <p><a href="{{ url_for('eval_run') }}">← all runs</a></p>
+  {% elif running %}
+    <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
+    <h1>Run in progress</h1>
+    <p class="sub">slug <code>{{ slug }}</code> · this page updates itself every 5 seconds</p>
+    <div class="progress-card">
+      <div class="progress-track">
+        <div id="prog-bar" class="progress-fill" style="width: {{ (100 * run_status.progress / run_status.total) if run_status.total else 0 }}%;"></div>
+      </div>
+      <p class="progress-meta">
+        <b id="prog-text">{{ run_status.progress }}/{{ run_status.total }}</b> questions ·
+        <span id="prog-state" class="progress-state">{{ run_status.status }}</span>
+      </p>
+      <p class="progress-fail" id="fail-hint" style="display: {{ 'block' if run_status.status == 'failed' else 'none' }};">
+        Run failed — check <code>evaluator/results/{{ slug }}.log</code> for the runner output.
+      </p>
+    </div>
+    <script>
+      const poll = setInterval(async () => {
+        const r = await fetch("{{ url_for('eval_run_status', slug=slug) }}");
+        if (!r.ok) return;
+        const s = await r.json();
+        if (s.total) {
+          document.getElementById("prog-bar").style.width = (100 * s.progress / s.total) + "%";
+        }
+        document.getElementById("prog-text").textContent = s.progress + "/" + s.total;
+        document.getElementById("prog-state").textContent = s.status;
+        if (s.status === "complete") { clearInterval(poll); location.href = location.pathname; }
+        if (s.status === "failed") {
+          clearInterval(poll);
+          document.getElementById("fail-hint").style.display = "block";
+        }
+      }, 5000);
+    </script>
   {% else %}
     <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
     <h1>{{ candidate_model }}</h1>

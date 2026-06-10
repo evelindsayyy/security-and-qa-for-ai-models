@@ -158,6 +158,11 @@ def _parse_args() -> argparse.Namespace:
                    help="completion budget for judge calls (default 600; "
                         "use 2000+ for reasoning-model judges)")
     p.add_argument("--output-dir", type=Path, default=HERE / "results")
+    # Lets a caller (the frontend launch flow) dictate the results filename
+    # stem so it can predict the output path before the run starts. The
+    # default keeps the runner's own <timestamp>_<suite>_<candidate> naming.
+    p.add_argument("--output-name", type=str, default=None,
+                   help="results filename stem (default: <timestamp>_<suite>_<candidate>)")
     return p.parse_args()
 
 
@@ -220,8 +225,13 @@ def main() -> int:
     run_started_filename = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     args.output_dir.mkdir(parents=True, exist_ok=True)
     cand_slug = _safe_slug(args.candidate_model)
-    out_path = args.output_dir / f"{run_started_filename}_{suite_id}_{cand_slug}.jsonl"
-    trace_path = args.output_dir / f"{run_started_filename}_{suite_id}_{cand_slug}_trace.jsonl"
+    stem = (
+        _safe_slug(args.output_name)
+        if args.output_name
+        else f"{run_started_filename}_{suite_id}_{cand_slug}"
+    )
+    out_path = args.output_dir / f"{stem}.jsonl"
+    trace_path = args.output_dir / f"{stem}_trace.jsonl"
 
     # ---- banner ----
     print(f"Runner started  run_id={run_id}")
