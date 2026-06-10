@@ -6,6 +6,7 @@ Covers:
   - judge.resolve_rubric     (shared-dimension reference resolver)
   - runner._weighted_overall (rubric-weighted aggregation math)
   - candidate/judge cache round-trip, corrupt-entry self-heal
+  - candidate empty-response handling (reasoning-token budget artifact)
 
 Run from repo root:
   uv run python -m unittest unit_tests.test_evaluator_judge -v
@@ -18,6 +19,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 # evaluator/ is not a package (its modules import each other flat), so add
@@ -242,6 +244,73 @@ class CandidateCacheTest(unittest.TestCase):
         )
         leftovers = list(Path(self._tmp.name).glob("*.tmp"))
         self.assertEqual(leftovers, [])
+
+
+def _fake_gateway_client(content: str, completion_tokens: int = 500) -> mock.Mock:
+    """A stub OpenAI client whose chat completion returns `content`."""
+    resp = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=content))],
+        usage=SimpleNamespace(prompt_tokens=10, completion_tokens=completion_tokens),
+    )
+    client = mock.Mock()
+    client.with_options.return_value = client
+    client.chat.completions.create.return_value = resp
+    return client
+
+
+class GenerateCandidateEmptyResponseTest(unittest.TestCase):
+    """Reasoning models can spend the whole max_tokens budget on hidden
+    thinking and 'succeed' with empty visible text. That must surface as a
+    candidate failure (skipping the judge) and must NOT be cached, so a
+    re-run with a bigger budget actually retries the call.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        patcher = mock.patch.object(candidate, "_CACHE_DIR", Path(self._tmp.name))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _generate(self, client: mock.Mock):
+        with mock.patch.object(candidate, "gateway_client", return_value=client):
+            return candidate.generate_candidate(
+                question="q",
+                model="gpt-5-mini",
+                system_prompt="sys",
+                max_tokens=500,
+            )
+
+    def test_empty_response_is_marked_failed(self) -> None:
+        result = self._generate(_fake_gateway_client(""))
+        self.assertTrue(result.failed)
+        self.assertIn("empty response", result.error or "")
+        self.assertIn("500/500", result.error or "")  # budget shown for diagnosis
+
+    def test_whitespace_only_response_is_marked_failed(self) -> None:
+        result = self._generate(_fake_gateway_client("   \n  "))
+        self.assertTrue(result.failed)
+
+    def test_empty_response_is_not_cached(self) -> None:
+        client = _fake_gateway_client("")
+        self._generate(client)
+        self.assertEqual(list(Path(self._tmp.name).glob("*.json")), [])
+        # second call must hit the API again, not a cached empty result
+        self._generate(client)
+        self.assertEqual(client.chat.completions.create.call_count, 2)
+
+    def test_non_empty_response_still_succeeds_and_caches(self) -> None:
+        client = _fake_gateway_client("a real answer", completion_tokens=42)
+        result = self._generate(client)
+        self.assertFalse(result.failed)
+        self.assertEqual(result.response, "a real answer")
+        self.assertEqual(len(list(Path(self._tmp.name).glob("*.json"))), 1)
+
+    def test_cache_key_includes_max_tokens(self) -> None:
+        base = dict(model="m", system_prompt="s", question="q", temperature=0.2)
+        key_500 = candidate._cache_key(**base, max_tokens=500)
+        key_2000 = candidate._cache_key(**base, max_tokens=2000)
+        self.assertNotEqual(key_500, key_2000)
 
 
 class JudgeCacheTest(unittest.TestCase):
