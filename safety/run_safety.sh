@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# End-to-end safety: Promptfoo policy (+ optional red-team) + Garak + merge.
+# End-to-end safety: Promptfoo policy + red-team + Garak + merge.
 #
 # Usage (from repo root):
 #   ./safety/run_safety.sh
-#   ./safety/run_safety.sh "gpt-5-chat" --redteam
+#   ./safety/run_safety.sh "gpt-5-chat"
+#   ./safety/run_safety.sh --skip-redteam
 #   ./safety/run_safety.sh --garak-probes "encoding,promptinject,dan.Dan_11_0"
-#   ./safety/run_safety.sh --skip-garak          # promptfoo + merge only
-#   ./safety/run_safety.sh --skip-promptfoo      # garak + merge only
+#   ./safety/run_safety.sh --skip-garak
+#   ./safety/run_safety.sh --skip-promptfoo
 
 set -euo pipefail
 
@@ -14,13 +15,12 @@ usage() {
   cat <<'EOF'
 Usage: ./safety/run_safety.sh [MODEL] [OPTIONS]
 
-End-to-end safety for one gateway model: Promptfoo policy, Garak scan, merge.
-Pass --redteam to add the Promptfoo red-team suite.
+End-to-end safety for one gateway model: Promptfoo policy, red-team, Garak, merge.
 
-MODEL defaults to "GPT 4.1 Mini" (or GATEWAY_MODEL env).
+MODEL defaults to GATEWAY_MODEL in safety/promptfoo/docker/.env (or env / "GPT 4.1 Mini").
 
 Options:
-  --redteam              Include Promptfoo red-team eval + export
+  --skip-redteam         Skip Promptfoo red-team eval + export
   --skip-promptfoo       Skip Promptfoo (Garak + merge only)
   --skip-garak           Skip Garak (Promptfoo + merge only)
   --garak-probes LIST    Comma-separated Garak modules (overrides garak_duke.yaml)
@@ -29,7 +29,7 @@ Options:
 Examples:
   ./safety/run_safety.sh
   ./safety/run_safety.sh "gpt-5-chat"
-  ./safety/run_safety.sh "GPT 4.1 Mini" --redteam
+  ./safety/run_safety.sh --skip-redteam
   ./safety/run_safety.sh --garak-probes "encoding,promptinject"
 
 Individual suite commands: safety/README.md and safety/{promptfoo,garak}/README.md
@@ -39,8 +39,18 @@ EOF
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-MODEL="${GATEWAY_MODEL:-GPT 4.1 Mini}"
-REDTEAM=false
+_read_env_gateway_model() {
+  local env_file="$ROOT/safety/promptfoo/docker/.env"
+  if [[ -f "$env_file" ]]; then
+    grep -E '^GATEWAY_MODEL=' "$env_file" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'"
+  fi
+}
+
+DEFAULT_MODEL="${GATEWAY_MODEL:-$(_read_env_gateway_model)}"
+DEFAULT_MODEL="${DEFAULT_MODEL:-GPT 4.1 Mini}"
+
+MODEL="$DEFAULT_MODEL"
+REDTEAM=true
 SKIP_PROMPTFOO=false
 SKIP_GARAK=false
 GARAK_PROBES=""
@@ -50,6 +60,10 @@ while [[ $# -gt 0 ]]; do
     --help|-h)
       usage
       exit 0
+      ;;
+    --skip-redteam)
+      REDTEAM=false
+      shift
       ;;
     --redteam)
       REDTEAM=true
@@ -100,7 +114,7 @@ mkdir -p "safety/promptfoo/output/${SLUG}" "safety/garak/output/${SLUG}" "safety
 PF_DC="docker compose --env-file safety/promptfoo/docker/.env -f safety/promptfoo/docker/compose.yml"
 GARAK_DC="docker compose --env-file safety/garak/docker/.env -f safety/garak/docker/compose.yml"
 
-echo "Safety run: model=${MODEL} slug=${SLUG}"
+echo "Safety run: model=${MODEL} slug=${SLUG} redteam=${REDTEAM}"
 
 MERGE_ARGS=()
 
@@ -136,6 +150,8 @@ if ! $SKIP_PROMPTFOO; then
     PYTHONPATH=. uv run python safety/promptfoo/export_safety_result.py \
       "safety/promptfoo/output/${SLUG}/redteam_eval.json"
     MERGE_ARGS+=(--promptfoo "safety/promptfoo/output/${SLUG}/redteam_safety_result.json")
+  else
+    echo "--- Promptfoo red-team skipped (--skip-redteam) ---"
   fi
 else
   echo "--- Promptfoo skipped (--skip-promptfoo) ---"

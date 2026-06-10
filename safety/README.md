@@ -19,22 +19,22 @@ docker compose --env-file safety/garak/docker/.env \
 
 ## End-to-end (recommended)
 
-[`run_safety.sh`](run_safety.sh) runs **Promptfoo policy + Garak + merge** by default. Add `--redteam` for the red-team suite.
+[`run_safety.sh`](run_safety.sh) runs **Promptfoo policy + red-team + Garak + merge** by default. Model comes from `GATEWAY_MODEL` in `promptfoo/docker/.env`.
 
 ```bash
-# full pipeline — default GPT 4.1 Mini
+# full pipeline — uses GATEWAY_MODEL from docker/.env (default GPT 4.1 Mini)
 ./safety/run_safety.sh
 
 # another model
 ./safety/run_safety.sh "gpt-5-chat"
 
-# policy + red-team + garak + merge
-./safety/run_safety.sh "GPT 4.1 Mini" --redteam
+# skip red-team for faster runs
+./safety/run_safety.sh --skip-redteam
 
 # subset of Garak modules (CLI override)
 ./safety/run_safety.sh --garak-probes "encoding,promptinject,dan.Dan_11_0"
 
-# faster iteration — skip one suite
+# skip one suite
 ./safety/run_safety.sh --skip-garak
 ./safety/run_safety.sh --skip-promptfoo
 ```
@@ -78,7 +78,7 @@ Omit flags for suites you did not run.
 | Suite | Edit | Re-run via |
 |-------|------|------------|
 | Duke policy | `promptfoo/promptfooconfig.yaml` → `tests[]` | `run_safety.sh` or promptfoo README |
-| Red-team | `promptfoo/promptfooconfig.redteam.yaml` → `redteam.plugins` | `run_safety.sh --redteam` or promptfoo README |
+| Red-team | `promptfoo/promptfooconfig.redteam.yaml` → `redteam.plugins` | `run_safety.sh` (default) or promptfoo README |
 | Garak modules | `garak/garak_duke.yaml` → `probe_spec`, or `--garak-probes` on script | `run_safety.sh` or garak README |
 
 ## Probe suites

@@ -35,10 +35,10 @@ PYTHONPATH=. uv run python safety/promptfoo/export_safety_result.py \
 
 Output: `output/<slug>/safety_result.json` (`probe_suite: promptfoo_duke_policy_v1`).
 
-Equivalent via wrapper:
+Equivalent via wrapper (policy only — skips Garak and red-team):
 
 ```bash
-./safety/run_safety.sh "$GATEWAY_MODEL" --skip-garak
+./safety/run_safety.sh --skip-garak --skip-redteam
 ```
 
 ## Run red-team
@@ -56,10 +56,10 @@ PYTHONPATH=. uv run python safety/promptfoo/export_safety_result.py \
 
 Output: `output/<slug>/redteam_safety_result.json`.
 
-Equivalent via wrapper:
+Equivalent via wrapper (red-team only — skips Garak):
 
 ```bash
-./safety/run_safety.sh "$GATEWAY_MODEL" --redteam --skip-garak
+./safety/run_safety.sh --skip-garak
 ```
 
 ## Add or edit policy probes
@@ -78,7 +78,7 @@ Edit `tests:` in `promptfooconfig.yaml`. Each entry needs:
         value: [expected, phrases]
 ```
 
-Re-run **Run policy probes** (or `./safety/run_safety.sh --skip-garak`).
+Re-run **Run policy probes** (or `./safety/run_safety.sh --skip-garak --skip-redteam`).
 
 ### Current policy probes
 
@@ -111,7 +111,7 @@ Local plugins: `policy`, `hallucination`, `overreliance`, `excessive-agency`, `p
 
 Remote-only (commented in yaml): `hijacking`, `ferpa`.
 
-Re-run **Run red-team** (or `./safety/run_safety.sh --redteam --skip-garak`).
+Re-run **Run red-team** (or `./safety/run_safety.sh --skip-garak`).
 
 ## Merge after individual runs
 
