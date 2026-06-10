@@ -144,7 +144,7 @@ Answer with ONLY the location (one word). Do not explain."""
             api_key=API_KEY,
             messages=[{"role": "user", "content": prompt}],
             temperature=1,
-            max_tokens=128,
+            max_tokens=1000,
         )
         return response.choices[0].message.content.strip().lower() or ""
     except Exception as e:
