@@ -27,7 +27,8 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+
+from frontend.path_safety import is_safe_slug
 
 ROOT = Path(__file__).parent.parent
 PRIMARY_DIR = ROOT / "testing" / "basic_tests" / "test_results"
@@ -212,6 +213,10 @@ def get_benchmarks_data() -> dict:
 
 def get_benchmark_detail(slug: str) -> dict | None:
     """Full payload for one benchmark file. Returns None if not found."""
+    # slug comes straight from the URL — refuse anything that could
+    # traverse outside the benchmark dirs before touching the filesystem.
+    if not is_safe_slug(slug):
+        return None
     for d in _candidate_dirs():
         candidate_paths = [d / f"{slug}.json", d / f"{slug}.jsonl"]
         for path in candidate_paths:
