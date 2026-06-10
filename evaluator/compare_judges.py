@@ -20,7 +20,7 @@ import json
 from pathlib import Path
 
 from candidate import generate_candidate
-from judge import judge_response
+from judge import judge_response, resolve_rubric
 
 
 JUDGES_TO_COMPARE = ("Llama 3.3", "Llama 4 Maverick")
@@ -78,7 +78,13 @@ def main() -> None:
     print(f"Candidate: {CANDIDATE_MODEL}")
     print(bar)
 
-    dims = ("accuracy", "completeness", "policy_adherence", "tone")
+    # Dimensions and max scores come from the rubric itself so this script
+    # stays correct when pointed at a rubric with a different dimension set.
+    rubric, _ = resolve_rubric(rubric_path)
+    dim_blocks = rubric.get("dimensions") or {}
+    dims = tuple(dim_blocks.keys())
+    max_score = {dim: block["scale"][1] for dim, block in dim_blocks.items()}
+
     col_w = 20
     header = f"{'dimension':18s}  " + "  ".join(f"{j:>{col_w}s}" for j in JUDGES_TO_COMPARE) + f"  {'delta':>8s}"
     print(header)
@@ -86,8 +92,6 @@ def main() -> None:
 
     total_abs_delta = 0.0
     total_normalized_delta = 0.0
-    # max scores per dim from the rubric (mirror, not parsed dynamically — small file).
-    max_score = {"accuracy": 5, "completeness": 5, "policy_adherence": 5, "tone": 3}
 
     for dim in dims:
         scores = [verdicts[j].scores[dim].score for j in JUDGES_TO_COMPARE]

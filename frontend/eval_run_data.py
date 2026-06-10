@@ -16,6 +16,8 @@ import statistics
 import sys
 from pathlib import Path
 
+from frontend.path_safety import is_safe_slug, resolves_inside
+
 ROOT = Path(__file__).parent.parent
 EVALUATOR = ROOT / "evaluator"
 RESULTS_DIR = EVALUATOR / "results"
@@ -58,7 +60,9 @@ def _aggregate_file(path: Path) -> dict | None:
     cand_fail = sum(1 for r in rows if r.candidate_failed)
     judge_fail = sum(1 for r in rows if r.judge_failed)
 
-    dims = ("accuracy", "completeness", "policy_adherence", "tone")
+    # Dimensions come from the rows themselves (rubric-driven), not a
+    # hardcoded list. dict.fromkeys preserves rubric order.
+    dims = list(dict.fromkeys(d for r in rows for d in r.scores))
     dim_means: dict[str, float | None] = {}
     for d in dims:
         vals = [r.scores[d].score for r in rows if d in r.scores]
@@ -88,10 +92,8 @@ def _aggregate_file(path: Path) -> dict | None:
         "ok": ok,
         "cand_fail": cand_fail,
         "judge_fail": judge_fail,
-        "accuracy": dim_means["accuracy"],
-        "completeness": dim_means["completeness"],
-        "policy": dim_means["policy_adherence"],
-        "tone": dim_means["tone"],
+        "dims": dims,
+        "dim_means": dim_means,
         "overall": overall_mean,
         "mean_latency_ms": int(mean_latency),
         "p95_latency_ms": int(p95_latency),
@@ -136,8 +138,12 @@ def get_run_detail(slug: str) -> dict | None:
     Slug is the JSONL filename without the .jsonl extension. Returns None
     if the file is missing or unreadable.
     """
+    # slug comes straight from the URL — refuse anything that could
+    # traverse outside RESULTS_DIR before touching the filesystem.
+    if not is_safe_slug(slug):
+        return None
     path = RESULTS_DIR / f"{slug}.jsonl"
-    if not path.is_file():
+    if not resolves_inside(RESULTS_DIR, path) or not path.is_file():
         return None
     try:
         with path.open("r", encoding="utf-8") as f:
@@ -169,6 +175,9 @@ def get_run_detail(slug: str) -> dict | None:
     overall_vals = [r.overall for r in rows if r.overall is not None]
     mean_overall = round(statistics.mean(overall_vals), 2) if overall_vals else None
 
+    # Dimension columns for the detail table, rubric-ordered union over rows.
+    dims = list(dict.fromkeys(d for r in rows for d in r.scores))
+
     # Per-question rows for the detail table.
     questions_rows: list[dict] = []
     for r in rows:
@@ -183,10 +192,9 @@ def get_run_detail(slug: str) -> dict | None:
             "question_id": r.question_id,
             "question": _truncate(questions_by_id.get(r.question_id, ""), 90),
             "candidate_empty": not (r.candidate_response or "").strip(),
-            "accuracy": scores["accuracy"].score if "accuracy" in scores else None,
-            "completeness": scores["completeness"].score if "completeness" in scores else None,
-            "policy": scores["policy_adherence"].score if "policy_adherence" in scores else None,
-            "tone": scores["tone"].score if "tone" in scores else None,
+            "dim_scores": {
+                d: (scores[d].score if d in scores else None) for d in dims
+            },
             "rationales": {
                 dim: scores[dim].rationale for dim in scores
             },
@@ -215,6 +223,7 @@ def get_run_detail(slug: str) -> dict | None:
         "ok": ok,
         "cand_fail": cand_fail,
         "judge_fail": judge_fail,
+        "dims": dims,
         "mean_overall": mean_overall,
         "mean_latency_ms": mean_latency,
         "p95_latency_ms": p95_latency,
@@ -247,10 +256,14 @@ def get_runs_data() -> dict:
     # Page-level summary fields the template can show in the subtitle.
     judges = sorted({r["judge_model"] for r in runs})
     suite_ns = sorted({r["n"] for r in runs})
+    # Union of dimension columns across runs, preserving per-run rubric order,
+    # so the comparison table can render runs from different rubrics together.
+    dim_columns = list(dict.fromkeys(d for r in runs for d in r["dims"]))
     return {
         "has_runs": bool(runs),
         "results_dir": str(RESULTS_DIR),
         "runs": runs,
+        "dim_columns": dim_columns,
         "judge_summary": " · ".join(judges) if judges else "",
         "n_summary": "/".join(str(n) for n in suite_ns) if suite_ns else "",
     }

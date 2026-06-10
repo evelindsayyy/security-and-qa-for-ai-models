@@ -30,8 +30,6 @@ import time
 from pathlib import Path
 from typing import Optional
 
-import yaml
-
 from candidate import generate_candidate
 from judge import judge_response, resolve_rubric
 from schemas import (
@@ -144,6 +142,11 @@ def _parse_args() -> argparse.Namespace:
                    default=HERE / "tasks" / "rubrics" / "it_support.yaml")
     p.add_argument("--system-prompt", type=Path,
                    default=HERE / "prompts" / "system" / "it_support_v1.txt")
+    # NOTE: v1 hardcodes the four IT-support dims in its OUTPUT FORMAT and
+    # only works with the it_support rubric; other rubrics need a template
+    # with the {output_schema} placeholder (reference_based_v2.txt). main()
+    # fails fast on a mismatched pairing. The default stays v1 so default
+    # runs keep the judge cache and version string comparable with week 3.
     p.add_argument("--judge-prompt", type=Path,
                    default=HERE / "prompts" / "judge" / "reference_based_v1.txt")
     p.add_argument("--temperature", type=float, default=0.2)
@@ -169,6 +172,9 @@ def main() -> int:
     suite_lines = args.suite.read_text(encoding="utf-8").splitlines()
     metadata = json.loads(suite_lines[0])
     suite_id = metadata.get("task_suite_version", args.suite.stem)
+    # Task family without the version suffix ('policy_qa_v1' -> 'policy_qa'),
+    # matching the schema's `suite` field semantics.
+    suite_family = suite_id.rsplit("_v", 1)[0]
     questions = [json.loads(line) for line in suite_lines[1:] if line.strip()]
 
     # resolve_rubric inlines any {from: shared} references against
@@ -181,6 +187,27 @@ def main() -> int:
     system_prompt = args.system_prompt.read_text(encoding="utf-8")
     system_prompt_version = args.system_prompt.stem
     judge_prompt_version = args.judge_prompt.stem
+
+    # Fail fast on a judge-prompt/rubric mismatch. A template without the
+    # {output_schema} placeholder (like the locked reference_based_v1) has
+    # its dimension keys hardcoded in its OUTPUT FORMAT block; running it
+    # against a rubric with a different dimension set would fail every
+    # judge call twice (the parse retry) before producing an all-failed
+    # run. Catch the pairing here, before any API call.
+    judge_template = args.judge_prompt.read_text(encoding="utf-8")
+    if "{output_schema}" not in judge_template:
+        rubric_dims = tuple((rubric.get("dimensions") or {}).keys())
+        missing = [d for d in rubric_dims if f'"{d}"' not in judge_template]
+        if missing:
+            print(
+                f"ERROR: judge prompt {args.judge_prompt.name!r} hardcodes its "
+                f"output dimensions and does not cover rubric dimension(s) "
+                f"{missing} from rubric {rubric_version!r}. Use a rubric-aware "
+                f"template instead, e.g.\n"
+                f"  --judge-prompt {HERE / 'prompts' / 'judge' / 'reference_based_v2.txt'}",
+                file=sys.stderr,
+            )
+            return 2
 
     # ---- prepare output paths ----
     run_id = new_run_id()
@@ -275,7 +302,7 @@ def main() -> int:
                     evaluation_run_id=run_id,
                     timestamp=now_iso(),
                     question_id=qid,
-                    suite="it_support",
+                    suite=suite_family,
                     schema_version=SCHEMA_VERSION,
                     adaptation=adaptation,
                     candidate_response=cand.response,
@@ -318,9 +345,51 @@ def main() -> int:
 
             except Exception as e:
                 # Defensive — generate_candidate / judge_response are documented
-                # as no-raise, so reaching here means something else went wrong.
-                # Record as a candidate failure (closest bucket) and continue.
+                # as no-raise, so reaching here means something else went wrong
+                # (e.g. a malformed suite line). Record as a candidate failure
+                # (closest bucket), still write a row so the JSONL has one row
+                # per question, and continue.
                 counts["candidate_failed"] += 1
+                fallback = EvaluationResult(
+                    evaluation_run_id=run_id,
+                    timestamp=now_iso(),
+                    question_id=qid,
+                    suite=suite_family,
+                    schema_version=SCHEMA_VERSION,
+                    adaptation=Adaptation(
+                        candidate_model=args.candidate_model,
+                        candidate_model_version=candidate_model_version,
+                        system_prompt_version=system_prompt_version,
+                        user_prompt_template_version="raw_question_v1",
+                        temperature=args.temperature,
+                        max_tokens=args.max_tokens,
+                        task_suite_version=suite_id,
+                        rubric_version=rubric_version,
+                        judge_model=args.judge_model,
+                        judge_prompt_version=judge_prompt_version,
+                    ),
+                    candidate_response="",
+                    scores={},
+                    overall=None,
+                    operational=Operational(
+                        latency_ms=0,
+                        prompt_tokens=0,
+                        completion_tokens=0,
+                        estimated_cost_usd=0.0,
+                    ),
+                    candidate_failed=True,
+                    judge_failed=False,
+                    error=f"runner exception: {type(e).__name__}: {e}",
+                )
+                try:
+                    out_f.write(fallback.to_jsonl() + "\n")
+                    out_f.flush()
+                except Exception as write_err:
+                    print(
+                        f"[{i:>2}/{len(questions)}] {qid}  "
+                        f"FAILED to write fallback row: {write_err}",
+                        file=sys.stderr,
+                    )
                 print(
                     f"[{i:>2}/{len(questions)}] {qid}  RUNNER_EXC: {type(e).__name__}: {e}",
                     file=sys.stderr,

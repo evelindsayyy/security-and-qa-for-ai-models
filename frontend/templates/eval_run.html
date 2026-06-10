@@ -15,7 +15,7 @@
   {% else %}
     <p class="sub">
       {{ runs|length }} candidate{{ "" if runs|length == 1 else "s" }} ·
-      {{ n_summary }} IT-support question{{ "" if n_summary == "1" else "s" }} ·
+      {{ n_summary }} question{{ "" if n_summary == "1" else "s" }} ·
       judge: <b>{{ judge_summary }}</b>
     </p>
 
@@ -24,10 +24,9 @@
         <tr>
           <th>Candidate</th>
           <th>Judge</th>
-          <th class="num">Acc</th>
-          <th class="num">Comp</th>
-          <th class="num">Pol</th>
-          <th class="num">Tone</th>
+          {% for dim in dim_columns %}
+          <th class="num">{{ dim|replace("_", " ") }}</th>
+          {% endfor %}
           <th class="num">Overall</th>
           <th class="num">Latency (mean / p95)</th>
           <th class="num">Cost</th>
@@ -43,10 +42,9 @@
             {% if r.is_best %}<span class="badge badge-best">best</span>{% endif %}
           </td>
           <td><span class="dim">{{ r.judge_model }}</span></td>
-          <td class="num">{{ "%.2f"|format(r.accuracy) if r.accuracy is not none else "—" }}</td>
-          <td class="num">{{ "%.2f"|format(r.completeness) if r.completeness is not none else "—" }}</td>
-          <td class="num">{{ "%.2f"|format(r.policy) if r.policy is not none else "—" }}</td>
-          <td class="num">{{ "%.2f"|format(r.tone) if r.tone is not none else "—" }}</td>
+          {% for dim in dim_columns %}
+          <td class="num">{{ "%.2f"|format(r.dim_means[dim]) if r.dim_means.get(dim) is not none else "—" }}</td>
+          {% endfor %}
           <td class="num overall">{{ "%.2f"|format(r.overall) if r.overall is not none else "—" }}</td>
           <td class="num">{{ r.mean_latency_ms }} / {{ r.p95_latency_ms }} ms</td>
           <td class="num">${{ "%.4f"|format(r.total_cost_usd) }}</td>
@@ -68,7 +66,7 @@
     <section class="key">
       <h2>How to read this</h2>
       <ul>
-        <li><b>Acc / Comp / Pol</b> are 1–5; <b>Tone</b> is 1–3. Higher is better.</li>
+        <li>Dimension columns come from each run's rubric; the rubric YAML defines each scale (most are 1–5, tone is 1–3). Higher is better. A run shows "—" for dimensions its rubric doesn't define.</li>
         <li><b>Overall</b> = rubric-weighted normalized score on the 0–5 display scale.</li>
         <li>Rows are sorted best-first by overall mean. The top row also carries a <span class="badge badge-best">best</span> badge.</li>
         <li>An <span class="badge badge-warn">⚠ N/n empty</span> badge means the candidate returned empty text for N of n questions — usually a reasoning model that spent its <code>max_tokens</code> budget on hidden reasoning. The score for those rows is not a real model comparison.</li>

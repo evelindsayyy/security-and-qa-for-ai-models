@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -68,15 +70,34 @@ def _cache_read(key: str) -> Optional[CandidateResult]: # return a CandidateResu
     path = _cache_path(key)
     if not path.exists():
         return None
-    with path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
-    return CandidateResult(**data)
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        return CandidateResult(**data)
+    except (json.JSONDecodeError, OSError, TypeError, KeyError) as e:
+        # A truncated (killed mid-write) or stale-shape entry must read as a
+        # cache miss, not crash the run. Drop it; the fresh API call rewrites it.
+        print(
+            f"  WARN: discarding corrupt candidate cache entry {path.name}: {e}",
+            file=sys.stderr,
+        )
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return None
 
 
 def _cache_write(key: str, result: CandidateResult) -> None: # save the results to disk as JSON
     _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    with _cache_path(key).open("w", encoding="utf-8") as f:
+    target = _cache_path(key)
+    # Write-then-rename so a killed run never leaves a half-written entry.
+    # The pid suffix keeps concurrent runs from sharing a temp file; the
+    # rename itself is atomic on POSIX.
+    tmp = target.with_name(f"{key}.{os.getpid()}.tmp")
+    with tmp.open("w", encoding="utf-8") as f:
         json.dump(asdict(result), f, ensure_ascii=False, indent=2)
+    tmp.replace(target)
 
 
 # Public API

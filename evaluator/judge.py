@@ -29,7 +29,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -94,10 +96,23 @@ def _cache_read(key: str) -> Optional[JudgeResult]:
     path = _cache_path(key)
     if not path.exists():
         return None
-    with path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
-    data["scores"] = {k: DimensionScore(**v) for k, v in data["scores"].items()}
-    return JudgeResult(**data)
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        data["scores"] = {k: DimensionScore(**v) for k, v in data["scores"].items()}
+        return JudgeResult(**data)
+    except (json.JSONDecodeError, OSError, TypeError, KeyError) as e:
+        # A truncated (killed mid-write) or stale-shape entry must read as a
+        # cache miss, not crash the run. Drop it; the fresh API call rewrites it.
+        print(
+            f"  WARN: discarding corrupt judge cache entry {path.name}: {e}",
+            file=sys.stderr,
+        )
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return None
 
 
 def _cache_write(key: str, result: JudgeResult) -> None:
@@ -108,8 +123,14 @@ def _cache_write(key: str, result: JudgeResult) -> None:
         "error": result.error,
         "raw_response": result.raw_response,
     }
-    with _cache_path(key).open("w", encoding="utf-8") as f:
+    target = _cache_path(key)
+    # Write-then-rename so a killed run never leaves a half-written entry.
+    # The pid suffix keeps concurrent runs from sharing a temp file; the
+    # rename itself is atomic on POSIX.
+    tmp = target.with_name(f"{key}.{os.getpid()}.tmp")
+    with tmp.open("w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
+    tmp.replace(target)
 
 
 # ---------------------------------------------------------------------------
