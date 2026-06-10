@@ -429,3 +429,25 @@ header nav a:hover {
   padding: 6px 12px;
   border-bottom: 1px solid #dde3ee;
 }
+
+/* legend grid — term -> explanation pairs inside the .key card */
+.legend-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 1.5rem;
+  row-gap: 0.65rem;
+  margin: 0;
+  align-items: baseline;
+}
+.legend-grid dt {
+  font-weight: 600;
+  color: #333;
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+.legend-grid dt.num-sample { font-weight: 700; color: #222; }
+.legend-grid dd { margin: 0; color: #555; max-width: 64ch; }
+@media (max-width: 640px) {
+  .legend-grid { grid-template-columns: 1fr; row-gap: 0.2rem; }
+  .legend-grid dd { margin-bottom: 0.6rem; }
+}
