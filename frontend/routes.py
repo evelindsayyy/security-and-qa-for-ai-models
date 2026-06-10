@@ -95,11 +95,66 @@ def register_routes(app):
 
         return render_template("eval_run.html", **get_runs_data())
 
+    @app.route("/eval-run/new")
+    def eval_run_new():
+        from frontend.eval_launch import get_launch_options
+
+        return render_template("eval_run_new.html", **get_launch_options())
+
+    @app.route("/eval-run/start", methods=["POST"])
+    def eval_run_start():
+        from flask import redirect, request, url_for
+
+        from frontend.eval_launch import start_run, validate_launch
+
+        candidate = request.form.get("candidate", "")
+        judge = request.form.get("judge", "")
+        suite_key = request.form.get("suite", "")
+        try:
+            max_tokens = int(request.form.get("max_tokens", ""))
+        except ValueError:
+            return "max_tokens must be an integer", 400
+
+        # Allowlist validation is the security boundary — nothing that
+        # fails it may reach subprocess (TASK.md hard constraint).
+        error = validate_launch(candidate, judge, suite_key, max_tokens)
+        if error is not None:
+            return error, 400
+
+        slug, _already = start_run(candidate, judge, suite_key, max_tokens)
+        return redirect(url_for("eval_run_detail", slug=slug, status="running"))
+
+    @app.route("/eval-run/<slug>/status")
+    def eval_run_status(slug: str):
+        from flask import jsonify
+
+        from frontend.eval_launch import get_status
+
+        return jsonify(get_status(slug))
+
     @app.route("/eval-run/<slug>")
     def eval_run_detail(slug: str):
+        from flask import request
+
         from frontend.eval_run_data import get_run_detail
 
         detail = get_run_detail(slug)
+
+        # Live-run flow: while the runner subprocess is still writing the
+        # JSONL, render the progress view instead of "not found"/partial.
+        if detail is None or request.args.get("status") == "running":
+            from frontend.eval_launch import get_status
+
+            status = get_status(slug)
+            if status["status"] in ("running", "failed"):
+                return render_template(
+                    "eval_run_detail.html",
+                    missing=False,
+                    running=True,
+                    run_status=status,
+                    slug=slug,
+                )
+
         if detail is None:
             return render_template(
                 "eval_run_detail.html",
