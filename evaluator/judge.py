@@ -29,7 +29,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -94,10 +96,23 @@ def _cache_read(key: str) -> Optional[JudgeResult]:
     path = _cache_path(key)
     if not path.exists():
         return None
-    with path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
-    data["scores"] = {k: DimensionScore(**v) for k, v in data["scores"].items()}
-    return JudgeResult(**data)
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        data["scores"] = {k: DimensionScore(**v) for k, v in data["scores"].items()}
+        return JudgeResult(**data)
+    except (json.JSONDecodeError, OSError, TypeError, KeyError) as e:
+        # A truncated (killed mid-write) or stale-shape entry must read as a
+        # cache miss, not crash the run. Drop it; the fresh API call rewrites it.
+        print(
+            f"  WARN: discarding corrupt judge cache entry {path.name}: {e}",
+            file=sys.stderr,
+        )
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return None
 
 
 def _cache_write(key: str, result: JudgeResult) -> None:
@@ -108,8 +123,14 @@ def _cache_write(key: str, result: JudgeResult) -> None:
         "error": result.error,
         "raw_response": result.raw_response,
     }
-    with _cache_path(key).open("w", encoding="utf-8") as f:
+    target = _cache_path(key)
+    # Write-then-rename so a killed run never leaves a half-written entry.
+    # The pid suffix keeps concurrent runs from sharing a temp file; the
+    # rename itself is atomic on POSIX.
+    tmp = target.with_name(f"{key}.{os.getpid()}.tmp")
+    with tmp.open("w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
+    tmp.replace(target)
 
 
 # ---------------------------------------------------------------------------
@@ -123,8 +144,16 @@ def _strip_fences(text: str) -> str:
     return fence_pat.sub("", text).strip()
 
 
-def _parse_scores(raw: str) -> dict[str, DimensionScore]:
+def _parse_scores(
+    raw: str,
+    expected_dims: tuple[str, ...] = _EXPECTED_DIMENSIONS,
+) -> dict[str, DimensionScore]:
     """Parse a JSON judge response into a {dim: DimensionScore} dict.
+
+    ``expected_dims`` lets the caller pin which dimension keys must appear
+    in the JSON. Defaults to the original IT-support set for backward
+    compatibility; the runner now passes the actual rubric's dimension
+    list (derived from the resolved rubric).
 
     Raises ValueError with a specific message on any structural issue so the
     retry path can include it in the follow-up message to the judge.
@@ -138,16 +167,16 @@ def _parse_scores(raw: str) -> dict[str, DimensionScore]:
     if not isinstance(obj, dict):
         raise ValueError("response JSON must be an object, got a different type")
 
-    missing = [d for d in _EXPECTED_DIMENSIONS if d not in obj]
+    missing = [d for d in expected_dims if d not in obj]
     if missing:
         raise ValueError(f"missing required dimension(s): {missing}")
 
-    extra = [k for k in obj if k not in _EXPECTED_DIMENSIONS]
+    extra = [k for k in obj if k not in expected_dims]
     if extra:
         raise ValueError(f"unexpected key(s) in response: {extra}")
 
     scores: dict[str, DimensionScore] = {}
-    for dim in _EXPECTED_DIMENSIONS:
+    for dim in expected_dims:
         entry = obj[dim]
         if not isinstance(entry, dict):
             raise ValueError(f"dimension '{dim}' must be an object")
@@ -161,6 +190,83 @@ def _parse_scores(raw: str) -> dict[str, DimensionScore]:
         scores[dim] = DimensionScore(score=score, rationale=rationale)
 
     return scores
+
+
+# ---------------------------------------------------------------------------
+# Rubric loader — resolves {from: shared} references against the shared lib
+# ---------------------------------------------------------------------------
+
+
+def resolve_rubric(rubric_path: Path) -> tuple[dict, str]:
+    """Load a rubric YAML and inline any shared-dimension references.
+
+    A rubric can reference reusable dimensions defined in a sibling shared
+    library file (``_shared_dimensions.yaml``). When a dimension body has
+    ``from: shared``, this resolver copies the ``definition`` / ``scale`` /
+    ``anchors`` from the shared library and layers the per-task ``weight``
+    and ``task_note`` over them.
+
+    Returns a tuple of (resolved_rubric_dict, resolved_yaml_text). The
+    YAML text is what gets inlined into the judge prompt template; the
+    dict is what the runner reads ``rubric_version`` / ``aggregation`` /
+    etc. from.
+
+    Backward-compatible: rubrics without a ``shared_dimensions_lib`` key
+    (e.g. the locked ``it_support_v1.yaml``) pass through unchanged — the
+    original YAML text is returned as-is so this refactor is a no-op for
+    inline rubrics.
+    """
+    raw = rubric_path.read_text(encoding="utf-8")
+    rubric = yaml.safe_load(raw)
+
+    shared_lib_name = rubric.get("shared_dimensions_lib")
+    if not shared_lib_name:
+        # Pure inline rubric — return as-is.
+        return rubric, raw
+
+    shared_lib_path = rubric_path.parent / shared_lib_name
+    if not shared_lib_path.is_file():
+        raise FileNotFoundError(
+            f"Rubric {rubric_path.name!r} references shared library "
+            f"{shared_lib_name!r} but it was not found at {shared_lib_path}"
+        )
+    shared = yaml.safe_load(shared_lib_path.read_text(encoding="utf-8"))
+    shared_dims = (shared or {}).get("dimensions") or {}
+
+    resolved_dims: dict[str, dict] = {}
+    for dim_name, dim_body in (rubric.get("dimensions") or {}).items():
+        if isinstance(dim_body, dict) and dim_body.get("from") == "shared":
+            if dim_name not in shared_dims:
+                raise KeyError(
+                    f"Dimension {dim_name!r} in {rubric_path.name} is marked "
+                    f"from:shared but is not defined in {shared_lib_name}"
+                )
+            # Start from the shared definition; overlay rubric's task fields.
+            merged = dict(shared_dims[dim_name])
+            for key, val in dim_body.items():
+                if key == "from":
+                    continue
+                merged[key] = val
+            resolved_dims[dim_name] = merged
+        else:
+            # Inline dimension — keep verbatim.
+            resolved_dims[dim_name] = dim_body
+
+    # Build the resolved rubric dict. Drop shared-lib metadata once
+    # resolution is done so the judge prompt isn't littered with it.
+    resolved = dict(rubric)
+    resolved["dimensions"] = resolved_dims
+    resolved.pop("shared_dimensions_lib", None)
+    resolved.pop("shared_dimensions_version", None)
+
+    resolved_yaml = yaml.safe_dump(
+        resolved,
+        sort_keys=False,
+        allow_unicode=True,
+        default_flow_style=False,
+        width=4096,
+    )
+    return resolved, resolved_yaml
 
 
 # ---------------------------------------------------------------------------
@@ -193,9 +299,10 @@ def judge_response(
      rubric_version). Cache hit returns the saved scores without any API call.
     """
     # ----- load contracts (rubric + template version come from these files) -----
-    with rubric_path.open("r", encoding="utf-8") as f:
-        rubric_raw = f.read()
-    rubric = yaml.safe_load(rubric_raw)
+    # resolve_rubric returns the rubric YAML with any {from: shared} references
+    # inlined against _shared_dimensions.yaml. For inline rubrics like the locked
+    # it_support_v1.yaml this is a no-op (original YAML returned unchanged).
+    rubric, rubric_raw = resolve_rubric(rubric_path)
     rubric_version: str = str(rubric.get("rubric_version", rubric_path.stem))
 
     template = judge_prompt_path.read_text(encoding="utf-8")
@@ -213,12 +320,37 @@ def judge_response(
     if cached is not None:
         return cached
 
+    # ----- derive rubric-specific output schema -----
+    # The dimension keys the judge must produce. For backward compat with
+    # the hardcoded reference_based_v1.txt template, _EXPECTED_DIMENSIONS
+    # still works; v2 template uses these to build {output_schema}.
+    expected_dims: tuple[str, ...] = tuple((rubric.get("dimensions") or {}).keys())
+    if not expected_dims:
+        expected_dims = _EXPECTED_DIMENSIONS
+
+    output_schema_lines = ["{"]
+    max_dim_len = max(len(d) for d in expected_dims)
+    for i, dim in enumerate(expected_dims):
+        scale = (rubric.get("dimensions") or {}).get(dim, {}).get("scale", [1, 5])
+        comma = "," if i < len(expected_dims) - 1 else ""
+        pad = " " * (max_dim_len - len(dim) + 2)
+        output_schema_lines.append(
+            f'  "{dim}":{pad}{{"score": <int {scale[0]}-{scale[1]}>, '
+            f'"rationale": "<one sentence>"}}{comma}'
+        )
+    output_schema_lines.append("}")
+    output_schema = "\n".join(output_schema_lines)
+
     # ----- format the user message -----
+    # Extra kwargs (like output_schema) are silently ignored by templates
+    # that don't reference them — so this is backward-compatible with
+    # the hardcoded reference_based_v1.txt template.
     user_message = template.format(
         question=question,
         reference=reference,
         candidate=candidate_response,
         rubric_yaml=rubric_raw,
+        output_schema=output_schema,
     )
 
     client = gateway_client().with_options(timeout=timeout_sec)
@@ -241,7 +373,7 @@ def judge_response(
         )
 
     try:
-        scores = _parse_scores(raw1)
+        scores = _parse_scores(raw1, expected_dims=expected_dims)
         result = JudgeResult(scores=scores, raw_response=raw1)
         _cache_write(key, result)
         return result
@@ -258,8 +390,8 @@ def judge_response(
                     "Your previous response failed JSON parsing: "
                     f"{first_error}. Reply with ONLY the JSON object specified "
                     "in the OUTPUT FORMAT section — no prose, no code fences, "
-                    "no leading or trailing text. Use the exact four keys: "
-                    "accuracy, completeness, policy_adherence, tone."
+                    "no leading or trailing text. Use these exact dimension "
+                    f"keys: {', '.join(expected_dims)}."
                 ),
             },
         ]
@@ -280,7 +412,7 @@ def judge_response(
         )
 
     try:
-        scores = _parse_scores(raw2)
+        scores = _parse_scores(raw2, expected_dims=expected_dims)
         result = JudgeResult(scores=scores, raw_response=raw2)
         _cache_write(key, result)
         return result

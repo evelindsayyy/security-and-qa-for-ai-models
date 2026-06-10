@@ -75,7 +75,10 @@ def main() -> int:
     failure_rate = (cand_fail + judge_fail) / n
 
     # ---- per-dimension means (only over rows where the dim is present) ----
-    dims = ("accuracy", "completeness", "policy_adherence", "tone")
+    # Dimensions come from the rows themselves, not a hardcoded list, so any
+    # rubric's dimension set aggregates correctly. dict.fromkeys preserves
+    # first-seen order, which matches the rubric's dimension order.
+    dims = tuple(dict.fromkeys(dim for r in rows for dim in r.scores))
     dim_means: dict[str, float | None] = {}
     for dim in dims:
         vals = [r.scores[dim].score for r in rows if dim in r.scores]

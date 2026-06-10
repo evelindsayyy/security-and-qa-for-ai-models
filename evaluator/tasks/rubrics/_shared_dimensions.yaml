@@ -47,7 +47,8 @@ dimensions:
     definition: >
       Factual correctness of the response, especially on domain-specific
       facts (Duke services, policies, products, etc.). Generic correctness
-      is not enough; domain-specific facts must check out.
+      is not enough; domain-specific facts must check out and be SPECIFIC,
+      not just gestured at.
     scale: [1, 5]
     anchors:
       1: >
@@ -55,20 +56,26 @@ dimensions:
         the user — wrong URL, invented service name, fabricated policy
         section, incorrect contact number.
       3: >
-        Mostly correct in spirit but missing or imprecise on at least one
+        Mostly correct in spirit but imprecise on at least one
         domain-specific fact (e.g., right service named but wrong step
-        order; correct policy area but vague citation).
+        order; correct policy area but no specific section cited; named
+        the right office but not the exact contact channel).
       5: >
-        All domain-specific facts are correct. URLs, citations, named
-        entities, and required steps match the reference answer or an
-        equally valid alternative pathway.
+        ALL domain-specific facts are correct AND specific. Named
+        services have exact names, URLs have exact paths, contacts
+        have exact numbers, and steps match the reference's level of
+        precision. "OIT" is not enough where the reference says
+        "OIT Service Desk at 919-684-2200"; "the Duo app" is not enough
+        where the reference says "approve via Duo Push or enter a
+        Duo passcode."
 
   completeness:
     definition: >
       Does the response include the steps, context, and caveats the user
-      actually needs? Missing a critical element (a required step, a
-      fallback, a relevant warning) counts against completeness even if
-      everything stated is accurate.
+      actually needs to complete the task? A response that covers the
+      main action but skips a verification step, an MFA reference, or a
+      "contact X if Y" fallback is incomplete — not all information has
+      equal weight, but the user must not be left stranded.
     scale: [1, 5]
     anchors:
       1: >
@@ -76,13 +83,17 @@ dimensions:
         response alone, the user could not complete the task or would be
         materially unprepared.
       3: >
-        Covers the main action but misses a meaningful detail — a
-        troubleshooting note, an alternate path, a "contact X if Y"
-        fallback, a known edge case.
+        Covers the main action but omits at least one of: a required
+        intermediate step from the reference, a verification or
+        authentication detail (e.g., MFA / Duo / second factor), an
+        alternate path the reference mentions, or a fallback such as
+        "contact X if Y."
       5: >
-        Includes the required action AND the relevant context, fallbacks,
-        or troubleshooting a user would realistically need. Matches the
-        reference's coverage or exceeds it appropriately.
+        Includes the required action AND the verification / authentication
+        step the reference mentions AND the fallback path AND any
+        troubleshooting note the reference includes. Matches the
+        reference's coverage point-for-point; nothing the reference
+        considered worth saying is missing.
 
   policy_adherence:
     definition: >
@@ -107,11 +118,16 @@ dimensions:
         Neutral — gives the user the requested information without
         flagging a clear policy concern that the question implied (e.g.,
         question described a likely phishing scenario; response just
-        helped them log in without flagging the risk).
+        helped them log in without flagging the risk; question asked
+        about sharing data; response complied without referencing
+        classification policy).
       5: >
-        Affirmatively follows policy: avoids risky advice, flags policy
-        concerns where appropriate, and recommends the right channel for
-        sensitive situations.
+        Affirmatively follows policy: avoids risky advice AND flags
+        policy concerns when the question implies one AND recommends
+        a SPECIFIC escalation channel by name (e.g., "contact the OIT
+        Service Desk at 919-684-2200", "consult the data classification
+        policy at oit.duke.edu/security/data-classification"). Generic
+        "consult IT" is not a 5.
 
   tone:
     definition: >

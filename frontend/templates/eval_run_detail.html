@@ -34,10 +34,9 @@
         <tr>
           <th>#</th>
           <th>Question</th>
-          <th class="num">Acc</th>
-          <th class="num">Comp</th>
-          <th class="num">Pol</th>
-          <th class="num">Tone</th>
+          {% for dim in dims %}
+          <th class="num">{{ dim|replace("_", " ") }}</th>
+          {% endfor %}
           <th class="num">Overall</th>
           <th class="num">Latency</th>
           <th class="num">Cost</th>
@@ -49,10 +48,9 @@
         <tr class="{% if q.status != 'OK' or q.candidate_empty %}row-warn{% endif %}">
           <td><code>{{ q.question_id }}</code></td>
           <td class="snippet">{{ q.question or "—" }}</td>
-          <td class="num">{{ "%.1f"|format(q.accuracy) if q.accuracy is not none else "—" }}</td>
-          <td class="num">{{ "%.1f"|format(q.completeness) if q.completeness is not none else "—" }}</td>
-          <td class="num">{{ "%.1f"|format(q.policy) if q.policy is not none else "—" }}</td>
-          <td class="num">{{ "%.1f"|format(q.tone) if q.tone is not none else "—" }}</td>
+          {% for dim in dims %}
+          <td class="num">{{ "%.1f"|format(q.dim_scores[dim]) if q.dim_scores.get(dim) is not none else "—" }}</td>
+          {% endfor %}
           <td class="num overall">{{ "%.2f"|format(q.overall) if q.overall is not none else "—" }}</td>
           <td class="num">{{ q.latency_ms }} ms</td>
           <td class="num">${{ "%.5f"|format(q.cost_usd) }}</td>
@@ -89,14 +87,8 @@
           <tbody>
             {% for dim, rationale in q.rationales.items() %}
             <tr>
-              <td>{{ dim }}</td>
-              <td class="num">
-                {% if dim == 'accuracy' %}{{ "%.1f"|format(q.accuracy) if q.accuracy is not none else "—" }}
-                {% elif dim == 'completeness' %}{{ "%.1f"|format(q.completeness) if q.completeness is not none else "—" }}
-                {% elif dim == 'policy_adherence' %}{{ "%.1f"|format(q.policy) if q.policy is not none else "—" }}
-                {% elif dim == 'tone' %}{{ "%.1f"|format(q.tone) if q.tone is not none else "—" }}
-                {% else %}—{% endif %}
-              </td>
+              <td>{{ dim|replace("_", " ") }}</td>
+              <td class="num">{{ "%.1f"|format(q.dim_scores[dim]) if q.dim_scores.get(dim) is not none else "—" }}</td>
               <td>{{ rationale }}</td>
             </tr>
             {% endfor %}
