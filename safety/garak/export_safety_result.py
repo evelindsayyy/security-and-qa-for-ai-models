@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Export Garak report JSONL → ``safety_result.json``. Logic: ``safety.exporters.garak``."""
+"""
+Export Garak report JSONL → ``safety_result.json``.
+
+Thin CLI wrapper — logic lives in ``safety.exporters.garak``.
+Default report glob matches ``garak-duke-*.report.jsonl`` under output/<slug>/.
+
+Run from repo root (needs PYTHONPATH):
+    PYTHONPATH=. uv run python safety/garak/export_safety_result.py \\
+      safety/garak/output/<slug>/garak-duke-*.report.jsonl
+"""
 
 from __future__ import annotations
 
@@ -11,7 +20,7 @@ from pathlib import Path
 from safety.exporters.garak import export_from_garak_report
 
 DEFAULT_OUTPUT = "safety_result.json"
-DEFAULT_REPORT_GLOB = "garak-gpt41mini-low-guardrail.report.jsonl"
+DEFAULT_REPORT_GLOB = "garak-duke-*.report.jsonl"
 
 
 def main() -> int:
@@ -25,10 +34,15 @@ def main() -> int:
     )
     parser.add_argument("-o", "--output", type=Path, help=f"Default: output/{DEFAULT_OUTPUT}")
     parser.add_argument("--probe-suite", default="garak_subset_v1")
+    parser.add_argument("--gateway-model-id", default=None, help="Override target model slug source")
     args = parser.parse_args()
 
     try:
-        doc = export_from_garak_report(args.input, probe_suite=args.probe_suite)
+        doc = export_from_garak_report(
+            args.input,
+            probe_suite=args.probe_suite,
+            gateway_model_id=args.gateway_model_id,
+        )
     except (FileNotFoundError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

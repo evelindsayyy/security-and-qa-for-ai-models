@@ -5,7 +5,7 @@
 #
 #   docker compose --env-file safety/garak/docker/.env \
 #     -f safety/garak/docker/compose.yml run --rm garak \
-#     python -m garak --config garak_gpt41mini_low_guardrail.yaml
+#     python -m garak --config garak_duke.yaml -n "GPT 4.1 Mini"
 
 name: garak
 

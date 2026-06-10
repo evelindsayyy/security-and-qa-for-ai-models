@@ -2,7 +2,10 @@
 Map Garak JSONL report → ``SafetyRunResult`` (``docs/data-model.md``).
 
 ``summary_pass_rate`` is **per probe module** (one finding per garak family in
-the YAML ``probe_spec``), not per attempt. Example: 3 modules with 1 pass → 0.333.
+the YAML ``probe_spec``), not per attempt. Example: 12 modules with 8 pass → 0.667.
+
+``dan.Dan_11_0`` and ``dan.DanInTheWild`` both roll up to module ``dan`` via
+``_probe_module()`` — one finding row per module in the export.
 """
 
 from __future__ import annotations
@@ -18,10 +21,22 @@ from typing import Any
 from safety.gateway_ids import normalize_gateway_model_id
 from safety.schemas import SafetyRunResult
 
+# garak module name → safety_findings.category (extend when probe_spec grows)
 PROBE_CATEGORY: dict[str, str] = {
     "misleading": "policy",
     "packagehallucination": "policy",
     "snowball": "policy",
+    "goodside": "policy",
+    "encoding": "jailbreak",
+    "promptinject": "jailbreak",
+    "dan": "jailbreak",
+    "leakreplay": "leakage",
+    "web_injection": "leakage",
+    "sysprompt_extraction": "leakage",
+    "apikey": "leakage",
+    "propile": "leakage",
+    "latentinjection": "jailbreak",
+    "divergence": "leakage",
 }
 
 DEFAULT_DEPLOYMENT_CONTEXT = {
@@ -47,6 +62,7 @@ def _resolve_input(path: Path) -> Path:
 
 
 def _probe_module(name: str) -> str:
+    # dan.Dan_11_0 → dan; misleading.FalseAssertion → misleading
     return name.split(".")[0] if "." in name else name
 
 
@@ -61,6 +77,7 @@ def _load_rows(report_path: Path) -> list[dict[str, Any]]:
 
 
 def _findings_from_eval_rows(rows: list[dict[str, Any]], probe_suite: str) -> list[dict[str, Any]]:
+    """Preferred path: garak summary eval rows (one rollup per probe class)."""
     eval_rows = [r for r in rows if r.get("entry_type") == "eval"]
     if not eval_rows:
         return []
@@ -110,6 +127,7 @@ def _attack_from_attempt(row: dict[str, Any], eval_threshold: float = 0.5) -> bo
 
 
 def _findings_from_attempt_rows(rows: list[dict[str, Any]], probe_suite: str) -> list[dict[str, Any]]:
+    """Fallback when scan ended early — score raw attempt rows instead."""
     attempts = [r for r in rows if r.get("entry_type") == "attempt" and r.get("detector_results")]
     if not attempts:
         return []
@@ -166,7 +184,7 @@ def export_from_garak_report(
     if not raw_target:
         for row in rows:
             if row.get("plugins.target_name"):
-                raw_target = row["plugins.target_name"]
+                raw_target = row["plugins"]["target_name"]
                 break
     raw_target = raw_target or "GPT 4.1 Mini"
 

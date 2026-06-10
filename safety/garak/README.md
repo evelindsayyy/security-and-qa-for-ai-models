@@ -1,64 +1,142 @@
 # Garak
 
-Automated probes against Duke AI Gateway. Run from **repo root**. Maps to `probe_suite: garak_subset_v1` ([`docs/data-model.md`](../../docs/data-model.md)).
+Automated probe modules against Duke AI Gateway. Run from **repo root**. Maps to `probe_suite: garak_subset_v1`.
+
+For the full pipeline (policy + Garak + merge), use [`../run_safety.sh`](../run_safety.sh). This README covers running Garak on its own.
+
+## Setup (once)
+
+```bash
+cp safety/garak/docker/.env.example safety/garak/docker/.env
+# OPENAICOMPATIBLE_API_KEY (= DUKE_GATEWAY_KEY)
+
+docker compose --env-file safety/garak/docker/.env \
+  -f safety/garak/docker/compose.yml build
+```
+
+## Session variables
+
+```bash
+export GARAK_DC="docker compose --env-file safety/garak/docker/.env -f safety/garak/docker/compose.yml"
+export GATEWAY_MODEL="GPT 4.1 Mini"
+export SLUG=gpt-4.1-mini
+mkdir -p safety/garak/output/${SLUG}
+```
+
+## Run scan
+
+Default 12 modules from `garak_duke.yaml`:
+
+```bash
+$GARAK_DC run --rm garak \
+  python -m garak --config garak_duke.yaml -n "${GATEWAY_MODEL}"
+```
+
+Subset via CLI (`-p` overrides yaml `probe_spec`):
+
+```bash
+$GARAK_DC run --rm garak \
+  python -m garak --config garak_duke.yaml -n "${GATEWAY_MODEL}" \
+  -p "encoding,promptinject,dan.Dan_11_0"
+```
+
+Equivalent via wrapper:
+
+```bash
+./safety/run_safety.sh "$GATEWAY_MODEL" --skip-promptfoo
+./safety/run_safety.sh --garak-probes "encoding,promptinject,dan.Dan_11_0" --skip-promptfoo
+```
+
+Reports land as `output/garak-duke-*.report.jsonl` (flat `output/` dir). The wrapper copies the newest report into `output/<slug>/`.
+
+## Export results
+
+```bash
+PYTHONPATH=. uv run python safety/garak/export_safety_result.py \
+  safety/garak/output/${SLUG}/garak-duke-*.report.jsonl \
+  -o safety/garak/output/${SLUG}/safety_result.json \
+  --gateway-model-id "${GATEWAY_MODEL}"
+```
+
+If the report is still in flat `output/`:
+
+```bash
+PYTHONPATH=. uv run python safety/garak/export_safety_result.py \
+  safety/garak/output/garak-duke-*.report.jsonl \
+  -o safety/garak/output/${SLUG}/safety_result.json \
+  --gateway-model-id "${GATEWAY_MODEL}"
+```
+
+## Merge after individual run
+
+```bash
+PYTHONPATH=. uv run python -m safety.merge \
+  --garak safety/garak/output/${SLUG}/safety_result.json \
+  -o safety/output/${SLUG}/merged_safety_result.json
+```
+
+Add `--promptfoo` flags for any Promptfoo exports you have. See [`../README.md`](../README.md).
+
+## Add or edit probe modules
+
+**Option A — yaml** (persistent default): edit `plugins.probe_spec` in `garak_duke.yaml`:
+
+```yaml
+plugins:
+  probe_spec: misleading,packagehallucination,snowball,encoding,promptinject,dan.Dan_11_0
+```
+
+**Option B — CLI** (one-off): pass `-p` on the scan command or `--garak-probes` on `run_safety.sh`.
+
+| Field | Purpose |
+|-------|---------|
+| `probe_spec` / `-p` | Modules to run |
+| `-n` | Target model (LiteLLM id) |
+| `run.soft_probe_prompt_cap` | Max prompts per module (default 10) |
+| `run.generations` | Completions per prompt (default 1) |
+
+Avoid `*Full` variants (large prompt counts).
+
+### Default modules (12)
+
+| Module | Category |
+|--------|----------|
+| `misleading` | policy |
+| `packagehallucination` | policy |
+| `snowball` | policy |
+| `encoding` | jailbreak |
+| `goodside` | policy |
+| `leakreplay` | leakage |
+| `web_injection` | leakage |
+| `sysprompt_extraction` | leakage |
+| `apikey` | leakage |
+| `promptinject` | jailbreak |
+| `dan.Dan_11_0` | jailbreak |
+| `dan.DanInTheWild` | jailbreak |
+
+`dan.*` sub-probes roll up to one `garak.dan` finding.
+
+### Optional (commented in yaml)
+
+`latentinjection`, `propile`, `divergence` — for RAG/tool deployments.
+
+### Scoring note
+
+Azure gateway may block jailbreak prompts before the model responds. Garak reports zero attack hits for that module, which counts as a **pass** (layered defense).
 
 ## Files
 
 | Path | Role |
 |------|------|
-| `garak_gpt41mini_low_guardrail.yaml` | **Input** — model, probes, caps |
-| `export_safety_result.py` | Report JSONL → `output/safety_result.json` |
-| `output/garak-gpt41mini-low-guardrail.report.jsonl` | Raw scan |
-| `output/safety_result.json` | Normalized (`SafetyRunResult`) |
-
-## Setup
-
-```bash
-cp safety/garak/docker/.env.example safety/garak/docker/.env
-# set OPENAICOMPATIBLE_API_KEY (= DUKE_GATEWAY_KEY)
-
-docker compose --env-file safety/garak/docker/.env \
-  -f safety/garak/docker/compose.yml build
-
-export DC="docker compose --env-file safety/garak/docker/.env -f safety/garak/docker/compose.yml"
-```
-
-## 1. Run
-
-```bash
-$DC run --rm garak python -m garak --config garak_gpt41mini_low_guardrail.yaml
-```
-
-Writes `output/garak-gpt41mini-low-guardrail.report.jsonl` (+ `.html`). First run ~15–25 min.
-
-## 2. Export
-
-```bash
-$DC run --rm garak python3 export_safety_result.py
-# or: python3 safety/garak/export_safety_result.py safety/garak/output/garak-gpt41mini-low-guardrail.report.jsonl
-```
-
-## Changing probes
-
-Edit `garak_gpt41mini_low_guardrail.yaml`:
-
-| Field | What it does |
-|-------|----------------|
-| `plugins.probe_spec` | Comma-separated garak modules (e.g. `misleading,snowball`) |
-| `plugins.target_name` | LiteLLM model id (`GPT 4.1 Mini`) |
-| `run.soft_probe_prompt_cap` | Max prompts per probe (misleading ignores cap) |
-| `run.generations` | Completions per prompt |
-| `reporting.report_prefix` | Output filename prefix |
-
-Output `probe_id` values: `garak.<module>` (one finding per module). Listed in `safety_result.json` → `tool_results.garak.probe_ids`.
-
-Avoid high-filter probes (jailbreak, toxicity) until OIT approves — see YAML header comments.
+| `garak_duke.yaml` | Scan config |
+| `export_safety_result.py` | Normalizer CLI |
+| `output/garak-duke-*.report.jsonl` | Raw report (flat dir) |
+| `output/<slug>/safety_result.json` | Normalized export |
 
 ## Troubleshooting
 
 | Issue | Fix |
 |-------|-----|
-| `No detectors, nothing to do` | Use stock `compose.yml` (no `user:` override) |
-| Root-owned `output/` | `chown -R "$(id -u):$(id -g)" safety/garak/output` or `$DC run --rm garak sh -c 'chown -R 1000:1000 output'` |
-
-Merge: [`../README.md`](../README.md).
+| `No detectors, nothing to do` | Use stock `compose.yml` |
+| Root-owned `output/` | `chown -R "$(id -u):$(id -g)" safety/garak/output` |
+| No report after scan | Check `OPENAICOMPATIBLE_API_KEY` in `docker/.env` |

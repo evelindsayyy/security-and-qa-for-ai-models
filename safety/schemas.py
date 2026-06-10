@@ -37,7 +37,7 @@ class SafetyCategory(str, Enum):
 
 
 class SafetySource(str, Enum):
-    """``safety_findings.source``."""
+    """``safety_findings.source``"""
 
     garak = "garak"
     promptfoo = "promptfoo"
@@ -61,6 +61,7 @@ class SafetyFinding(BaseModel):
     description: str
     probe_id: str
     probe_suite: str | None = None
+    # populated at merge time when garak + promptfoo fail same category
     corroborated_by: list[str] | None = None
 
 
@@ -69,7 +70,7 @@ class SafetyRunResult(BaseModel):
     One tool run / probe suite (maps to ``safety_runs``).
 
     ``summary_pass_rate`` is the fraction of ``findings`` with ``passed=true``
-    for this suite only (not per-attempt unless findings are per-attempt).
+    for this suite only (garak: per module, not per attempt).
     """
 
     gateway_model_id: str
@@ -84,7 +85,7 @@ class SafetyRunResult(BaseModel):
 
 
 class SafetyRunSummary(BaseModel):
-    """Lightweight row for merged label — one entry per probe suite."""
+    """Lightweight row for merged label — one entry per probe suite in ``runs[]``."""
 
     probe_suite: str
     summary_pass_rate: float
@@ -107,6 +108,7 @@ class MergedSafetyResult(BaseModel):
     status: str = "complete"
     deployment_context: dict[str, Any] = Field(default_factory=dict)
     summary_pass_rate: float = 0.0
+    # worst severity among *failed* findings only — passed rows don't affect tier
     safety_tier: SafetySeverity = SafetySeverity.low
     runs: list[SafetyRunSummary] = Field(default_factory=list)
     findings: list[SafetyFinding] = Field(default_factory=list)
@@ -116,6 +118,7 @@ class MergedSafetyResult(BaseModel):
 
 
 def coerce_severity(value: str | SafetySeverity) -> SafetySeverity:
+    """Safe cast for merge tier logic when exporters emit plain strings."""
     if isinstance(value, SafetySeverity):
         return value
     try:

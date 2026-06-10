@@ -1,76 +1,110 @@
 # Safety (Track A — gateway red team)
 
-Garak + Promptfoo → [`SafetyRunResult`](schemas.py) JSON per tool → [`MergedSafetyResult`](schemas.py) via [`safety_scorer.py`](safety_scorer.py). Shapes match [`docs/data-model.md`](../docs/data-model.md) (`safety_runs`, `safety_findings`). Framework: [`docs/track-a-framework.md`](../docs/track-a-framework.md).
+Promptfoo + Garak → per-tool [`SafetyRunResult`](schemas.py) → merged [`MergedSafetyResult`](schemas.py) for the nutrition-label safety pillar. Shapes match [`docs/data-model.md`](../docs/data-model.md).
 
-```text
-safety/promptfoo/   promptfooconfig.yaml  →  output/eval.json  →  output/safety_result.json
-safety/garak/       garak_*.yaml          →  output/*.report.jsonl  →  output/safety_result.json
-safety/merge.py     both safety_result.json  →  safety/output/<model>/merged_safety_result.json
+**Model id:** any LiteLLM string from [`docs/gateway-models.md`](../docs/gateway-models.md) (case-sensitive). Outputs go under `<slug>/` (e.g. `gpt-4.1-mini`).
+
+## One-time setup
+
+```bash
+cp safety/promptfoo/docker/.env.example safety/promptfoo/docker/.env
+cp safety/garak/docker/.env.example safety/garak/docker/.env
+# OPENAI_API_KEY, OPENAICOMPATIBLE_API_KEY (= DUKE_GATEWAY_KEY)
+
+docker compose --env-file safety/promptfoo/docker/.env \
+  -f safety/promptfoo/docker/compose.yml build
+docker compose --env-file safety/garak/docker/.env \
+  -f safety/garak/docker/compose.yml build
 ```
 
-## Layout
+## End-to-end (recommended)
 
-| Path | Role |
-|------|------|
-| [`schemas.py`](schemas.py) | Pydantic types |
-| [`safety_scorer.py`](safety_scorer.py) | Merge policy (like `scanner/risk_scorer.py`) |
-| [`merge.py`](merge.py) | `python -m safety.merge` |
-| [`exporters/`](exporters/) | Tool JSON → `SafetyRunResult` |
-| [`promptfoo/`](promptfoo/README.md) | Duke policy probes (Promptfoo) |
-| [`garak/`](garak/README.md) | Automated probe modules (Garak) |
-| [`output/`](output/README.md) | Merged labels per `gateway_model_id` |
+[`run_safety.sh`](run_safety.sh) runs **Promptfoo policy + Garak + merge** by default. Add `--redteam` for the red-team suite.
+
+```bash
+# full pipeline — default GPT 4.1 Mini
+./safety/run_safety.sh
+
+# another model
+./safety/run_safety.sh "gpt-5-chat"
+
+# policy + red-team + garak + merge
+./safety/run_safety.sh "GPT 4.1 Mini" --redteam
+
+# subset of Garak modules (CLI override)
+./safety/run_safety.sh --garak-probes "encoding,promptinject,dan.Dan_11_0"
+
+# faster iteration — skip one suite
+./safety/run_safety.sh --skip-garak
+./safety/run_safety.sh --skip-promptfoo
+```
+
+Output: `safety/output/<slug>/merged_safety_result.json` → frontend `/safety/<slug>`.
+
+```bash
+./safety/run_safety.sh --help
+```
+
+## Run suites individually
+
+Use this when debugging one tool, editing probes, or re-exporting without re-running everything. Full CLI detail lives in the suite READMEs.
+
+| Suite | README | What it runs |
+|-------|--------|--------------|
+| Promptfoo policy | [`promptfoo/README.md`](promptfoo/README.md) | 14 Duke policy probes |
+| Promptfoo red-team | [`promptfoo/README.md`](promptfoo/README.md) | 8 local plugins |
+| Garak | [`garak/README.md`](garak/README.md) | 12 automated modules |
+| Merge | below | Combine `safety_result.json` files |
+
+```bash
+export GATEWAY_MODEL="GPT 4.1 Mini"
+export SLUG=gpt-4.1-mini
+```
+
+Run the eval/export steps from each README, then merge:
+
+```bash
+PYTHONPATH=. uv run python -m safety.merge \
+  --promptfoo safety/promptfoo/output/${SLUG}/safety_result.json \
+  --promptfoo safety/promptfoo/output/${SLUG}/redteam_safety_result.json \
+  --garak safety/garak/output/${SLUG}/safety_result.json \
+  -o safety/output/${SLUG}/merged_safety_result.json
+```
+
+Omit flags for suites you did not run.
+
+## Change probes
+
+| Suite | Edit | Re-run via |
+|-------|------|------------|
+| Duke policy | `promptfoo/promptfooconfig.yaml` → `tests[]` | `run_safety.sh` or promptfoo README |
+| Red-team | `promptfoo/promptfooconfig.redteam.yaml` → `redteam.plugins` | `run_safety.sh --redteam` or promptfoo README |
+| Garak modules | `garak/garak_duke.yaml` → `probe_spec`, or `--garak-probes` on script | `run_safety.sh` or garak README |
 
 ## Probe suites
 
-| `probe_suite` | Tool | Config | Default probes |
-|---------------|------|--------|----------------|
-| `promptfoo_duke_policy_v1` | Promptfoo | `promptfoo/promptfooconfig.yaml` | `duke.smoke.001`, `duke.policy.001`–`009` |
-| `promptfoo_duke_redteam_v1` | Promptfoo | `promptfoo/promptfooconfig.redteam.yaml` | `promptfoo.redteam.<plugin>.<nnn>` (12 tests default) |
-| `garak_subset_v1` | Garak | `garak/garak_gpt41mini_low_guardrail.yaml` | `garak.misleading`, `garak.packagehallucination`, `garak.snowball` |
-
-Exported JSON lists probes in `tool_results.*.probe_ids` and merged `runs[].probe_ids`.
-
-## Changing probes
-
-**Garak** — edit one line in `garak/garak_gpt41mini_low_guardrail.yaml`:
-
-```yaml
-plugins:
-  probe_spec: misleading,packagehallucination,snowball   # comma-separated module names
-```
-
-See [Garak probe docs](https://docs.garak.ai/). Re-run scan + export; findings use `probe_id: garak.<module>`.
-
-**Promptfoo** — edit `tests:` in `promptfoo/promptfooconfig.yaml` (add/remove cases). Each test **must** set:
-
-```yaml
-vars:
-  probe_id: duke.policy.005      # → safety_findings.probe_id
-  category: policy               # policy | jailbreak | leakage | smoke
-  severity: medium               # low | medium | high
-  question: "..."
-```
-
-Red-team plugins: `promptfooconfig.redteam.yaml` (`redteam.plugins`). Export: `redteam_eval.json` → `redteam_safety_result.json`.
-
-**Expanding beyond 5 Duke probes:** add rows to `promptfoo/promptfooconfig.yaml` (`tests[]`). No new tool required — aim for ~10–20 ITSO-aligned cases per deployment context (credentials, FERPA, academic integrity, jailbreak, Duke-specific services). Red-team adds breadth via generated attacks; garak adds automated modules. Track B efficacy (`evaluator/`) covers task quality, not red-team — see [`docs/track-a-framework.md`](../docs/track-a-framework.md).
+| `probe_suite` | Tool | Config |
+|---------------|------|--------|
+| `promptfoo_duke_policy_v1` | Promptfoo | `promptfooconfig.yaml` — 14 probes |
+| `promptfoo_duke_redteam_v1` | Promptfoo | `promptfooconfig.redteam.yaml` — 8 plugins |
+| `garak_subset_v1` | Garak | `garak_duke.yaml` — 12 modules |
 
 ## Pass rate
 
 | Level | Formula |
 |-------|---------|
-| Per tool | `passed findings / total findings` in that `safety_result.json` |
-| Garak | One finding per **probe module** (not per attempt) |
-| Merged | All findings across suites; `safety_tier` = worst failed severity |
+| Per tool | passed findings / total findings |
+| Garak | one finding per **module** (not per attempt) |
+| Merged | all findings; `safety_tier` = worst failed severity |
 
-## Merge (after both tools)
+## Layout
 
-```bash
-uv run python -m safety.merge \
-  --promptfoo safety/promptfoo/output/safety_result.json \
-  --promptfoo safety/promptfoo/output/redteam_safety_result.json \
-  --garak safety/garak/output/safety_result.json \
-  -o safety/output/gpt-4.1-mini/merged_safety_result.json
-```
-
-Runbooks: [`promptfoo/README.md`](promptfoo/README.md), [`garak/README.md`](garak/README.md).
+| Path | Role |
+|------|------|
+| [`run_safety.sh`](run_safety.sh) | End-to-end pipeline |
+| [`schemas.py`](schemas.py) | Pydantic types |
+| [`safety_scorer.py`](safety_scorer.py) | Merge logic |
+| [`merge.py`](merge.py) | `python -m safety.merge` |
+| [`promptfoo/`](promptfoo/README.md) | Policy + red-team |
+| [`garak/`](garak/README.md) | Automated modules |
+| [`output/`](output/README.md) | Merged labels |

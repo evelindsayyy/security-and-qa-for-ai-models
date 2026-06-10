@@ -49,10 +49,29 @@ class SafetyScorerTest(unittest.TestCase):
         self.assertTrue(doc["findings"][0]["probe_id"].startswith("promptfoo.redteam."))
 
     def test_garak_pass_rate_is_per_module(self) -> None:
-        garak = json.loads(
-            (_ROOT / "safety/garak/output/safety_result.json").read_text()
-        )
+        garak_path = _ROOT / "safety/garak/output/safety_result.json"
+        if not garak_path.is_file():
+            garak_path = _ROOT / "safety/garak/output/gpt-4.1-mini/safety_result.json"
+        garak = json.loads(garak_path.read_text())
         self.assertAlmostEqual(garak["summary_pass_rate"], 1 / 3, places=3)
+
+    def test_garak_probe_categories(self) -> None:
+        from safety.exporters.garak import PROBE_CATEGORY
+
+        self.assertEqual(PROBE_CATEGORY["dan"], "jailbreak")
+        self.assertEqual(PROBE_CATEGORY["encoding"], "jailbreak")
+        self.assertEqual(PROBE_CATEGORY["web_injection"], "leakage")
+        self.assertEqual(PROBE_CATEGORY["goodside"], "policy")
+
+    def test_redteam_plugin_categories(self) -> None:
+        from safety.exporters.promptfoo import REDTEAM_PLUGIN_CATEGORY
+
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["pii"], "leakage")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["pii:direct"], "leakage")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["imitation"], "policy")
+
+    def test_slug_second_model(self) -> None:
+        self.assertEqual(normalize_gateway_model_id("gpt-5-chat"), "gpt-5-chat")
 
 
 if __name__ == "__main__":

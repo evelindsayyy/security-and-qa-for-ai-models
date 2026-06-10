@@ -4,9 +4,12 @@ Merge per-tool ``safety_result.json`` files → ``merged_safety_result.json``.
 
 Usage (repo root):
     uv run python -m safety.merge \
-      --promptfoo safety/promptfoo/output/safety_result.json \
-      --garak safety/garak/output/safety_result.json \
+      --promptfoo safety/promptfoo/output/gpt-4.1-mini/safety_result.json \
+      --promptfoo safety/promptfoo/output/gpt-4.1-mini/redteam_safety_result.json \
+      --garak safety/garak/output/gpt-4.1-mini/safety_result.json \
       -o safety/output/gpt-4.1-mini/merged_safety_result.json
+
+Or use ``safety/run_safety.sh`` for the full pipeline (Promptfoo + Garak + merge).
 """
 
 from __future__ import annotations

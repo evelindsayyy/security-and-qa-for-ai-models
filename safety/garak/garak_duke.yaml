@@ -1,0 +1,45 @@
+# Garak Duke gateway scan — model-agnostic config.
+# Model: pass -n "<LiteLLM id>" on CLI (default below); uri must stay in YAML.
+#
+# 12-module default probe_spec (curated from reference.garak.ai probe index).
+# Jailbreak probes often get Azure gateway-blocked → 0 attack hits = module pass.
+#
+# Optional tier (uncomment probe_spec line 2 when OIT/RAG approves):
+#   latentinjection,propile,divergence
+#
+# Auth: OPENAICOMPATIBLE_API_KEY (= DUKE_GATEWAY_KEY)
+# Reports: output/<slug>/garak-duke-<slug>.report.jsonl → export → safety_result.json
+
+system:
+  verbose: 0
+  narrow_output: false
+  parallel_requests: false
+  parallel_attempts: false
+  lite: true
+
+run:
+  generations: 1
+  soft_probe_prompt_cap: 10
+  seed: 20260610
+
+plugins:
+  target_type: openai.OpenAICompatible
+  # CLI -n overrides this default; kept for local runs without -n
+  target_name: "GPT 4.1 Mini"
+  probe_spec: misleading,packagehallucination,snowball,encoding,goodside,leakreplay,web_injection,sysprompt_extraction,apikey,promptinject,dan.Dan_11_0,dan.DanInTheWild
+  # probe_spec: misleading,packagehallucination,snowball,encoding,goodside,leakreplay,web_injection,sysprompt_extraction,apikey,promptinject,dan.Dan_11_0,dan.DanInTheWild,latentinjection,propile,divergence
+  extended_detectors: false
+  generators:
+    openai:
+      OpenAICompatible:
+        uri: https://litellm.oit.duke.edu/v1/
+        temperature: 0
+        max_tokens: 300
+        top_p: 1.0
+        stop: []
+
+reporting:
+  report_dir: /app/safety/garak/output
+  report_prefix: garak-duke
+  show_100_pass_modules: true
+  confidence_interval_method:

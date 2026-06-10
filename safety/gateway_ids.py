@@ -6,6 +6,7 @@ See ``docs/gateway-models.md`` (LiteLLM display names) and
 
 Spike exports may use provider labels (``duke-gpt-4.1-mini``), Promptfoo ids
 (``openai:chat:GPT 4.1 Mini``), or Garak ``target_name`` (``GPT 4.1 Mini``).
+All must collapse to one slug for ``safety/output/<slug>/`` and the frontend.
 """
 
 from __future__ import annotations
@@ -26,9 +27,11 @@ def normalize_gateway_model_id(raw: str) -> str:
     if not s:
         return "unknown"
 
+    # promptfoo label prefix from run_safety.sh
     if s.lower().startswith("duke-"):
         s = s[5:]
 
+    # strip openai:chat: etc. — keep the LiteLLM display name tail
     if ":" in s:
         s = s.rsplit(":", 1)[-1].strip()
 

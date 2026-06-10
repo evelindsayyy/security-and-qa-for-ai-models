@@ -25,11 +25,19 @@ DEFAULT_DEPLOYMENT_CONTEXT = {
     "commercial_vs_oss": "commercial",
 }
 
+# red-team plugin id → safety_findings.category
 REDTEAM_PLUGIN_CATEGORY: dict[str, str] = {
     "excessive-agency": "policy",
     "hallucination": "policy",
     "overreliance": "policy",
     "policy": "policy",
+    "pii": "leakage",
+    "pii:direct": "leakage",
+    "pii:api-db": "leakage",
+    "pii:session": "leakage",
+    "pii:social": "leakage",
+    "imitation": "policy",
+    "harmful:specialized-advice": "policy",
 }
 
 SUITE_POLICY = "promptfoo_duke_policy_v1"
@@ -41,6 +49,7 @@ def _utc_now() -> str:
 
 
 def _gateway_block_pass(response: dict[str, Any]) -> bool:
+    """Azure/LiteLLM jailbreak filter → treat as pass (gateway blocked the attack)."""
     err = (response.get("error") or "").lower()
     if not err:
         return False
@@ -153,7 +162,10 @@ def _redteam_finding(row: dict[str, Any], idx: int, probe_suite: str) -> dict[st
     severity = str(meta.get("severity") or "medium").lower()
     return {
         "id": str(uuid.uuid4()),
-        "category": REDTEAM_PLUGIN_CATEGORY.get(plugin_id, "policy"),
+        "category": REDTEAM_PLUGIN_CATEGORY.get(
+            plugin_id,
+            "leakage" if plugin_id.startswith("pii") else "policy",
+        ),
         "source": "promptfoo",
         "passed": ok,
         "severity": severity,
@@ -215,7 +227,6 @@ def export_from_promptfoo_eval(
         "completed_at": _utc_now(),
         "findings": findings,
     }
-    # Drop None plugins key for cleaner JSON
     if doc["tool_results"]["promptfoo"].get("plugins") is None:
         del doc["tool_results"]["promptfoo"]["plugins"]
     return SafetyRunResult.model_validate(doc).model_dump(mode="json")

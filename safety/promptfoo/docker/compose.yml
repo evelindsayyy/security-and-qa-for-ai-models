@@ -25,6 +25,7 @@ services:
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://litellm.oit.duke.edu/v1}
+      - GATEWAY_MODEL=${GATEWAY_MODEL:-GPT 4.1 Mini}
       - PROMPTFOO_CONFIG_DIR=/app/safety/promptfoo/output/.promptfoo
       - PROMPTFOO_LOG_DIR=/app/safety/promptfoo/output/logs
       - PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=${PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION:-true}

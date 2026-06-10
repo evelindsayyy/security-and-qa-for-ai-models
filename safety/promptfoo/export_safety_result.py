@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Export Promptfoo eval JSON → ``SafetyRunResult`` JSON. Logic: ``safety.exporters.promptfoo``."""
+"""
+Export Promptfoo eval JSON → ``SafetyRunResult`` JSON.
+
+Thin CLI wrapper — logic lives in ``safety.exporters.promptfoo``.
+Auto-names output: policy → safety_result.json, red-team → redteam_safety_result.json.
+
+Run from repo root (needs PYTHONPATH):
+    PYTHONPATH=. uv run python safety/promptfoo/export_safety_result.py \\
+      safety/promptfoo/output/<slug>/eval.json
+"""
 
 from __future__ import annotations
 

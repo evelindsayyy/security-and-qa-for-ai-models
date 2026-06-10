@@ -1,4 +1,4 @@
-"""``python -m safety merge`` → ``safety.merge`` CLI."""
+"""``python -m safety merge`` → ``safety.merge`` CLI (same as ``python -m safety.merge``)."""
 
 from safety.merge import main
 

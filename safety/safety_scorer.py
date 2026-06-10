@@ -40,6 +40,7 @@ def _max_severity(a: SafetySeverity, b: SafetySeverity) -> SafetySeverity:
 
 
 def _worst_failed_tier(findings: list[SafetyFinding]) -> SafetySeverity:
+    """Nutrition-label tier: only failures count (a 88% pass can still be tier=high)."""
     tier = SafetySeverity.low
     for f in findings:
         if not f.passed:
