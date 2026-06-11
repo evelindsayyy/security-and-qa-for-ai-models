@@ -81,8 +81,9 @@ Runtime data is gitignored (`scanner/models`, `scanner/output`, `testing/eval/ou
 | Layer | Choice |
 |-------|--------|
 | Language | Python 3.11+ |
-| Inference | LiteLLM to Duke AI Gateway (OpenAI-compatible) |
-| Security scanning | ModelScan, Fickling, ModelAudit (content-routed); pip-audit/OSV planned |
+| Inference | LiteLLM to Duke AI Gateway (cloud/API models); DCC SLURM for open-source weights (planned) |
+| Security scanning | ModelScan, Fickling, ModelAudit (content-routed), pip-audit + OSV, TruffleHog |
+| Safety / red team | garak, promptfoo, Duke policy probes (`safety/`) |
 | Containers | Docker Compose on DGX (`asus-dgx-04.oit.duke.edu`) |
 | API / DB / jobs | Flask, PostgreSQL, Celery + Redis (weeks 5+) |
 | UI | `frontend/` — Flask (W3+), full label W6 (mockups) |
@@ -137,6 +138,24 @@ docker compose run --rm scanner python -m scanner scan gpt2
 
 See [`scanner/README.md`](scanner/README.md). Spikes: [`scanner/experiments/`](scanner/experiments/).
 
+**Safety red-team (gateway model, Docker):**
+
+```bash
+./safety/run_safety.sh "GPT 4.1 Mini"   # promptfoo policy + red-team + garak, then merge
+# → safety/output/gpt-4.1-mini/merged_safety_result.json  (frontend: /safety)
+```
+
+See [`safety/README.md`](safety/README.md).
+
+**Efficacy run (gateway model):**
+
+```bash
+uv run python evaluator/runner.py --candidate-model "GPT 4.1 Mini" --judge-model "Llama 4 Maverick"
+# → evaluator/results/<timestamp>_<suite>_<model>.jsonl  (frontend: /eval-run)
+```
+
+See [`evaluator/README.md`](evaluator/README.md).
+
 ---
 
 ## Environment variables
@@ -168,9 +187,9 @@ See `.env.example`. Never commit `.env`.
 | Security scanning spike (ModelScan, Fickling, OSV/pip-audit) | Done |
 | Track / tool / evaluation docs | Done |
 | Scanning spikes + TruthfulQA pilot | Done |
-| Safety schemas + promptfoo; Team Docker/CI | Week 3 |
-| Scanner + safety packages | Weeks 3–4 |
-| Evaluation (`evaluator/`) | W3: MVP suites, 1 gateway model; W4+: pilot scale |
-| API + persistence | Week 5 |
-| Dashboard + DGX deploy | Week 6 |
+| Scanner package (3-tool + pip-audit/OSV + TruffleHog) | Done (W3–4) |
+| Safety package (garak + promptfoo + Duke probes, merged) | Done (W3–4) |
+| Evaluator (`evaluator/` runner + rubric judge) | Done (W3–4); multi-model pilot ongoing |
+| API + persistence (JSON → Postgres ingest) | Week 5 |
+| Dashboard + VM/DCC deploy | Week 6 |
 | Stakeholder demo, scope freeze | Week 7 |

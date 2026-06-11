@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from '_macros.html' import expandable %}
 
-{% block title %}{% if missing %}Safety not found{% else %}{{ display_name }} — safety{% endif %}{% endblock %}
+{% block title %}{% if missing %}Safety not found{% else %}{{ gateway_model_id }} — safety{% endif %}{% endblock %}
 
 {% block content %}
 <div class="scan-detail">
@@ -11,9 +11,8 @@
     <p><a href="{{ url_for('safety') }}">← all safety results</a></p>
   {% else %}
     <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
-    <h1>{{ display_name }}</h1>
+    <h1><code>{{ gateway_model_id }}</code></h1>
     <p class="sub">
-      gateway <code>{{ gateway_model_id }}</code> ·
       slug <code>{{ slug }}</code> ·
       status {{ status }} ·
       completed {{ completed_at[:19] if completed_at != "—" else "—" }}

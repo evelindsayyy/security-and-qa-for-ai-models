@@ -64,12 +64,12 @@ model_ids + deployment_context
 
 ## Output
 
-Normalized shapes: [`data-model.md`](data-model.md) (`scans`/`findings`, `safety_runs`/`safety_findings`). Week 3: run tools, capture raw JSON, map into Pydantic in `scanner/` and `safety/` before Postgres (week 5).
+Normalized shapes: [`data-model.md`](data-model.md) (`scans`/`findings`, `safety_runs`/`safety_findings`). Tools run, capture raw JSON, and map into Pydantic in `scanner/` and `safety/`; a week-5 ingest step loads that JSON into Postgres (see [`architecture.md`](architecture.md#results-persistence-json--postgres-ingest)).
 
-| Part | Spike (learn tool output) | Production |
-|------|---------------------------|------------|
-| Scanning | `scanner/` → `scanner/output/<slug>/scan_result.json` (Docker: `scanner/docker/`) | Postgres week 5 |
-| Safety | Run garak / promptfoo; sample output in issue | `safety/` → `SafetyResult` JSON |
+| Part | Output (JSON today) | Production |
+|------|---------------------|------------|
+| Scanning | `scanner/` → `scanner/output/<slug>/scan_result.json` (Docker: `scanner/docker/`) | Postgres week 5 (ingest) |
+| Safety | `safety/` → `safety/output/<slug>/merged_safety_result.json` (`run_safety.sh` → `safety.merge`) | Postgres week 5 (ingest) |
 
 ---
 

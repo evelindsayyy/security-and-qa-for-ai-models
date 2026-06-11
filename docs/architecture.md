@@ -16,6 +16,62 @@ Two nutrition-label pillars (**security**, **efficacy**) — two development tra
 
 All tracks push structured results to a shared Postgres database. **`api/`** (Flask, week 5+) serves JSON; **`frontend/`** (Flask from week 3, full label UI by week 6) is the nutrition label UI per Grace's mockups.
 
+## Compute topology (DGX, application VM, DCC)
+
+Three execution environments, each matched to a job's needs:
+
+| Environment | Runs | Why | Reaches Postgres? |
+|-------------|------|-----|-------------------|
+| **Application VM** (Duke OIT) | `api/` (Flask), Celery workers, Redis, the JSON→DB ingest step | Always-on orchestrator; the only host that holds the database connection | Yes |
+| **DGX / Docker host** | `scanner/` artifact jobs (download HF files, run ModelScan / Fickling / ModelAudit / pip-audit / TruffleHog in a container) | Untrusted-file isolation; CPU-bound, no GPU needed | No — JSON pulled to the VM and ingested |
+| **Duke Compute Cluster (DCC)** | GPU inference for open-source HF models in the safety and efficacy pillars (SLURM batch jobs) | On-demand GPUs (`codeplussu2026-gpu` partition); avoids standing GPU cost | No — emits JSON, pulled back to the VM |
+| **Duke AI Gateway** (LiteLLM) | Inference for cloud / Azure / API-key models (safety + efficacy default path) | Production-like endpoints; gateway guardrails apply | n/a (called from the VM/worker) |
+
+**The DGX does not disappear.** It (or any Docker host, including the VM) keeps running `scanner/`, because artifact scanning is about sandboxing untrusted files, not GPU compute. Model **weights** live where the job runs: the scanner downloads to a local, gitignored cache (`scanner/models/`); DCC inference pulls weights from Hugging Face once into cluster storage (`/work/<netid>` or `/hpc/group/<team>`).
+
+**Two inference backends for safety and efficacy:**
+
+- **Gateway path (default, today):** `safety/` and `evaluator/` call models through LiteLLM with an API key. Closed-source, Azure-hosted, and gateway-catalog models use this path; LiteLLM guardrails apply.
+- **Open-source HF path (DCC, optional flag):** point a run at a custom Hugging Face repo id; the job runs on a DCC GPU node and serves the open weights locally (e.g. vLLM) for garak / promptfoo / the evaluator. This path bypasses the gateway and its guardrails by design — it is only for open-weight models we host ourselves.
+
+Both paths emit the **same** `SafetyResult` / `EvaluationResult` JSON, so scoring, ingest, and the frontend are identical regardless of backend.
+
+## Open-source inference on the DCC
+
+DCC is a SLURM cluster reached at `dcc-login.oit.duke.edu` (terminal/VS Code) or `dcc-ondemand-01.oit.duke.edu` (web). The team allocation is the `codeplussu2026` account with the `codeplussu2026-gpu` partition. Reference: <https://oit-rc.pages.oit.duke.edu/rcsupportdocs/dcc/>.
+
+```mermaid
+flowchart TD
+  VM["Application VM (Celery worker)"] -->|"sbatch over SSH"| Login["DCC login node"]
+  Login --> Sched["SLURM scheduler"]
+  Sched --> GPU["codeplussu2026-gpu node"]
+  GPU -->|"vLLM serves HF weights"| Job["garak / promptfoo / evaluator"]
+  Job --> JSON["SafetyResult / EvaluationResult JSON on /work"]
+  JSON -->|"scp / Globus pull"| VM
+  VM -->|"ingest"| PG[("Postgres")]
+```
+
+A run is one batch script (`#SBATCH --account=codeplussu2026 --partition=codeplussu2026-gpu --gres=gpu:a5000:1 …`) that loads CUDA, activates the environment, pulls HF weights, serves them locally, runs the tool with our YAML/probes, and writes JSON to cluster storage. The Celery worker submits with `sbatch`, polls `squeue` / `sacct`, then pulls the JSON back. The pillar entry points (`safety/`, `evaluator/`) are unchanged — the backend is chosen by a flag plus a small `*.sh` submit template.
+
+## Results persistence: JSON → Postgres ingest
+
+Every pillar defines Pydantic schemas — `scanner/schemas.py` (`ScanResult`, `Finding`), `safety/schemas.py` (`SafetyRunResult`, `MergedSafetyResult`, `SafetyFinding`), `evaluator/schemas.py` (`EvaluationResult`). Jobs serialize these to **JSON artifacts** first; a separate **ingest** step then loads JSON into Postgres.
+
+```mermaid
+flowchart LR
+  Job["scanner / safety / evaluator job"] --> Pyd["Pydantic model"]
+  Pyd --> J["JSON artifact (gitignored)"]
+  J --> Ing["ingest (VM, DB-reachable)"]
+  Ing --> ORM["SQLAlchemy rows"]
+  ORM --> PG[("Postgres")]
+```
+
+Why JSON-then-ingest instead of writing to the DB from each job: the DGX and DCC compute hosts **cannot reach** `codeplus-postgres-test-01.oit.duke.edu:5432` (confirmed — direct TCP times out from the DGX). Only the application VM holds the DB connection. JSON artifacts decouple compute from the database, survive network restrictions, double as the frontend's offline data source, and give an audit trail. Ingest is idempotent (keyed on run id) and maps each Pydantic document onto the tables in [`data-model.md`](data-model.md); raw tool blobs stay in the `tool_results` JSONB column.
+
+### JSON artifacts and gitignore policy
+
+Run outputs (`scanner/output/`, `safety/output/`, `evaluator/results/`) stay **gitignored**: they are large, machine-specific, and become redundant once Postgres is the source of truth (the team views results through the DB and frontend, not by syncing one machine's files). For unit tests and offline frontend demos, commit a few small **curated fixtures** (e.g. under `unit_tests/fixtures/`) rather than whole run directories. This removes today's single-machine bottleneck, where only the host that ran the jobs can see the results.
+
 ## System context
 
 ### Write paths (one per job type)
@@ -159,14 +215,16 @@ End-to-end paths and GET pairing: [System context](#system-context). Summary:
 
 ## Deployment
 
-- **Target:** GPU VM provisioned by Duke OIT.
+- **Application VM** (Duke OIT): hosts `api/`, Celery workers, Redis, frontend, and the Postgres client/ingest. It is the only tier with a route to the database.
+- **GPU work is delegated:** artifact scanning runs in a Docker sandbox (DGX or VM); open-source model inference runs on DCC via SLURM. Neither needs the VM to carry a standing GPU.
 - **Containerization:** Docker + Docker Compose. One command starts API + worker + Redis + Postgres + frontend.
 - **Production compose:** no hot reload, proper restart policies, secrets from environment variables.
+- **Database access:** Postgres (`codeplus-postgres-test-01.oit.duke.edu`) is reachable from the VM only; developers connect over the Duke VPN or an SSH tunnel. Rotate any credential that has been shared in plaintext.
 - **CI/CD:** GitLab CI runs lint, unit tests, and a Docker build check on every push to `main`.
 
 ## Open Questions
 
-- Async backend — Celery + Redis is the default; SLURM only if Duke OIT exposes the cluster scheduler from the GPU VM.
+- Async backend — Celery + Redis on the application VM orchestrates all jobs; GPU inference for open-source models is delegated to DCC via SLURM (`sbatch` over SSH), with results pulled back and ingested. Closed-source / gateway models need no GPU and run directly from the worker.
 - Frontend stack — Flask in `frontend/` now; Next.js + Tailwind possible week 6 in the same directory.
 - Auth — Duke Shibboleth preferred; prototype may run unauthenticated behind the VM firewall.
 - LiteLLM guardrail hooks — document integration path (week 5); prototype may ship without hooks.

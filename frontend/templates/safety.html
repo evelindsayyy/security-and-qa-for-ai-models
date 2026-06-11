@@ -42,13 +42,8 @@
             data-href="{{ url_for('safety_detail', slug=m.slug) }}"
             tabindex="0"
             role="link"
-            aria-label="Open safety results for {{ m.display_name }}">
-          <td>
-            <div class="model-block">
-              <span class="model">{{ m.display_name }}</span>
-              <code>{{ m.gateway_model_id }}</code>
-            </div>
-          </td>
+            aria-label="Open safety results for {{ m.gateway_model_id }}">
+          <td><code class="model">{{ m.gateway_model_id }}</code></td>
           <td class="col-nowrap"><span class="tier tier-{{ m.safety_tier }}">{{ m.safety_tier }}</span></td>
           <td class="num overall {{ score_class }}"><b>{{ m.pass_rate_display }}</b></td>
           <td class="num {% if m.n_failed %}score-weak{% endif %}">{{ m.n_failed }}</td>

@@ -1,6 +1,6 @@
 # Data model
 
-Target **PostgreSQL** schema for week 5 [`api/`](../api/README.md) (see [`architecture.md`](architecture.md)). Weeks 3–4: each package writes **JSON** with the same logical shapes (validated in code); Postgres comes later.
+Target **PostgreSQL** schema for week 5 [`api/`](../api/README.md) (see [`architecture.md`](architecture.md)). Weeks 3–4: each package writes **JSON** with the same logical shapes (validated by Pydantic in code). Week 5 adds an **ingest** step that maps those JSON documents onto the tables below (JSON → Pydantic → SQLAlchemy); see [`architecture.md`](architecture.md#results-persistence-json--postgres-ingest). Compute hosts emit JSON; only the application VM writes to Postgres.
 
 Catalog keys: [`gateway-models.md`](gateway-models.md).
 
@@ -86,11 +86,13 @@ One red-team job against one or more gateway models.
 |--------|---------|
 | `id` | UUID |
 | `gateway_model_id` | `gpt-4.1-mini` |
+| `inference_backend` | string | `gateway` (LiteLLM) \| `dcc` (open weights served on the cluster) |
+| `hf_repo` | string, nullable | set when an open-weight model was served on DCC instead of the gateway |
 | `status` | `complete` |
 | `deployment_context` | JSONB (required for ITSO-aligned probes) |
 | `probe_suite` | string | `garak_subset_v1` or `promptfoo_duke_policy_v1` |
 | `summary_pass_rate` | float | `0.85` |
-| `tool_results` | JSONB | `{"garak": {...}, "promptfoo": {...}}` — **format TBD after W3 runs** |
+| `tool_results` | JSONB | `{"garak": {...}, "promptfoo": {...}}` raw blobs (shapes in `safety/schemas.py`) |
 | `started_at` / `completed_at` | timestamptz | |
 
 **`safety_findings`** (normalized for UI):
@@ -129,6 +131,8 @@ Week 3 work: run garak and promptfoo, save sample JSON, then lock Pydantic types
 | `id` | UUID |
 | `suite_id` | FK → `task_suites` |
 | `gateway_model_id` | `gpt-4.1-mini` |
+| `inference_backend` | string | `gateway` \| `dcc` (open weights on the cluster) |
+| `hf_repo` | string, nullable | set for an open-weight model served on DCC |
 | `status` | `complete` |
 | `aggregate_score` | float | `0.78` (suite-defined) |
 | `latency_p50_ms` | int | `1200` |

@@ -35,10 +35,12 @@ Run: `scanner/` via Docker (`scanner/docker/` → `scanner/models`, `scanner/out
 
 | Tool | Status | Role |
 |------|--------|------|
-| garak | Planned | Broad automated probes (jailbreak, injection, toxicity, leakage) via LiteLLM |
-| promptfoo | Planned | [Declarative red-team YAML](https://github.com/promptfoo/promptfoo), custom graders, CI; Duke policy and academic-integrity suites |
-| Duke probes | Planned | Duke-only prompts not covered by garak catalog (may live in `safety/promptfoo/`) |
+| garak | In use | Broad automated probes (jailbreak, injection, toxicity, leakage) via LiteLLM (`safety/garak/`) |
+| promptfoo | In use | [Declarative red-team YAML](https://github.com/promptfoo/promptfoo), custom graders, CI; Duke policy and academic-integrity suites (`safety/promptfoo/`) |
+| Duke probes | In use | Duke-only prompts in the promptfoo policy config (`safety/promptfoo/promptfooconfig.yaml`) |
 | LiteLLM guardrails | Planned (doc) | Gateway integration path (ITSO) |
+
+Run: `./safety/run_safety.sh "GPT 4.1 Mini"` → per-tool exports merged by `python -m safety.merge` into `safety/output/<model>/merged_safety_result.json`.
 
 ### Not used (summer)
 
