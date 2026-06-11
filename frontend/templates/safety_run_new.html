@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Start a safety run{% endblock %}
+
+{% block content %}
+<div class="eval-comparison">
+  <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
+  <h1>Start a safety run</h1>
+  <p class="sub">
+    Launches <code>safety/run_safety.sh</code> on the server (promptfoo + garak + merge).
+    Full runs can take 30–90 minutes per model.
+  </p>
+
+  {% if gateway_error %}
+  <p class="form-warning">Live catalog unavailable — showing fallback list. {{ gateway_error }}</p>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('safety_run_start') }}" class="launch-form">
+    <label>Gateway model
+      <select name="gateway_model" id="gateway_model">
+        {% for group in gateway_groups %}
+        <optgroup label="{{ group.label }}">
+          {% for m in group.models %}
+          <option value="{{ m }}" {% if m == 'GPT 4.1 Mini' %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </optgroup>
+        {% endfor %}
+      </select>
+      <span class="form-hint">chat-capable models from the gateway catalog — ids are case-sensitive</span>
+    </label>
+
+    <p id="overwrite-warning" class="form-warning" style="display: none;">
+      This model already has safety results — starting a new run will delete the prior outputs and replace them.
+    </p>
+
+    <fieldset>
+      <legend>Options</legend>
+      <label><input type="checkbox" name="skip_redteam"> Skip promptfoo red-team (faster)</label>
+      <label><input type="checkbox" name="skip_garak"> Skip garak</label>
+      <label><input type="checkbox" name="skip_promptfoo"> Skip all promptfoo</label>
+    </fieldset>
+
+    <label>Garak probe subset (optional)
+      <input type="text" name="garak_probes" placeholder="encoding,promptinject,dan.Dan_11_0">
+      <span class="form-hint">comma-separated module list; leave blank for default Duke set</span>
+    </label>
+
+    <button type="submit" class="btn-primary">▶ Start safety run</button>
+  </form>
+</div>
+
+<script>
+  const HAS_RESULTS = {{ model_has_results | tojson }};
+
+  function updateWarning() {
+    const model = document.getElementById("gateway_model").value;
+    document.getElementById("overwrite-warning").style.display =
+      HAS_RESULTS[model] ? "block" : "none";
+  }
+
+  document.getElementById("gateway_model").addEventListener("change", updateWarning);
+  updateWarning();
+</script>
+{% endblock %}

@@ -127,6 +127,19 @@ def predict_stem(suite_key: str, candidate: str) -> str:
     return f"{ts}_{suite_key}_{_safe_slug(candidate)}"
 
 
+def _wipe_prior_runs(suite_key: str, candidate: str) -> None:
+    """Delete previous result/trace/log files for this (suite, candidate).
+
+    Runner output is timestamped, so old runs would otherwise pile up in the
+    comparison table (e.g. a stale "12/12 empty" row next to a fixed one).
+    Wiping on launch keeps exactly one run per model+suite on disk.
+    """
+    suffix = f"_{suite_key}_{_safe_slug(candidate)}"
+    for path in RESULTS_DIR.glob(f"*{suffix}*"):
+        if path.suffix in (".jsonl", ".log"):
+            path.unlink(missing_ok=True)
+
+
 def start_run(
     candidate: str, judge: str, suite_key: str, max_tokens: int
 ) -> tuple[str, bool]:
@@ -141,6 +154,10 @@ def start_run(
         if existing and _RUNNING.get(existing) is not None \
                 and _RUNNING[existing].poll() is None:
             return existing, True
+
+        # Fresh run — drop prior outputs for this model+suite so the table
+        # shows one current result instead of accumulating stale runs.
+        _wipe_prior_runs(suite_key, candidate)
 
         stem = predict_stem(suite_key, candidate)
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)

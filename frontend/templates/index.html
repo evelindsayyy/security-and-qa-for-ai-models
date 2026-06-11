@@ -6,8 +6,7 @@
 <div class="hub">
   <h1>AI Model Security & QA</h1>
   <p class="sub">
-    draft progress viewer — reads local json only (not interactive).
-    week 6 ui will use <code>api/</code> + postgres.
+    Progress viewer for scanning, efficacy, and safety pillars.
   </p>
 
   <h2 class="hub-section">Nutrition label</h2>
@@ -15,7 +14,7 @@
   <section class="pillars">
     <div class="pillar-card">
       <h2>Scanning</h2>
-      <p class="pillar-meta">hf artifacts · <code>scanner/output/</code></p>
+      <p class="pillar-meta">HF artifact security</p>
       {% if scan_has %}
         <p class="pillar-stat"><b>{{ scan_count }}</b> model{{ "s" if scan_count != 1 else "" }} scanned</p>
         <p class="pillar-stat">highest risk: <span class="tier tier-{{ scan_worst_tier }}">{{ scan_worst_tier }}</span> ({{ scan_worst_score }})</p>
@@ -28,7 +27,7 @@
 
     <div class="pillar-card">
       <h2>Efficacy</h2>
-      <p class="pillar-meta">gateway tasks · <code>evaluator/results/</code></p>
+      <p class="pillar-meta">Gateway task evaluation</p>
       {% if eval_has %}
         <p class="pillar-stat"><b>{{ eval_count }}</b> run{{ "s" if eval_count != 1 else "" }} on disk</p>
         {% if eval_best_overall is not none %}
@@ -43,14 +42,11 @@
 
     <div class="pillar-card">
       <h2>Safety</h2>
-      <p class="pillar-meta">garak · promptfoo · duke probes · <code>safety/output/</code></p>
+      <p class="pillar-meta">Promptfoo · Garak · Duke probes</p>
       {% if safety_has %}
         <p class="pillar-stat"><b>{{ safety_count }}</b> model{{ "s" if safety_count != 1 else "" }} tested</p>
-        <p class="pillar-stat">
-          worst tier: <span class="tier tier-{{ safety_worst_tier }}">{{ safety_worst_tier }}</span>
-          {% if safety_worst_pass_rate is not none %}
-            ({{ "%.0f"|format(safety_worst_pass_rate * 100) }}% pass)
-          {% endif %}
+        <p class="pillar-stat">highest risk: <span class="tier tier-{{ safety_worst_tier }}">{{ safety_worst_tier }}</span>
+          {% if safety_worst_pass_rate is not none %}({{ "%.0f"|format(safety_worst_pass_rate * 100) }}% pass){% endif %}
         </p>
         <p><a href="{{ url_for('safety') }}">View safety results →</a></p>
       {% else %}
@@ -58,27 +54,6 @@
         <p><a href="{{ url_for('safety') }}">Safety page →</a></p>
       {% endif %}
     </div>
-  </section>
-
-  <section class="catalog-preview">
-    <h2>Gateway models (live)</h2>
-    <p class="sub">
-      {% if gateway_count %}
-        <b>{{ gateway_count }}</b> models from gateway —
-      {% endif %}
-      <a href="{{ url_for('models_catalog') }}">full catalog</a>
-    </p>
-    {% if gateway_error %}
-      <p class="empty">{{ gateway_error }}</p>
-    {% elif gateway_models %}
-      <ul class="model-list">
-        {% for m in gateway_models %}
-          <li><code>{{ m.id }}</code>{% if m.notes %} — {{ m.notes }}{% endif %}</li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="empty">no models returned — check gateway credentials in .env</p>
-    {% endif %}
   </section>
 </div>
 {% endblock %}

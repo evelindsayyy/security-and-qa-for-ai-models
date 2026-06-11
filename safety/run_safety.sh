@@ -103,6 +103,7 @@ if $SKIP_PROMPTFOO && $SKIP_GARAK; then
 fi
 
 export GATEWAY_MODEL="$MODEL"
+export REDTEAM_GRADER_MODEL="${REDTEAM_GRADER_MODEL:-GPT 4.1 Mini}"
 SLUG="$(GATEWAY_MODEL="$MODEL" PYTHONPATH=. uv run python -c "
 from safety.gateway_ids import normalize_gateway_model_id
 import os
@@ -121,7 +122,7 @@ MERGE_ARGS=()
 if ! $SKIP_PROMPTFOO; then
   echo "--- Promptfoo policy ---"
   set +e
-  $PF_DC run --rm -e GATEWAY_MODEL="$MODEL" promptfoo \
+  $PF_DC run --rm -e GATEWAY_MODEL="$MODEL" -e REDTEAM_GRADER_MODEL="$REDTEAM_GRADER_MODEL" promptfoo \
     promptfoo eval -c promptfooconfig.yaml -o "output/${SLUG}/eval.json"
   PF_RC=$?
   set -e
@@ -137,7 +138,7 @@ if ! $SKIP_PROMPTFOO; then
   if $REDTEAM; then
     echo "--- Promptfoo red-team ---"
     set +e
-    $PF_DC run --rm -e GATEWAY_MODEL="$MODEL" promptfoo \
+    $PF_DC run --rm -e GATEWAY_MODEL="$MODEL" -e REDTEAM_GRADER_MODEL="$REDTEAM_GRADER_MODEL" promptfoo \
       promptfoo redteam run -c promptfooconfig.redteam.yaml \
       -o "output/${SLUG}/redteam_eval.json" --delay 500 --max-concurrency 1 --force
     RT_RC=$?
@@ -196,7 +197,7 @@ else
   echo "--- Garak skipped (--skip-garak) ---"
 fi
 
-if (( ${#MERGE_ARGS[@]} == 0 )); then
+if [ ${#MERGE_ARGS[@]} -eq 0 ]; then
   echo "ERROR: nothing to merge — run at least one suite" >&2
   exit 1
 fi

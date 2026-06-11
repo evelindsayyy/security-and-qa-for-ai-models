@@ -64,7 +64,15 @@ def cmd_scan(args: argparse.Namespace) -> int:
     """Full pipeline: download (optional) → tools → ``scan_result.json``."""
     for model_id in args.models:
         print(f"scanning {model_id} ...")
-        result = scan_model(model_id, auto_download=not args.no_download)
+        result = scan_model(
+            model_id,
+            auto_download=not args.no_download,
+            run_modelscan=not args.skip_modelscan,
+            run_fickling=not args.skip_fickling,
+            run_modelaudit=not args.skip_modelaudit,
+            run_dependencies=not args.skip_deps,
+            run_secrets=not args.skip_secrets,
+        )
         out = output_dir(model_id) / "scan_result.json"
         print(
             f"  tier={result.severity_tier.value} score={result.overall_risk_score} "
@@ -236,7 +244,6 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     nd = argparse.ArgumentParser(add_help=False)
     nd.add_argument("--no-download", action="store_true")
-
     refresh_parser = sub.add_parser(
         "refresh-supply-chain",
         help="deps+secrets only; update existing scan_result.json",
@@ -254,8 +261,19 @@ def main() -> int:
     )
     refresh_parser.set_defaults(func=cmd_refresh_supply_chain)
 
+    scan_parser = sub.add_parser("scan", help="full pipeline -> scan_result.json", parents=[nd])
+    scan_parser.add_argument("models", nargs="+")
+    for flag, dest in [
+        ("--skip-modelscan", "skip_modelscan"),
+        ("--skip-fickling", "skip_fickling"),
+        ("--skip-modelaudit", "skip_modelaudit"),
+        ("--skip-deps", "skip_deps"),
+        ("--skip-secrets", "skip_secrets"),
+    ]:
+        scan_parser.add_argument(flag, action="store_true")
+    scan_parser.set_defaults(func=cmd_scan)
+
     for name, func, help_text in [
-        ("scan", cmd_scan, "full pipeline -> scan_result.json"),
         ("metadata", cmd_metadata, "hf hub file list only"),
         ("modelscan", cmd_modelscan, "modelscan only (debug)"),
         ("fickling", cmd_fickling, "fickling only (debug)"),

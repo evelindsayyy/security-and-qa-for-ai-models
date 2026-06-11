@@ -47,22 +47,13 @@ Equivalent via wrapper:
 ./safety/run_safety.sh --garak-probes "encoding,promptinject,dan.Dan_11_0" --skip-promptfoo
 ```
 
-Reports land as `output/garak-duke.report.jsonl` (flat `output/` dir). The wrapper copies the newest `garak-duke*.report.jsonl` into `output/<slug>/`.
+Reports land under `output/<slug>/` (e.g. `output/gpt-4.1-mini/garak-duke.report.jsonl`). `run_safety.sh` sets `report_dir` per model so outputs never share a flat root.
 
 ## Export results
 
 ```bash
 PYTHONPATH=. uv run python safety/garak/export_safety_result.py \
   safety/garak/output/${SLUG}/garak-duke*.report.jsonl \
-  -o safety/garak/output/${SLUG}/safety_result.json \
-  --gateway-model-id "${GATEWAY_MODEL}"
-```
-
-If the report is still in flat `output/`:
-
-```bash
-PYTHONPATH=. uv run python safety/garak/export_safety_result.py \
-  safety/garak/output/garak-duke-*.report.jsonl \
   -o safety/garak/output/${SLUG}/safety_result.json \
   --gateway-model-id "${GATEWAY_MODEL}"
 ```
@@ -132,7 +123,7 @@ Azure gateway may block jailbreak prompts before the model responds. Garak repor
 |------|------|
 | `garak_duke.yaml` | Scan config |
 | `export_safety_result.py` | Normalizer CLI |
-| `output/garak-duke.report.jsonl` | Raw report (flat dir) |
+| `output/<slug>/garak-duke.report.jsonl` | Raw report |
 | `output/<slug>/safety_result.json` | Normalized export |
 
 ## Troubleshooting

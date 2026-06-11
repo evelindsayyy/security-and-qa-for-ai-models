@@ -12,7 +12,6 @@ week 5: replace file glob with GET /api/safety and GET /api/safety/{id}.
 from __future__ import annotations
 
 import json
-from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -34,10 +33,6 @@ def _severity_rank(severity: str) -> int:
         return len(_SEVERITY_ORDER)
 
 
-def _tier_rank(tier: str) -> int:
-    return _severity_rank(tier)
-
-
 def _pass_rate_display(rate: float | None) -> str:
     if rate is None:
         return "—"
@@ -48,28 +43,18 @@ def _suite_label(probe_suite: str) -> str:
     return _SUITE_LABELS.get(probe_suite, probe_suite.replace("_", " "))
 
 
-def _failed_summary(findings: list[dict]) -> str:
-    failed = [f for f in findings if not f.get("passed")]
-    if not failed:
-        return "none"
-    counts = Counter((f.get("severity") or "unknown").lower() for f in failed)
-    parts = []
-    for sev in _SEVERITY_ORDER:
-        if counts.get(sev):
-            parts.append(f"{counts[sev]} {sev}")
-    return ", ".join(parts) if parts else f"{len(failed)} failed"
+# Fixed suite order so columns line up across models.
+_SUITE_ORDER = ("promptfoo_duke_policy_v1", "promptfoo_duke_redteam_v1", "garak_subset_v1")
 
 
-def _suite_snippet(runs: list[dict]) -> str:
-    parts = []
-    for r in runs:
-        if not isinstance(r, dict):
-            continue
-        suite = r.get("probe_suite") or "—"
-        label = _suite_label(suite)
-        rate = r.get("summary_pass_rate")
-        parts.append(f"{label}={_pass_rate_display(rate)}")
-    return " · ".join(parts) if parts else "—"
+def _rate_class(rate: float | None) -> str:
+    if rate is None:
+        return "rate-na"
+    if rate >= 0.8:
+        return "rate-strong"
+    if rate >= 0.6:
+        return "rate-mid"
+    return "rate-weak"
 
 
 def _summarize_merged(path: Path, slug: str) -> dict | None:
@@ -80,21 +65,37 @@ def _summarize_merged(path: Path, slug: str) -> dict | None:
 
     findings = data.get("findings") or []
     runs = data.get("runs") or []
-    n_failed = sum(1 for f in findings if isinstance(f, dict) and not f.get("passed"))
+    n_failed = sum(
+        1 for f in findings if isinstance(f, dict) and not f.get("passed")
+    )
+    pass_rate = data.get("summary_pass_rate") or 0
+    by_suite = {
+        r.get("probe_suite"): r.get("summary_pass_rate")
+        for r in runs
+        if isinstance(r, dict)
+    }
+    tier = (data.get("composite_tier") or "low").lower()
 
     return {
         "slug": slug,
         "gateway_model_id": data.get("gateway_model_id") or slug,
         "display_name": data.get("display_name") or data.get("gateway_model_id") or slug,
-        "safety_tier": (data.get("safety_tier") or "unknown").lower(),
-        "summary_pass_rate": data.get("summary_pass_rate", 0),
-        "pass_rate_display": _pass_rate_display(data.get("summary_pass_rate")),
+        "tier": tier,
+        "composite_score": data.get("composite_score") or 0,
+        "summary_pass_rate": pass_rate,
+        "pass_rate_display": _pass_rate_display(pass_rate),
+        "pass_rate_class": _rate_class(pass_rate),
+        "suite_columns": [
+            {
+                "display": _pass_rate_display(by_suite.get(suite)),
+                "rate_class": _rate_class(by_suite.get(suite)),
+            }
+            for suite in _SUITE_ORDER
+        ],
+        "missing_suites": [_suite_label(s) for s in (data.get("missing_suites") or [])],
         "n_findings": len(findings),
         "n_failed": n_failed,
         "n_passed": len(findings) - n_failed,
-        "failed_summary": _failed_summary([f for f in findings if isinstance(f, dict)]),
-        "n_suites": len(runs),
-        "suite_snippet": _suite_snippet(runs),
         "completed_at": data.get("completed_at") or "—",
         "status": data.get("status") or "unknown",
     }
@@ -119,6 +120,7 @@ def _parse_findings(findings_raw: list) -> list[dict]:
                 "probe_id": f.get("probe_id") or "—",
                 "probe_suite": f.get("probe_suite"),
                 "description": (f.get("description") or "").strip(),
+                "scoring_excluded": bool(f.get("scoring_excluded")),
                 "corroborated_by": f.get("corroborated_by") or [],
             }
         )
@@ -154,7 +156,13 @@ def _deployment_rows(ctx: dict) -> list[dict]:
     return rows
 
 
-def _suite_panels(runs: list, tool_results: dict) -> list[dict]:
+def _suite_panels(runs: list, tool_results: dict, findings: list[dict]) -> list[dict]:
+    # Group parsed findings by suite so each panel can show per-probe detail
+    # (failures first), not just a bare probe-id list.
+    by_suite: dict[str, list[dict]] = {}
+    for f in findings:
+        by_suite.setdefault(f.get("probe_suite") or "—", []).append(f)
+
     panels = []
     for run in runs:
         if not isinstance(run, dict):
@@ -172,7 +180,7 @@ def _suite_panels(runs: list, tool_results: dict) -> list[dict]:
                 "pass_rate_display": _pass_rate_display(run.get("summary_pass_rate")),
                 "n_findings": run.get("n_findings", 0),
                 "n_passed": run.get("n_passed", 0),
-                "probe_ids": run.get("probe_ids") or [],
+                "probes": by_suite.get(suite, []),
                 "eval_id": promptfoo.get("evalId"),
                 "source_file": promptfoo.get("source_file"),
                 "description": promptfoo.get("description"),
@@ -192,7 +200,6 @@ def get_safety_data() -> dict:
             "has_safety": False,
             "output_dir": str(OUTPUT_DIR),
             "models": [],
-            "tier_summary": "",
         }
 
     rows: list[dict] = []
@@ -202,16 +209,14 @@ def get_safety_data() -> dict:
         if row:
             rows.append(row)
 
-    rows.sort(key=lambda r: (_tier_rank(r["safety_tier"]), r["summary_pass_rate"]))
-
-    tiers = sorted({r["safety_tier"] for r in rows}, key=_tier_rank)
-    tier_summary = ", ".join(tiers) if tiers else ""
+    # Worst first: lowest calibrated composite score, then lowest pass rate.
+    rows.sort(key=lambda r: (r["composite_score"], r["summary_pass_rate"]))
 
     return {
         "has_safety": bool(rows),
         "output_dir": str(OUTPUT_DIR),
         "models": rows,
-        "tier_summary": tier_summary,
+        "suite_labels": [_suite_label(s) for s in _SUITE_ORDER],
     }
 
 
@@ -234,24 +239,23 @@ def get_safety_detail(slug: str) -> dict | None:
         "slug": slug,
         "gateway_model_id": data.get("gateway_model_id") or slug,
         "display_name": data.get("display_name") or data.get("gateway_model_id") or slug,
-        "safety_tier": (data.get("safety_tier") or "unknown").lower(),
-        "summary_pass_rate": data.get("summary_pass_rate", 0),
+        "tier": (data.get("composite_tier") or "low").lower(),
+        "summary_pass_rate": data.get("summary_pass_rate") or 0,
         "pass_rate_display": _pass_rate_display(data.get("summary_pass_rate")),
+        "pass_rate_class": _rate_class(data.get("summary_pass_rate")),
+        "missing_suites": [_suite_label(s) for s in (data.get("missing_suites") or [])],
         "status": data.get("status") or "unknown",
         "findings": findings,
         "n_findings": len(findings),
         "n_failed": n_failed,
         "n_passed": len(findings) - n_failed,
-        "failed_summary": _failed_summary(findings),
-        "suite_snippet": _suite_snippet(runs),
-        "suite_panels": _suite_panels(runs, data.get("tool_results") or {}),
+        "suite_panels": _suite_panels(runs, data.get("tool_results") or {}, findings),
         "deployment_rows": _deployment_rows(data.get("deployment_context") or {}),
         "started_at": data.get("started_at") or "—",
         "completed_at": data.get("completed_at") or "—",
         "raw_summary": {
             "gateway_model_id": data.get("gateway_model_id"),
             "display_name": data.get("display_name"),
-            "safety_tier": data.get("safety_tier"),
             "summary_pass_rate": data.get("summary_pass_rate"),
             "runs": runs,
             "deployment_context": data.get("deployment_context"),

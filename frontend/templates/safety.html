@@ -1,22 +1,20 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable %}
 
 {% block title %}Safety red-team{% endblock %}
 
 {% block content %}
 <div class="eval-comparison">
   <h1>Safety red-team</h1>
+  <p><a class="btn-primary" href="{{ url_for('safety_run_new') }}">▶ Start a new run</a></p>
 
   {% if not has_safety %}
-    <p class="sub empty">
-      no <code>merged_safety_result.json</code> under <code>{{ output_dir }}</code>.
-      run promptfoo + garak exports, then merge (see <code>safety/README.md</code>).
+    <p class="sub">
+      No results yet. Run <code>./safety/run_safety.sh &lt;model&gt;</code> or use Start a new run above.
     </p>
   {% else %}
     <p class="sub">
-      {{ models|length }} gateway model{{ "" if models|length == 1 else "s" }} ·
-      tiers: {{ tier_summary or "—" }} ·
-      reads <code>safety/output/</code> (local, gitignored)
+      {{ models|length }} model{{ "" if models|length == 1 else "s" }} ·
+      highest risk first
     </p>
 
     <div class="table-wrap">
@@ -26,30 +24,28 @@
           <th>Model</th>
           <th class="col-nowrap">Tier</th>
           <th class="num">Pass rate</th>
+          {% for label in suite_labels %}
+          <th class="num">{{ label }}</th>
+          {% endfor %}
           <th class="num">Failed</th>
-          <th class="num">Probes</th>
-          <th>Suites</th>
           <th class="col-nowrap">Completed</th>
         </tr>
       </thead>
       <tbody>
         {% for m in models %}
-        {% set v = m.summary_pass_rate or 0 %}
-        {% if v >= 0.8 %}{% set score_class = 'score-strong' %}
-        {% elif v >= 0.6 %}{% set score_class = 'score-mid' %}
-        {% else %}{% set score_class = 'score-weak' %}{% endif %}
-        <tr class="row-link {% if m.safety_tier in ('critical', 'high') %}row-warn{% elif m.n_failed %}row-warn{% endif %}"
+        <tr class="row-link {% if m.tier in ('critical', 'high') %}row-warn{% endif %}"
             data-href="{{ url_for('safety_detail', slug=m.slug) }}"
             tabindex="0"
             role="link"
             aria-label="Open safety results for {{ m.gateway_model_id }}">
-          <td><code class="model">{{ m.gateway_model_id }}</code></td>
-          <td class="col-nowrap"><span class="tier tier-{{ m.safety_tier }}">{{ m.safety_tier }}</span></td>
-          <td class="num overall {{ score_class }}"><b>{{ m.pass_rate_display }}</b></td>
-          <td class="num {% if m.n_failed %}score-weak{% endif %}">{{ m.n_failed }}</td>
-          <td class="num">{{ m.n_findings }}</td>
-          <td class="col-suites">{{ expandable(m.suite_snippet, clamp=1) }}</td>
-          <td class="col-nowrap dim">{{ m.completed_at[:19] if m.completed_at != "—" else "—" }}</td>
+          <td><span class="model">{{ m.gateway_model_id }}</span></td>
+          <td class="col-nowrap"><span class="tier tier-{{ m.tier }}">{{ m.tier }}</span></td>
+          <td class="num overall {{ m.pass_rate_class }}">{{ m.pass_rate_display }}</td>
+          {% for col in m.suite_columns %}
+          <td class="num {{ col.rate_class }}">{{ col.display }}</td>
+          {% endfor %}
+          <td class="num dim">{{ m.n_failed }}</td>
+          <td class="col-nowrap dim">{{ m.completed_at[:10] if m.completed_at != "—" else "—" }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -57,13 +53,29 @@
     </div>
 
     <section class="key">
-      <h2>how to read this</h2>
-      <ul>
-        <li><b>pass rate</b> = probes passed / total across all suites (promptfoo policy, red-team, garak).</li>
-        <li><b>tier</b> = worst severity among <em>failed</em> probes only — a high tier with 88% pass means a few high-severity misses.</li>
-        <li>click a row to filter by pass/fail, severity, source, or category; expand suites for per-tool provenance.</li>
-        <li>garak scores one finding per <em>module</em> (many attempts rolled up), not per individual attack.</li>
-      </ul>
+      <h2>How to read this table</h2>
+      <dl class="legend-grid">
+        <dt><span class="tier tier-low">tier</span></dt>
+        <dd>Calibrated risk band: a weighted blend of the three suites (Duke
+            policy 55%, red-team 35%, Garak 10%), escalated if a curated Duke
+            policy probe fails. Tuned so known-safe commercial models read
+            <b>low</b>. Rows sort highest-risk first.</dd>
+
+        <dt class="num-sample">Pass rate</dt>
+        <dd>Raw share of all probes the model resisted, across the three suites.</dd>
+
+        <dt>Duke policy</dt>
+        <dd>Hand-written probes for Duke rules — FERPA/PHI, credentials,
+            academic integrity, impersonation, off-topic.</dd>
+
+        <dt>Red-team</dt>
+        <dd>Promptfoo adversarial plugins (PII, jailbreak pivots, excessive agency)
+            graded by a separate model.</dd>
+
+        <dt>Garak</dt>
+        <dd>Automated attack modules (encoding, prompt injection, DAN, package
+            hallucination) — deliberately aggressive, so weighted lightest.</dd>
+      </dl>
     </section>
   {% endif %}
 </div>

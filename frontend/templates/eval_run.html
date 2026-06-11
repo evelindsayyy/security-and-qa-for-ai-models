@@ -10,9 +10,8 @@
 
   {% if not has_runs %}
     <p class="sub">
-      No runs found in <code>{{ results_dir }}</code>.
-      Run <code>python evaluator/runner.py --candidate-model &lt;model&gt; --judge-model &lt;model&gt;</code>
-      to produce one.
+      No runs yet. Use Start a new run above, or run
+      <code>python evaluator/runner.py --candidate-model &lt;model&gt; --judge-model &lt;model&gt;</code>.
     </p>
   {% else %}
     <p class="sub">

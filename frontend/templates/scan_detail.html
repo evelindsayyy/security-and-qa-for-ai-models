@@ -4,35 +4,41 @@
 {% block title %}{% if missing %}Scan not found{% else %}{{ model_id }} — scan{% endif %}{% endblock %}
 
 {% block content %}
-<div class="scan-detail">
+<div class="eval-comparison">
   {% if missing %}
     <h1>Scan not found</h1>
     <p class="sub empty">no <code>scan_result.json</code> for slug <code>{{ slug }}</code>.</p>
     <p><a href="{{ url_for('scans') }}">← all scans</a></p>
+  {% elif running %}
+    <p class="back"><a href="{{ url_for('scans') }}">← all scans</a></p>
+    <h1>Scan in progress</h1>
+    <p class="sub">slug <code>{{ slug }}</code> · updates every 5 seconds</p>
+    <div class="progress-card">
+      <p class="progress-meta">status: <b id="prog-state">{{ run_status.status }}</b></p>
+      <pre class="log-snippet" id="prog-log">{{ run_status.message }}</pre>
+    </div>
+    <script>
+      (function () {
+        const slug = {{ slug | tojson }};
+        function poll() {
+          fetch("/scans/" + slug + "/status").then(r => r.json()).then(function (s) {
+            document.getElementById("prog-state").textContent = s.status;
+            if (s.message) document.getElementById("prog-log").textContent = s.message;
+            if (s.status === "complete") window.location = "/scans/" + slug;
+            else if (s.status === "failed") document.getElementById("prog-state").textContent = "failed";
+          });
+        }
+        setInterval(poll, 5000);
+      })();
+    </script>
   {% else %}
     <p class="back"><a href="{{ url_for('scans') }}">← all scans</a></p>
-    <h1>{{ model_id }}</h1>
+    <h1><span class="model">{{ model_id }}</span></h1>
     <p class="sub">
-      slug <code>{{ slug }}</code> ·
-      status {{ status }} ·
-      scanned {{ scanned_at[:19] if scanned_at != "—" else "—" }} ·
-      scanner {{ scanner_version }}
+      <span class="tier tier-{{ severity_tier }}">{{ severity_tier }}</span>
+      · risk {{ overall_risk_score }} · {{ n_findings }} finding{{ "" if n_findings == 1 else "s" }} ·
+      scanned {{ scanned_at[:10] if scanned_at != "—" else "—" }}
     </p>
-
-    <div class="summary-row">
-      <div class="summary-chips">
-        <span class="tier tier-{{ severity_tier }}">{{ severity_tier }}</span>
-        <span class="summary-score">risk score <b>{{ overall_risk_score }}</b></span>
-        <span class="dim">{{ n_findings }} finding{{ "" if n_findings == 1 else "s" }}</span>
-        {% if fickling_severity %}
-          <span class="badge badge-fickling">{{ fickling_severity }}</span>
-        {% endif %}
-      </div>
-      {% if severity_summary != "—" %}
-        <div class="summary-meta dim">{{ expandable(severity_summary, clamp=1) }}</div>
-      {% endif %}
-      <div class="summary-meta">{{ expandable(tool_snippet, clamp=1) }}</div>
-    </div>
 
     <h2>Findings ({{ n_findings }})</h2>
     {% if findings %}
@@ -51,72 +57,63 @@
         <option value="osv">Source: osv</option>
         <option value="trufflehog">Source: trufflehog</option>
       </select>
+      <span class="controls-hint dim">click a row to expand details</span>
     </div>
     <table class="run-table" id="findings-table">
       <thead>
         <tr>
+          <th class="col-expand"></th>
           <th class="col-nowrap">Severity</th>
           <th class="col-nowrap">Source</th>
           <th>Title</th>
           <th>File</th>
-          <th class="col-nowrap">Corroborated</th>
         </tr>
       </thead>
       <tbody>
         {% for f in findings %}
         <tr class="finding-row {% if f.severity in ('critical', 'high') %}row-warn{% endif %}"
+            role="button" tabindex="0" aria-expanded="false"
             data-finding-severity="{{ f.severity }}"
             data-finding-source="{{ f.source }}">
+          <td class="col-expand"><span class="expand-indicator">▸</span></td>
           <td class="col-nowrap"><span class="tier tier-{{ f.severity }}">{{ f.severity }}</span></td>
           <td class="col-nowrap"><span class="badge badge-{{ f.source }}">{{ f.source }}</span></td>
-          <td class="col-long">{{ expandable(f.title, clamp=2) }}</td>
+          <td class="col-long">{{ f.title }}</td>
           <td class="col-long">{% if f.file_path %}<code>{{ f.file_path }}</code>{% else %}—{% endif %}</td>
-          <td class="col-nowrap dim">{{ f.corroborated_by|join(", ") if f.corroborated_by else "—" }}</td>
+        </tr>
+        <tr class="finding-detail-row" hidden>
+          <td colspan="5">
+            <div class="finding-detail-panel">
+              {% if f.description %}
+                <p>{{ f.description }}</p>
+              {% endif %}
+              {% if f.remediation %}
+                <p><span class="dim">Remediation:</span> {{ f.remediation }}</p>
+              {% endif %}
+              {% if f.raw_tool_severity %}
+                <p class="dim">raw tool severity: {{ f.raw_tool_severity }}</p>
+              {% endif %}
+              {% if f.corroborated_by %}
+                <p class="dim">corroborated by: {{ f.corroborated_by|join(", ") }}</p>
+              {% endif %}
+              {% if not f.description and not f.remediation %}
+                <p class="dim">no extra detail recorded.</p>
+              {% endif %}
+            </div>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
-
-    <h2>Finding details</h2>
-    <p class="dim">click a row to expand description and remediation.</p>
-    {% for f in findings %}
-    <details class="finding-detail"
-             data-finding-severity="{{ f.severity }}"
-             data-finding-source="{{ f.source }}">
-      <summary>
-        <span class="finding-summary-chips">
-          <span class="tier tier-{{ f.severity }}">{{ f.severity }}</span>
-          <span class="badge badge-{{ f.source }}">{{ f.source }}</span>
-        </span>
-        <span class="finding-summary-title">{{ f.title }}</span>
-        {% if f.file_path %}<code>{{ f.file_path }}</code>{% endif %}
-      </summary>
-      {% if f.description %}
-        <div class="finding-desc">{{ expandable(f.description, clamp=3) }}</div>
-      {% endif %}
-      {% if f.remediation %}
-        <p class="finding-remediation"><b>Remediation:</b> {{ f.remediation }}</p>
-      {% endif %}
-      {% if f.raw_tool_severity %}
-        <p class="dim">raw tool severity: {{ f.raw_tool_severity }}</p>
-      {% endif %}
-      {% if f.corroborated_by %}
-        <p class="dim">corroborated by: {{ f.corroborated_by|join(", ") }}</p>
-      {% endif %}
-      {% if not f.description and not f.remediation %}
-        <p class="empty">no extra detail on this finding.</p>
-      {% endif %}
-    </details>
-    {% endfor %}
     {% else %}
     <p class="empty">no normalized findings — check scanner tools below (benign pytorch pickles often show fickling signal with tier still low).</p>
     {% endif %}
 
     <h2>Scanner tools</h2>
-    <p class="dim">defense-in-depth merge (artifacts, dependencies, secrets); expand each tool for specifics.</p>
+    <p class="sub dim">Collapsed by default — expand a tool for its findings.</p>
 
     {% if tool_panels.modelscan %}
-    <details class="tool-panel" open>
+    <details class="tool-panel">
       <summary>
         <span class="badge badge-modelscan">ModelScan</span>
         <b>{{ tool_panels.modelscan.total_issues }}</b> issue{{ "" if tool_panels.modelscan.total_issues == 1 else "s" }}
@@ -143,7 +140,7 @@
     {% endif %}
 
     {% if tool_panels.fickling %}
-    <details class="tool-panel" {% if tool_panels.fickling.headline and tool_panels.fickling.headline != 'LIKELY_SAFE' %}open{% endif %}>
+    <details class="tool-panel">
       <summary>
         <span class="badge badge-fickling">Fickling</span>
         signal <b>{{ tool_panels.fickling.headline }}</b>
@@ -168,7 +165,7 @@
     {% endif %}
 
     {% if tool_panels.modelaudit %}
-    <details class="tool-panel" {% if tool_panels.modelaudit.actionable_issue_count %}open{% endif %}>
+    <details class="tool-panel">
       <summary>
         <span class="badge badge-modelaudit">ModelAudit</span>
         <b>{{ tool_panels.modelaudit.actionable_issue_count }}</b> actionable
@@ -202,7 +199,7 @@
     {% endif %}
 
     {% if tool_panels.dependencies %}
-    <details class="tool-panel" {% if tool_panels.dependencies.vuln_count %}open{% endif %}>
+    <details class="tool-panel">
       <summary>
         <span class="badge badge-pip_audit">Dependencies</span>
         <b>{{ tool_panels.dependencies.vuln_count }}</b> CVE{{ "" if tool_panels.dependencies.vuln_count == 1 else "s" }}
@@ -238,7 +235,7 @@
     {% endif %}
 
     {% if tool_panels.secrets %}
-    <details class="tool-panel" {% if tool_panels.secrets.secret_count %}open{% endif %}>
+    <details class="tool-panel">
       <summary>
         <span class="badge badge-trufflehog">TruffleHog</span>
         <b>{{ tool_panels.secrets.secret_count }}</b> secret{{ "" if tool_panels.secrets.secret_count == 1 else "s" }}
@@ -318,19 +315,37 @@
 {% if not missing and findings %}
 <script>
 (function () {
+  function toggleRow(row) {
+    const detail = row.nextElementSibling;
+    if (!detail || !detail.classList.contains("finding-detail-row")) return;
+    const open = detail.hidden;
+    detail.hidden = !open;
+    row.setAttribute("aria-expanded", open ? "true" : "false");
+    const ind = row.querySelector(".expand-indicator");
+    if (ind) ind.textContent = open ? "▾" : "▸";
+  }
+
+  document.querySelectorAll("#findings-table .finding-row").forEach(function (row) {
+    row.addEventListener("click", function () { toggleRow(row); });
+    row.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleRow(row); }
+    });
+  });
+
   const sel = document.getElementById("finding-filter");
   if (!sel) return;
-  const rows = document.querySelectorAll(".finding-row, .finding-detail");
   sel.addEventListener("change", function () {
     const v = sel.value;
-    rows.forEach(function (el) {
-      const sev = el.getAttribute("data-finding-severity");
-      const src = el.getAttribute("data-finding-source");
-      const show =
-        v === "all" ||
-        v === sev ||
-        v === src;
-      el.style.display = show ? "" : "none";
+    document.querySelectorAll("#findings-table .finding-row").forEach(function (row) {
+      const sev = row.getAttribute("data-finding-severity");
+      const src = row.getAttribute("data-finding-source");
+      const show = v === "all" || v === sev || v === src;
+      row.style.display = show ? "" : "none";
+      const detail = row.nextElementSibling;
+      if (detail && detail.classList.contains("finding-detail-row")) {
+        detail.style.display = show ? "" : "none";
+        if (!show) { detail.hidden = true; row.setAttribute("aria-expanded", "false"); }
+      }
     });
   });
 })();

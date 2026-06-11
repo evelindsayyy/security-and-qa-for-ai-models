@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Start an HF scan{% endblock %}
+
+{% block content %}
+<div class="eval-comparison">
+  <p class="back"><a href="{{ url_for('scans') }}">← all scans</a></p>
+  <h1>Start an HF scan</h1>
+  <p class="sub">
+    Launches <code>python -m scanner scan</code> on the server. All tools enabled by default.
+  </p>
+
+  <form method="post" action="{{ url_for('scan_run_start') }}" class="launch-form">
+    <label>Hugging Face repo id
+      <input type="text" name="hf_repo" id="hf_repo" list="hf_repo_suggestions"
+             placeholder="gpt2 or org/model" autocomplete="off" required>
+      <datalist id="hf_repo_suggestions">
+        {% for repo in suggested_hf_repos %}
+        <option value="{{ repo }}"></option>
+        {% endfor %}
+      </datalist>
+      <span class="form-hint">public or gated repo on huggingface.co — use the id from the model page (e.g. <code>meta-llama/Llama-3.2-1B</code> or <code>gpt2</code>)</span>
+    </label>
+
+    <p id="overwrite-warning" class="form-warning" style="display: none;">
+      A scan for this repo already exists — starting again will delete the prior results and replace them.
+    </p>
+
+    <fieldset>
+      <legend>Scanners <span class="dim">(all on by default)</span></legend>
+      <label><input type="checkbox" name="run_modelscan" checked> ModelScan</label>
+      <label><input type="checkbox" name="run_fickling" checked> Fickling (pickle)</label>
+      <label><input type="checkbox" name="run_modelaudit" checked> ModelAudit</label>
+      <label><input type="checkbox" name="run_deps" checked> pip-audit / OSV (dependencies)</label>
+      <label><input type="checkbox" name="run_secrets" checked> TruffleHog (secrets)</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Download</legend>
+      <label><input type="checkbox" name="no_download"> Skip download — use cached weights only</label>
+    </fieldset>
+
+    <button type="submit" class="btn-primary">▶ Start scan</button>
+  </form>
+</div>
+
+<script>
+  const EXISTING_SLUGS = new Set({{ existing_scan_slugs | tojson }});
+
+  function repoSlug(repo) {
+    const trimmed = repo.trim();
+    return trimmed.includes("/") ? trimmed.replace("/", "--") : trimmed;
+  }
+
+  function updateWarning() {
+    const repo = document.getElementById("hf_repo").value;
+    document.getElementById("overwrite-warning").style.display =
+      EXISTING_SLUGS.has(repoSlug(repo)) ? "block" : "none";
+  }
+
+  document.getElementById("hf_repo").addEventListener("input", updateWarning);
+  document.getElementById("hf_repo").addEventListener("change", updateWarning);
+</script>
+{% endblock %}

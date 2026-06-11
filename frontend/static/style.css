@@ -77,7 +77,11 @@ header nav a:hover {
 }
 .run-table thead th.num { text-align: right; }
 .run-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
-.run-table td.overall { font-weight: 700; font-size: 15px; color: #222; }
+.run-table td.overall { font-weight: 600; font-size: 15px; color: #333; }
+.run-table td.rate-strong { color: #2e7d32; }
+.run-table td.rate-mid    { color: #b5840a; }
+.run-table td.rate-weak   { color: #c0461a; font-weight: 600; }
+.run-table td.rate-na     { color: #aaa; }
 .run-table td {
   word-break: normal;
   overflow-wrap: normal;
@@ -187,10 +191,34 @@ header nav a:hover {
 .run-table tr.row-warn:hover { background: #f5e0cc; }
 .run-table tr.row-warn.row-link:hover { background: #efcfb0; }
 
-/* detail pages — finding summary rows (ok + warn) */
+/* detail pages — finding rows expand inline */
 .run-table tbody tr.finding-row { cursor: pointer; }
-.run-table tbody tr.finding-row:hover { background: #e8edf3; }
-.run-table tbody tr.finding-row.row-warn:hover { background: #f5e0cc; }
+.run-table tbody tr.finding-row:hover { background: #eef2f6; }
+.run-table tbody tr.finding-row.row-warn:hover { background: #f5e8dc; }
+.run-table tbody tr.finding-row[aria-expanded="true"] { background: #eef2f6; }
+.run-table tbody tr.finding-row.row-warn[aria-expanded="true"] { background: #fdf0e6; }
+.finding-detail-row td {
+  padding: 0;
+  border-bottom: 1px solid #e4e8ed;
+}
+.finding-detail-panel {
+  padding: 0.65rem 1rem 0.75rem 1.5rem;
+  background: #f8f9fb;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.finding-detail-panel p { margin: 0.35rem 0; }
+.finding-row .expand-indicator {
+  color: #aaa;
+  font-size: 10px;
+  user-select: none;
+}
+.run-table th.col-expand,
+.run-table td.col-expand {
+  width: 1.5rem;
+  padding-left: 0.5rem;
+  padding-right: 0;
+}
 
 /* severity tier badges — never break mid-word */
 .tier {
@@ -232,22 +260,31 @@ header nav a:hover {
 }
 .status-ok { color: #2a7a2a; font-size: 13px; font-weight: 600; }
 
-/* benchmark-type badges — distinct per kind */
-.badge-tqa         { background: #e6edf7; color: #1b3a6e; }
-.badge-ifeval      { background: #e8f4e8; color: #2a6b2a; }
-.badge-consistency { background: #fff3cd; color: #856404; }
+/* benchmark-type badges — neutral (not severity colors) */
+.badge-tqa,
+.badge-ifeval,
+.badge-consistency,
+.badge-mmlu,
+.badge-tomi {
+  background: #eef1f5;
+  color: #445566;
+  border: 1px solid #dde2e8;
+}
 
-/* scan tool / source badges */
-.badge-modelscan  { background: #e6edf7; color: #1b3a6e; }
-.badge-fickling   { background: #fff3cd; color: #856404; }
-.badge-modelaudit { background: #fdecec; color: #842029; }
-.badge-pip_audit  { background: #e8f5e9; color: #1b5e20; }
-.badge-osv        { background: #e3f2fd; color: #0d47a1; }
-.badge-trufflehog { background: #fce4ec; color: #880e4f; }
-
-/* safety tool / source badges */
-.badge-promptfoo { background: #e6edf7; color: #1b3a6e; }
-.badge-garak     { background: #fdecec; color: #842029; }
+/* scan / safety tool & source badges — neutral grey (tiers keep red/orange/yellow/green) */
+.badge-modelscan,
+.badge-fickling,
+.badge-modelaudit,
+.badge-pip_audit,
+.badge-osv,
+.badge-trufflehog,
+.badge-promptfoo,
+.badge-garak,
+.badge-duke_probe {
+  background: #eef1f5;
+  color: #445566;
+  border: 1px solid #dde2e8;
+}
 
 .status-fail {
   color: #842029;
@@ -346,6 +383,28 @@ header nav a:hover {
 }
 .compact-table { margin-top: 0.5rem; margin-bottom: 0.5rem; }
 .compact-table td, .compact-table th { padding: 6px 10px; }
+
+/* per-probe blocks inside a collapsed suite panel */
+.probe-item {
+  padding: 0.45rem 0.6rem;
+  margin: 0.4rem 0;
+  border-radius: 4px;
+  background: #fff;
+  border: 1px solid #eee;
+  border-left: 3px solid #d9dee5;
+}
+.probe-item.probe-fail { border-left-color: #d99a6c; background: #fdf8f5; }
+.probe-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 13px;
+}
+.probe-item-title { font-size: 13px; margin-top: 0.25rem; color: #333; }
+.probe-item-desc { margin: 0.2rem 0 0; font-size: 13px; }
+.probe-more { margin-top: 0.4rem; }
+.probe-more > summary { cursor: pointer; font-size: 13px; color: #012169; }
 .file-list {
   font-size: 13px;
   max-height: 240px;
@@ -576,7 +635,8 @@ header nav a:hover {
 }
 .launch-form label { font-size: 14px; font-weight: 600; color: #333; }
 .launch-form select,
-.launch-form input[type="number"] {
+.launch-form input[type="number"],
+.launch-form input[type="text"] {
   display: block;
   width: 100%;
   margin-top: 0.3rem;
@@ -590,7 +650,8 @@ header nav a:hover {
   box-sizing: border-box;
 }
 .launch-form select:focus,
-.launch-form input[type="number"]:focus {
+.launch-form input[type="number"]:focus,
+.launch-form input[type="text"]:focus {
   outline: 2px solid #012169;
   outline-offset: 1px;
 }

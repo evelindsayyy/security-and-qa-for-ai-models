@@ -1,8 +1,8 @@
 # Frontend (`frontend/`)
 
-Temporary, read-only progress viewer for the Duke model nutrition label. It loads JSON from local pipeline output directories so users can see real scanning and efficacy results without Postgres or the API.
+Progress viewer for the Duke model nutrition label. Loads JSON from local pipeline output directories; eval, scan, and safety pillars also support **browser-launched runs** (subprocess + live polling), mirroring Grace’s evaluator pattern.
 
-The production UI (week 6) will read from the database via `api/` and support interactive runs. This draft only reflects whatever is already on disk under `scanner/output/` and `evaluator/results/` (both gitignored — each developer sees their own fresh data after running the tools locally).
+Production UI (week 6) will read from Postgres via `api/`. This draft reflects whatever is on disk under `scanner/output/`, `evaluator/results/`, `safety/output/`, and `testing/basic_tests/test_results/` (run outputs are gitignored locally).
 
 ## Run locally
 
@@ -16,34 +16,28 @@ uv run flask --app frontend:create_app run --debug
 
 | Route | Purpose |
 |-------|---------|
-| `/` | Hub — scan/eval/safety counts, gateway model list |
-| `/safety` | Merged safety labels from `safety/output/*/merged_safety_result.json` |
-| `/safety/<slug>` | One model safety detail (findings, suites, deployment context) |
-| `/scans` | All HF `scan_result.json` rows from `scanner/output/` |
-| `/scans/<slug>` | One scan detail (findings, coverage, tool_results) |
+| `/` | Hub — scan/eval/safety counts (no gateway model list) |
+| `/models` | Live gateway catalog only (`GET /v1/models`) |
+| `/scans` | HF `scan_result.json` rows from `scanner/output/` |
+| `/scans/new`, `/scans/start` | Start an allowlisted HF scan from the browser |
+| `/scans/<slug>`, `/scans/<slug>/status` | Scan detail or in-progress polling |
 | `/eval-run` | Aggregated efficacy runs from `evaluator/results/*.jsonl` |
-| `/models` | Live gateway catalog (`GET /v1/models`) + static HF scan list |
+| `/eval-run/new`, `/eval-run/start` | Start eval run (Grace) |
+| `/eval-run/<slug>`, `.../status` | Eval detail or progress |
+| `/safety` | Merged safety from `safety/output/*/merged_safety_result.json` |
+| `/safety/new`, `/safety/start` | Start gateway safety run (`run_safety.sh`) |
+| `/safety/<slug>`, `/safety/<slug>/status` | Safety detail or progress |
+| `/benchmarks` | Jack’s benchmarks from `testing/basic_tests/test_results/` |
 
-## Populate data (read-only UI — run tools separately)
+## Populate data
 
-**Scanning (DGX or host with scanner deps):**
+**Scanning:** run `python -m scanner scan <hf_id>` or use **Start a new scan** on `/scans`.
 
-```bash
-cd scanner/docker   # or host with requirements installed
-python -m scanner scan gpt2
-# → scanner/output/gpt2/scan_result.json
-```
+**Efficacy:** run `evaluator/runner.py` or use **Start a new run** on `/eval-run`.
 
-**Efficacy (gateway env required):**
+**Safety:** run `safety/run_safety.sh` + merge, or use **Start a new run** on `/safety`.
 
-```bash
-# .env at repo root: DUKE_GATEWAY_URL, DUKE_GATEWAY_KEY (see evaluator/README.md)
-cd evaluator
-uv run python runner.py \
-  --candidate-model "gpt-5-chat" \
-  --judge-model "Llama 4 Maverick"
-# → evaluator/results/<timestamp>_it_support_v1_gpt-5-chat.jsonl
-```
+**Benchmarks:** run scripts under `testing/basic_tests/` (TQA, IFEval, MMLU, ToMi, consistency).
 
 Refresh the browser after new files appear; no restart needed.
 
@@ -52,29 +46,39 @@ Refresh the browser after new files appear; no restart needed.
 | Module | Role |
 |--------|------|
 | `gateway_catalog.py` | Live gateway ids via `GET /v1/models` (5 min cache) |
-| `hf_scan_catalog.py` | HF scan rows from `scanner/output/*/scan_result.json` |
-| `scan_data.py` | Load `scanner/output/*/scan_result.json`; detail view uses findings tables, tool panels, and filters (like eval/benchmarks) |
-| `eval_run_data.py` | Load and summarize `evaluator/results/*.jsonl` |
-| `safety_data.py` | Load `safety/output/*/merged_safety_result.json`; detail uses findings tables, suite panels, filters (like scans) |
-| `routes.py` | Flask routes (lazy imports for eval/scanner loaders) |
+| `scan_data.py` / `scan_launch.py` | Load scans; launch HF scans |
+| `eval_run_data.py` / `eval_launch.py` | Load eval JSONL; launch runner |
+| `safety_data.py` / `safety_launch.py` | Load merged safety; launch `run_safety.sh` |
+| `benchmark_data.py` | TQA, IFEval, consistency, MMLU, ToMi |
+| `routes.py` | Flask routes |
 | `templates/` | Jinja HTML |
-| `static/style.css` | Shared table + tier badge styles |
+| `static/style.css` | Shared styles — severity tiers use red/orange/yellow/green; tool badges are neutral grey |
+
+## Safety overview (UI)
+
+Each row shows the calibrated **tier** (`composite_tier`), the overall **pass
+rate**, and a per-suite breakdown (Duke policy, Red-team, Garak). Models are
+ordered highest-risk first (lowest composite score). The tier is a weighted
+blend of suite pass rates escalated by Duke policy failures — tuned so
+known-safe commercial models read `low`. See
+[`safety/README.md`](../safety/README.md) for the calibration.
+
+## Browser-launched runs
+
+The "Start a new run" button on each pillar (scans, eval, safety) launches the
+real CLI as a subprocess. **Starting a run wipes that model's prior outputs**
+so the UI never blends stale and fresh JSON:
+
+- Scans → `scanner/output/<slug>/`
+- Eval → prior `*_<suite>_<candidate>.{jsonl,log}` for that model+suite
+- Safety → `safety/output/<slug>/` + the per-tool `promptfoo`/`garak` dirs
+
+The eval comparison table also de-dupes to the **latest run per
+(candidate, judge, suite)** so superseded runs don't linger.
 
 ## Related docs
 
-- [`docs/architecture.md`](../docs/architecture.md) — target API and UI
-- [`docs/data-model.md`](../docs/data-model.md) — Postgres shapes
-- [`scanner/README.md`](../scanner/README.md) — artifact scanning
-- [`evaluator/README.md`](../evaluator/README.md) — efficacy runner
-- [`safety/README.md`](../safety/README.md) — promptfoo + garak red-team pipeline
-
-**Safety (gateway env required):**
-
-```bash
-# see safety/README.md — promptfoo eval, garak scan, then merge
-PYTHONPATH=. uv run python -m safety.merge \
-  --promptfoo safety/promptfoo/output/safety_result.json \
-  --promptfoo safety/promptfoo/output/redteam_safety_result.json \
-  --garak safety/garak/output/safety_result.json \
-  -o safety/output/gpt-4.1-mini/merged_safety_result.json
-```
+- [`docs/architecture.md`](../docs/architecture.md)
+- [`scanner/README.md`](../scanner/README.md)
+- [`evaluator/README.md`](../evaluator/README.md)
+- [`safety/README.md`](../safety/README.md)

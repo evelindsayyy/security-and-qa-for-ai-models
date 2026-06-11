@@ -70,6 +70,14 @@ def _detect_kind(path: Path) -> str | None:
             return None
         if "summary" in obj and "mean_f1_overall" in (obj.get("summary") or {}):
             return "consistency"
+        if "per_subject" in obj and isinstance(obj.get("summary"), dict):
+            if "accuracy" in obj["summary"]:
+                return "mmlu"
+        results = obj.get("results")
+        if isinstance(results, list) and results:
+            first = results[0]
+            if isinstance(first, dict) and "question_type" in first:
+                return "tomi"
         if "metrics" in obj and isinstance(obj["metrics"], dict) and "accuracy" in obj["metrics"]:
             return "truthfulqa"
     except Exception:
@@ -95,6 +103,44 @@ def _summarize_truthfulqa(path: Path, data: dict) -> dict:
             "correct": metrics.get("correct"),
             "total_evaluated": metrics.get("total_evaluated"),
         },
+    }
+
+
+def _summarize_mmlu(path: Path, data: dict) -> dict:
+    summary = data.get("summary") or {}
+    acc = summary.get("accuracy")
+    return {
+        "slug": path.stem,
+        "filename": path.name,
+        "kind": "mmlu",
+        "kind_label": "MMLU",
+        "model": data.get("model") or "—",
+        "timestamp_raw": data.get("timestamp") or "",
+        "timestamp": _format_ts(data.get("timestamp") or ""),
+        "headline_metric": "accuracy",
+        "headline_value": acc,
+        "headline_display": f"{acc:.1%}" if acc is not None else "—",
+        "n": summary.get("total") or len(data.get("results") or []),
+        "extras": {"subjects": len(data.get("per_subject") or {})},
+    }
+
+
+def _summarize_tomi(path: Path, data: dict) -> dict:
+    summary = data.get("summary") or {}
+    acc = summary.get("accuracy")
+    return {
+        "slug": path.stem,
+        "filename": path.name,
+        "kind": "tomi",
+        "kind_label": "ToMi",
+        "model": data.get("model") or "—",
+        "timestamp_raw": data.get("timestamp") or "",
+        "timestamp": _format_ts(data.get("timestamp") or ""),
+        "headline_metric": "accuracy",
+        "headline_value": acc,
+        "headline_display": f"{acc:.1%}" if acc is not None else "—",
+        "n": summary.get("total") or len(data.get("results") or []),
+        "extras": {},
     }
 
 
@@ -178,9 +224,16 @@ def _summarize_file(path: Path) -> dict | None:
     except Exception:
         return None
     if kind == "truthfulqa":
+        metrics = data.get("metrics") or {}
+        if not metrics.get("total_evaluated") and not data.get("responses"):
+            return None
         return _summarize_truthfulqa(path, data)
     if kind == "consistency":
         return _summarize_consistency(path, data)
+    if kind == "mmlu":
+        return _summarize_mmlu(path, data)
+    if kind == "tomi":
+        return _summarize_tomi(path, data)
     return None
 
 
@@ -250,5 +303,16 @@ def get_benchmark_detail(slug: str) -> dict | None:
                     summary = _summarize_consistency(path, data)
                     summary["questions"] = (data.get("questions") or [])[:50]
                     summary["raw_row_count"] = len(data.get("questions") or [])
+                    return summary
+                if kind == "mmlu":
+                    summary = _summarize_mmlu(path, data)
+                    summary["per_subject"] = data.get("per_subject") or {}
+                    summary["results"] = (data.get("results") or [])[:50]
+                    summary["raw_row_count"] = len(data.get("results") or [])
+                    return summary
+                if kind == "tomi":
+                    summary = _summarize_tomi(path, data)
+                    summary["results"] = (data.get("results") or [])[:50]
+                    summary["raw_row_count"] = len(data.get("results") or [])
                     return summary
     return None

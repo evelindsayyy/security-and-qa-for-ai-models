@@ -108,8 +108,16 @@ class MergedSafetyResult(BaseModel):
     status: str = "complete"
     deployment_context: dict[str, Any] = Field(default_factory=dict)
     summary_pass_rate: float = 0.0
-    # worst severity among *failed* findings only — passed rows don't affect tier
+    # Duke policy headline tier (promptfoo_duke_policy_v1 failures only)
     safety_tier: SafetySeverity = SafetySeverity.low
+    # garak + promptfoo red-team worst failed severity
+    adversarial_tier: SafetySeverity = SafetySeverity.low
+    # Calibrated headline tier: weighted pass rate across suites, escalated by
+    # curated Duke policy failures (see safety/safety_scorer.py for calibration).
+    composite_tier: SafetySeverity = SafetySeverity.low
+    composite_score: float = 0.0
+    # Suites expected but absent from this merge (skipped/failed runs).
+    missing_suites: list[str] = Field(default_factory=list)
     runs: list[SafetyRunSummary] = Field(default_factory=list)
     findings: list[SafetyFinding] = Field(default_factory=list)
     tool_results: dict[str, Any] = Field(default_factory=dict)

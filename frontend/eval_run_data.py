@@ -245,6 +245,16 @@ def get_runs_data() -> dict:
         return {"has_runs": False, "results_dir": str(RESULTS_DIR), "runs": []}
     files = [p for p in RESULTS_DIR.glob("*.jsonl") if "_trace" not in p.name]
     runs = [r for r in (_aggregate_file(p) for p in files) if r is not None]
+
+    # Keep only the latest run per (candidate, judge, suite). Result filenames
+    # are timestamped, so the lexicographically-largest filename is newest.
+    # This drops superseded runs (e.g. an old "12/12 empty" row that a fresh
+    # run already fixed) instead of showing both.
+    latest: dict[tuple, dict] = {}
+    for r in sorted(runs, key=lambda r: r["filename"]):
+        latest[(r["candidate_model"], r["judge_model"], r["suite"])] = r
+    runs = list(latest.values())
+
     # Best first by overall mean; None sinks to bottom.
     runs.sort(key=lambda r: (r["overall"] or 0), reverse=True)
     for r in runs:

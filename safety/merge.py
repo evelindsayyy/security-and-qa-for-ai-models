@@ -63,7 +63,8 @@ def main() -> int:
     print(
         f"  gateway_model_id={merged.gateway_model_id}  "
         f"pass_rate={merged.summary_pass_rate:.0%}  "
-        f"safety_tier={merged.safety_tier.value}  "
+        f"policy_tier={merged.safety_tier.value}  "
+        f"adversarial_tier={merged.adversarial_tier.value}  "
         f"findings={len(merged.findings)}"
     )
     return 0

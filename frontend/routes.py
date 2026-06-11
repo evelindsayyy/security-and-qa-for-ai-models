@@ -1,10 +1,8 @@
 """
 flask routes for the draft nutrition-label frontend.
 
-all pages are read-only: they load json/jsonl from scanner/output and
-evaluator/results on disk. no subprocess, no api calls yet.
-
-week 5+: routes become thin handlers that call GET /api/... instead.
+Most pages load json/jsonl from pipeline output on disk. Eval, scan, and
+safety pillars also support browser-launched runs (subprocess + polling).
 """
 
 from __future__ import annotations
@@ -12,7 +10,6 @@ from __future__ import annotations
 from flask import render_template
 
 from frontend.gateway_catalog import get_gateway_catalog
-from frontend.hf_scan_catalog import get_hf_scan_catalog
 
 
 def _hub_context() -> dict:
@@ -26,8 +23,8 @@ def _hub_context() -> dict:
     scan_has = False
     safety_has = False
     safety_count = 0
-    safety_worst_tier = "—"
     safety_worst_pass_rate = None
+    safety_worst_tier = "—"
 
     try:
         from frontend.scan_data import get_scans_data
@@ -59,8 +56,8 @@ def _hub_context() -> dict:
         safety_has = saf["has_safety"]
         safety_count = len(saf["models"])
         if saf["models"]:
-            safety_worst_tier = saf["models"][0]["safety_tier"]
             safety_worst_pass_rate = saf["models"][0]["summary_pass_rate"]
+            safety_worst_tier = saf["models"][0]["tier"]
     except Exception:
         pass
 
@@ -78,8 +75,8 @@ def _hub_context() -> dict:
         "eval_best_overall": eval_best_overall,
         "safety_has": safety_has,
         "safety_count": safety_count,
-        "safety_worst_tier": safety_worst_tier,
         "safety_worst_pass_rate": safety_worst_pass_rate,
+        "safety_worst_tier": safety_worst_tier,
     }
 
 
@@ -94,11 +91,69 @@ def register_routes(app):
 
         return render_template("scans.html", **get_scans_data())
 
+    @app.route("/scans/new")
+    def scan_run_new():
+        from frontend.scan_launch import get_launch_options
+
+        return render_template("scan_run_new.html", **get_launch_options())
+
+    @app.route("/scans/start", methods=["POST"])
+    def scan_run_start():
+        from flask import redirect, request, url_for
+
+        from frontend.scan_launch import start_run, validate_launch
+
+        hf_repo = request.form.get("hf_repo", "")
+        error = validate_launch(
+            hf_repo,
+            no_download=bool(request.form.get("no_download")),
+            skip_modelscan=not request.form.get("run_modelscan"),
+            skip_fickling=not request.form.get("run_fickling"),
+            skip_modelaudit=not request.form.get("run_modelaudit"),
+            skip_deps=not request.form.get("run_deps"),
+            skip_secrets=not request.form.get("run_secrets"),
+        )
+        if error:
+            return error, 400
+        slug, _already = start_run(
+            hf_repo,
+            no_download=bool(request.form.get("no_download")),
+            skip_modelscan=not request.form.get("run_modelscan"),
+            skip_fickling=not request.form.get("run_fickling"),
+            skip_modelaudit=not request.form.get("run_modelaudit"),
+            skip_deps=not request.form.get("run_deps"),
+            skip_secrets=not request.form.get("run_secrets"),
+        )
+        return redirect(url_for("scan_detail", slug=slug, status="running"))
+
+    @app.route("/scans/<slug>/status")
+    def scan_run_status(slug: str):
+        from flask import jsonify
+
+        from frontend.scan_launch import get_status
+
+        return jsonify(get_status(slug))
+
     @app.route("/scans/<slug>")
     def scan_detail(slug: str):
+        from flask import request
+
         from frontend.scan_data import get_scan_detail
 
         detail = get_scan_detail(slug)
+        if detail is None or request.args.get("status") == "running":
+            from frontend.scan_launch import get_status
+
+            status = get_status(slug)
+            if status["status"] in ("running", "failed"):
+                return render_template(
+                    "scan_detail.html",
+                    missing=False,
+                    running=True,
+                    run_status=status,
+                    slug=slug,
+                )
+
         if detail is None:
             return render_template(
                 "scan_detail.html",
@@ -194,11 +249,69 @@ def register_routes(app):
 
         return render_template("safety.html", **get_safety_data())
 
+    @app.route("/safety/new")
+    def safety_run_new():
+        from frontend.safety_launch import get_launch_options
+
+        return render_template("safety_run_new.html", **get_launch_options())
+
+    @app.route("/safety/start", methods=["POST"])
+    def safety_run_start():
+        from flask import redirect, request, url_for
+
+        from frontend.safety_launch import start_run, validate_launch
+
+        model = request.form.get("gateway_model", "")
+        skip_redteam = request.form.get("skip_redteam") == "on"
+        skip_garak = request.form.get("skip_garak") == "on"
+        skip_promptfoo = request.form.get("skip_promptfoo") == "on"
+        garak_probes = request.form.get("garak_probes", "").strip()
+        error = validate_launch(
+            model,
+            skip_redteam=skip_redteam,
+            skip_garak=skip_garak,
+            skip_promptfoo=skip_promptfoo,
+            garak_probes=garak_probes,
+        )
+        if error:
+            return error, 400
+        slug, _already = start_run(
+            model,
+            skip_redteam=skip_redteam,
+            skip_garak=skip_garak,
+            skip_promptfoo=skip_promptfoo,
+            garak_probes=garak_probes or None,
+        )
+        return redirect(url_for("safety_detail", slug=slug, status="running"))
+
+    @app.route("/safety/<slug>/status")
+    def safety_run_status(slug: str):
+        from flask import jsonify
+
+        from frontend.safety_launch import get_status
+
+        return jsonify(get_status(slug))
+
     @app.route("/safety/<slug>")
     def safety_detail(slug: str):
+        from flask import request
+
         from frontend.safety_data import get_safety_detail
 
         detail = get_safety_detail(slug)
+        if detail is None or request.args.get("status") == "running":
+            from frontend.safety_launch import get_status
+
+            status = get_status(slug)
+            if status["status"] in ("running", "failed"):
+                return render_template(
+                    "safety_detail.html",
+                    missing=False,
+                    running=True,
+                    run_status=status,
+                    slug=slug,
+                )
+
         if detail is None:
             return render_template(
                 "safety_detail.html",
@@ -223,7 +336,6 @@ def register_routes(app):
     @app.route("/models")
     def models_catalog():
         gw = get_gateway_catalog()
-        hf = get_hf_scan_catalog()
         return render_template(
             "catalog.html",
             gateway=gw["models"],
@@ -233,11 +345,6 @@ def register_routes(app):
             gateway_fetched_at=gw["fetched_at"],
             gateway_error=gw["error"],
             gateway_deprecated=gw["deprecated"],
-            hf=hf["models"],
-            hf_count=hf["count"],
-            hf_source=hf["source"],
-            hf_output_dir=hf["output_dir"],
-            hf_error=hf["error"],
         )
 
     @app.route("/hello")

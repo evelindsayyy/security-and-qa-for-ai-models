@@ -68,10 +68,9 @@ def get_split_answers(row, col):
 
 BASE_URL = os.getenv("TQA_BASE_URL", "https://litellm.oit.duke.edu/v1")
 API_KEY = os.getenv("TQA_API_KEY") or os.getenv("LITELLM_API_KEY")
-MODEL = os.getenv("TQA_MODEL", "Llama 4 Scout")
-API_VERSION = os.getenv("TQA_API_VERSION")
+MODEL = os.getenv("TQA_MODEL", "gpt-5.1")
 OUTPUT_DIR = os.getenv("TQA_OUTPUT_DIR", "test_results")
-TQA_LIMIT = os.getenv("TQA_LIMIT", "25")
+TQA_LIMIT = os.getenv("TQA_LIMIT", "50")
 TEST_LIMIT = int(TQA_LIMIT) if TQA_LIMIT.isdigit() and int(TQA_LIMIT) > 0 else None
 
 
@@ -227,8 +226,8 @@ Options:"""
                     {"role": "system", "content": "You are a helpful assistant. Answer concisely."},
                     {"role": "user", "content": prompt}
                 ],
-                "temperature": 0,
-                "max_tokens": 100,
+                "temperature": 1,
+                "max_tokens": 1000,
             }
             
             url = f"{base_url}/chat/completions"
@@ -279,8 +278,6 @@ def main():
     print(f"{'#'*70}")
     print(f"  Base URL: {BASE_URL}")
     print(f"  Model: {MODEL}")
-    if API_VERSION:
-        print(f"  API version: {API_VERSION}")
     if TEST_LIMIT is None:
         print("  Test limit: all questions")
     else:
@@ -290,7 +287,6 @@ def main():
         base_url=BASE_URL,
         model=MODEL,
         api_key=API_KEY,
-        api_version=API_VERSION
     )
 
     try:

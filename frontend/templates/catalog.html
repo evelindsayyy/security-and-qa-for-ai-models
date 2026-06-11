@@ -12,7 +12,6 @@
     {% else %}
       0 gateway models loaded
     {% endif %}
-    · {% if hf_count %}<b>{{ hf_count }}</b>{% else %}0{% endif %} hf scan result{{ "" if hf_count == 1 else "s" }} on disk
     · gateway: <code>{{ gateway_source }}</code>
     {% if gateway_fetched_at %} · fetched {{ gateway_fetched_at }}{% endif %}
   </p>
@@ -65,53 +64,12 @@
   </table>
   {% endif %}
 
-  <h2 class="section-title">HF scan models (artifact scanning)</h2>
-  <p class="section-hint">
-    live from <code>{{ hf_source }}</code> under <code>{{ hf_output_dir }}</code> — only repos you have scanned appear here.
-  </p>
-  {% if hf_error and not hf %}
-  <p class="empty pillar-stat">{{ hf_error }}</p>
-  {% endif %}
-  {% if hf %}
-  <div class="table-wrap">
-  <table class="run-table">
-    <thead>
-      <tr>
-        <th>HF repo</th>
-        <th>Slug</th>
-        <th class="col-nowrap">Risk</th>
-        <th class="col-nowrap">Scanned</th>
-        <th>Notes</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for m in hf %}
-      <tr class="row-link {% if m.is_warn %}row-warn{% endif %}"
-          data-href="{{ url_for('scan_detail', slug=m.slug) }}"
-          tabindex="0"
-          role="link"
-          aria-label="Open scan for {{ m.id }}">
-        <td><span class="model">{{ m.id }}</span></td>
-        <td><code>{{ m.slug }}</code></td>
-        <td class="col-nowrap">
-          <span class="tier tier-{{ m.severity_tier }}">{{ m.severity_tier }}</span>
-          {{ m.overall_risk_score }}
-        </td>
-        <td class="col-nowrap dim">{{ m.scanned_at }}</td>
-        <td class="col-long">{{ expandable(m.notes or "—", clamp=2) }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
-  {% endif %}
-
   <section class="key">
     <h2>how to use this catalog</h2>
     <ul>
-      <li><b>gateway</b> rows are live from the duke ai gateway — use for safety red-team and efficacy eval (<a href="{{ url_for('eval_run') }}">eval runs</a>).</li>
-      <li><b>hf</b> rows link to scan detail — click a row or use <a href="{{ url_for('scans') }}">scan results</a>.</li>
-      <li>refresh docs: <code>uv run python testing/gateway/list_models.py</code> or open this page with gateway env set.</li>
+      <li>rows are live from the duke ai gateway — use these exact ids for safety red-team and efficacy eval.</li>
+      <li>artifact scanning uses hugging face repo ids — see <a href="{{ url_for('scans') }}">scan results</a>.</li>
+      <li>refresh: open this page with gateway env set, or run <code>uv run python testing/gateway/list_models.py</code>.</li>
     </ul>
   </section>
 </div>

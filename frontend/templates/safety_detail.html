@@ -4,41 +4,45 @@
 {% block title %}{% if missing %}Safety not found{% else %}{{ gateway_model_id }} — safety{% endif %}{% endblock %}
 
 {% block content %}
-<div class="scan-detail">
+<div class="eval-comparison">
   {% if missing %}
     <h1>Safety result not found</h1>
     <p class="sub empty">no <code>merged_safety_result.json</code> for slug <code>{{ slug }}</code>.</p>
     <p><a href="{{ url_for('safety') }}">← all safety results</a></p>
+  {% elif running %}
+    <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
+    <h1>Safety run in progress</h1>
+    <p class="sub">slug <code>{{ slug }}</code> · updates every 10 seconds (may take 30–90 min)</p>
+    <div class="progress-card">
+      <p class="progress-meta">status: <b id="prog-state">{{ run_status.status }}</b></p>
+      <pre class="log-snippet" id="prog-log">{{ run_status.message }}</pre>
+    </div>
+    <script>
+      (function () {
+        const slug = {{ slug | tojson }};
+        function poll() {
+          fetch("/safety/" + slug + "/status").then(r => r.json()).then(function (s) {
+            document.getElementById("prog-state").textContent = s.status;
+            if (s.message) document.getElementById("prog-log").textContent = s.message;
+            if (s.status === "complete") window.location = "/safety/" + slug;
+            else if (s.status === "failed") document.getElementById("prog-state").textContent = "failed";
+          });
+        }
+        setInterval(poll, 10000);
+      })();
+    </script>
   {% else %}
     <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
-    <h1><code>{{ gateway_model_id }}</code></h1>
+    <h1><span class="model">{{ gateway_model_id }}</span></h1>
     <p class="sub">
-      slug <code>{{ slug }}</code> ·
-      status {{ status }} ·
-      completed {{ completed_at[:19] if completed_at != "—" else "—" }}
+      <span class="tier tier-{{ tier }}">{{ tier }}</span> ·
+      <span class="{{ pass_rate_class }}">{{ pass_rate_display }}</span> pass rate ·
+      {{ n_passed }}/{{ n_findings }} probes resisted ·
+      completed {{ completed_at[:10] if completed_at != "—" else "—" }}
     </p>
-
-    {% set v = summary_pass_rate or 0 %}
-    {% if v >= 0.8 %}{% set score_class = 'score-strong' %}
-    {% elif v >= 0.6 %}{% set score_class = 'score-mid' %}
-    {% else %}{% set score_class = 'score-weak' %}{% endif %}
-
-    <div class="summary-row">
-      <div class="summary-chips">
-        <span class="tier tier-{{ safety_tier }}">{{ safety_tier }}</span>
-        <span class="summary-score {{ score_class }}">pass rate <b>{{ pass_rate_display }}</b></span>
-        <span class="dim">{{ n_passed }}/{{ n_findings }} passed</span>
-        {% if n_failed %}
-          <span class="status-fail">{{ n_failed }} failed</span>
-        {% else %}
-          <span class="status-ok">all probes passed</span>
-        {% endif %}
-      </div>
-      {% if n_failed and failed_summary %}
-        <div class="summary-meta dim">{{ expandable(failed_summary, clamp=1) }}</div>
-      {% endif %}
-      <div class="summary-meta">{{ expandable(suite_snippet, clamp=1) }}</div>
-    </div>
+    {% if missing_suites %}
+    <p class="sub dim">Note: {{ missing_suites|join(", ") }} did not run — tier reflects only the completed suites.</p>
+    {% endif %}
 
     <h2>Probe findings ({{ n_findings }})</h2>
     {% if findings %}
@@ -48,37 +52,35 @@
         <option value="all">All findings</option>
         <option value="failed">Failed only</option>
         <option value="passed">Passed only</option>
-        <option value="critical">Critical only</option>
-        <option value="high">High only</option>
-        <option value="medium">Medium only</option>
-        <option value="low">Low only</option>
         <option value="promptfoo">Source: promptfoo</option>
         <option value="garak">Source: garak</option>
-        <option value="policy">Category: policy</option>
         <option value="jailbreak">Category: jailbreak</option>
         <option value="leakage">Category: leakage</option>
-        <option value="smoke">Category: smoke</option>
+        <option value="policy">Category: policy</option>
       </select>
+      <span class="controls-hint dim">click a row to expand details</span>
     </div>
     <table class="run-table" id="findings-table">
       <thead>
         <tr>
+          <th class="col-expand"></th>
           <th class="col-nowrap">Result</th>
           <th class="col-nowrap">Severity</th>
           <th class="col-nowrap">Source</th>
           <th class="col-nowrap">Category</th>
           <th>Probe</th>
           <th>Title</th>
-          <th class="col-nowrap">Corroborated</th>
         </tr>
       </thead>
       <tbody>
         {% for f in findings %}
         <tr class="finding-row {% if not f.passed %}row-warn{% endif %}"
+            role="button" tabindex="0" aria-expanded="false"
             data-finding-passed="{{ 'passed' if f.passed else 'failed' }}"
             data-finding-severity="{{ f.severity }}"
             data-finding-source="{{ f.source }}"
             data-finding-category="{{ f.category }}">
+          <td class="col-expand"><span class="expand-indicator">▸</span></td>
           <td class="col-nowrap">
             {% if f.passed %}
               <span class="status-ok">PASS</span>
@@ -90,68 +92,53 @@
           <td class="col-nowrap"><span class="badge badge-{{ f.source }}">{{ f.source }}</span></td>
           <td class="col-nowrap dim">{{ f.category }}</td>
           <td class="col-long"><code>{{ f.probe_id }}</code></td>
-          <td class="col-long">{{ expandable(f.title, clamp=2) }}</td>
-          <td class="col-nowrap dim">{{ f.corroborated_by|join(", ") if f.corroborated_by else "—" }}</td>
+          <td class="col-long">{{ f.title }}</td>
+        </tr>
+        <tr class="finding-detail-row" hidden>
+          <td colspan="7">
+            <div class="finding-detail-panel">
+              {% if f.probe_suite %}<p class="dim">suite: {{ f.probe_suite }}</p>{% endif %}
+              {% if f.description %}
+                <p>{{ f.description }}</p>
+              {% else %}
+                <p class="dim">no extra detail recorded.</p>
+              {% endif %}
+              {% if f.corroborated_by %}
+                <p class="dim">corroborated by: {{ f.corroborated_by|join(", ") }}</p>
+              {% endif %}
+            </div>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
-
-    <h2>Finding details</h2>
-    <p class="dim">expand for full description and probe metadata.</p>
-    {% for f in findings %}
-    <details class="finding-detail {% if not f.passed %}finding-fail{% endif %}"
-             data-finding-passed="{{ 'passed' if f.passed else 'failed' }}"
-             data-finding-severity="{{ f.severity }}"
-             data-finding-source="{{ f.source }}"
-             data-finding-category="{{ f.category }}"
-             {% if not f.passed %}open{% endif %}>
-      <summary>
-        <span class="finding-summary-chips">
-          {% if f.passed %}
-            <span class="status-ok">PASS</span>
-          {% else %}
-            <span class="status-fail">FAIL</span>
-          {% endif %}
-          <span class="tier tier-{{ f.severity }}">{{ f.severity }}</span>
-          <span class="badge badge-{{ f.source }}">{{ f.source }}</span>
-        </span>
-        <span class="finding-summary-title">{{ f.title }}</span>
-        <code>{{ f.probe_id }}</code>
-      </summary>
-      {% if f.probe_suite %}
-        <p class="dim">suite: {{ f.probe_suite }}</p>
-      {% endif %}
-      {% if f.description %}
-        <div class="finding-desc">{{ expandable(f.description, clamp=3) }}</div>
-      {% endif %}
-      {% if f.corroborated_by %}
-        <p class="dim">corroborated by: {{ f.corroborated_by|join(", ") }}</p>
-      {% endif %}
-      {% if not f.description %}
-        <p class="empty">no extra detail on this finding.</p>
-      {% endif %}
-    </details>
-    {% endfor %}
     {% else %}
     <p class="empty">no findings recorded in this merge.</p>
     {% endif %}
 
     <h2>Probe suites</h2>
-    <p class="dim">three-suite defense-in-depth — expand each for pass rates and probe ids.</p>
+    <p class="sub dim">Collapsed by default — expand a suite for its probes and per-probe detail.</p>
+
+    {% macro probe_block(f) %}
+    <div class="probe-item {% if not f.passed %}probe-fail{% endif %}">
+      <div class="probe-item-head">
+        {% if f.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+        <span class="tier tier-{{ f.severity }}">{{ f.severity }}</span>
+        <code>{{ f.probe_id }}</code>
+      </div>
+      {% if f.title %}<div class="probe-item-title">{{ f.title }}</div>{% endif %}
+      {% if f.description %}<p class="dim probe-item-desc">{{ f.description }}</p>{% endif %}
+    </div>
+    {% endmacro %}
 
     {% for p in suite_panels %}
-    {% set pr = p.summary_pass_rate or 0 %}
-    {% if pr >= 0.8 %}{% set suite_score = 'score-strong' %}
-    {% elif pr >= 0.6 %}{% set suite_score = 'score-mid' %}
-    {% else %}{% set suite_score = 'score-weak' %}{% endif %}
-    <details class="tool-panel" {% if p.n_passed < p.n_findings %}open{% endif %}>
+    <details class="tool-panel">
       <summary>
         <span class="panel-summary-chips">
           <span class="badge badge-{{ p.source }}">{{ p.label }}</span>
-          <span class="{{ suite_score }}"><b>{{ p.pass_rate_display }}</b></span>
+          <span>{{ p.pass_rate_display }}</span>
         </span>
-        <span>{{ p.n_passed }}/{{ p.n_findings }} passed</span>
+        <span class="dim">{{ p.n_passed }}/{{ p.n_findings }} passed</span>
         <code>{{ p.probe_suite }}</code>
       </summary>
       {% if p.description %}
@@ -166,15 +153,14 @@
       {% if p.garak_version %}
         <p class="dim">garak {{ p.garak_version }}{% if p.garak_report %} · {{ p.garak_report }}{% endif %}</p>
       {% endif %}
-      {% if p.probe_ids %}
-      <table class="run-table compact-table">
-        <thead><tr><th>Probe id</th></tr></thead>
-        <tbody>
-          {% for pid in p.probe_ids %}
-          <tr><td><code>{{ pid }}</code></td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      {% if p.probes %}
+        {% for f in p.probes[:3] %}{{ probe_block(f) }}{% endfor %}
+        {% if p.probes|length > 3 %}
+        <details class="probe-more">
+          <summary>Show all {{ p.probes|length }} probes</summary>
+          {% for f in p.probes[3:] %}{{ probe_block(f) }}{% endfor %}
+        </details>
+        {% endif %}
       {% endif %}
     </details>
     {% endfor %}
@@ -184,7 +170,7 @@
     <table class="run-table compact-table">
       <tbody>
         {% for r in deployment_rows %}
-        <tr><td class="dim">{{ r.label }}</td><td><b>{{ r.value }}</b></td></tr>
+        <tr><td class="dim">{{ r.label }}</td><td>{{ r.value }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -200,23 +186,39 @@
 {% if not missing and findings %}
 <script>
 (function () {
+  function toggleRow(row) {
+    const detail = row.nextElementSibling;
+    if (!detail || !detail.classList.contains("finding-detail-row")) return;
+    const open = detail.hidden;
+    detail.hidden = !open;
+    row.setAttribute("aria-expanded", open ? "true" : "false");
+    const ind = row.querySelector(".expand-indicator");
+    if (ind) ind.textContent = open ? "▾" : "▸";
+  }
+
+  document.querySelectorAll("#findings-table .finding-row").forEach(function (row) {
+    row.addEventListener("click", function () { toggleRow(row); });
+    row.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleRow(row); }
+    });
+  });
+
   const sel = document.getElementById("finding-filter");
   if (!sel) return;
-  const rows = document.querySelectorAll(".finding-row, .finding-detail");
   sel.addEventListener("change", function () {
     const v = sel.value;
-    rows.forEach(function (el) {
-      const passed = el.getAttribute("data-finding-passed");
-      const sev = el.getAttribute("data-finding-severity");
-      const src = el.getAttribute("data-finding-source");
-      const cat = el.getAttribute("data-finding-category");
-      const show =
-        v === "all" ||
-        v === passed ||
-        v === sev ||
-        v === src ||
-        v === cat;
-      el.style.display = show ? "" : "none";
+    document.querySelectorAll("#findings-table .finding-row").forEach(function (row) {
+      const passed = row.getAttribute("data-finding-passed");
+      const sev = row.getAttribute("data-finding-severity");
+      const src = row.getAttribute("data-finding-source");
+      const cat = row.getAttribute("data-finding-category");
+      const show = v === "all" || v === passed || v === sev || v === src || v === cat;
+      row.style.display = show ? "" : "none";
+      const detail = row.nextElementSibling;
+      if (detail && detail.classList.contains("finding-detail-row")) {
+        detail.style.display = show ? "" : "none";
+        if (!show) { detail.hidden = true; row.setAttribute("aria-expanded", "false"); }
+      }
     });
   });
 })();

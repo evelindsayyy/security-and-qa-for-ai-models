@@ -165,6 +165,11 @@ def scan_model(
     *,
     auto_download: bool = True,
     write_combined: bool = True,
+    run_modelscan: bool = True,
+    run_fickling: bool = True,
+    run_modelaudit: bool = True,
+    run_dependencies: bool = True,
+    run_secrets: bool = True,
 ) -> ScanResult:
     """
     Run the full Track A scan for one Hugging Face repo id.
@@ -196,15 +201,17 @@ def scan_model(
     format_summary = format_summarize(mdir)
 
     # Step 2–4: defense-in-depth scanners (overlap is intentional; deduped later).
-    modelscan_payload = run_modelscan(mdir)
-    fickling = run_fickling_if_applicable(mdir)
-    modelaudit = run_modelaudit_scoped(
-        mdir, format_summary, modelscan_payload, fickling_report=fickling
+    modelscan_payload = run_modelscan(mdir) if run_modelscan else {"summary": {"total_issues": 0}, "scanned_files": []}
+    fickling = run_fickling_if_applicable(mdir) if run_fickling else None
+    modelaudit = (
+        run_modelaudit_scoped(mdir, format_summary, modelscan_payload, fickling_report=fickling)
+        if run_modelaudit
+        else None
     )
 
     # Step 5–6: supply-chain and secret scanning (graceful skip when no manifests/binary).
-    dependencies = run_dependency_scan(mdir)
-    secrets = run_trufflehog(mdir)
+    dependencies = run_dependency_scan(mdir) if run_dependencies else None
+    secrets = run_trufflehog(mdir) if run_secrets else None
     if dependencies is None:
         dependencies = {
             "manifests_found": [],

@@ -46,13 +46,17 @@ Equivalent via wrapper (policy only — skips Garak and red-team):
 Requires `PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=true` in `docker/.env`.
 
 ```bash
-$PF_DC run --rm -e GATEWAY_MODEL="$GATEWAY_MODEL" promptfoo \
+$PF_DC run --rm -e GATEWAY_MODEL="$GATEWAY_MODEL" -e REDTEAM_GRADER_MODEL="${REDTEAM_GRADER_MODEL:-GPT 4.1 Mini}" promptfoo \
   promptfoo redteam run -c promptfooconfig.redteam.yaml \
   -o output/${SLUG}/redteam_eval.json --delay 500 --max-concurrency 1 --force
 
 PYTHONPATH=. uv run python safety/promptfoo/export_safety_result.py \
   safety/promptfoo/output/${SLUG}/redteam_eval.json
 ```
+
+`REDTEAM_GRADER_MODEL` (default **GPT 4.1 Mini**) grades llm-rubric assertions — do **not** use the target model as its own judge. `run_safety.sh` passes this env into Docker automatically.
+
+Azure content-policy blocks count as **pass** in export (gateway blocked the attack). See policy probe `duke.policy.004`.
 
 Output: `output/<slug>/redteam_safety_result.json`.
 

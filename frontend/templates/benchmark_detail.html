@@ -128,6 +128,65 @@
       {% endif %}
     {% endif %}
 
+    {# ---- MMLU branch ---- #}
+    {% if kind == 'mmlu' %}
+      <h2>Per-subject accuracy</h2>
+      {% if per_subject %}
+      <table class="run-table">
+        <thead>
+          <tr><th>Subject</th><th class="num">Accuracy</th><th class="num">n</th></tr>
+        </thead>
+        <tbody>
+          {% for subject, stats in per_subject|dictsort %}
+          <tr>
+            <td>{{ subject }}</td>
+            <td class="num">{{ "%.1f"|format((stats.accuracy or 0) * 100) }}%</td>
+            <td class="num">{{ stats.correct }}/{{ stats.total }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+      <h2>Sample questions</h2>
+      {% if results %}
+      <table class="run-table">
+        <thead>
+          <tr><th>Subject</th><th>Question</th><th class="col-nowrap">Pass?</th></tr>
+        </thead>
+        <tbody>
+          {% for r in results %}
+          <tr class="{% if not r.passed %}row-warn{% endif %}">
+            <td class="col-nowrap dim">{{ r.subject }}</td>
+            <td class="col-long">{{ expandable(r.question, clamp=2) }}</td>
+            <td class="col-nowrap">{% if r.passed %}<span class="status-ok">PASS</span>{% else %}<span class="badge badge-warn">FAIL</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    {% endif %}
+
+    {# ---- ToMi branch ---- #}
+    {% if kind == 'tomi' %}
+      <h2>Per-question results</h2>
+      {% if results %}
+      <table class="run-table">
+        <thead>
+          <tr><th>Type</th><th>Question</th><th class="col-nowrap">Pass?</th></tr>
+        </thead>
+        <tbody>
+          {% for r in results %}
+          <tr class="{% if not r.passed %}row-warn{% endif %}">
+            <td class="col-nowrap dim">{{ r.question_type }}</td>
+            <td class="col-long">{{ expandable(r.question, clamp=2) }}</td>
+            <td class="col-nowrap">{% if r.passed %}<span class="status-ok">PASS</span>{% else %}<span class="badge badge-warn">FAIL</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    {% endif %}
+
     <details>
       <summary>Raw summary fields</summary>
       <pre class="json-block">{{ {

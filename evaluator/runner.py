@@ -70,6 +70,7 @@ _COST_PER_M_TOKENS: dict[str, tuple[float, float]] = {
     "gpt-5.2-chat":   (1.75, 14.00),
     "gpt-5.3-chat":   (1.75, 14.00),
     "gpt-5.4":        (2.50, 15.00),
+    "gpt-5.5":        (2.50, 15.00),
     # GPT-4.1 family — note: Gateway allowlist returns these with spaces and
     # capitals (e.g. "GPT 4.1 Mini"), not the rate-sheet's hyphenated form.
     # Keys must match the model id the user passes via --candidate-model.
