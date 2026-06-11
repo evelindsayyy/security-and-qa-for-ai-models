@@ -76,7 +76,7 @@ class ValidateLaunchTest(unittest.TestCase):
 class BuildCommandTest(unittest.TestCase):
     def test_command_is_argv_list_with_expected_flags(self) -> None:
         cmd = eval_launch.build_command(
-            "gpt-5-chat", "Llama 4 Maverick", "policy_qa_v1", 500, "stem123"
+            "gpt-5-chat", "Llama 4 Maverick", "policy_qa_v1.1", 500, "stem123"
         )
         self.assertIsInstance(cmd, list)
         self.assertIn("--candidate-model", cmd)
@@ -127,7 +127,7 @@ class GetStatusTest(unittest.TestCase):
         self.assertEqual(s["progress"], n)
 
     def test_running_while_registered_process_alive(self) -> None:
-        slug = "20990101T000000Z_policy_qa_v1_x"
+        slug = "20990101T000000Z_policy_qa_v1.1_x"
         (self.dir / f"{slug}.jsonl").write_text("{}\n", encoding="utf-8")
         proc = mock.Mock()
         proc.poll.return_value = None  # alive
@@ -137,7 +137,7 @@ class GetStatusTest(unittest.TestCase):
         self.assertEqual(s["progress"], 1)
 
     def test_failed_when_process_exited_with_partial_file(self) -> None:
-        slug = "20990101T000000Z_policy_qa_v1_x"
+        slug = "20990101T000000Z_policy_qa_v1.1_x"
         (self.dir / f"{slug}.jsonl").write_text("{}\n", encoding="utf-8")
         proc = mock.Mock()
         proc.poll.return_value = 1  # exited
@@ -192,7 +192,7 @@ class LaunchRoutesTest(unittest.TestCase):
         fake_proc.poll.return_value = None  # still running
         data = {
             "candidate": "gpt-5.1-chat", "judge": "Llama 3.3",
-            "suite": "policy_qa_v1", "max_tokens": "500",
+            "suite": "policy_qa_v1.1", "max_tokens": "500",
         }
         with mock.patch.object(
             eval_launch.subprocess, "Popen", return_value=fake_proc
