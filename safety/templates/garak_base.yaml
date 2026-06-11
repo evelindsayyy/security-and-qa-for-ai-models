@@ -1,0 +1,23 @@
+# Reusable Garak config template for the safety pipeline.
+# Runtime values such as model/provider are injected at execution time.
+
+description: "Garak red-team template for {{model_id}}"
+
+probes:
+  - dan
+  - knownbadsignatures
+  - promptinject
+
+generators:
+  - openai
+
+target:
+  model: "{{model_id}}"
+  provider: "{{provider_id}}"
+  api_base_url: "{{api_base_url}}"
+  api_key_env: "{{api_key_env}}"
+  temperature: {{temperature}}
+  max_tokens: {{max_tokens}}
+
+report:
+  path: "{{report_path}}"
