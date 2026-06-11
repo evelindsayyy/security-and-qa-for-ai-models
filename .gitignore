@@ -41,6 +41,8 @@ jack/
 
 # Flask local folder (auto-created at repo root: config.py, frontend.sqlite)
 instance/
+logs/
+scripts/dcc/.vllm-session.env
 
 # Ignore tqa test results
 test_results/

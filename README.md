@@ -67,6 +67,7 @@ tasks/          # YAML task suites and rubrics
 models/         # Gateway catalog seed placeholder (week 3+)
 api/            # Flask REST API (week 5+)
 frontend/       # Nutrition label UI (Flask W3+)
+scripts/        # Foundry and DCC/vLLM example workflows
 unit_tests/     # Automated unit tests 
 testing/        # Manual gateway/eval spikes; scanning → scanner/
 docs/           # See docs/README.md
