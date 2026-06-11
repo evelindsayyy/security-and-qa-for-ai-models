@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import json
-import shutil
-import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
 from safety.garak_runner import run_garak
 from safety.promptfoo_runner import run_promptfoo
-from safety.schemas import SafetyRunResult, ToolRunResult
+from safety.safety_score import score_garak_file, score_promptfoo_file
+from safety.schemas import ToolRunResult
 from safety.targets import resolve_target
 
 
@@ -31,6 +29,32 @@ def _write_summary(result: dict[str, Any], output_dir: Path) -> Path:
     return summary_path
 
 
+def _deployment_context(target: dict[str, Any]) -> dict[str, Any]:
+    """Copy non-secret runtime context into safety_runs.deployment_context."""
+    keys = (
+        "provider_id",
+        "model_id",
+        "label",
+        "api_base_url",
+        "api_key_env",
+        "temperature",
+        "max_tokens",
+        "description",
+    )
+    return {key: target[key] for key in keys if key in target}
+
+
+def _tool_summary(result: ToolRunResult) -> dict[str, Any]:
+    return {
+        "status": result.status,
+        "output_dir": result.output_dir,
+        "config_path": result.config_path,
+        "raw_output": result.metadata.get("report_path"),
+        "run_metadata": result.metadata.get("metadata_path"),
+        "safety_result": None,
+    }
+
+
 def scan_model(model_id: str, *, output_dir: Path | None = None) -> dict[str, Any]:
     """Run the safety pipeline for one model alias.
 
@@ -43,46 +67,60 @@ def scan_model(model_id: str, *, output_dir: Path | None = None) -> dict[str, An
     out_dir = _output_dir(model_id, output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    garak = run_garak(model_id, target=target, output_dir=out_dir)
-    promptfoo = run_promptfoo(model_id, target=target, output_dir=out_dir)
+    garak_dir = out_dir / "garak"
+    promptfoo_dir = out_dir / "promptfoo"
+
+    garak = run_garak(model_id, target=target, output_dir=garak_dir)
+    promptfoo = run_promptfoo(model_id, target=target, output_dir=promptfoo_dir)
 
     summary = {
         "model_id": model_id,
         "target": target,
-        "garak": {
-            "status": garak.status,
-            "output_dir": garak.output_dir,
-            "config_path": garak.config_path,
-        },
-        "promptfoo": {
-            "status": promptfoo.status,
-            "output_dir": promptfoo.output_dir,
-            "config_path": promptfoo.config_path,
-        },
-        "combined_output": None,
+        "garak": _tool_summary(garak),
+        "promptfoo": _tool_summary(promptfoo),
+        "safety_results": {},
+        "notes": [],
     }
 
-    # If the existing safety scorer is present, invoke it as the normalization layer.
-    garak_path = Path(garak.output_dir) / "garak_report.json"
-    promptfoo_path = Path(promptfoo.output_dir) / "promptfoo_report.json"
-    if garak_path.exists() and promptfoo_path.exists():
-        combined_path = out_dir / "combined_safety_result.json"
-        cmd = [
-            sys.executable,
-            "safety/safety_score.py",
-            "--garak",
-            str(garak_path),
-            "--promptfoo",
-            str(promptfoo_path),
-            "-o",
-            str(combined_path),
-        ]
+    context = _deployment_context(target)
+
+    garak_raw_output = summary["garak"]["raw_output"]
+    garak_path = Path(garak_raw_output) if garak_raw_output else None
+    if garak_path and garak_path.is_file():
+        garak_result_path = garak_dir / "garak_safety_result.json"
         try:
-            subprocess.run(cmd, check=True, capture_output=True, text=True)
-        except (FileNotFoundError, subprocess.CalledProcessError) as exc:
-            summary["notes"] = [f"Scoring step skipped: {exc}"]
+            score_garak_file(
+                garak_path,
+                garak_result_path,
+                model_id=model_id,
+                deployment_context=context,
+            )
+        except (OSError, ValueError) as exc:
+            summary["notes"].append(f"Garak scoring skipped: {exc}")
         else:
-            summary["combined_output"] = str(combined_path)
+            summary["garak"]["safety_result"] = str(garak_result_path)
+            summary["safety_results"]["garak"] = str(garak_result_path)
+    else:
+        summary["notes"].append(f"Garak raw output not found: {garak_raw_output or 'unset'}")
+
+    promptfoo_raw_output = summary["promptfoo"]["raw_output"]
+    promptfoo_path = Path(promptfoo_raw_output) if promptfoo_raw_output else None
+    if promptfoo_path and promptfoo_path.is_file():
+        promptfoo_result_path = promptfoo_dir / "promptfoo_safety_result.json"
+        try:
+            score_promptfoo_file(
+                promptfoo_path,
+                promptfoo_result_path,
+                model_id=model_id,
+                deployment_context=context,
+            )
+        except (OSError, ValueError) as exc:
+            summary["notes"].append(f"Promptfoo scoring skipped: {exc}")
+        else:
+            summary["promptfoo"]["safety_result"] = str(promptfoo_result_path)
+            summary["safety_results"]["promptfoo"] = str(promptfoo_result_path)
+    else:
+        summary["notes"].append(f"Promptfoo raw output not found: {promptfoo_raw_output or 'unset'}")
 
     summary_path = _write_summary(summary, out_dir)
     summary["summary_path"] = str(summary_path)

@@ -6,7 +6,6 @@ import json
 import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +24,16 @@ def _render_template(template_path: Path, values: dict[str, Any]) -> str:
     return text
 
 
+def _first_existing_report(base_dir: Path, preferred: Path) -> Path:
+    if preferred.exists():
+        return preferred
+    for pattern in ("raw_garak_report*", "garak*"):
+        for candidate in sorted(base_dir.glob(pattern)):
+            if candidate.is_file() and candidate.suffix.lower() in {".json", ".jsonl"}:
+                return candidate
+    return preferred
+
+
 def run_garak(
     model_id: str,
     *,
@@ -37,7 +46,8 @@ def run_garak(
     base_dir.mkdir(parents=True, exist_ok=True)
 
     config_path = base_dir / "garak_runtime.yaml"
-    report_path = base_dir / "garak_report.json"
+    report_path = base_dir / "raw_garak_report.json"
+    metadata_path = base_dir / "garak_run_metadata.json"
     template_path = Path(__file__).with_name("templates") / "garak_base.yaml"
 
     rendered = _render_template(
@@ -57,14 +67,22 @@ def run_garak(
 
     garak_cmd = shutil.which("garak")
     if garak_cmd:
-        cmd = [garak_cmd, "-c", str(config_path), "--report_prefix", str(base_dir / "garak")]
+        cmd = [
+            garak_cmd,
+            "-c",
+            str(config_path),
+            "--report_prefix",
+            str(base_dir / "raw_garak_report"),
+        ]
         try:
             completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            report_path.write_text(
+            report_path = _first_existing_report(base_dir, report_path)
+            metadata_path.write_text(
                 json.dumps(
                     {
                         "status": "ok",
                         "command": cmd,
+                        "raw_output_path": str(report_path),
                         "stdout": completed.stdout,
                         "stderr": completed.stderr,
                     },
@@ -75,11 +93,12 @@ def run_garak(
             status = "ok"
             notes = []
         except subprocess.CalledProcessError as exc:
-            report_path.write_text(
+            metadata_path.write_text(
                 json.dumps(
                     {
                         "status": "failed",
                         "command": cmd,
+                        "raw_output_path": str(report_path),
                         "returncode": exc.returncode,
                         "stdout": exc.stdout,
                         "stderr": exc.stderr,
@@ -91,12 +110,13 @@ def run_garak(
             status = "failed"
             notes = [str(exc)]
     else:
-        report_path.write_text(
+        metadata_path.write_text(
             json.dumps(
                 {
                     "status": "skipped",
                     "reason": "garak executable is not available in PATH",
                     "config_path": str(config_path),
+                    "raw_output_path": str(report_path),
                 },
                 indent=2,
             ),
@@ -112,5 +132,10 @@ def run_garak(
         output_dir=str(base_dir),
         config_path=str(config_path),
         command=[garak_cmd] if garak_cmd else None,
-        metadata={"notes": notes, "target": target_config},
+        metadata={
+            "notes": notes,
+            "target": target_config,
+            "report_path": str(report_path),
+            "metadata_path": str(metadata_path),
+        },
     )

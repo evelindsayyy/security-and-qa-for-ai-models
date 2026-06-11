@@ -36,7 +36,8 @@ def run_promptfoo(
     base_dir.mkdir(parents=True, exist_ok=True)
 
     config_path = base_dir / "promptfoo_runtime.yaml"
-    report_path = base_dir / "promptfoo_report.json"
+    report_path = base_dir / "raw_promptfoo_report.json"
+    metadata_path = base_dir / "promptfoo_run_metadata.json"
     template_path = Path(__file__).with_name("templates") / "promptfoo_base.yaml"
 
     rendered = _render_template(
@@ -58,11 +59,12 @@ def run_promptfoo(
         cmd = [promptfoo_cmd, "eval", "--config", str(config_path), "--output", str(report_path)]
         try:
             completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            report_path.write_text(
+            metadata_path.write_text(
                 json.dumps(
                     {
                         "status": "ok",
                         "command": cmd,
+                        "raw_output_path": str(report_path),
                         "stdout": completed.stdout,
                         "stderr": completed.stderr,
                     },
@@ -73,11 +75,12 @@ def run_promptfoo(
             status = "ok"
             notes = []
         except subprocess.CalledProcessError as exc:
-            report_path.write_text(
+            metadata_path.write_text(
                 json.dumps(
                     {
                         "status": "failed",
                         "command": cmd,
+                        "raw_output_path": str(report_path),
                         "returncode": exc.returncode,
                         "stdout": exc.stdout,
                         "stderr": exc.stderr,
@@ -89,12 +92,13 @@ def run_promptfoo(
             status = "failed"
             notes = [str(exc)]
     else:
-        report_path.write_text(
+        metadata_path.write_text(
             json.dumps(
                 {
                     "status": "skipped",
                     "reason": "promptfoo executable is not available in PATH",
                     "config_path": str(config_path),
+                    "raw_output_path": str(report_path),
                 },
                 indent=2,
             ),
@@ -110,5 +114,10 @@ def run_promptfoo(
         output_dir=str(base_dir),
         config_path=str(config_path),
         command=[promptfoo_cmd] if promptfoo_cmd else None,
-        metadata={"notes": notes, "target": target_config},
+        metadata={
+            "notes": notes,
+            "target": target_config,
+            "report_path": str(report_path),
+            "metadata_path": str(metadata_path),
+        },
     )
