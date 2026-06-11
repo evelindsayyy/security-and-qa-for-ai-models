@@ -8,6 +8,7 @@ How the Efficacy pillar designs evaluation rubrics. Authoritative reference for 
 - **G-Eval** (Liu et al. arXiv 2303.16634) says: every dimension has four parts — definition, scale, anchored anchors, and chain-of-thought evaluation steps. Not "rate this 1-5."
 - **MT-Bench** (Zheng et al. NeurIPS 2023) says: name the judge biases in the rubric's limitations, then correct for them in a validation study against human raters.
 - **Versioning** says: once a task suite has been run against a rubric, that rubric is immutable. Revisions go in `<task>_v2.yaml`; the runner records `rubric_version` per row.
+- **Validity & reliability** says: "is this subjective?" is answered with evidence, not assertion — questions are validated against real Duke demand, rubrics against rater-agreement statistics. See [Validity & reliability](#validity--reliability-how-we-answer-isnt-this-subjective).
 
 If you're about to design a new rubric, jump to [The 8-step design process](#the-8-step-design-process).
 
@@ -134,6 +135,78 @@ After this, the rubric is **immutable**. Revisions go to `<task>_v2.yaml`. The r
 
 ---
 
+## Validity & reliability — how we answer "isn't this subjective?"
+
+Questions and rubrics can't be made *objective*; they can be made **valid**
+(measuring what they claim to measure) and **reliable** (different raters
+get the same score). Both are measurable properties with named statistics —
+so "isn't this subjective?" gets answered with evidence, not assertion.
+
+### Task suites: do the questions reflect real use?
+
+HELM defines every evaluation scenario as a **(task, domain, user)** triple
+and does two things we copy:
+
+1. **Enumerate the space first, then select.** List who actually asks
+   (student / faculty / staff / researcher / admin) × topic areas, place
+   each suite question on that map, and state the gaps explicitly. Coverage
+   becomes a decision, not an accident of what was easy to write.
+2. **Sample from real demand instead of inventing.** Hand-written questions
+   have only *face validity* ("an informed person wrote what seems
+   plausible"). *Content validity* comes from grounding in measured demand:
+   OIT ticket categories by volume, policy-office inbox themes — with the
+   question mix weighted to match real frequency.
+
+Operational rules for suites:
+
+- **Provenance per question.** Record where each question came from
+  (ticket category, FAQ, invented). Reviewers weight trust accordingly.
+- **Keep authentic phrasing.** Real users write messy questions; polishing
+  everything away reduces ecological validity.
+- **Refresh cadence.** Policy answers go stale; date the references and
+  re-verify when the cited policy changes.
+- **Week-5 OIT ask:** top ticket categories by volume + anonymized real
+  phrasings — not just reference-answer review.
+
+### Rubrics: do the scores track quality?
+
+The literature's machinery, mapped to this project:
+
+| Technique | Why it reduces subjectivity | Where it lives here |
+|---|---|---|
+| Behavioral anchors, not adjectives | "Names the document but not the section" is checkable; "decent citation" is a vibe | anchor text in `_shared_dimensions.yaml` |
+| Decomposed dimensions (HELM) | five narrow judgments are each less subjective than one holistic 1–10, and disagreements become diagnosable | per-dimension scores as the headline |
+| Stakeholder-owned weights | weights are *value judgments* — the policy office owns "citation_precision = 0.30", not the engineer | `aggregation.note` rationale; re-weight after validation |
+| Chain-of-thought steps (G-Eval) | the judge applies the anchors in a fixed order instead of free-associating | `evaluation_steps` |
+| Cross-judge concordance | residual judge bias that doesn't change any ranking can't change any conclusion | `compare_judges.py --from-results`; `docs/judge-selection.md` |
+| Human-agreement statistics | the rubric is validated by correlation with experts, never by inspection | weeks 7–8 study |
+
+**The proof standard (from G-Eval and MT-Bench):** a rubric + judge is
+"good" when its scores correlate with human expert judgments — G-Eval's
+entire claim rests on beating prior metrics' correlation with SummEval's
+human annotations. Reliability thresholds to report: Cohen's Kappa ≥ 0.6
+between human raters = anchors usable; below ~0.4 = anchors ambiguous (fix
+the rubric before blaming the judge). MT-Bench's ceiling reminder: a good
+LLM judge agrees with humans about as often as humans agree with each
+other (~80%) — human-human agreement is the realistic target, not 100%.
+
+**Criteria drift (Shankar et al. 2024):** experts refine what they think
+the criteria mean *while* grading real outputs. So at the week-5 review,
+have OIT/policy staff **grade 3–5 real model outputs with the rubric**
+before approving it — expect anchor revisions, and treat them as the
+process working.
+
+### Current status (week 4, honest)
+
+| Validity layer | Status | Fix |
+|---|---|---|
+| Face validity (questions look plausible) | ✅ | — |
+| Content validity (mirrors real demand) | ❌ hand-written | OIT ticket data, week 5 |
+| Anchor reliability (raters agree) | ❌ untested | expert pilot week 5; Kappa study weeks 7–8 |
+| Judge fidelity (LLM applies rubric like humans) | partial — rank concordance 100% across 3 judges | human validation, weeks 7–8 |
+
+---
+
 ## Versioning
 
 Match the locked-file pattern from `CLAUDE.md`:
@@ -205,3 +278,5 @@ The shared library means a single edit (e.g., revising the `accuracy` definition
 1. Liang, Percy, et al. *Holistic Evaluation of Language Models.* arXiv 2211.09110, 2022.
 2. Liu, Yang, et al. *G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment.* arXiv 2303.16634, 2023.
 3. Zheng, Lianmin, et al. *Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena.* NeurIPS 2023.
+4. Fabbri, Alexander, et al. *SummEval: Re-evaluating Summarization Evaluation.* arXiv 2007.12626, 2021. (Model protocol for expert human annotation.)
+5. Shankar, Shreya, et al. *Who Validates the Validators? Aligning LLM-Assisted Evaluation of LLM Outputs with Human Preferences.* arXiv 2404.12272, 2024. (Criteria drift.)
