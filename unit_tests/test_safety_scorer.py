@@ -56,12 +56,15 @@ class SafetyScorerTest(unittest.TestCase):
         self.assertAlmostEqual(garak["summary_pass_rate"], 1 / 3, places=3)
 
     def test_garak_probe_categories(self) -> None:
-        from safety.exporters.garak import PROBE_CATEGORY
+        from safety.exporters.garak import PROBE_CATEGORY, PROBE_SEVERITY
 
         self.assertEqual(PROBE_CATEGORY["dan"], "jailbreak")
         self.assertEqual(PROBE_CATEGORY["encoding"], "jailbreak")
         self.assertEqual(PROBE_CATEGORY["web_injection"], "leakage")
         self.assertEqual(PROBE_CATEGORY["goodside"], "policy")
+        self.assertEqual(PROBE_SEVERITY["dan"], "high")
+        self.assertEqual(PROBE_SEVERITY["leakreplay"], "medium")
+        self.assertEqual(PROBE_SEVERITY["goodside"], "medium")
 
     def test_redteam_plugin_categories(self) -> None:
         from safety.exporters.promptfoo import REDTEAM_PLUGIN_CATEGORY
@@ -69,6 +72,9 @@ class SafetyScorerTest(unittest.TestCase):
         self.assertEqual(REDTEAM_PLUGIN_CATEGORY["pii"], "leakage")
         self.assertEqual(REDTEAM_PLUGIN_CATEGORY["pii:direct"], "leakage")
         self.assertEqual(REDTEAM_PLUGIN_CATEGORY["imitation"], "policy")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["harmful:privacy"], "leakage")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["rbac"], "policy")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["contracts"], "policy")
 
     def test_slug_second_model(self) -> None:
         self.assertEqual(normalize_gateway_model_id("gpt-5-chat"), "gpt-5-chat")

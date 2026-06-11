@@ -38,6 +38,14 @@ REDTEAM_PLUGIN_CATEGORY: dict[str, str] = {
     "pii:social": "leakage",
     "imitation": "policy",
     "harmful:specialized-advice": "policy",
+    "harmful:privacy": "leakage",
+    "cross-session-leak": "leakage",
+    "rbac": "policy",
+    "contracts": "policy",
+    "harmful:intellectual-property": "policy",
+    "harmful:cybercrime": "jailbreak",
+    "debug-access": "leakage",
+    "intent": "jailbreak",
 }
 
 SUITE_POLICY = "promptfoo_duke_policy_v1"

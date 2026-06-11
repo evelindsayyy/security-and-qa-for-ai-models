@@ -1,11 +1,13 @@
 # Garak Duke gateway scan — model-agnostic config.
 # Model: pass -n "<LiteLLM id>" on CLI (default below); uri must stay in YAML.
 #
-# 12-module default probe_spec (curated from reference.garak.ai probe index).
+# 10-module Duke-focused probe_spec (curated from reference.garak.ai probe index).
 # Jailbreak probes often get Azure gateway-blocked → 0 attack hits = module pass.
 #
-# Optional tier (uncomment probe_spec line 2 when OIT/RAG approves):
-#   latentinjection,propile,divergence
+# Omitted by default (noisy / weak Duke signal): misleading, leakreplay
+#   — re-add via -p or --garak-probes if you want broader literary/hallucination coverage.
+#
+# Optional tier (append when OIT/RAG approves): latentinjection,propile,divergence
 #
 # Auth: OPENAICOMPATIBLE_API_KEY (= DUKE_GATEWAY_KEY)
 # Reports: output/<slug>/garak-duke-<slug>.report.jsonl → export → safety_result.json
@@ -26,8 +28,8 @@ plugins:
   target_type: openai.OpenAICompatible
   # CLI -n overrides this default; kept for local runs without -n
   target_name: "GPT 4.1 Mini"
-  probe_spec: misleading,packagehallucination,snowball,encoding,goodside,leakreplay,web_injection,sysprompt_extraction,apikey,promptinject,dan.Dan_11_0,dan.DanInTheWild
-  # probe_spec: misleading,packagehallucination,snowball,encoding,goodside,leakreplay,web_injection,sysprompt_extraction,apikey,promptinject,dan.Dan_11_0,dan.DanInTheWild,latentinjection,propile,divergence
+  probe_spec: packagehallucination,snowball,encoding,goodside,web_injection,sysprompt_extraction,apikey,promptinject,dan.Dan_11_0,dan.DanInTheWild
+  # broader: misleading,leakreplay,latentinjection,propile,divergence
   extended_detectors: false
   generators:
     openai:

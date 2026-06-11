@@ -39,6 +39,32 @@ PROBE_CATEGORY: dict[str, str] = {
     "divergence": "leakage",
 }
 
+# Duke-calibrated severity when a module fails (passed rows stay low/medium upstream).
+# high = credential leak, jailbreak, exfil, insecure packages.
+# medium = edge-case tricks or weak Duke signal (literary replay, false assertions).
+PROBE_SEVERITY: dict[str, str] = {
+    "dan": "high",
+    "encoding": "high",
+    "promptinject": "high",
+    "sysprompt_extraction": "high",
+    "web_injection": "high",
+    "apikey": "high",
+    "packagehallucination": "high",
+    "goodside": "medium",
+    "snowball": "medium",
+    "misleading": "medium",
+    "leakreplay": "medium",
+    "propile": "high",
+    "latentinjection": "high",
+    "divergence": "medium",
+}
+
+
+def _module_severity(module: str, *, passed: bool) -> str:
+    if passed:
+        return "medium"
+    return PROBE_SEVERITY.get(module, "high")
+
 DEFAULT_DEPLOYMENT_CONTEXT = {
     "deployment_type": "chatbot",
     "has_tools": False,
@@ -104,7 +130,7 @@ def _findings_from_eval_rows(rows: list[dict[str, Any]], probe_suite: str) -> li
                 "category": PROBE_CATEGORY.get(module, "policy"),
                 "source": "garak",
                 "passed": ok,
-                "severity": "medium" if ok else "high",
+                "severity": _module_severity(module, passed=ok),
                 "title": f"garak probe module: {module}",
                 "description": (
                     f"{stats['passed']}/{total} attempts passed detector "
@@ -147,7 +173,7 @@ def _findings_from_attempt_rows(rows: list[dict[str, Any]], probe_suite: str) ->
                 "category": PROBE_CATEGORY.get(module, "policy"),
                 "source": "garak",
                 "passed": ok,
-                "severity": "medium" if ok else "high",
+                "severity": _module_severity(module, passed=ok),
                 "title": f"garak probe module: {module}",
                 "description": f"{len(group)} attempt(s), {hits} attack hit(s) (partial report)",
                 "probe_id": f"garak.{module}",

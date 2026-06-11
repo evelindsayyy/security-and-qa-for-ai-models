@@ -159,7 +159,10 @@ fi
 
 if ! $SKIP_GARAK; then
   echo "--- Garak scan ---"
-  GARAK_CMD=(python -m garak --config garak_duke.yaml -n "${MODEL}")
+  GARAK_RUN_CFG="safety/garak/output/${SLUG}/garak_run.yaml"
+  sed "s|report_dir: .*|report_dir: /app/safety/garak/output/${SLUG}|" \
+    safety/garak/garak_duke.yaml > "$GARAK_RUN_CFG"
+  GARAK_CMD=(python -m garak --config "output/${SLUG}/garak_run.yaml" -n "${MODEL}")
   if [[ -n "$GARAK_PROBES" ]]; then
     GARAK_CMD+=(-p "$GARAK_PROBES")
   fi
@@ -170,10 +173,7 @@ if ! $SKIP_GARAK; then
   set -e
 
   shopt -s nullglob
-  REPORT_CANDIDATES=(
-    safety/garak/output/garak-duke-*.report.jsonl
-    "safety/garak/output/${SLUG}/garak-duke-"*.report.jsonl
-  )
+  REPORT_CANDIDATES=("safety/garak/output/${SLUG}/garak-duke"*.report.jsonl)
   shopt -u nullglob
 
   REPORT=""
@@ -182,14 +182,8 @@ if ! $SKIP_GARAK; then
   fi
 
   if [[ -z "$REPORT" ]]; then
-    echo "ERROR: Garak finished (exit ${GARAK_RC}) but no garak-duke-*.report.jsonl found" >&2
+    echo "ERROR: Garak finished (exit ${GARAK_RC}) but no report in safety/garak/output/${SLUG}/" >&2
     exit "${GARAK_RC:-1}"
-  fi
-
-  REPORT_DEST="safety/garak/output/${SLUG}/$(basename "$REPORT")"
-  if [[ "$REPORT" != "$REPORT_DEST" ]]; then
-    cp "$REPORT" "$REPORT_DEST"
-    REPORT="$REPORT_DEST"
   fi
 
   echo "--- Garak export ---"

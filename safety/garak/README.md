@@ -25,7 +25,7 @@ mkdir -p safety/garak/output/${SLUG}
 
 ## Run scan
 
-Default 12 modules from `garak_duke.yaml`:
+Default 10 Duke-focused modules from `garak_duke.yaml`:
 
 ```bash
 $GARAK_DC run --rm garak \
@@ -47,13 +47,13 @@ Equivalent via wrapper:
 ./safety/run_safety.sh --garak-probes "encoding,promptinject,dan.Dan_11_0" --skip-promptfoo
 ```
 
-Reports land as `output/garak-duke-*.report.jsonl` (flat `output/` dir). The wrapper copies the newest report into `output/<slug>/`.
+Reports land as `output/garak-duke.report.jsonl` (flat `output/` dir). The wrapper copies the newest `garak-duke*.report.jsonl` into `output/<slug>/`.
 
 ## Export results
 
 ```bash
 PYTHONPATH=. uv run python safety/garak/export_safety_result.py \
-  safety/garak/output/${SLUG}/garak-duke-*.report.jsonl \
+  safety/garak/output/${SLUG}/garak-duke*.report.jsonl \
   -o safety/garak/output/${SLUG}/safety_result.json \
   --gateway-model-id "${GATEWAY_MODEL}"
 ```
@@ -97,24 +97,26 @@ plugins:
 
 Avoid `*Full` variants (large prompt counts).
 
-### Default modules (12)
+### Default modules (10)
 
-| Module | Category |
-|--------|----------|
-| `misleading` | policy |
-| `packagehallucination` | policy |
-| `snowball` | policy |
-| `encoding` | jailbreak |
-| `goodside` | policy |
-| `leakreplay` | leakage |
-| `web_injection` | leakage |
-| `sysprompt_extraction` | leakage |
-| `apikey` | leakage |
-| `promptinject` | jailbreak |
-| `dan.Dan_11_0` | jailbreak |
-| `dan.DanInTheWild` | jailbreak |
+| Module | Category | Fail severity |
+|--------|----------|---------------|
+| `packagehallucination` | policy | high |
+| `snowball` | policy | medium |
+| `encoding` | jailbreak | high |
+| `goodside` | policy | medium |
+| `web_injection` | leakage | high |
+| `sysprompt_extraction` | leakage | high |
+| `apikey` | leakage | high |
+| `promptinject` | jailbreak | high |
+| `dan.Dan_11_0` | jailbreak | high |
+| `dan.DanInTheWild` | jailbreak | high |
 
 `dan.*` sub-probes roll up to one `garak.dan` finding.
+
+### Omitted by default (weak Duke signal)
+
+`misleading`, `leakreplay` — re-add via `-p` or `--garak-probes` for broader literary/hallucination coverage.
 
 ### Optional (commented in yaml)
 
@@ -130,7 +132,7 @@ Azure gateway may block jailbreak prompts before the model responds. Garak repor
 |------|------|
 | `garak_duke.yaml` | Scan config |
 | `export_safety_result.py` | Normalizer CLI |
-| `output/garak-duke-*.report.jsonl` | Raw report (flat dir) |
+| `output/garak-duke.report.jsonl` | Raw report (flat dir) |
 | `output/<slug>/safety_result.json` | Normalized export |
 
 ## Troubleshooting

@@ -107,9 +107,11 @@ Edit `redteam.plugins` in `promptfooconfig.redteam.yaml`:
       numTests: 2
 ```
 
-Local plugins: `policy`, `hallucination`, `overreliance`, `excessive-agency`, `pii`, `pii:direct`, `imitation`, `harmful:specialized-advice`.
+Local plugins (15): `policy`, `hallucination`, `overreliance`, `excessive-agency`, `pii`, `pii:direct`, `imitation`, `harmful:privacy`, `cross-session-leak`, `rbac`, `contracts`, `harmful:intellectual-property`, `harmful:cybercrime`, `debug-access`, `intent`.
 
-Remote-only (commented in yaml): `hijacking`, `ferpa`.
+The `policy` plugin and `purpose` block cover Duke multi-channel context: FERPA, HIPAA/PHI, HR, research-confidential, financial/grants, contracts, and impersonation — not only student IT/academic integrity.
+
+Remote-only (commented in yaml): `hijacking`, `ferpa`, `harmful:specialized-advice`.
 
 Re-run **Run red-team** (or `./safety/run_safety.sh --skip-garak`).
 

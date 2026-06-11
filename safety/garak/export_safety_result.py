@@ -3,11 +3,11 @@
 Export Garak report JSONL → ``safety_result.json``.
 
 Thin CLI wrapper — logic lives in ``safety.exporters.garak``.
-Default report glob matches ``garak-duke-*.report.jsonl`` under output/<slug>/.
+Default report glob matches ``garak-duke*.report.jsonl`` under output/<slug>/.
 
 Run from repo root (needs PYTHONPATH):
     PYTHONPATH=. uv run python safety/garak/export_safety_result.py \\
-      safety/garak/output/<slug>/garak-duke-*.report.jsonl
+      safety/garak/output/<slug>/garak-duke*.report.jsonl
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from pathlib import Path
 from safety.exporters.garak import export_from_garak_report
 
 DEFAULT_OUTPUT = "safety_result.json"
-DEFAULT_REPORT_GLOB = "garak-duke-*.report.jsonl"
+DEFAULT_REPORT_GLOB = "garak-duke*.report.jsonl"
 
 
 def main() -> int:
