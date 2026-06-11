@@ -20,5 +20,25 @@
   <main>
     {% block content %}{% endblock %}
   </main>
+  <script>
+  (function () {
+    function go(row) {
+      var href = row.getAttribute("data-href");
+      if (href) window.location.href = href;
+    }
+    document.addEventListener("click", function (e) {
+      var row = e.target.closest("tr.row-link");
+      if (!row || e.target.closest("a, button, input, select, textarea, label")) return;
+      go(row);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      var row = e.target.closest("tr.row-link");
+      if (!row) return;
+      e.preventDefault();
+      go(row);
+    });
+  })();
+  </script>
 </body>
 </html>

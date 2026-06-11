@@ -22,6 +22,7 @@
       reads <code>testing/basic_tests/test_results/</code> (local, gitignored)
     </p>
 
+    <div class="table-wrap">
     <table class="run-table">
       <thead>
         <tr>
@@ -31,7 +32,6 @@
           <th class="num">n</th>
           <th>When</th>
           <th>File</th>
-          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -43,7 +43,11 @@
         {% if v >= 0.8 %}{% set score_class = 'score-strong' %}
         {% elif v >= 0.6 %}{% set score_class = 'score-mid' %}
         {% else %}{% set score_class = 'score-weak' %}{% endif %}
-        <tr>
+        <tr class="row-link"
+            data-href="{{ url_for('benchmark_detail', slug=r.slug) }}"
+            tabindex="0"
+            role="link"
+            aria-label="Open {{ r.kind_label }} results for {{ r.model }}">
           <td><span class="badge {{ badge_class }}">{{ r.kind_label }}</span></td>
           <td><span class="model">{{ r.model }}</span></td>
           <td class="num overall {{ score_class }}">
@@ -53,11 +57,11 @@
           <td class="num">{{ r.n }}</td>
           <td class="dim">{{ r.timestamp }}</td>
           <td class="snippet" title="{{ r.filename }}"><code>{{ r.filename }}</code></td>
-          <td><a href="{{ url_for('benchmark_detail', slug=r.slug) }}">detail</a></td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    </div>
 
     <section class="key">
       <h2>how to read this</h2>
@@ -65,7 +69,7 @@
         <li><b>TruthfulQA</b> — multiple-choice accuracy. Higher = the model picks the truthful answer more often.</li>
         <li><b>IFEval</b> — fraction of prompts whose constraints (e.g. "include 3 bullet points") the response satisfied. Higher = better instruction following.</li>
         <li><b>Consistency</b> — mean BERTScore F1 between responses to rephrasings of the same question. Higher = more semantically consistent across phrasings.</li>
-        <li>This page is read-only — outputs come from <code>testing/basic_tests/test_results/</code> (gitignored). To produce more, run Jack's test scripts locally.</li>
+        <li>Click a row to open per-item breakdowns. This page is read-only — outputs come from <code>testing/basic_tests/test_results/</code> (gitignored).</li>
       </ul>
     </section>
   {% endif %}

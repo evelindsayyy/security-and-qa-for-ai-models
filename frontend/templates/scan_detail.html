@@ -44,6 +44,9 @@
         <option value="modelscan">Source: modelscan</option>
         <option value="fickling">Source: fickling</option>
         <option value="modelaudit">Source: modelaudit</option>
+        <option value="pip_audit">Source: pip_audit</option>
+        <option value="osv">Source: osv</option>
+        <option value="trufflehog">Source: trufflehog</option>
       </select>
     </div>
     <table class="run-table" id="findings-table">
@@ -105,7 +108,7 @@
     {% endif %}
 
     <h2>Scanner tools</h2>
-    <p class="dim">three-tool defense-in-depth merge; expand each tool for specifics.</p>
+    <p class="dim">defense-in-depth merge (artifacts, dependencies, secrets); expand each tool for specifics.</p>
 
     {% if tool_panels.modelscan %}
     <details class="tool-panel" open>
@@ -189,6 +192,77 @@
       {% endif %}
       {% if tool_panels.modelaudit.sample_paths %}
         <p class="dim">paths scanned: {{ tool_panels.modelaudit.sample_paths|join(", ") }}</p>
+      {% endif %}
+    </details>
+    {% endif %}
+
+    {% if tool_panels.dependencies %}
+    <details class="tool-panel" {% if tool_panels.dependencies.vuln_count %}open{% endif %}>
+      <summary>
+        <span class="badge badge-pip_audit">Dependencies</span>
+        <b>{{ tool_panels.dependencies.vuln_count }}</b> CVE{{ "" if tool_panels.dependencies.vuln_count == 1 else "s" }}
+        · {{ tool_panels.dependencies.manifests_found|length }} manifest{{ "" if tool_panels.dependencies.manifests_found|length == 1 else "s" }}
+        · mode {{ tool_panels.dependencies.scan_mode }}
+      </summary>
+      {% if tool_panels.dependencies.vulnerabilities %}
+      <table class="run-table">
+        <thead>
+          <tr><th>Package</th><th>Version</th><th>Severity</th><th>ID</th><th>Source</th><th>Manifest</th><th>Fix</th></tr>
+        </thead>
+        <tbody>
+          {% for v in tool_panels.dependencies.vulnerabilities %}
+          <tr class="{% if v.severity in ('critical', 'high') %}row-warn{% endif %}">
+            <td><code>{{ v.package }}</code></td>
+            <td>{{ v.version }}</td>
+            <td><span class="tier tier-{{ v.severity }}">{{ v.severity }}</span></td>
+            <td class="dim"><code>{{ v.id }}</code></td>
+            <td><span class="badge badge-{{ v.source }}">{{ v.source }}</span></td>
+            <td><code>{{ v.manifest }}</code></td>
+            <td class="dim">{{ v.fix }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+        <p class="empty">no dependency vulnerabilities in this run.</p>
+      {% endif %}
+      {% if tool_panels.dependencies.manifests_found %}
+        <p class="dim">manifests: {{ tool_panels.dependencies.manifests_found|join(", ") }}</p>
+      {% endif %}
+    </details>
+    {% endif %}
+
+    {% if tool_panels.secrets %}
+    <details class="tool-panel" {% if tool_panels.secrets.secret_count %}open{% endif %}>
+      <summary>
+        <span class="badge badge-trufflehog">TruffleHog</span>
+        <b>{{ tool_panels.secrets.secret_count }}</b> secret{{ "" if tool_panels.secrets.secret_count == 1 else "s" }}
+        · {{ tool_panels.secrets.verified_count }} verified
+        {% if not tool_panels.secrets.available %}
+          · <span class="dim">binary unavailable</span>
+        {% endif %}
+      </summary>
+      {% if tool_panels.secrets.note %}
+        <p class="dim">{{ tool_panels.secrets.note }}</p>
+      {% endif %}
+      {% if tool_panels.secrets.secrets %}
+      <table class="run-table">
+        <thead>
+          <tr><th>Detector</th><th>File</th><th>Verified</th><th>Redacted</th></tr>
+        </thead>
+        <tbody>
+          {% for s in tool_panels.secrets.secrets %}
+          <tr class="{% if s.verified %}row-warn{% endif %}">
+            <td>{{ s.detector }}</td>
+            <td><code>{{ s.file or "—" }}</code></td>
+            <td>{{ "yes" if s.verified else "no" }}</td>
+            <td class="dim snippet">{{ s.redacted }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+        <p class="empty">no secrets detected{% if not tool_panels.secrets.available %} (scanner skipped){% endif %}.</p>
       {% endif %}
     </details>
     {% endif %}

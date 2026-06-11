@@ -72,6 +72,7 @@
   <p class="empty pillar-stat">{{ hf_error }}</p>
   {% endif %}
   {% if hf %}
+  <div class="table-wrap">
   <table class="run-table">
     <thead>
       <tr>
@@ -80,12 +81,15 @@
         <th>Risk</th>
         <th>Scanned</th>
         <th>Notes</th>
-        <th></th>
       </tr>
     </thead>
     <tbody>
       {% for m in hf %}
-      <tr class="{% if m.is_warn %}row-warn{% endif %}">
+      <tr class="row-link {% if m.is_warn %}row-warn{% endif %}"
+          data-href="{{ url_for('scan_detail', slug=m.slug) }}"
+          tabindex="0"
+          role="link"
+          aria-label="Open scan for {{ m.id }}">
         <td><span class="model">{{ m.id }}</span></td>
         <td><code>{{ m.slug }}</code></td>
         <td>
@@ -94,18 +98,18 @@
         </td>
         <td class="dim">{{ m.scanned_at }}</td>
         <td>{{ m.notes or "—" }}</td>
-        <td><a href="{{ url_for('scan_detail', slug=m.slug) }}">detail</a></td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% endif %}
 
   <section class="key">
     <h2>how to use this catalog</h2>
     <ul>
       <li><b>gateway</b> rows are live from the duke ai gateway — use for safety red-team and efficacy eval (<a href="{{ url_for('eval_run') }}">eval runs</a>).</li>
-      <li><b>hf</b> rows are for pre-deploy file scanning (<a href="{{ url_for('scans') }}">scan results</a>).</li>
+      <li><b>hf</b> rows link to scan detail — click a row or use <a href="{{ url_for('scans') }}">scan results</a>.</li>
       <li>refresh docs: <code>uv run python testing/gateway/list_models.py</code> or open this page with gateway env set.</li>
     </ul>
   </section>

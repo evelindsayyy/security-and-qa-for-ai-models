@@ -52,6 +52,8 @@ def _tool_snippet(data: dict) -> str:
     ms = tool.get("modelscan") or {}
     fick = tool.get("fickling") or {}
     ma = tool.get("modelaudit") or {}
+    deps = tool.get("dependencies") or {}
+    sec = tool.get("secrets") or {}
     parts = []
     parts.append(f"modelscan={ms.get('total_issues', 0)}")
     fick_sev = fick.get("severity") or data.get("fickling_severity")
@@ -60,6 +62,10 @@ def _tool_snippet(data: dict) -> str:
     actionable = ma.get("actionable_issue_count")
     if actionable is not None:
         parts.append(f"modelaudit={actionable}")
+    if deps.get("vuln_count") is not None or tool.get("dependencies") is not None:
+        parts.append(f"deps={deps.get('vuln_count', 0)}")
+    if sec.get("secret_count") is not None or tool.get("secrets") is not None:
+        parts.append(f"secrets={sec.get('secret_count', 0)}")
     return " · ".join(parts)
 
 
@@ -190,6 +196,63 @@ def _modelaudit_panel(ma: dict) -> dict:
     }
 
 
+def _dependency_panel(deps: dict) -> dict | None:
+    if not deps:
+        return None
+    vulns = []
+    for v in deps.get("vulnerabilities") or []:
+        if not isinstance(v, dict):
+            continue
+        fix = v.get("fix_versions") or []
+        vulns.append(
+            {
+                "package": v.get("package") or "—",
+                "version": v.get("version") or "—",
+                "severity": (v.get("severity") or "unknown").lower(),
+                "id": v.get("id") or "—",
+                "source": v.get("source") or "—",
+                "manifest": v.get("manifest") or "—",
+                "fix": ", ".join(fix) if fix else "—",
+                "corroborated_by": v.get("corroborated_by") or [],
+            }
+        )
+    return {
+        "vuln_count": deps.get("vuln_count", 0),
+        "manifests_found": deps.get("manifests_found") or [],
+        "by_severity": deps.get("by_severity") or {},
+        "scan_mode": deps.get("scan_mode") or "—",
+        "pip_audit_available": deps.get("pip_audit_available", False),
+        "vulnerabilities": vulns,
+    }
+
+
+def _secret_panel(sec: dict | None) -> dict | None:
+    if not sec:
+        return None
+    secrets = []
+    for s in sec.get("secrets") or []:
+        if not isinstance(s, dict):
+            continue
+        secrets.append(
+            {
+                "detector": s.get("detector") or "—",
+                "file": _basename(s.get("file")),
+                "verified": bool(s.get("verified")),
+                "redacted": (s.get("redacted") or "[redacted]")[:80],
+            }
+        )
+    return {
+        "available": sec.get("available", True),
+        "secret_count": sec.get("secret_count", 0),
+        "verified_count": sec.get("verified_count", 0),
+        "by_detector": sec.get("by_detector") or {},
+        "files_scanned": sec.get("files_scanned"),
+        "scan_mode": sec.get("scan_mode") or "—",
+        "note": sec.get("note") or sec.get("error"),
+        "secrets": secrets,
+    }
+
+
 def _coverage_stats(coverage: dict, file_formats: dict) -> list[dict]:
     """human-readable label/value pairs for the coverage section."""
     stats: list[dict] = []
@@ -207,6 +270,23 @@ def _coverage_stats(coverage: dict, file_formats: dict) -> list[dict]:
                 "value": "yes" if coverage["fickling_applicable"] else "no (e.g. safetensors-only)",
             }
         )
+    if coverage.get("dependency_manifests") is not None:
+        manifests = coverage["dependency_manifests"]
+        stats.append(
+            {
+                "label": "Dependency manifests",
+                "value": len(manifests) if isinstance(manifests, list) else manifests or 0,
+            }
+        )
+    if "secret_scan_available" in coverage:
+        stats.append(
+            {
+                "label": "TruffleHog available",
+                "value": "yes" if coverage["secret_scan_available"] else "no",
+            }
+        )
+    if coverage.get("secret_files_scanned") is not None:
+        stats.append({"label": "Secret scan files", "value": coverage["secret_files_scanned"]})
     for key, val in (file_formats or {}).items():
         if isinstance(val, list) and val:
             stats.append({"label": f"Format: {key}", "value": len(val)})
@@ -283,11 +363,15 @@ def get_scan_detail(slug: str) -> dict | None:
     ms = tool.get("modelscan") or {}
     fick = tool.get("fickling")
     ma = tool.get("modelaudit") or {}
+    deps = tool.get("dependencies")
+    sec = tool.get("secrets")
 
     tool_panels = {
         "modelscan": _modelscan_panel(ms) if ms else None,
         "fickling": _fickling_panel(fick, data.get("fickling_severity")),
         "modelaudit": _modelaudit_panel(ma) if ma else None,
+        "dependencies": _dependency_panel(deps) if deps is not None else None,
+        "secrets": _secret_panel(sec) if sec is not None else None,
     }
 
     scanned_files = [_basename(p) for p in (data.get("scanned_files") or [])]
@@ -323,6 +407,13 @@ def get_scan_detail(slug: str) -> dict | None:
                     for k in ("actionable_issue_count", "issue_count", "noise_filtered_count", "scan_mode")
                     if ma
                 },
+                "dependencies": {"vuln_count": (deps or {}).get("vuln_count")} if deps else None,
+                "secrets": {
+                    "secret_count": (sec or {}).get("secret_count"),
+                    "verified_count": (sec or {}).get("verified_count"),
+                }
+                if sec
+                else None,
             },
         },
     }

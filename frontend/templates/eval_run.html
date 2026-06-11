@@ -19,6 +19,7 @@
       judge: <b>{{ judge_summary }}</b>
     </p>
 
+    <div class="table-wrap">
     <table class="run-table">
       <thead>
         <tr>
@@ -31,12 +32,15 @@
           <th class="num">Latency (mean / p95)</th>
           <th class="num">Cost</th>
           <th>Status</th>
-          <th></th>
         </tr>
       </thead>
       <tbody>
         {% for r in runs %}
-        <tr class="{% if r.is_best %}row-best{% endif %}{% if r.note %}row-warn{% endif %}">
+        <tr class="row-link {% if r.is_best %}row-best{% endif %}{% if r.note %}row-warn{% endif %}"
+            data-href="{{ url_for('eval_run_detail', slug=r.slug) }}"
+            tabindex="0"
+            role="link"
+            aria-label="Open eval run for {{ r.candidate_model }}">
           <td>
             <span class="model">{{ r.candidate_model }}</span>
             {% if r.is_best %}<span class="badge badge-best">best</span>{% endif %}
@@ -48,7 +52,7 @@
           <td class="num overall">{{ "%.2f"|format(r.overall) if r.overall is not none else "—" }}</td>
           <td class="num">{{ r.mean_latency_ms }} / {{ r.p95_latency_ms }} ms</td>
           <td class="num">${{ "%.4f"|format(r.total_cost_usd) }}</td>
-          <td>
+          <td class="col-wrap">
             {% if r.note %}
               <span class="badge badge-warn">{{ r.note }}</span>
             {% elif r.cand_fail or r.judge_fail %}
@@ -57,18 +61,18 @@
               <span class="status-ok">OK</span>
             {% endif %}
           </td>
-          <td><a href="{{ url_for('eval_run_detail', slug=r.slug) }}">detail</a></td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    </div>
 
     <section class="key">
       <h2>How to read this</h2>
       <ul>
         <li>Dimension columns come from each run's rubric; the rubric YAML defines each scale (most are 1–5, tone is 1–3). Higher is better. A run shows "—" for dimensions its rubric doesn't define.</li>
         <li><b>Overall</b> = rubric-weighted normalized score on the 0–5 display scale.</li>
-        <li>Rows are sorted best-first by overall mean. The top row also carries a <span class="badge badge-best">best</span> badge.</li>
+        <li>Rows are sorted best-first by overall mean. Click a row to open per-question scores. The top row also carries a <span class="badge badge-best">best</span> badge.</li>
         <li>An <span class="badge badge-warn">⚠ N/n empty</span> badge means the candidate returned empty text for N of n questions — usually a reasoning model that spent its <code>max_tokens</code> budget on hidden reasoning. The score for those rows is not a real model comparison.</li>
       </ul>
     </section>

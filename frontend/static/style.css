@@ -56,6 +56,13 @@ header nav a:hover {
 }
 
 /* shared tables (eval + scan pages use the same class names) */
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 1.75rem;
+}
+.table-wrap .run-table { margin-bottom: 0; }
 .run-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 1.75rem; }
 .run-table th, .run-table td { padding: 10px 12px; border-bottom: 1px solid #eee; vertical-align: middle; }
 .run-table thead th {
@@ -71,22 +78,68 @@ header nav a:hover {
 .run-table thead th.num { text-align: right; }
 .run-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .run-table td.overall { font-weight: 700; font-size: 15px; color: #222; }
+.run-table td {
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
 .run-table .model { font-weight: 600; }
 .run-table .snippet {
   font-size: 13px;
   color: #555;
-  max-width: 280px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+  min-width: 8rem;
 }
-.run-table td.snippet code { font-size: 12px; }
+.run-table td.snippet code { font-size: 12px; word-break: break-all; }
 
-.run-table tbody tr:hover { background: #fafbfc; }
+/* Long text columns on list pages (tools, suites, breakdown, status) */
+.run-table .col-wrap {
+  min-width: 10rem;
+  max-width: 28rem;
+}
+.run-table .col-tools { min-width: 12rem; max-width: 32rem; }
+.run-table .col-suites { min-width: 10rem; max-width: 36rem; }
+
+.run-table tbody tr {
+  transition: background-color 0.12s ease;
+}
+.run-table tbody tr:hover {
+  background: #e8edf3;
+}
+.run-table tbody tr.row-link:hover {
+  background: #dde4ee;
+}
+.run-table tbody tr.row-link {
+  cursor: pointer;
+}
+.run-table tbody tr.row-link:focus {
+  outline: 2px solid #012169;
+  outline-offset: -2px;
+}
+.run-table tbody tr.row-link:focus:not(:focus-visible) {
+  outline: none;
+}
+.run-table tbody tr.row-link:focus-visible {
+  outline: 2px solid #012169;
+  outline-offset: -2px;
+  background: #dde4ee;
+}
 .run-table tr.row-best { background: #f3faf3; }
-.run-table tr.row-best:hover { background: #ecf6ec; }
+.run-table tr.row-best:hover { background: #d8edd8; }
+.run-table tr.row-best.row-link:hover { background: #c9e4c9; }
 .run-table tr.row-warn { background: #fdf6f0; }
-.run-table tr.row-warn:hover { background: #faeee2; }
+.run-table tr.row-warn:hover { background: #f5e0cc; }
+.run-table tr.row-warn.row-link:hover { background: #efcfb0; }
+
+/* detail pages — finding summary rows (ok + warn) */
+.run-table tbody tr.finding-row { cursor: pointer; }
+.run-table tbody tr.finding-row:hover { background: #e8edf3; }
+.run-table tbody tr.finding-row.row-warn:hover { background: #f5e0cc; }
 
 /* severity tier badges */
 .tier {
@@ -126,6 +179,9 @@ header nav a:hover {
 .badge-modelscan  { background: #e6edf7; color: #1b3a6e; }
 .badge-fickling   { background: #fff3cd; color: #856404; }
 .badge-modelaudit { background: #fdecec; color: #842029; }
+.badge-pip_audit  { background: #e8f5e9; color: #1b5e20; }
+.badge-osv        { background: #e3f2fd; color: #0d47a1; }
+.badge-trufflehog { background: #fce4ec; color: #880e4f; }
 
 /* safety tool / source badges */
 .badge-promptfoo { background: #e6edf7; color: #1b3a6e; }
@@ -164,6 +220,15 @@ header nav a:hover {
   background: #fafafa;
   border-radius: 4px;
   border: 1px solid #eee;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+.finding-detail:hover {
+  background: #eef2f6;
+  border-color: #d5dce6;
+}
+.finding-detail.finding-fail:hover {
+  background: #f8ebe3;
+  border-color: #e8c9b8;
 }
 .finding-detail summary {
   cursor: pointer;
@@ -264,6 +329,13 @@ header nav a:hover {
   padding: 0.75rem 1rem;
   background: #fafafa;
   border-radius: 4px;
+}
+.summary-row .snippet {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  flex: 1 1 12rem;
+  min-width: 0;
 }
 .summary-score { font-size: 16px; }
 

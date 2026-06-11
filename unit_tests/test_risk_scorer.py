@@ -153,6 +153,99 @@ class RiskScorerTest(unittest.TestCase):
         self.assertEqual(result.severity_tier.value, "medium")
         self.assertTrue(any(f.source == "modelaudit" for f in result.findings))
 
+    def test_dependency_high_cve_raises_tier(self) -> None:
+        ms = {"summary": {"total_issues": 0, "total_issues_by_severity": {}}, "issues": []}
+        deps = {
+            "vuln_count": 1,
+            "vulnerabilities": [
+                {
+                    "package": "pillow",
+                    "version": "8.1.0",
+                    "id": "CVE-2021-XXXX",
+                    "severity": "high",
+                    "source": "pip_audit",
+                    "manifest": "requirements.txt",
+                    "summary": "buffer overflow",
+                    "fix_versions": ["8.2.0"],
+                }
+            ],
+        }
+        result = score("test/model", ms, None, None, dependency_summary=deps)
+        self.assertEqual(result.severity_tier.value, "high")
+        self.assertGreaterEqual(result.overall_risk_score, 70)
+        self.assertTrue(any(f.source == "pip_audit" for f in result.findings))
+
+    def test_verified_secret_raises_critical(self) -> None:
+        ms = {"summary": {"total_issues": 0, "total_issues_by_severity": {}}, "issues": []}
+        secrets = {
+            "available": True,
+            "secret_count": 1,
+            "verified_count": 1,
+            "secrets": [
+                {
+                    "detector": "AWS",
+                    "file": "config.py",
+                    "verified": True,
+                    "redacted": "AKIA…[redacted]",
+                }
+            ],
+        }
+        result = score("test/model", ms, None, None, secret_summary=secrets)
+        self.assertEqual(result.severity_tier.value, "critical")
+        self.assertGreaterEqual(result.overall_risk_score, 95)
+        self.assertTrue(any(f.source == "trufflehog" for f in result.findings))
+
+    def test_multiple_secrets_same_file_not_deduped(self) -> None:
+        ms = {"summary": {"total_issues": 0, "total_issues_by_severity": {}}, "issues": []}
+        secrets = {
+            "available": True,
+            "secret_count": 2,
+            "verified_count": 0,
+            "secrets": [
+                {
+                    "detector": "Github",
+                    "file": "credentials.env",
+                    "verified": False,
+                    "redacted": "ghp_…[redacted]",
+                },
+                {
+                    "detector": "SlackWebhook",
+                    "file": "credentials.env",
+                    "verified": False,
+                    "redacted": "https://hooks.slack.com/…",
+                },
+            ],
+        }
+        result = score("test/model", ms, None, None, secret_summary=secrets)
+        th = [f for f in result.findings if f.source == "trufflehog"]
+        self.assertEqual(len(th), 2)
+        detectors = {f.title for f in th}
+        self.assertIn("secret detected: Github", detectors)
+        self.assertIn("secret detected: SlackWebhook", detectors)
+
+    def test_pip_audit_osv_corroboration(self) -> None:
+        ms = {"summary": {"total_issues": 0, "total_issues_by_severity": {}}, "issues": []}
+        deps = {
+            "vuln_count": 1,
+            "vulnerabilities": [
+                {
+                    "package": "pillow",
+                    "version": "8.1.0",
+                    "id": "CVE-2021-XXXX",
+                    "severity": "high",
+                    "source": "pip_audit",
+                    "corroborated_by": ["osv"],
+                    "manifest": "requirements.txt",
+                    "summary": "known vuln",
+                    "fix_versions": ["8.2.0"],
+                }
+            ],
+        }
+        result = score("test/model", ms, None, None, dependency_summary=deps)
+        dep_findings = [f for f in result.findings if f.source == "pip_audit"]
+        self.assertEqual(len(dep_findings), 1)
+        self.assertIn("osv", dep_findings[0].corroborated_by or [])
+
 
 if __name__ == "__main__":
     unittest.main()
