@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import expandable %}
 
 {% block title %}{% if missing %}Benchmark not found{% else %}{{ kind_label }} — {{ model }}{% endif %}{% endblock %}
 
@@ -18,14 +19,16 @@
     </p>
 
     <div class="summary-row">
-      <span class="badge badge-pilot">{{ kind_label }}</span>
-      <span class="summary-score">
-        {{ headline_metric }} <b>{{ headline_display }}</b>
-      </span>
-      <span class="dim">n = {{ n }}</span>
-      {% if raw_row_count and raw_row_count > 50 %}
-        <span class="dim">showing first 50 of {{ raw_row_count }} rows</span>
-      {% endif %}
+      <div class="summary-chips">
+        <span class="badge badge-pilot">{{ kind_label }}</span>
+        <span class="summary-score">
+          {{ headline_metric }} <b>{{ headline_display }}</b>
+        </span>
+        <span class="dim">n = {{ n }}</span>
+        {% if raw_row_count and raw_row_count > 50 %}
+          <span class="dim">first 50 of {{ raw_row_count }}</span>
+        {% endif %}
+      </div>
     </div>
 
     {# ---- TruthfulQA branch ---- #}
@@ -43,9 +46,9 @@
         <tbody>
           {% for r in responses %}
           <tr class="{% if r.model_answer != r.correct_letter %}row-warn{% endif %}">
-            <td class="snippet">{{ r.question }}</td>
-            <td class="num">{{ r.correct_letter or '—' }}</td>
-            <td class="num">{{ r.model_answer or '—' }}</td>
+            <td class="col-long">{{ expandable(r.question, clamp=2) }}</td>
+            <td class="num col-nowrap">{{ r.correct_letter or '—' }}</td>
+            <td class="num col-nowrap">{{ r.model_answer or '—' }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -62,19 +65,19 @@
       <table class="run-table">
         <thead>
           <tr>
-            <th>Key</th>
+            <th class="col-nowrap">Key</th>
             <th>Instructions</th>
-            <th>Prompt (truncated)</th>
-            <th>Pass?</th>
+            <th>Prompt</th>
+            <th class="col-nowrap">Pass?</th>
           </tr>
         </thead>
         <tbody>
           {% for r in raw_rows %}
           <tr class="{% if not r.judge.passed %}row-warn{% endif %}">
-            <td class="dim"><code>{{ r.key }}</code></td>
-            <td class="dim">{{ r.instruction_id_list|join(", ") if r.instruction_id_list else '—' }}</td>
-            <td class="snippet">{{ r.prompt[:120] }}{% if r.prompt|length > 120 %}…{% endif %}</td>
-            <td>
+            <td class="col-nowrap dim"><code>{{ r.key }}</code></td>
+            <td class="col-long dim">{{ expandable(r.instruction_id_list|join(", ") if r.instruction_id_list else '—', clamp=1) }}</td>
+            <td class="col-long">{{ expandable(r.prompt, clamp=2) }}</td>
+            <td class="col-nowrap">
               {% if r.judge.passed %}
                 <span class="status-ok">PASS</span>
               {% else %}
@@ -104,8 +107,8 @@
         <tbody>
           {% for q in questions %}
           <tr class="{% if (q.mean_f1 or 0) < 0.7 %}row-warn{% endif %}">
-            <td class="snippet">
-              {% if q.question %}{{ q.question }}
+            <td class="col-long">
+              {% if q.question %}{{ expandable(q.question, clamp=2) }}
               {% elif q.id %}<code>{{ q.id }}</code>
               {% else %}—{% endif %}
             </td>

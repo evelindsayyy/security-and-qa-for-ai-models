@@ -79,31 +79,82 @@ header nav a:hover {
 .run-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .run-table td.overall { font-weight: 700; font-size: 15px; color: #222; }
 .run-table td {
-  word-wrap: break-word;
-  overflow-wrap: anywhere;
-  hyphens: auto;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+/* Shrink-to-fit columns — badges, tiers, status (stay on one line) */
+.run-table .col-nowrap,
+.run-table th.col-nowrap,
+.run-table td.col-nowrap {
+  white-space: nowrap;
+  width: 1%;
+  vertical-align: middle;
 }
 .run-table .model { font-weight: 600; }
-.run-table .snippet {
-  font-size: 13px;
-  color: #555;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: unset;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-  line-height: 1.45;
+.run-table .model-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
   min-width: 8rem;
 }
-.run-table td.snippet code { font-size: 12px; word-break: break-all; }
-
-/* Long text columns on list pages (tools, suites, breakdown, status) */
-.run-table .col-wrap {
-  min-width: 10rem;
-  max-width: 28rem;
+.run-table .model-block .model { white-space: nowrap; }
+.run-table .model-block code {
+  font-size: 12px;
+  white-space: nowrap;
+  max-width: 14rem;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
 }
-.run-table .col-tools { min-width: 12rem; max-width: 32rem; }
-.run-table .col-suites { min-width: 10rem; max-width: 36rem; }
+/* Long text — clamped with optional “See more” (JS in base.html) */
+.expandable {
+  min-width: 0;
+  max-width: 100%;
+}
+.expandable-body {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.45;
+}
+.expandable[data-clamp="1"] .expandable-body { -webkit-line-clamp: 1; }
+.expandable[data-clamp="2"] .expandable-body { -webkit-line-clamp: 2; }
+.expandable[data-clamp="3"] .expandable-body { -webkit-line-clamp: 3; }
+.expandable.is-expanded .expandable-body {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+.expandable-toggle {
+  display: none;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #012169;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+.expandable.is-overflow .expandable-toggle { display: inline-block; }
+.run-table td.dim .expandable-body,
+.run-table .summary-meta .expandable-body {
+  color: #888;
+  font-size: 13px;
+}
+.run-table .col-long { min-width: 10rem; max-width: 22rem; }
+.run-table .col-tools { min-width: 10rem; max-width: 24rem; }
+.run-table .col-suites { min-width: 10rem; max-width: 28rem; }
+.run-table td.col-long code,
+.run-table .expandable code {
+  font-size: 12px;
+  word-break: break-all;
+}
 
 .run-table tbody tr {
   transition: background-color 0.12s ease;
@@ -141,15 +192,18 @@ header nav a:hover {
 .run-table tbody tr.finding-row:hover { background: #e8edf3; }
 .run-table tbody tr.finding-row.row-warn:hover { background: #f5e0cc; }
 
-/* severity tier badges */
+/* severity tier badges — never break mid-word */
 .tier {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  white-space: nowrap;
+  line-height: 1.35;
+  flex-shrink: 0;
 }
 .tier-low { background: #e8f4e8; color: #2a6b2a; }
 .tier-medium { background: #fff3cd; color: #856404; }
@@ -161,13 +215,21 @@ header nav a:hover {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
   vertical-align: middle;
+  white-space: nowrap;
+  line-height: 1.35;
+  flex-shrink: 0;
 }
-.badge-best { background: #dff1df; color: #1f6b1f; margin-left: 0.5rem; }
-.badge-warn { background: #fde2c8; color: #a35200; }
+.badge-best { background: #dff1df; color: #1f6b1f; margin-left: 0.35rem; }
+.badge-warn { background: #fde2c8; color: #a35200; max-width: none; }
+.status-ok,
+.status-fail {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 .status-ok { color: #2a7a2a; font-size: 13px; font-weight: 600; }
 
 /* benchmark-type badges — distinct per kind */
@@ -234,11 +296,45 @@ header nav a:hover {
   cursor: pointer;
   font-size: 14px;
   list-style-position: outside;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+}
+.finding-summary-chips {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.finding-summary-title {
+  flex: 1 1 12rem;
+  min-width: 0;
+  font-weight: 600;
 }
 .finding-detail summary .tier,
-.finding-detail summary .badge {
-  margin-right: 0.35rem;
+.finding-detail summary .badge,
+.finding-detail summary .status-ok,
+.finding-detail summary .status-fail {
+  margin-right: 0;
 }
+.tool-panel summary {
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+}
+.panel-summary-chips {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.tool-panel summary .badge { margin-right: 0; }
 .finding-desc { margin: 0.5rem 0 0.25rem; font-size: 14px; color: #444; }
 .finding-remediation { margin: 0.25rem 0; font-size: 14px; color: #555; }
 .tool-panel {
@@ -248,8 +344,6 @@ header nav a:hover {
   border-radius: 4px;
   border: 1px solid #eee;
 }
-.tool-panel summary { cursor: pointer; font-size: 14px; }
-.tool-panel summary .badge { margin-right: 0.35rem; }
 .compact-table { margin-top: 0.5rem; margin-bottom: 0.5rem; }
 .compact-table td, .compact-table th { padding: 6px 10px; }
 .file-list {
@@ -323,21 +417,32 @@ header nav a:hover {
 .summary-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 0.5rem 0.75rem;
   align-items: center;
   margin-bottom: 1.5rem;
   padding: 0.75rem 1rem;
   background: #fafafa;
   border-radius: 4px;
 }
-.summary-row .snippet {
-  white-space: normal;
-  word-break: break-word;
-  overflow-wrap: anywhere;
+.summary-chips {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.summary-chips .tier,
+.summary-chips .badge,
+.summary-chips .status-ok,
+.summary-chips .status-fail,
+.summary-chips .summary-score {
+  flex-shrink: 0;
+}
+.summary-row .summary-meta {
   flex: 1 1 12rem;
   min-width: 0;
 }
-.summary-score { font-size: 16px; }
+.summary-score { font-size: 16px; white-space: nowrap; }
 
 /* json debug blocks on detail pages */
 .json-block {

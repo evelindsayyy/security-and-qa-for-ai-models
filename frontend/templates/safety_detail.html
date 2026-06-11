@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import expandable %}
 
 {% block title %}{% if missing %}Safety not found{% else %}{{ display_name }} — safety{% endif %}{% endblock %}
 
@@ -24,15 +25,20 @@
     {% else %}{% set score_class = 'score-weak' %}{% endif %}
 
     <div class="summary-row">
-      <span class="tier tier-{{ safety_tier }}">{{ safety_tier }}</span>
-      <span class="summary-score {{ score_class }}">pass rate <b>{{ pass_rate_display }}</b></span>
-      <span class="dim">{{ n_passed }}/{{ n_findings }} passed</span>
-      {% if n_failed %}
-        <span class="dim status-fail">{{ n_failed }} failed ({{ failed_summary }})</span>
-      {% else %}
-        <span class="status-ok">all probes passed</span>
+      <div class="summary-chips">
+        <span class="tier tier-{{ safety_tier }}">{{ safety_tier }}</span>
+        <span class="summary-score {{ score_class }}">pass rate <b>{{ pass_rate_display }}</b></span>
+        <span class="dim">{{ n_passed }}/{{ n_findings }} passed</span>
+        {% if n_failed %}
+          <span class="status-fail">{{ n_failed }} failed</span>
+        {% else %}
+          <span class="status-ok">all probes passed</span>
+        {% endif %}
+      </div>
+      {% if n_failed and failed_summary %}
+        <div class="summary-meta dim">{{ expandable(failed_summary, clamp=1) }}</div>
       {% endif %}
-      <span class="dim snippet">{{ suite_snippet }}</span>
+      <div class="summary-meta">{{ expandable(suite_snippet, clamp=1) }}</div>
     </div>
 
     <h2>Probe findings ({{ n_findings }})</h2>
@@ -58,13 +64,13 @@
     <table class="run-table" id="findings-table">
       <thead>
         <tr>
-          <th>Result</th>
-          <th>Severity</th>
-          <th>Source</th>
-          <th>Category</th>
+          <th class="col-nowrap">Result</th>
+          <th class="col-nowrap">Severity</th>
+          <th class="col-nowrap">Source</th>
+          <th class="col-nowrap">Category</th>
           <th>Probe</th>
           <th>Title</th>
-          <th>Corroborated</th>
+          <th class="col-nowrap">Corroborated</th>
         </tr>
       </thead>
       <tbody>
@@ -74,19 +80,19 @@
             data-finding-severity="{{ f.severity }}"
             data-finding-source="{{ f.source }}"
             data-finding-category="{{ f.category }}">
-          <td>
+          <td class="col-nowrap">
             {% if f.passed %}
               <span class="status-ok">PASS</span>
             {% else %}
               <span class="status-fail">FAIL</span>
             {% endif %}
           </td>
-          <td><span class="tier tier-{{ f.severity }}">{{ f.severity }}</span></td>
-          <td><span class="badge badge-{{ f.source }}">{{ f.source }}</span></td>
-          <td class="dim">{{ f.category }}</td>
-          <td><code>{{ f.probe_id }}</code></td>
-          <td class="snippet" title="{{ f.title }}">{{ f.title }}</td>
-          <td class="dim">{{ f.corroborated_by|join(", ") if f.corroborated_by else "—" }}</td>
+          <td class="col-nowrap"><span class="tier tier-{{ f.severity }}">{{ f.severity }}</span></td>
+          <td class="col-nowrap"><span class="badge badge-{{ f.source }}">{{ f.source }}</span></td>
+          <td class="col-nowrap dim">{{ f.category }}</td>
+          <td class="col-long"><code>{{ f.probe_id }}</code></td>
+          <td class="col-long">{{ expandable(f.title, clamp=2) }}</td>
+          <td class="col-nowrap dim">{{ f.corroborated_by|join(", ") if f.corroborated_by else "—" }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -102,21 +108,23 @@
              data-finding-category="{{ f.category }}"
              {% if not f.passed %}open{% endif %}>
       <summary>
-        {% if f.passed %}
-          <span class="status-ok">PASS</span>
-        {% else %}
-          <span class="status-fail">FAIL</span>
-        {% endif %}
-        <span class="tier tier-{{ f.severity }}">{{ f.severity }}</span>
-        <span class="badge badge-{{ f.source }}">{{ f.source }}</span>
-        <b>{{ f.title }}</b>
-        · <code>{{ f.probe_id }}</code>
+        <span class="finding-summary-chips">
+          {% if f.passed %}
+            <span class="status-ok">PASS</span>
+          {% else %}
+            <span class="status-fail">FAIL</span>
+          {% endif %}
+          <span class="tier tier-{{ f.severity }}">{{ f.severity }}</span>
+          <span class="badge badge-{{ f.source }}">{{ f.source }}</span>
+        </span>
+        <span class="finding-summary-title">{{ f.title }}</span>
+        <code>{{ f.probe_id }}</code>
       </summary>
       {% if f.probe_suite %}
         <p class="dim">suite: {{ f.probe_suite }}</p>
       {% endif %}
       {% if f.description %}
-        <p class="finding-desc">{{ f.description }}</p>
+        <div class="finding-desc">{{ expandable(f.description, clamp=3) }}</div>
       {% endif %}
       {% if f.corroborated_by %}
         <p class="dim">corroborated by: {{ f.corroborated_by|join(", ") }}</p>
@@ -140,10 +148,12 @@
     {% else %}{% set suite_score = 'score-weak' %}{% endif %}
     <details class="tool-panel" {% if p.n_passed < p.n_findings %}open{% endif %}>
       <summary>
-        <span class="badge badge-{{ p.source }}">{{ p.label }}</span>
-        <span class="{{ suite_score }}"><b>{{ p.pass_rate_display }}</b></span>
-        · {{ p.n_passed }}/{{ p.n_findings }} passed
-        · <code>{{ p.probe_suite }}</code>
+        <span class="panel-summary-chips">
+          <span class="badge badge-{{ p.source }}">{{ p.label }}</span>
+          <span class="{{ suite_score }}"><b>{{ p.pass_rate_display }}</b></span>
+        </span>
+        <span>{{ p.n_passed }}/{{ p.n_findings }} passed</span>
+        <code>{{ p.probe_suite }}</code>
       </summary>
       {% if p.description %}
         <p class="dim">{{ p.description }}</p>

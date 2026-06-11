@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import expandable %}
 
 {% block title %}{% if missing %}Scan not found{% else %}{{ model_id }} — scan{% endif %}{% endblock %}
 
@@ -19,16 +20,18 @@
     </p>
 
     <div class="summary-row">
-      <span class="tier tier-{{ severity_tier }}">{{ severity_tier }}</span>
-      <span class="summary-score">risk score <b>{{ overall_risk_score }}</b></span>
-      <span class="dim">{{ n_findings }} finding{{ "" if n_findings == 1 else "s" }}</span>
+      <div class="summary-chips">
+        <span class="tier tier-{{ severity_tier }}">{{ severity_tier }}</span>
+        <span class="summary-score">risk score <b>{{ overall_risk_score }}</b></span>
+        <span class="dim">{{ n_findings }} finding{{ "" if n_findings == 1 else "s" }}</span>
+        {% if fickling_severity %}
+          <span class="badge badge-fickling">{{ fickling_severity }}</span>
+        {% endif %}
+      </div>
       {% if severity_summary != "—" %}
-        <span class="dim">{{ severity_summary }}</span>
+        <div class="summary-meta dim">{{ expandable(severity_summary, clamp=1) }}</div>
       {% endif %}
-      {% if fickling_severity %}
-        <span class="badge badge-fickling">{{ fickling_severity }}</span>
-      {% endif %}
-      <span class="dim snippet">{{ tool_snippet }}</span>
+      <div class="summary-meta">{{ expandable(tool_snippet, clamp=1) }}</div>
     </div>
 
     <h2>Findings ({{ n_findings }})</h2>
@@ -52,11 +55,11 @@
     <table class="run-table" id="findings-table">
       <thead>
         <tr>
-          <th>Severity</th>
-          <th>Source</th>
+          <th class="col-nowrap">Severity</th>
+          <th class="col-nowrap">Source</th>
           <th>Title</th>
           <th>File</th>
-          <th>Corroborated</th>
+          <th class="col-nowrap">Corroborated</th>
         </tr>
       </thead>
       <tbody>
@@ -64,11 +67,11 @@
         <tr class="finding-row {% if f.severity in ('critical', 'high') %}row-warn{% endif %}"
             data-finding-severity="{{ f.severity }}"
             data-finding-source="{{ f.source }}">
-          <td><span class="tier tier-{{ f.severity }}">{{ f.severity }}</span></td>
-          <td><span class="badge badge-{{ f.source }}">{{ f.source }}</span></td>
-          <td>{{ f.title }}</td>
-          <td><code>{{ f.file_path or "—" }}</code></td>
-          <td class="dim">{{ f.corroborated_by|join(", ") if f.corroborated_by else "—" }}</td>
+          <td class="col-nowrap"><span class="tier tier-{{ f.severity }}">{{ f.severity }}</span></td>
+          <td class="col-nowrap"><span class="badge badge-{{ f.source }}">{{ f.source }}</span></td>
+          <td class="col-long">{{ expandable(f.title, clamp=2) }}</td>
+          <td class="col-long">{% if f.file_path %}<code>{{ f.file_path }}</code>{% else %}—{% endif %}</td>
+          <td class="col-nowrap dim">{{ f.corroborated_by|join(", ") if f.corroborated_by else "—" }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -81,13 +84,15 @@
              data-finding-severity="{{ f.severity }}"
              data-finding-source="{{ f.source }}">
       <summary>
-        <span class="tier tier-{{ f.severity }}">{{ f.severity }}</span>
-        <span class="badge badge-{{ f.source }}">{{ f.source }}</span>
-        <b>{{ f.title }}</b>
-        {% if f.file_path %} · <code>{{ f.file_path }}</code>{% endif %}
+        <span class="finding-summary-chips">
+          <span class="tier tier-{{ f.severity }}">{{ f.severity }}</span>
+          <span class="badge badge-{{ f.source }}">{{ f.source }}</span>
+        </span>
+        <span class="finding-summary-title">{{ f.title }}</span>
+        {% if f.file_path %}<code>{{ f.file_path }}</code>{% endif %}
       </summary>
       {% if f.description %}
-        <p class="finding-desc">{{ f.description }}</p>
+        <div class="finding-desc">{{ expandable(f.description, clamp=3) }}</div>
       {% endif %}
       {% if f.remediation %}
         <p class="finding-remediation"><b>Remediation:</b> {{ f.remediation }}</p>
@@ -152,7 +157,7 @@
           {% for e in tool_panels.fickling.entries %}
           <tr class="{% if e.severity == 'LIKELY_OVERTLY_MALICIOUS' %}row-warn{% endif %}">
             <td><code>{{ e.file or "—" }}</code></td>
-            <td>{{ e.severity }}</td>
+            <td class="col-nowrap"><span class="badge badge-fickling">{{ e.severity }}</span></td>
             <td class="dim">{{ e.pytorch_format }}</td>
             <td class="num">{{ e.stack_count if e.stack_count is not none else "—" }}</td>
           </tr>
@@ -180,9 +185,9 @@
           {% for i in tool_panels.modelaudit.issues %}
           <tr class="{% if i.severity in ('critical', 'high') %}row-warn{% endif %}">
             <td><code>{{ i.location or "—" }}</code></td>
-            <td><span class="tier tier-{{ i.severity }}">{{ i.severity }}</span></td>
-            <td class="dim"><code>{{ i.rule_code }}</code></td>
-            <td class="snippet" title="{{ i.message }}">{{ i.message }}</td>
+            <td class="col-nowrap"><span class="tier tier-{{ i.severity }}">{{ i.severity }}</span></td>
+            <td class="col-nowrap dim"><code>{{ i.rule_code }}</code></td>
+            <td class="col-long">{{ expandable(i.message, clamp=2) }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -207,18 +212,18 @@
       {% if tool_panels.dependencies.vulnerabilities %}
       <table class="run-table">
         <thead>
-          <tr><th>Package</th><th>Version</th><th>Severity</th><th>ID</th><th>Source</th><th>Manifest</th><th>Fix</th></tr>
+          <tr><th>Package</th><th>Version</th><th class="col-nowrap">Severity</th><th>ID</th><th class="col-nowrap">Source</th><th>Manifest</th><th>Fix</th></tr>
         </thead>
         <tbody>
           {% for v in tool_panels.dependencies.vulnerabilities %}
           <tr class="{% if v.severity in ('critical', 'high') %}row-warn{% endif %}">
             <td><code>{{ v.package }}</code></td>
-            <td>{{ v.version }}</td>
-            <td><span class="tier tier-{{ v.severity }}">{{ v.severity }}</span></td>
-            <td class="dim"><code>{{ v.id }}</code></td>
-            <td><span class="badge badge-{{ v.source }}">{{ v.source }}</span></td>
+            <td class="col-nowrap">{{ v.version }}</td>
+            <td class="col-nowrap"><span class="tier tier-{{ v.severity }}">{{ v.severity }}</span></td>
+            <td class="dim col-long"><code>{{ v.id }}</code></td>
+            <td class="col-nowrap"><span class="badge badge-{{ v.source }}">{{ v.source }}</span></td>
             <td><code>{{ v.manifest }}</code></td>
-            <td class="dim">{{ v.fix }}</td>
+            <td class="col-long dim">{{ expandable(v.fix, clamp=1) }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -253,10 +258,10 @@
         <tbody>
           {% for s in tool_panels.secrets.secrets %}
           <tr class="{% if s.verified %}row-warn{% endif %}">
-            <td>{{ s.detector }}</td>
+            <td class="col-nowrap">{{ s.detector }}</td>
             <td><code>{{ s.file or "—" }}</code></td>
-            <td>{{ "yes" if s.verified else "no" }}</td>
-            <td class="dim snippet">{{ s.redacted }}</td>
+            <td class="col-nowrap">{{ "yes" if s.verified else "no" }}</td>
+            <td class="col-long dim">{{ expandable(s.redacted, clamp=1) }}</td>
           </tr>
           {% endfor %}
         </tbody>

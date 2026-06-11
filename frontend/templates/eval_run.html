@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import expandable %}
 
 {% block title %}Model comparison{% endblock %}
 
@@ -31,7 +32,7 @@
           <th class="num">Overall</th>
           <th class="num">Latency (mean / p95)</th>
           <th class="num">Cost</th>
-          <th>Status</th>
+          <th class="col-nowrap">Status</th>
         </tr>
       </thead>
       <tbody>
@@ -52,9 +53,9 @@
           <td class="num overall">{{ "%.2f"|format(r.overall) if r.overall is not none else "—" }}</td>
           <td class="num">{{ r.mean_latency_ms }} / {{ r.p95_latency_ms }} ms</td>
           <td class="num">${{ "%.4f"|format(r.total_cost_usd) }}</td>
-          <td class="col-wrap">
+          <td class="col-long">
             {% if r.note %}
-              <span class="badge badge-warn">{{ r.note }}</span>
+              {{ expandable(r.note, clamp=1) }}
             {% elif r.cand_fail or r.judge_fail %}
               <span class="badge badge-warn">cand_fail={{ r.cand_fail }} judge_fail={{ r.judge_fail }}</span>
             {% else %}

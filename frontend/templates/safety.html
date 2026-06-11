@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import expandable %}
 
 {% block title %}Safety red-team{% endblock %}
 
@@ -23,12 +24,12 @@
       <thead>
         <tr>
           <th>Model</th>
-          <th>Tier</th>
+          <th class="col-nowrap">Tier</th>
           <th class="num">Pass rate</th>
           <th class="num">Failed</th>
           <th class="num">Probes</th>
           <th>Suites</th>
-          <th>Completed</th>
+          <th class="col-nowrap">Completed</th>
         </tr>
       </thead>
       <tbody>
@@ -43,15 +44,17 @@
             role="link"
             aria-label="Open safety results for {{ m.display_name }}">
           <td>
-            <span class="model">{{ m.display_name }}</span>
-            <span class="dim"><code>{{ m.gateway_model_id }}</code></span>
+            <div class="model-block">
+              <span class="model">{{ m.display_name }}</span>
+              <code>{{ m.gateway_model_id }}</code>
+            </div>
           </td>
-          <td><span class="tier tier-{{ m.safety_tier }}">{{ m.safety_tier }}</span></td>
+          <td class="col-nowrap"><span class="tier tier-{{ m.safety_tier }}">{{ m.safety_tier }}</span></td>
           <td class="num overall {{ score_class }}"><b>{{ m.pass_rate_display }}</b></td>
           <td class="num {% if m.n_failed %}score-weak{% endif %}">{{ m.n_failed }}</td>
           <td class="num">{{ m.n_findings }}</td>
-          <td class="snippet col-suites">{{ m.suite_snippet }}</td>
-          <td class="dim">{{ m.completed_at[:19] if m.completed_at != "—" else "—" }}</td>
+          <td class="col-suites">{{ expandable(m.suite_snippet, clamp=1) }}</td>
+          <td class="col-nowrap dim">{{ m.completed_at[:19] if m.completed_at != "—" else "—" }}</td>
         </tr>
         {% endfor %}
       </tbody>

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import expandable %}
 
 {% block title %}HF artifact scans{% endblock %}
 
@@ -23,12 +24,12 @@
       <thead>
         <tr>
           <th>HF model</th>
-          <th>Tier</th>
+          <th class="col-nowrap">Tier</th>
           <th class="num">Risk</th>
           <th class="num">Findings</th>
           <th>Breakdown</th>
           <th>Tools</th>
-          <th>Scanned at</th>
+          <th class="col-nowrap">Scanned at</th>
         </tr>
       </thead>
       <tbody>
@@ -39,12 +40,12 @@
             role="link"
             aria-label="Open scan for {{ s.model_id }}">
           <td><span class="model">{{ s.model_id }}</span></td>
-          <td><span class="tier tier-{{ s.severity_tier }}">{{ s.severity_tier }}</span></td>
+          <td class="col-nowrap"><span class="tier tier-{{ s.severity_tier }}">{{ s.severity_tier }}</span></td>
           <td class="num"><b>{{ s.overall_risk_score }}</b></td>
           <td class="num">{{ s.n_findings }}</td>
-          <td class="dim snippet col-wrap">{{ s.severity_summary }}</td>
-          <td class="snippet col-tools">{{ s.tool_snippet }}</td>
-          <td class="dim">{{ s.scanned_at[:19] if s.scanned_at != "—" else "—" }}</td>
+          <td class="col-long dim">{{ expandable(s.severity_summary, clamp=1) }}</td>
+          <td class="col-tools">{{ expandable(s.tool_snippet, clamp=1) }}</td>
+          <td class="col-nowrap dim">{{ s.scanned_at[:19] if s.scanned_at != "—" else "—" }}</td>
         </tr>
         {% endfor %}
       </tbody>

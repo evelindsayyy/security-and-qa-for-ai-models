@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import expandable %}
 
 {% block title %}Model catalog{% endblock %}
 
@@ -78,8 +79,8 @@
       <tr>
         <th>HF repo</th>
         <th>Slug</th>
-        <th>Risk</th>
-        <th>Scanned</th>
+        <th class="col-nowrap">Risk</th>
+        <th class="col-nowrap">Scanned</th>
         <th>Notes</th>
       </tr>
     </thead>
@@ -92,12 +93,12 @@
           aria-label="Open scan for {{ m.id }}">
         <td><span class="model">{{ m.id }}</span></td>
         <td><code>{{ m.slug }}</code></td>
-        <td>
+        <td class="col-nowrap">
           <span class="tier tier-{{ m.severity_tier }}">{{ m.severity_tier }}</span>
           {{ m.overall_risk_score }}
         </td>
-        <td class="dim">{{ m.scanned_at }}</td>
-        <td>{{ m.notes or "—" }}</td>
+        <td class="col-nowrap dim">{{ m.scanned_at }}</td>
+        <td class="col-long">{{ expandable(m.notes or "—", clamp=2) }}</td>
       </tr>
       {% endfor %}
     </tbody>
