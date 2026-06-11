@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% from '_macros.html' import expandable %}
+
+{% block title %}Safety red-team{% endblock %}
+
+{% block content %}
+<div class="eval-comparison">
+  <h1>Safety red-team</h1>
+
+  {% if not has_safety %}
+    <p class="sub empty">
+      no <code>merged_safety_result.json</code> under <code>{{ output_dir }}</code>.
+      run promptfoo + garak exports, then merge (see <code>safety/README.md</code>).
+    </p>
+  {% else %}
+    <p class="sub">
+      {{ models|length }} gateway model{{ "" if models|length == 1 else "s" }} ·
+      tiers: {{ tier_summary or "—" }} ·
+      reads <code>safety/output/</code> (local, gitignored)
+    </p>
+
+    <div class="table-wrap">
+    <table class="run-table">
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th class="col-nowrap">Tier</th>
+          <th class="num">Pass rate</th>
+          <th class="num">Failed</th>
+          <th class="num">Probes</th>
+          <th>Suites</th>
+          <th class="col-nowrap">Completed</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in models %}
+        {% set v = m.summary_pass_rate or 0 %}
+        {% if v >= 0.8 %}{% set score_class = 'score-strong' %}
+        {% elif v >= 0.6 %}{% set score_class = 'score-mid' %}
+        {% else %}{% set score_class = 'score-weak' %}{% endif %}
+        <tr class="row-link {% if m.safety_tier in ('critical', 'high') %}row-warn{% elif m.n_failed %}row-warn{% endif %}"
+            data-href="{{ url_for('safety_detail', slug=m.slug) }}"
+            tabindex="0"
+            role="link"
+            aria-label="Open safety results for {{ m.display_name }}">
+          <td>
+            <div class="model-block">
+              <span class="model">{{ m.display_name }}</span>
+              <code>{{ m.gateway_model_id }}</code>
+            </div>
+          </td>
+          <td class="col-nowrap"><span class="tier tier-{{ m.safety_tier }}">{{ m.safety_tier }}</span></td>
+          <td class="num overall {{ score_class }}"><b>{{ m.pass_rate_display }}</b></td>
+          <td class="num {% if m.n_failed %}score-weak{% endif %}">{{ m.n_failed }}</td>
+          <td class="num">{{ m.n_findings }}</td>
+          <td class="col-suites">{{ expandable(m.suite_snippet, clamp=1) }}</td>
+          <td class="col-nowrap dim">{{ m.completed_at[:19] if m.completed_at != "—" else "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+
+    <section class="key">
+      <h2>how to read this</h2>
+      <ul>
+        <li><b>pass rate</b> = probes passed / total across all suites (promptfoo policy, red-team, garak).</li>
+        <li><b>tier</b> = worst severity among <em>failed</em> probes only — a high tier with 88% pass means a few high-severity misses.</li>
+        <li>click a row to filter by pass/fail, severity, source, or category; expand suites for per-tool provenance.</li>
+        <li>garak scores one finding per <em>module</em> (many attempts rolled up), not per individual attack.</li>
+      </ul>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

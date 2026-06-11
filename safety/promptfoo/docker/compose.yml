@@ -1,0 +1,37 @@
+# Run from repo root — see ../README.md
+#
+#   docker compose --env-file safety/promptfoo/docker/.env \
+#     -f safety/promptfoo/docker/compose.yml build
+#
+#   docker compose --env-file safety/promptfoo/docker/.env \
+#     -f safety/promptfoo/docker/compose.yml run --rm promptfoo \
+#     promptfoo eval -c promptfooconfig.yaml -o output/eval.json
+
+name: promptfoo
+
+services:
+  promptfoo:
+    build:
+      context: ../../..
+      dockerfile: safety/promptfoo/docker/Dockerfile
+      args:
+        PROMPTFOO_VERSION: ${PROMPTFOO_VERSION:-latest}
+
+    user: "${UID:-1000}:${GID:-1000}"
+
+    volumes:
+      - ../:/app/safety/promptfoo
+
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://litellm.oit.duke.edu/v1}
+      - GATEWAY_MODEL=${GATEWAY_MODEL:-GPT 4.1 Mini}
+      - PROMPTFOO_CONFIG_DIR=/app/safety/promptfoo/output/.promptfoo
+      - PROMPTFOO_LOG_DIR=/app/safety/promptfoo/output/logs
+      - PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=${PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION:-true}
+
+    ports:
+      - "${PROMPTFOO_REPORT_PORT:-15500}:15500"
+
+    stdin_open: true
+    tty: true

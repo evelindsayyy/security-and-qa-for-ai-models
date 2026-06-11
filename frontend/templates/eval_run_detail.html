@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import expandable %}
 
 {% block title %}{% if missing %}Run not found{% else %}{{ candidate_model }} — run{% endif %}{% endblock %}
 
@@ -73,21 +74,21 @@
           <th class="num">Overall</th>
           <th class="num">Latency</th>
           <th class="num">Cost</th>
-          <th>Status</th>
+          <th class="col-nowrap">Status</th>
         </tr>
       </thead>
       <tbody>
         {% for q in questions %}
         <tr class="{% if q.status != 'OK' or q.candidate_empty %}row-warn{% endif %}">
-          <td><code>{{ q.question_id }}</code></td>
-          <td class="snippet">{{ q.question or "—" }}</td>
+          <td class="col-nowrap"><code>{{ q.question_id }}</code></td>
+          <td class="col-long">{{ expandable(q.question or "—", clamp=2) }}</td>
           {% for dim in dims %}
           <td class="num">{{ "%.1f"|format(q.dim_scores[dim]) if q.dim_scores.get(dim) is not none else "—" }}</td>
           {% endfor %}
           <td class="num overall">{{ "%.2f"|format(q.overall) if q.overall is not none else "—" }}</td>
           <td class="num">{{ q.latency_ms }} ms</td>
           <td class="num">${{ "%.5f"|format(q.cost_usd) }}</td>
-          <td>
+          <td class="col-nowrap">
             {% if q.status == 'OK' and not q.candidate_empty %}
               <span class="status-ok">OK</span>
             {% elif q.candidate_empty %}
@@ -110,7 +111,9 @@
           {% if q.overall is not none %}
             · overall <b>{{ "%.2f"|format(q.overall) }}</b>
           {% endif %}
-          {% if q.question %} · {{ q.question }}{% endif %}
+          {% if q.question %}
+            · <span class="finding-summary-title">{{ q.question[:120] }}{% if q.question|length > 120 %}…{% endif %}</span>
+          {% endif %}
         </summary>
         {% if q.rationales %}
         <table class="run-table">
@@ -120,9 +123,9 @@
           <tbody>
             {% for dim, rationale in q.rationales.items() %}
             <tr>
-              <td>{{ dim|replace("_", " ") }}</td>
+              <td class="col-nowrap">{{ dim|replace("_", " ") }}</td>
               <td class="num">{{ "%.1f"|format(q.dim_scores[dim]) if q.dim_scores.get(dim) is not none else "—" }}</td>
-              <td>{{ rationale }}</td>
+              <td class="col-long">{{ expandable(rationale, clamp=2) }}</td>
             </tr>
             {% endfor %}
           </tbody>

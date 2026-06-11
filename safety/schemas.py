@@ -1,32 +1,127 @@
-"""Simple result models for the safety red-teaming pipeline."""
+"""
+Pydantic contracts for gateway safety output — aligned with ``docs/data-model.md``.
+
+``SafetyRunResult`` ≈ one ``safety_runs`` row; each ``SafetyFinding`` ≈ one
+``safety_findings`` row. ``MergedSafetyResult`` is the week-3 on-disk aggregate
+before Postgres (mirrors ``scanner/schemas.ScanResult`` + ``risk_scorer`` merge).
+
+UI reads normalized ``findings`` and ``summary_pass_rate``; investigators drill
+into ``tool_results`` per probe suite.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from pathlib import Path
+from enum import Enum
 from typing import Any
 
-
-@dataclass
-class ToolRunResult:
-    """Description of a single tool execution result."""
-
-    tool_name: str
-    model_id: str
-    status: str
-    output_dir: str
-    config_path: str | None = None
-    command: list[str] | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+from pydantic import BaseModel, Field
 
 
-@dataclass
-class SafetyRunResult:
-    """Normalized summary returned by the safety pipeline."""
+class SafetySeverity(str, Enum):
+    """Finding severity band (maps to ``safety_findings.severity``)."""
 
-    model_id: str
-    target: dict[str, Any]
-    garak: ToolRunResult | None
-    promptfoo: ToolRunResult | None
-    combined_output: str | None = None
-    notes: list[str] = field(default_factory=list)
+    low = "low"
+    medium = "medium"
+    high = "high"
+    critical = "critical"
+
+
+class SafetyCategory(str, Enum):
+    """``safety_findings.category`` — extend as Duke probes grow."""
+
+    smoke = "smoke"
+    policy = "policy"
+    jailbreak = "jailbreak"
+    leakage = "leakage"
+    toxicity = "toxicity"
+
+
+class SafetySource(str, Enum):
+    """``safety_findings.source``"""
+
+    garak = "garak"
+    promptfoo = "promptfoo"
+    duke_probe = "duke_probe"
+
+
+class SafetyFinding(BaseModel):
+    """
+    One probe outcome for reviewers (maps to ``safety_findings``).
+
+    ``passed: true`` means the model resisted the probe (or gateway blocked
+    a jailbreak attempt — see ``exporters/promptfoo.py``).
+    """
+
+    id: str
+    category: str
+    source: str
+    passed: bool
+    severity: SafetySeverity
+    title: str
+    description: str
+    probe_id: str
+    probe_suite: str | None = None
+    # populated at merge time when garak + promptfoo fail same category
+    corroborated_by: list[str] | None = None
+
+
+class SafetyRunResult(BaseModel):
+    """
+    One tool run / probe suite (maps to ``safety_runs``).
+
+    ``summary_pass_rate`` is the fraction of ``findings`` with ``passed=true``
+    for this suite only (garak: per module, not per attempt).
+    """
+
+    gateway_model_id: str
+    status: str = "complete"
+    deployment_context: dict[str, Any] = Field(default_factory=dict)
+    probe_suite: str
+    summary_pass_rate: float = 0.0
+    tool_results: dict[str, Any] = Field(default_factory=dict)
+    started_at: str
+    completed_at: str
+    findings: list[SafetyFinding] = Field(default_factory=list)
+
+
+class SafetyRunSummary(BaseModel):
+    """Lightweight row for merged label — one entry per probe suite in ``runs[]``."""
+
+    probe_suite: str
+    summary_pass_rate: float
+    n_findings: int
+    n_passed: int
+    source: str
+    probe_ids: list[str] = Field(default_factory=list)
+
+
+class MergedSafetyResult(BaseModel):
+    """
+    Combined safety label for one gateway model (week-3 JSON on disk).
+
+    Analogous to ``ScanResult`` after ``risk_scorer``: multiple tool runs merged
+    into one reviewer-facing document for the nutrition label ``safety`` pillar.
+    """
+
+    gateway_model_id: str
+    display_name: str | None = None
+    status: str = "complete"
+    deployment_context: dict[str, Any] = Field(default_factory=dict)
+    summary_pass_rate: float = 0.0
+    # worst severity among *failed* findings only — passed rows don't affect tier
+    safety_tier: SafetySeverity = SafetySeverity.low
+    runs: list[SafetyRunSummary] = Field(default_factory=list)
+    findings: list[SafetyFinding] = Field(default_factory=list)
+    tool_results: dict[str, Any] = Field(default_factory=dict)
+    started_at: str | None = None
+    completed_at: str | None = None
+
+
+def coerce_severity(value: str | SafetySeverity) -> SafetySeverity:
+    """Safe cast for merge tier logic when exporters emit plain strings."""
+    if isinstance(value, SafetySeverity):
+        return value
+    try:
+        return SafetySeverity(str(value).lower())
+    except ValueError:
+        return SafetySeverity.medium

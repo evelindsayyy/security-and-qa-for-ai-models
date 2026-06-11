@@ -33,6 +33,22 @@ def safe_dir_name(model_id: str) -> str:
     return model_id.replace("/", "--")
 
 
+def slug_to_model_id(slug: str) -> str:
+    """Reverse ``safe_dir_name`` for display and refresh when ``model_id`` is absent."""
+    return slug.replace("--", "/", 1) if "--" in slug else slug
+
+
+def list_scan_output_slugs() -> list[str]:
+    """Return output directory slugs that contain ``scan_result.json``."""
+    if not OUTPUT_ROOT.is_dir():
+        return []
+    slugs: list[str] = []
+    for path in sorted(OUTPUT_ROOT.iterdir()):
+        if path.is_dir() and (path / "scan_result.json").is_file():
+            slugs.append(path.name)
+    return slugs
+
+
 def get_model_id() -> str:
     """Resolve model id from ``MODEL_ID`` env or package default."""
     return os.environ.get("MODEL_ID", DEFAULT_MODEL_ID)

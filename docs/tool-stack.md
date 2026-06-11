@@ -25,9 +25,9 @@ Pipelines: [`track-a-framework.md`](track-a-framework.md) (Track A) · [`track-b
 | ModelScan | In use | Pickle / H5 / SavedModel; extension-routed (complemented by ModelAudit) |
 | Fickling | In use | Pickle AST on every pickle-family weight file; paired with ModelScan |
 | ModelAudit | In use | Content-routed directory scan (`scanner/modelaudit_scan.py`); findings deduped in risk scorer |
-| pip-audit | Spike → Planned | Dependency CVEs |
-| OSV API | Spike | CVE lookup with pip-audit |
-| TruffleHog | Planned | Secrets in model repos |
+| pip-audit | In use | Python dependency CVEs (primary for requirements files) |
+| OSV API | In use | Corroborates pip-audit; covers non-Python manifests (npm, Go, etc.) |
+| TruffleHog | In use | Secrets in model repos (filesystem mode) |
 
 Run: `scanner/` via Docker (`scanner/docker/` → `scanner/models`, `scanner/output`)
 
@@ -72,7 +72,7 @@ Reference: MT-Bench, AlpacaEval, full SWE-bench, HELM. See [`track-b-framework.m
 ## Pipelines
 
 ```text
-Scanning     → ModelScan + Fickling + ModelAudit + deps + secrets → ScanResult   } security pillar
+Scanning     → ModelScan + Fickling + ModelAudit + pip-audit/OSV + TruffleHog → ScanResult   } security pillar
 Safety       → garak + promptfoo + Duke probes       → SafetyResult } (Track A)
 Efficacy     → Duke tasks + metrics                  → EvalRun      (Track B)
 ```
@@ -83,7 +83,9 @@ Efficacy     → Duke tasks + metrics                  → EvalRun      (Track B
 
 | Item | Default |
 |------|---------|
-| OWASP Dependency-Check vs pip-audit | pip-audit + OSV |
+| OWASP Dependency-Check vs pip-audit | pip-audit + OSV (implemented) |
 | Watchtower | Skip |
 | Trivy | FS/CVE spike in `scanner/experiments/`; defer for weights |
 | PyRIT | Stretch only |
+
+**Dependency scanning:** pip-audit resolves Python requirement trees; OSV API corroborates hits (`corroborated_by: ["osv"]`) and scans non-Python manifests when present.

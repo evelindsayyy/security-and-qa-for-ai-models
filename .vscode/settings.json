@@ -1,3 +1,15 @@
 {
-    "python-envs.defaultEnvManager": "ms-python.python:system"
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "sqltools.connections": [
+        {
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "codeplus-postgres-test-01.oit.duke.edu",
+            "port": 5432,
+            "driver": "PostgreSQL",
+            "username": "qa_ai_models_admin",
+            "database": "qa_ai_models",
+            "name": "codeplus-postgres-test-01.oit.duke.edu"
+        }
+    ]
 }

@@ -41,10 +41,22 @@
       {% endif %}
     </div>
 
-    <div class="pillar-card pillar-pending">
+    <div class="pillar-card">
       <h2>Safety</h2>
-      <p class="pillar-meta">garak · promptfoo · duke probes</p>
-      <p class="empty">pending — no safety_result.json yet</p>
+      <p class="pillar-meta">garak · promptfoo · duke probes · <code>safety/output/</code></p>
+      {% if safety_has %}
+        <p class="pillar-stat"><b>{{ safety_count }}</b> model{{ "s" if safety_count != 1 else "" }} tested</p>
+        <p class="pillar-stat">
+          worst tier: <span class="tier tier-{{ safety_worst_tier }}">{{ safety_worst_tier }}</span>
+          {% if safety_worst_pass_rate is not none %}
+            ({{ "%.0f"|format(safety_worst_pass_rate * 100) }}% pass)
+          {% endif %}
+        </p>
+        <p><a href="{{ url_for('safety') }}">View safety results →</a></p>
+      {% else %}
+        <p class="empty">no merged_safety_result.json — run promptfoo + garak, then <code>safety.merge</code></p>
+        <p><a href="{{ url_for('safety') }}">Safety page →</a></p>
+      {% endif %}
     </div>
   </section>
 

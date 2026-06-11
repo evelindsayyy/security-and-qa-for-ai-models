@@ -25,6 +25,8 @@ from typing import Any
 from scanner.format_detector import FileFormatSummary
 from scanner.modelaudit_scan import modelaudit_tier, normalize_issue_path
 from scanner.pickle_scan import modelscan_tier
+from scanner.dependency_scan import dependency_tier
+from scanner.secret_scan import secret_tier
 from scanner.schemas import Finding, RiskScoreResult, Severity
 
 # Default score anchors per tier (overridden by explicit CRITICAL/HIGH counts).
@@ -243,12 +245,86 @@ def _findings_from_fickling(fickling_report: dict[str, Any]) -> list[Finding]:
     return out
 
 
+def _severity_from_cve_label(label: str) -> Severity:
+    """Map low/medium/high/critical string to Severity enum."""
+    try:
+        return Severity(label.lower())
+    except ValueError:
+        return Severity.medium
+
+
+def _findings_from_dependencies(summary: dict[str, Any]) -> list[Finding]:
+    """Map dependency scan vulnerabilities to normalized Finding rows."""
+    out: list[Finding] = []
+    for v in summary.get("vulnerabilities") or []:
+        if not isinstance(v, dict):
+            continue
+        pkg = v.get("package") or "unknown"
+        ver = v.get("version") or "?"
+        vid = v.get("id") or "unknown"
+        source = v.get("source") or "pip_audit"
+        sev = _severity_from_cve_label(v.get("severity") or "medium")
+        manifest = v.get("manifest") or "requirements.txt"
+        title = f"{pkg} {ver}: {vid}"
+        fix = v.get("fix_versions") or []
+        remediation = f"upgrade to {', '.join(fix)}" if fix else "review dependency pin"
+        summary_text = v.get("summary") or ""
+        desc = f"{summary_text} (manifest: {manifest})".strip()
+        out.append(
+            Finding(
+                id=_finding_id(source, manifest, title),
+                source=source,
+                title=title[:200],
+                severity=sev,
+                file_path=manifest,
+                description=desc[:2000] or title,
+                raw_tool_severity=vid,
+                remediation=remediation,
+                corroborated_by=v.get("corroborated_by"),
+            )
+        )
+    return out
+
+
+def _findings_from_secrets(summary: dict[str, Any]) -> list[Finding]:
+    """Map TruffleHog secret hits to Finding rows (redacted descriptions only)."""
+    if not summary.get("available", True):
+        return []
+
+    out: list[Finding] = []
+    for i, s in enumerate(summary.get("secrets") or []):
+        if not isinstance(s, dict):
+            continue
+        verified = bool(s.get("verified"))
+        sev = Severity.critical if verified else Severity.high
+        file_path = s.get("file")
+        detector = s.get("detector") or "unknown"
+        title = f"secret detected: {detector}"
+        redacted = s.get("redacted") or "[redacted]"
+        desc = f"{'verified' if verified else 'unverified'} {detector} in {file_path or 'unknown'} — {redacted}"
+        out.append(
+            Finding(
+                id=_finding_id("trufflehog", file_path, f"{detector}-{i}"),
+                source="trufflehog",
+                title=title[:200],
+                severity=sev,
+                file_path=file_path,
+                description=desc[:2000],
+                raw_tool_severity=detector,
+                remediation="rotate credential and remove from repository",
+            )
+        )
+    return out
+
+
 def score(
     model_id: str,
     modelscan_payload: dict[str, Any],
     fickling_report: dict[str, Any] | None,
     format_summary: FileFormatSummary | None = None,
     modelaudit_summary: dict[str, Any] | None = None,
+    dependency_summary: dict[str, Any] | None = None,
+    secret_summary: dict[str, Any] | None = None,
 ) -> RiskScoreResult:
     """
     Compute ``overall_risk_score``, ``severity_tier``, and deduped ``findings``.
@@ -259,6 +335,8 @@ def score(
         fickling_report: Aggregate Fickling report or None if no pickle files.
         format_summary: From ``format_detector`` — ``safetensors_only`` skips Fickling tier bumps.
         modelaudit_summary: Filtered ModelAudit summary from ``run_modelaudit_scoped``.
+        dependency_summary: pip-audit + OSV combiner output from ``run_dependency_scan``.
+        secret_summary: TruffleHog summary from ``run_trufflehog``.
 
     Returns:
         ``RiskScoreResult`` consumed by ``schemas.build_scan_result``.
@@ -305,6 +383,20 @@ def score(
         tier = _max_tier(tier, ma_tier)
         score_val = max(score_val, _TIER_SCORE.get(ma_tier.value, score_val))
         findings.extend(_findings_from_modelaudit(modelaudit_summary))
+
+    if dependency_summary and dependency_summary.get("vuln_count", 0) > 0:
+        dep_tier_str = dependency_tier(dependency_summary)
+        dep_tier = _severity_enum(dep_tier_str)
+        tier = _max_tier(tier, dep_tier)
+        score_val = max(score_val, _TIER_SCORE.get(dep_tier.value, score_val))
+        findings.extend(_findings_from_dependencies(dependency_summary))
+
+    if secret_summary and secret_summary.get("secret_count", 0) > 0:
+        sec_tier_str = secret_tier(secret_summary)
+        sec_tier = _severity_enum(sec_tier_str)
+        tier = _max_tier(tier, sec_tier)
+        score_val = max(score_val, _TIER_SCORE.get(sec_tier.value, score_val))
+        findings.extend(_findings_from_secrets(secret_summary))
 
     # After ModelAudit, clamp Fickling finding severities to low when label tier is still low.
     if tier == Severity.low and fickling_report:

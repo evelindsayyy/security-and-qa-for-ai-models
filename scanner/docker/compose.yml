@@ -10,12 +10,14 @@ services:
     user: "${UID:-1000}:${GID:-1000}"
 
     volumes:
+      - ..:/app/scanner
       - ../models:/app/scanner/models
       - ../output:/app/scanner/output
 
     environment:
       - HF_TOKEN=${HF_TOKEN:-}
       - MODEL_ID=${MODEL_ID:-distilbert-base-uncased}
+      # OSV API queries require outbound HTTPS from the container.
 
     stdin_open: true
     tty: true

@@ -11,4 +11,4 @@ Pipeline overview and calibration tables: ``scanner/README.md``.
 Data shapes and future DB mapping: ``docs/data-model.md``.
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"

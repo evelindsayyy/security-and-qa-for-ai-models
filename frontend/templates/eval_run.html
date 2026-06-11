@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import expandable %}
 
 {% block title %}Model comparison{% endblock %}
 
@@ -32,9 +33,10 @@
           <option value="suite">suite</option>
         </select>
       </label>
-      <span class="controls-hint">click Overall / Latency / Cost headers to sort ⇅</span>
+      <span class="controls-hint">click Overall / Latency / Cost headers to sort ⇅ · click a row for per-question detail</span>
     </div>
 
+    <div class="table-wrap">
     <table class="run-table" id="runs-table">
       <thead>
         <tr>
@@ -47,13 +49,16 @@
           <th class="num sortable" data-sort="overall" style="cursor: pointer;">Overall <span class="s-ind">▼</span></th>
           <th class="num sortable" data-sort="latency" style="cursor: pointer;">Latency (mean / p95) <span class="s-ind"></span></th>
           <th class="num sortable" data-sort="cost" style="cursor: pointer;">Cost <span class="s-ind"></span></th>
-          <th>Status</th>
-          <th></th>
+          <th class="col-nowrap">Status</th>
         </tr>
       </thead>
       <tbody>
         {% for r in runs %}
-        <tr class="{% if r.is_best %}row-best{% endif %}{% if r.note %}row-warn{% endif %}"
+        <tr class="row-link {% if r.is_best %}row-best{% endif %}{% if r.note %}row-warn{% endif %}"
+            data-href="{{ url_for('eval_run_detail', slug=r.slug) }}"
+            tabindex="0"
+            role="link"
+            aria-label="Open eval run for {{ r.candidate_model }}"
             data-suite="{{ r.suite }}"
             data-candidate="{{ r.candidate_model }}"
             data-judge="{{ r.judge_model }}"
@@ -72,20 +77,20 @@
           <td class="num overall">{{ "%.2f"|format(r.overall) if r.overall is not none else "—" }}</td>
           <td class="num">{{ r.mean_latency_ms }} / {{ r.p95_latency_ms }} ms</td>
           <td class="num">${{ "%.4f"|format(r.total_cost_usd) }}</td>
-          <td>
+          <td class="col-long">
             {% if r.note %}
-              <span class="badge badge-warn">{{ r.note }}</span>
+              {{ expandable(r.note, clamp=1) }}
             {% elif r.cand_fail or r.judge_fail %}
               <span class="badge badge-warn">cand_fail={{ r.cand_fail }} judge_fail={{ r.judge_fail }}</span>
             {% else %}
               <span class="status-ok">OK</span>
             {% endif %}
           </td>
-          <td><a href="{{ url_for('eval_run_detail', slug=r.slug) }}">detail</a></td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    </div>
 
     <script>
       (function () {
@@ -172,7 +177,8 @@
 
         <dt><span class="badge badge-best">best</span></dt>
         <dd>Highest overall score among runs with no warnings.
-            Default order is best-first — click <b>Overall</b>, <b>Latency</b>, or <b>Cost</b> to re-sort.</dd>
+            Default order is best-first — click <b>Overall</b>, <b>Latency</b>, or <b>Cost</b> to re-sort,
+            or click any row to open its per-question scores.</dd>
 
         <dt><span class="status-ok">OK</span></dt>
         <dd>Every question got an answer from the candidate and a verdict from the judge.</dd>

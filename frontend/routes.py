@@ -24,6 +24,10 @@ def _hub_context() -> dict:
     eval_best_overall = None
     eval_has = False
     scan_has = False
+    safety_has = False
+    safety_count = 0
+    safety_worst_tier = "—"
+    safety_worst_pass_rate = None
 
     try:
         from frontend.scan_data import get_scans_data
@@ -48,6 +52,18 @@ def _hub_context() -> dict:
     except Exception:
         pass
 
+    try:
+        from frontend.safety_data import get_safety_data
+
+        saf = get_safety_data()
+        safety_has = saf["has_safety"]
+        safety_count = len(saf["models"])
+        if saf["models"]:
+            safety_worst_tier = saf["models"][0]["safety_tier"]
+            safety_worst_pass_rate = saf["models"][0]["summary_pass_rate"]
+    except Exception:
+        pass
+
     gw = get_gateway_catalog()
     return {
         "gateway_models": gw["models"],
@@ -60,13 +76,16 @@ def _hub_context() -> dict:
         "eval_has": eval_has,
         "eval_count": eval_count,
         "eval_best_overall": eval_best_overall,
+        "safety_has": safety_has,
+        "safety_count": safety_count,
+        "safety_worst_tier": safety_worst_tier,
+        "safety_worst_pass_rate": safety_worst_pass_rate,
     }
 
 
 def register_routes(app):
     @app.route("/")
     def index():
-        # hub: three pillars at a glance (safety still pending)
         return render_template("index.html", **_hub_context())
 
     @app.route("/scans")
@@ -168,6 +187,25 @@ def register_routes(app):
         from frontend.benchmark_data import get_benchmarks_data
 
         return render_template("benchmarks.html", **get_benchmarks_data())
+
+    @app.route("/safety")
+    def safety():
+        from frontend.safety_data import get_safety_data
+
+        return render_template("safety.html", **get_safety_data())
+
+    @app.route("/safety/<slug>")
+    def safety_detail(slug: str):
+        from frontend.safety_data import get_safety_detail
+
+        detail = get_safety_detail(slug)
+        if detail is None:
+            return render_template(
+                "safety_detail.html",
+                missing=True,
+                slug=slug,
+            )
+        return render_template("safety_detail.html", missing=False, **detail)
 
     @app.route("/benchmarks/<slug>")
     def benchmark_detail(slug: str):

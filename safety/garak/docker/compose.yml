@@ -1,0 +1,35 @@
+# Run from repo root — see ../README.md
+#
+#   docker compose --env-file safety/garak/docker/.env \
+#     -f safety/garak/docker/compose.yml build
+#
+#   docker compose --env-file safety/garak/docker/.env \
+#     -f safety/garak/docker/compose.yml run --rm garak \
+#     python -m garak --config garak_duke.yaml -n "GPT 4.1 Mini"
+
+name: garak
+
+services:
+  garak:
+    build:
+      context: ../../..
+      dockerfile: safety/garak/docker/Dockerfile
+      args:
+        GARAK_VERSION: ${GARAK_VERSION:-}
+
+    volumes:
+      - ../:/app/safety/garak
+
+    environment:
+      - OPENAICOMPATIBLE_API_KEY=${OPENAICOMPATIBLE_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - HOME=/app/safety/garak/output/.garak-home
+      - USER=garak
+      - LOGNAME=garak
+      - TORCHINDUCTOR_CACHE_DIR=/app/safety/garak/output/.garak-cache/torchinductor
+      - XDG_DATA_HOME=/app/safety/garak/output/.garak-data
+      - XDG_CACHE_HOME=/app/safety/garak/output/.garak-cache
+      - XDG_CONFIG_HOME=/app/safety/garak/output/.garak-config
+
+    stdin_open: true
+    tty: true

@@ -1,6 +1,6 @@
 # Scanner (`scanner/`)
 
-Track A — HF artifact scanning: **ModelScan** + **Fickling** + **ModelAudit** → **risk scorer** → `scan_result.json` (Postgres-ready per [`docs/data-model.md`](../docs/data-model.md)).
+Track A — HF artifact scanning: **ModelScan** + **Fickling** + **ModelAudit** + **pip-audit/OSV** + **TruffleHog** → **risk scorer** → `scan_result.json` (Postgres-ready per [`docs/data-model.md`](../docs/data-model.md)).
 
 ## Pipeline
 
@@ -9,6 +9,8 @@ download → format_detector
          → ModelScan (whole repo; extension-routed)
          → Fickling (every pickle-family weight file)
          → ModelAudit (all candidate files; content-routed inside ModelAudit)
+         → pip-audit + OSV (dependency manifests)
+         → TruffleHog (filesystem secrets)
          → risk_scorer (deduped findings) → scan_result.json
 ```
 
@@ -17,6 +19,8 @@ download → format_detector
 | **ModelScan** | Pickle / H5 / SavedModel paths; may skip `.bin`/`.pt` by extension |
 | **Fickling** | Pickle AST on each pickle-family file (`per_file` in `tool_results`) |
 | **ModelAudit** | Magic-byte routing across 45+ formats; overlaps ModelScan/Fickling by design |
+| **pip-audit + OSV** | Python CVEs via requirements; OSV corroborates and covers other manifests |
+| **TruffleHog** | Leaked credentials/secrets in repo files (redacted in output) |
 | **Risk scorer** | Max severity across tools; dedupes `(file, signal)`; `corroborated_by` when tools agree |
 
 Defense-in-depth: the same payload may be reported by more than one tool. Correlated findings merge into one row.
@@ -29,6 +33,9 @@ Defense-in-depth: the same payload may be reported by more than one tool. Correl
 | Fickling LIKELY_UNSAFE, ModelScan clean | Stays **low**, score ~18 (benign PyTorch pickles) |
 | Fickling LIKELY_OVERTLY_MALICIOUS | **high** tier signal |
 | ModelAudit actionable (medium+) | Raises tier; install-missing warnings filtered |
+| pip-audit/OSV HIGH/CRITICAL CVE | Raises tier |
+| TruffleHog verified secret | **critical** tier |
+| TruffleHog unverified secret | **high** tier |
 | `safetensors_only` | Fickling omitted from label |
 
 **Calibration**
@@ -37,6 +44,7 @@ Defense-in-depth: the same payload may be reported by more than one tool. Correl
 |-------|----------------|-------|
 | gpt2, distilbert, BAAI/bge-small-en-v1.5 | low / 18 | Benign stacked pickle; ModelAudit warnings filtered |
 | neimasilk/modelscan-extension-mismatch-poc | critical / 95 | ModelScan 0 issues; Fickling + ModelAudit flag disguised pickles |
+| scan-test/supply-chain-demo | medium / 40 | Local fixture: `requirements.txt` (pip-audit + OSV); optional secret patterns in `credentials.env` |
 
 ## DGX/VM setup
 
@@ -64,11 +72,15 @@ Hub `org/model` → `models/org--model/`, `output/org--model/scan_result.json`. 
 | Command | Purpose |
 |---------|---------|
 | `scan` | Full pipeline → `scan_result.json` |
+| `refresh-supply-chain` | pip-audit/OSV + TruffleHog only; update existing JSON (no ModelScan rerun) |
+| `refresh-supply-chain --all` | Same for every model under `output/` |
 | `validate` | Check existing JSON |
 | `metadata` | Hub file list only |
 | `modelscan` | Debug: ModelScan only |
 | `fickling` | Debug: Fickling only |
 | `modelaudit` | Debug: ModelAudit only (content-routed) |
+| `deps` | Debug: pip-audit + OSV only |
+| `secrets` | Debug: TruffleHog only |
 
 ## Layout
 
@@ -90,6 +102,8 @@ Hub `org/model` → `models/org--model/`, `output/org--model/scan_result.json`. 
 | `format_detector.py` | File categories + `safetensors_only` / Fickling flags |
 | `pickle_scan.py` | ModelScan whole-repo + Fickling per pickle-family file |
 | `modelaudit_scan.py` | Content-routed ModelAudit + noise filtering |
+| `dependency_scan.py` | pip-audit + OSV combiner for dependency manifests |
+| `secret_scan.py` | TruffleHog filesystem secret scan |
 | `risk_scorer.py` | Merge tools → tier, score, deduped `findings[]` |
 | `schemas.py` | Pydantic `ScanResult` / `Finding` (Postgres-ready) |
 | `paths.py` | `MODELS_ROOT`, `OUTPUT_ROOT`, slug helpers |

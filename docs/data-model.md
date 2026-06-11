@@ -53,7 +53,7 @@ One HF repo inspection job.
 | `overall_risk_score` | `42` (0–100) |
 | `severity_tier` | `low` \| `medium` \| `high` \| `critical` |
 | `scanned_files` | JSON array | `["pytorch_model.bin", "config.json"]` |
-| `tool_results` | JSONB | `{"modelscan": {...}, "fickling": {...}, "modelaudit": {...}}` |
+| `tool_results` | JSONB | `{"modelscan": {...}, "fickling": {...}, "modelaudit": {...}, "dependencies": {...}, "secrets": {...}}` |
 | `scan_metadata` | JSONB | `{"duration_s": 120, "worker": "dgx-01"}` |
 | `started_at` / `completed_at` | timestamptz | |
 
@@ -63,7 +63,7 @@ One HF repo inspection job.
 |--------|---------|
 | `id` | UUID |
 | `scan_id` | FK |
-| `source` | `modelscan` \| `fickling` \| `modelaudit` \| `pip_audit` \| `trufflehog` |
+| `source` | `modelscan` \| `fickling` \| `modelaudit` \| `pip_audit` \| `osv` \| `trufflehog` |
 | `title` | `pickle safety signal from fickling` |
 | `severity` | `low` |
 | `file_path` | `pytorch_model.bin` |
