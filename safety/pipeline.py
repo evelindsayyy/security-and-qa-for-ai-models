@@ -64,6 +64,7 @@ def scan_model(model_id: str, *, output_dir: Path | None = None) -> dict[str, An
       - write a summary JSON for downstream scoring
     """
     target = resolve_target(model_id)
+    gateway_model_id = str(target.get("model_id") or model_id)
     out_dir = _output_dir(model_id, output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -75,6 +76,7 @@ def scan_model(model_id: str, *, output_dir: Path | None = None) -> dict[str, An
 
     summary = {
         "model_id": model_id,
+        "gateway_model_id": gateway_model_id,
         "target": target,
         "garak": _tool_summary(garak),
         "promptfoo": _tool_summary(promptfoo),
@@ -92,7 +94,7 @@ def scan_model(model_id: str, *, output_dir: Path | None = None) -> dict[str, An
             score_garak_file(
                 garak_path,
                 garak_result_path,
-                model_id=model_id,
+                model_id=gateway_model_id,
                 deployment_context=context,
             )
         except (OSError, ValueError) as exc:
@@ -111,7 +113,7 @@ def scan_model(model_id: str, *, output_dir: Path | None = None) -> dict[str, An
             score_promptfoo_file(
                 promptfoo_path,
                 promptfoo_result_path,
-                model_id=model_id,
+                model_id=gateway_model_id,
                 deployment_context=context,
             )
         except (OSError, ValueError) as exc:

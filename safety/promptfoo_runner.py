@@ -39,13 +39,14 @@ def run_promptfoo(
     report_path = base_dir / "raw_promptfoo_report.json"
     metadata_path = base_dir / "promptfoo_run_metadata.json"
     template_path = Path(__file__).with_name("templates") / "promptfoo_base.yaml"
+    gateway_model_id = target_config.get("model_id", model_id)
 
     rendered = _render_template(
         template_path,
         {
-            "model_id": model_id,
+            "model_id": gateway_model_id,
             "provider_id": target_config.get("provider_id", "openai:chat:GPT 4.1 Mini"),
-            "label": target_config.get("label", model_id),
+            "label": target_config.get("label", gateway_model_id),
             "api_base_url": target_config.get("api_base_url", "https://litellm.oit.duke.edu/v1"),
             "api_key_env": target_config.get("api_key_env", "OPENAI_API_KEY"),
             "temperature": target_config.get("temperature", 0),
@@ -109,7 +110,7 @@ def run_promptfoo(
 
     return ToolRunResult(
         tool_name="promptfoo",
-        model_id=model_id,
+        model_id=gateway_model_id,
         status=status,
         output_dir=str(base_dir),
         config_path=str(config_path),

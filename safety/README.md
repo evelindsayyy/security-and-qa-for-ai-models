@@ -23,7 +23,9 @@ different units:
 - `safety/templates/` — reusable config templates that keep test logic separate from runtime targets
 
 The runtime target is injected from the registry instead of being hard-coded
-into every YAML file.
+into every YAML file. `targets.py` resolves exact Duke AI Gateway model ids,
+common aliases such as `gpt-4.1-mini` and `llama-4-maverick`, and the live
+`GET /v1/models` catalog when Gateway credentials are available.
 
 ## Output layout
 
@@ -76,6 +78,8 @@ Run both tools and score whichever raw outputs are available:
 
 ```bash
 python -m safety scan gpt-4.1-mini
+python -m safety scan "Llama 4 Maverick"
+python -m safety scan gpt-5-chat
 ```
 
 Score existing reports directly:
