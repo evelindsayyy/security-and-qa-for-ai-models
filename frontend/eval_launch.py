@@ -76,9 +76,9 @@ SUITES: dict[str, dict] = {
         "rubric": EVALUATOR / "tasks" / "rubrics" / "it_support.yaml",
         "system_prompt": EVALUATOR / "prompts" / "system" / "it_support_v1.txt",
     },
-    "policy_qa_v1": {
-        "label": "Duke policy Q&A (4 questions, draft)",
-        "suite": EVALUATOR / "tasks" / "policy_qa_v1.jsonl",
+    "policy_qa_v1.1": {
+        "label": "Duke policy Q&A (12 questions, draft)",
+        "suite": EVALUATOR / "tasks" / "policy_qa_v1.1.jsonl",
         "rubric": EVALUATOR / "tasks" / "rubrics" / "policy_qa_v1.yaml",
         "system_prompt": EVALUATOR / "prompts" / "system" / "it_support_v1.txt",
     },
