@@ -4,7 +4,7 @@ Track A (security pillar): [`track-a-framework.md`](track-a-framework.md). Tools
 
 Track B implements `tasks/` and `evaluator/`. Duke suites and benchmark references below.
 
-Gateway catalog: [`gateway-models.md`](gateway-models.md). Structured outputs: [`data-model.md`](data-model.md) (`eval_runs`, `eval_results`). GitLab: [`.gitlab/README.md`](../.gitlab/README.md).
+Gateway catalog: [`gateway-models.md`](gateway-models.md). Structured outputs: [`data-model.md`](data-model.md) — Duke suites in `eval_runs` / `eval_results`, public benchmarks in `benchmark_runs`. GitLab: [`.gitlab/README.md`](../.gitlab/README.md).
 
 ---
 
@@ -39,7 +39,7 @@ Record latency, tokens, cost, and failure rate on every run.
 
 ## MVP suites 
 
-First wave for gateway eval — not the full table above. **Week 3:** run on **one** cheap gateway model (e.g. GPT 4.1 Mini). **Week 4+:** same suites or more on the **three-model pilot** with Track A.
+First wave for gateway eval — not the full table above. Start on **one** cheap gateway model (e.g. GPT 4.1 Mini), then run the same suites on the **three-model pilot** with Track A.
 
 | Priority | Suite | Notes |
 |----------|-------|--------|
@@ -52,25 +52,31 @@ Other suites (creative writing, med education, coding, etc.) follow in later wee
 
 ## Rollout
 
-| When | Focus |
-|------|--------|
-| **W3** | `evaluator/` + schemas; **MVP suites** on **one** gateway model |
-| **W4** | MVP (+ more) suites on **three** pilot models (with Track A) |
-| **W5–6** | Remaining Duke suites; charts in `frontend/` |
-| Later | Benchmark subsets, variation overlay |
+| Stage | Focus |
+|-------|--------|
+| Done | `evaluator/` + schemas; MVP suites on the gateway pilot models; public-benchmark pilots (IFEval, TruthfulQA, MMLU, ToMi, consistency) with their own tab |
+| Next | Remaining Duke suites; ingest `eval_runs`/`eval_results`/`benchmark_runs` → Postgres; charts in `frontend/` |
+| Later | More benchmark subsets, variation overlay |
+
+Step-by-step sequencing lives in the GitLab milestones.
 
 ---
 
-## Public benchmarks (reference)
+## Public benchmarks
 
-| Benchmark | Use |
-|-----------|-----|
-| TruthfulQA MCQ | W2 spike — optional column on label |
-| IFEval, DocBench / QASPER | Optional subsets |
-| MT-Bench, AlpacaEval | Quality reference on label |
-| Berkeley Function Calling | Agentic / tool-use |
-| SWE-bench (full) | Not on gateway API |
-| SWE-bench Lite / HumanEval | Optional coding column |
+Standard academic benchmarks, separate from the judge-scored Duke suites: own runner in [`benchmarks/`](../benchmarks/), own frontend tab, and own `benchmark_runs` table ([`data-model.md`](data-model.md#efficacy--public-benchmarks-track-b)). Each benchmark brings its own scoring and per-item shape but shares one run envelope, so new benchmarks are a code change, not a schema migration.
+
+**Implemented** (in `benchmarks/`):
+
+| Benchmark | Headline metric | Probes |
+|-----------|-----------------|--------|
+| IFEval | pass-rate | Verifiable instruction-following constraints |
+| TruthfulQA (MCQ) | accuracy | Factuality / misconception avoidance |
+| MMLU (subset) | accuracy | Multitask knowledge across 57 subjects |
+| ToMi | accuracy | Theory-of-mind belief tracking |
+| Consistency | mean BERTScore F1 | Robustness to question rephrasing |
+
+**Candidate** (not yet wired): DocBench / QASPER, MT-Bench, AlpacaEval, Berkeley Function Calling, SWE-bench Lite / HumanEval.
 
 Catalog: [`tasks/benchmarks/manifest.yaml`](../tasks/benchmarks/manifest.yaml).
 

@@ -6,18 +6,17 @@ For the full pipeline (policy + Garak + merge), use [`../run_safety.sh`](../run_
 
 ## Setup (once)
 
-```bash
-cp safety/garak/docker/.env.example safety/garak/docker/.env
-# OPENAICOMPATIBLE_API_KEY (= DUKE_GATEWAY_KEY)
+Secrets come from the repo-root `.env` (gateway token). garak's `OPENAICOMPATIBLE_API_KEY`
+is mapped from it in `compose.yml`.
 
-docker compose --env-file safety/garak/docker/.env \
-  -f safety/garak/docker/compose.yml build
+```bash
+docker compose --env-file .env -f safety/garak/docker/compose.yml build
 ```
 
 ## Session variables
 
 ```bash
-export GARAK_DC="docker compose --env-file safety/garak/docker/.env -f safety/garak/docker/compose.yml"
+export GARAK_DC="docker compose --env-file .env -f safety/garak/docker/compose.yml"
 export GATEWAY_MODEL="GPT 4.1 Mini"
 export SLUG=gpt-4.1-mini
 mkdir -p safety/garak/output/${SLUG}
@@ -132,4 +131,4 @@ Azure gateway may block jailbreak prompts before the model responds. Garak repor
 |-------|-----|
 | `No detectors, nothing to do` | Use stock `compose.yml` |
 | Root-owned `output/` | `chown -R "$(id -u):$(id -g)" safety/garak/output` |
-| No report after scan | Check `OPENAICOMPATIBLE_API_KEY` in `docker/.env` |
+| No report after scan | Check the gateway token in the repo-root `.env` (`OPENAI_API_KEY`/`DUKE_GATEWAY_KEY`) |

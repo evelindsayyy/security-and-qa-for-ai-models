@@ -12,8 +12,12 @@
     {% else %}
       0 gateway models loaded
     {% endif %}
-    · gateway: <code>{{ gateway_source }}</code>
+    · notes from <code>gateway/catalog.py</code>
     {% if gateway_fetched_at %} · fetched {{ gateway_fetched_at }}{% endif %}
+    <form method="post" action="{{ url_for('gateway_refresh') }}" class="refresh-form">
+      <input type="hidden" name="next" value="{{ url_for('models_catalog') }}">
+      <button type="submit" class="btn-secondary" title="Re-fetch GET /v1/models now">&#8635; Refresh</button>
+    </form>
   </p>
 
   {% if gateway_error %}
@@ -65,11 +69,14 @@
   {% endif %}
 
   <section class="key">
-    <h2>how to use this catalog</h2>
+    <h2>How to use this catalog</h2>
     <ul>
-      <li>rows are live from the duke ai gateway — use these exact ids for safety red-team and efficacy eval.</li>
-      <li>artifact scanning uses hugging face repo ids — see <a href="{{ url_for('scans') }}">scan results</a>.</li>
-      <li>refresh: open this page with gateway env set, or run <code>uv run python testing/gateway/list_models.py</code>.</li>
+      <li>Rows are live from the Duke AI Gateway — copy ids exactly (spaces and capitals matter).</li>
+      <li>Use these ids for <a href="{{ url_for('eval_run') }}">efficacy eval</a>,
+          <a href="{{ url_for('benchmarks') }}">public benchmarks</a>, and
+          <a href="{{ url_for('safety') }}">safety</a> runs.</li>
+      <li>Artifact scanning uses Hugging Face repo ids — see <a href="{{ url_for('scans') }}">scan results</a>.</li>
+      <li>Refresh: use the button above, or run <code>uv run python -m gateway</code>.</li>
     </ul>
   </section>
 </div>

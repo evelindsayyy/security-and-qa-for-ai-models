@@ -17,7 +17,7 @@ Usage: ./safety/run_safety.sh [MODEL] [OPTIONS]
 
 End-to-end safety for one gateway model: Promptfoo policy, red-team, Garak, merge.
 
-MODEL defaults to GATEWAY_MODEL in safety/promptfoo/docker/.env (or env / "GPT 4.1 Mini").
+MODEL defaults to the GATEWAY_MODEL environment variable (or "GPT 4.1 Mini").
 
 Options:
   --skip-redteam         Skip Promptfoo red-team eval + export
@@ -39,15 +39,16 @@ EOF
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-_read_env_gateway_model() {
-  local env_file="$ROOT/safety/promptfoo/docker/.env"
-  if [[ -f "$env_file" ]]; then
-    grep -E '^GATEWAY_MODEL=' "$env_file" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'"
+run_py() {
+  # Host dev may use uv; Docker orchestrator images use plain python + pip deps.
+  if PYTHONPATH=. python -c "import safety.merge" >/dev/null 2>&1; then
+    PYTHONPATH=. python "$@"
+  else
+    PYTHONPATH=. uv run python "$@"
   fi
 }
 
-DEFAULT_MODEL="${GATEWAY_MODEL:-$(_read_env_gateway_model)}"
-DEFAULT_MODEL="${DEFAULT_MODEL:-GPT 4.1 Mini}"
+DEFAULT_MODEL="${GATEWAY_MODEL:-GPT 4.1 Mini}"
 
 MODEL="$DEFAULT_MODEL"
 REDTEAM=true
@@ -104,7 +105,7 @@ fi
 
 export GATEWAY_MODEL="$MODEL"
 export REDTEAM_GRADER_MODEL="${REDTEAM_GRADER_MODEL:-GPT 4.1 Mini}"
-SLUG="$(GATEWAY_MODEL="$MODEL" PYTHONPATH=. uv run python -c "
+SLUG="$(GATEWAY_MODEL="$MODEL" PYTHONPATH=. python -c "
 from safety.gateway_ids import normalize_gateway_model_id
 import os
 print(normalize_gateway_model_id(os.environ['GATEWAY_MODEL']))
@@ -112,8 +113,9 @@ print(normalize_gateway_model_id(os.environ['GATEWAY_MODEL']))
 
 mkdir -p "safety/promptfoo/output/${SLUG}" "safety/garak/output/${SLUG}" "safety/output/${SLUG}"
 
-PF_DC="docker compose --env-file safety/promptfoo/docker/.env -f safety/promptfoo/docker/compose.yml"
-GARAK_DC="docker compose --env-file safety/garak/docker/.env -f safety/garak/docker/compose.yml"
+# Sub-stacks read the single repo-root .env (mounted at /app/.env in the orchestrator).
+PF_DC="docker compose --env-file .env -f safety/promptfoo/docker/compose.yml"
+GARAK_DC="docker compose --env-file .env -f safety/garak/docker/compose.yml"
 
 echo "Safety run: model=${MODEL} slug=${SLUG} redteam=${REDTEAM}"
 
@@ -131,7 +133,7 @@ if ! $SKIP_PROMPTFOO; then
     exit $PF_RC
   fi
 
-  PYTHONPATH=. uv run python safety/promptfoo/export_safety_result.py \
+  run_py safety/promptfoo/export_safety_result.py \
     "safety/promptfoo/output/${SLUG}/eval.json"
   MERGE_ARGS+=(--promptfoo "safety/promptfoo/output/${SLUG}/safety_result.json")
 
@@ -148,7 +150,7 @@ if ! $SKIP_PROMPTFOO; then
       exit $RT_RC
     fi
 
-    PYTHONPATH=. uv run python safety/promptfoo/export_safety_result.py \
+    run_py safety/promptfoo/export_safety_result.py \
       "safety/promptfoo/output/${SLUG}/redteam_eval.json"
     MERGE_ARGS+=(--promptfoo "safety/promptfoo/output/${SLUG}/redteam_safety_result.json")
   else
@@ -188,7 +190,7 @@ if ! $SKIP_GARAK; then
   fi
 
   echo "--- Garak export ---"
-  PYTHONPATH=. uv run python safety/garak/export_safety_result.py \
+  run_py safety/garak/export_safety_result.py \
     "$REPORT" \
     -o "safety/garak/output/${SLUG}/safety_result.json" \
     --gateway-model-id "$MODEL"
@@ -203,7 +205,7 @@ if [ ${#MERGE_ARGS[@]} -eq 0 ]; then
 fi
 
 echo "--- Merge ---"
-PYTHONPATH=. uv run python -m safety.merge \
+run_py -m safety.merge \
   "${MERGE_ARGS[@]}" \
   -o "safety/output/${SLUG}/merged_safety_result.json"
 

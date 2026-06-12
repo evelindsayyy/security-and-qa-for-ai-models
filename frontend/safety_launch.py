@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
 import threading
 from pathlib import Path
 
+from frontend import docker_launch
 from frontend.path_safety import is_safe_slug
 from safety.gateway_ids import normalize_gateway_model_id
 
@@ -48,7 +50,7 @@ _PROBE_RE = re.compile(r"^[a-zA-Z0-9.,_-]+$")
 
 
 def _eligible_gateway_models() -> tuple[str, ...]:
-    from frontend.gateway_catalog import get_gateway_catalog
+    from gateway.catalog import get_gateway_catalog
 
     gw = get_gateway_catalog()
     ids = [
@@ -88,6 +90,8 @@ def validate_launch(
         return "cannot skip both promptfoo and garak"
     if garak_probes and not _PROBE_RE.match(garak_probes):
         return "garak_probes: letters, digits, comma, dot, dash, underscore only"
+    if docker_launch.use_docker() and not docker_launch.docker_available():
+        return docker_launch.docker_required_message("safety")
     return None
 
 
@@ -99,17 +103,28 @@ def build_command(
     skip_promptfoo: bool = False,
     garak_probes: str | None = None,
 ) -> list[str]:
-    cmd = ["bash", str(RUN_SCRIPT)]
+    inner: list[str] = ["bash", str(RUN_SCRIPT.relative_to(ROOT))]
     if skip_redteam:
-        cmd.append("--skip-redteam")
+        inner.append("--skip-redteam")
     if skip_garak:
-        cmd.append("--skip-garak")
+        inner.append("--skip-garak")
     if skip_promptfoo:
-        cmd.append("--skip-promptfoo")
+        inner.append("--skip-promptfoo")
     if garak_probes:
-        cmd.extend(["--garak-probes", garak_probes])
-    cmd.append(model)
-    return cmd
+        inner.extend(["--garak-probes", garak_probes])
+    inner.append(model)
+
+    if not docker_launch.use_docker():
+        return ["bash", str(RUN_SCRIPT), *inner[2:]]
+
+    return docker_launch.compose_run_argv(
+        "safety",
+        inner,
+        extra_env={
+            "GATEWAY_MODEL": model,
+            "REDTEAM_GRADER_MODEL": model,
+        },
+    )
 
 
 def start_run(
@@ -130,21 +145,26 @@ def start_run(
         # Fresh run — clear stale outputs so the merge/UI start from a clean slate.
         _wipe_outputs(slug)
 
+        if docker_launch.use_docker():
+            docker_launch.ensure_stack("safety")
+
         log_path = ROOT / "safety" / "output" / slug / "run.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        cmd = build_command(
+            model,
+            skip_redteam=skip_redteam,
+            skip_garak=skip_garak,
+            skip_promptfoo=skip_promptfoo,
+            garak_probes=garak_probes,
+        )
         with log_path.open("ab") as log_f:
-            log_f.write(f"\n=== UI launch ===\n".encode())
+            log_f.write(f"\n=== UI launch: {' '.join(cmd)} ===\n".encode())
             proc = subprocess.Popen(
-                build_command(
-                    model,
-                    skip_redteam=skip_redteam,
-                    skip_garak=skip_garak,
-                    skip_promptfoo=skip_promptfoo,
-                    garak_probes=garak_probes,
-                ),
+                cmd,
                 cwd=str(ROOT),
                 stdout=log_f,
                 stderr=subprocess.STDOUT,
+                env=os.environ.copy(),
             )
         _RUNNING[slug] = proc
         _INFLIGHT[combo] = slug
@@ -177,7 +197,7 @@ def get_status(slug: str) -> dict:
 
 
 def get_launch_options() -> dict:
-    from frontend.gateway_catalog import get_gateway_catalog
+    from gateway.catalog import get_gateway_catalog
 
     gw = get_gateway_catalog()
     existing = _existing_safety_slugs()
@@ -204,4 +224,6 @@ def get_launch_options() -> dict:
         "gateway_models": flat,
         "gateway_error": gw.get("error"),
         "model_has_results": model_has_results,
+        "launch_mode": "docker" if docker_launch.use_docker() else "host",
+        "docker_available": docker_launch.docker_available(),
     }

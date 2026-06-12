@@ -38,10 +38,11 @@ litellm.suppress_debug_info = True
 # CONFIGURATION
 # ============================================================================
 
-BASE_URL = os.getenv("LITELLM_BASE_URL", "https://litellm.oit.duke.edu/v1")
-API_KEY = os.getenv("LITELLM_API_KEY")
+BASE_URL = os.getenv("LITELLM_BASE_URL") or os.getenv("DUKE_GATEWAY_URL") or "https://litellm.oit.duke.edu/v1"
+API_KEY = os.getenv("LITELLM_API_KEY") or os.getenv("DUKE_GATEWAY_KEY") or os.getenv("OPENAI_API_KEY")
 MODEL = os.getenv("TOMI_MODEL", "openai/gpt-5.4")
-OUTPUT_DIR = os.getenv("TOMI_OUTPUT", "test_results")
+HERE = Path(__file__).resolve().parent
+OUTPUT_DIR = os.getenv("TOMI_OUTPUT", str(HERE / "results"))
 TOMI_FILE = os.getenv("TOMI_FILE", "tomi_questions.txt")
 SAMPLE_LIMIT = int(os.getenv("TOMI_LIMIT", "10"))  # 0 = no limit
 

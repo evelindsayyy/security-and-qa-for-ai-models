@@ -55,5 +55,22 @@
       {% endif %}
     </div>
   </section>
+
+  <section class="gateway-strip">
+    <span>
+      {% if gateway_count %}
+        <b>{{ gateway_count }}</b> live gateway model{{ "" if gateway_count == 1 else "s" }}
+        — safety &amp; eval dropdowns read this catalog.
+      {% else %}
+        Gateway catalog unavailable
+        {% if gateway_error %}<span class="dim">({{ gateway_error }})</span>{% endif %}
+      {% endif %}
+      <a href="{{ url_for('models_catalog') }}">View catalog →</a>
+    </span>
+    <form method="post" action="{{ url_for('gateway_refresh') }}" class="refresh-form">
+      <input type="hidden" name="next" value="{{ url_for('index') }}">
+      <button type="submit" class="btn-secondary" title="Re-fetch GET /v1/models now">&#8635; Refresh models</button>
+    </form>
+  </section>
 </div>
 {% endblock %}

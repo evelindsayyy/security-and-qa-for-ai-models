@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from pathlib import Path
 
 # Package directory (scanner/) — stable on host and in Docker (/app/scanner).
@@ -62,6 +63,30 @@ def model_dir(model_id: str) -> Path:
 def output_dir(model_id: str) -> Path:
     """Per-model output folder (scan_result.json, tool reports, spikes)."""
     return OUTPUT_ROOT / safe_dir_name(model_id)
+
+
+def delete_model_weights(model_id: str) -> bool:
+    """
+    Remove a local HF snapshot under ``models/<slug>/``.
+
+    Called automatically after a successful scan unless ``SCAN_KEEP_WEIGHTS=1``.
+    Scan JSON under ``output/<slug>/`` is kept — it is the source of truth for
+    the UI and Postgres ingest.
+    """
+    target = model_dir(model_id)
+    if not target.is_dir():
+        return False
+    shutil.rmtree(target, ignore_errors=True)
+    return True
+
+
+def weights_retained() -> bool:
+    """True when ``SCAN_KEEP_WEIGHTS`` requests keeping snapshots after scan."""
+    return os.environ.get("SCAN_KEEP_WEIGHTS", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
 
 
 def dump_json(path: Path, data: dict) -> None:

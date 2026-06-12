@@ -64,12 +64,12 @@ model_ids + deployment_context
 
 ## Output
 
-Normalized shapes: [`data-model.md`](data-model.md) (`scans`/`findings`, `safety_runs`/`safety_findings`). Tools run, capture raw JSON, and map into Pydantic in `scanner/` and `safety/`; a week-5 ingest step loads that JSON into Postgres (see [`architecture.md`](architecture.md#results-persistence-json--postgres-ingest)).
+Normalized shapes: [`data-model.md`](data-model.md) (`scans`/`findings`, `safety_runs`/`safety_findings`). Tools run, capture raw JSON, and map into Pydantic in `scanner/` and `safety/`; an ingest step loads that JSON into Postgres (see [`architecture.md`](architecture.md#why-json--postgres)).
 
 | Part | Output (JSON today) | Production |
 |------|---------------------|------------|
-| Scanning | `scanner/` → `scanner/output/<slug>/scan_result.json` (Docker: `scanner/docker/`) | Postgres week 5 (ingest) |
-| Safety | `safety/` → `safety/output/<slug>/merged_safety_result.json` (`run_safety.sh` → `safety.merge`) | Postgres week 5 (ingest) |
+| Scanning | `scanner/` → `scanner/output/<slug>/scan_result.json` (Docker: `scanner/docker/`) | Postgres (ingest) |
+| Safety | `safety/` → `safety/output/<slug>/merged_safety_result.json` (`run_safety.sh` → `safety.merge`) | Postgres (ingest) |
 
 ---
 
@@ -98,13 +98,10 @@ Do not block deploy on Fickling alone when ModelScan and ModelAudit are clean. S
 
 ## Package roadmap (`scanner/` and `safety/`)
 
-| Week | `scanner/` | `safety/` |
-|------|------------|-----------|
-| W2 | Spike in Docker workspace | Safety schemas slipped |
-| W3 | **`scanner/`** package + CLI | `garak_runner`, `promptfoo/`, probes v0 |
-| W4 | deps, secrets, E2E `scan_model()` | Pilot 3 gateway models |
-| W5 | Celery worker integration | Celery worker; writes `safety_runs` |
-| W6 | — | UI in `frontend/` (reads `api/`) |
+| Stage | `scanner/` | `safety/` |
+|-------|------------|-----------|
+| Done | package + CLI; deps, secrets, E2E `scan_model()` | `garak` + `promptfoo` + Duke probes; merge → `MergedSafetyResult` on gateway models |
+| Next | Celery worker integration; ingest `ScanResult` → Postgres | Celery worker; ingest `MergedSafetyResult` → Postgres; full label UI in `frontend/` |
 
 Target layout: [`scanner/README.md`](../scanner/README.md), [`docs/architecture.md`](architecture.md).
 
