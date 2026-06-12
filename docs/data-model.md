@@ -117,48 +117,63 @@ Pydantic types in `safety/schemas.py` match this table.
 
 ## `task_suites` / `eval_runs` / `eval_results` (Track B — Duke efficacy)
 
-**`task_suites`:**
+> **Authoritative DDL: `evaluator/db/efficacy_schema.sql`** (implemented week 4;
+> loader: `evaluator/db/load_results.py`, idempotent, dry-run by default).
+> The tables below reflect what is implemented; columns marked *planned* are
+> agreed direction but not yet in the DDL.
+
+**`task_suites`** — one row per (suite, version); `UNIQUE (suite_key, version)`:
 
 | Column | Example |
 |--------|---------|
 | `id` | UUID |
 | `suite_key` | `it_support` \| `policy_qa` \| `summarization` |
-| `version` | `1.0` |
-| `yaml_path` | `tasks/rubrics/it_support.yaml` |
+| `version` | `v1` \| `v1.1` (suffix of `task_suite_version`) |
+| `yaml_path` | `tasks/rubrics/it_support.yaml` (evaluator-relative) |
+| `rubric_version` | `it_support_v1` |
 
-**`eval_runs`:**
+**`eval_runs`** — one row per results JSONL; **PK reuses the file's
+`evaluation_run_id` UUID** (gives the loader free idempotency):
 
 | Column | Example |
 |--------|---------|
-| `id` | UUID |
+| `id` | UUID (= `evaluation_run_id` from the JSONL) |
 | `suite_id` | FK → `task_suites` |
 | `gateway_model_id` | `gpt-4.1-mini` |
-| `inference_backend` | string | `gateway` \| `dcc` (open weights on the cluster) |
-| `hf_repo` | string, nullable | set for an open-weight model served on DCC |
+| `judge_model` | `Llama 4 Maverick` (LLM-as-judge — postdates the original sketch) |
+| `inference_backend` | *planned* — `gateway` \| `dcc` (open weights on the cluster) |
+| `hf_repo` | *planned*, nullable — open-weight model served on DCC |
 | `status` | `complete` |
-| `aggregate_score` | float | `0.78` (suite-defined) |
-| `latency_p50_ms` | int | `1200` |
-| `tokens_in_total` / `tokens_out_total` | int | |
-| `cost_usd_total` | decimal, nullable | |
-| `tool_results` | JSONB | optional raw judge logs |
-| `started_at` / `completed_at` | timestamptz | |
+| `aggregate_score` | float — mean of per-question `overall` |
+| `latency_p50_ms` / `latency_p95_ms` | int |
+| `tokens_in_total` / `tokens_out_total` | int |
+| `cost_usd_total` | NUMERIC(12,6) — exact, never float |
+| `adaptation` | JSONB — full how-it-was-run metadata (temperature, max_tokens, prompt/rubric versions); kept as JSONB so the table doesn't churn when `Adaptation` gains fields |
+| `tool_results` | JSONB — optional raw judge logs (not loaded yet; traces stay on disk) |
+| `source_file` | the JSONL filename — traceability + the frontend's slug key |
+| `started_at` / `completed_at` | timestamptz |
 
-**`eval_results`** (per task / prompt):
+**`eval_results`** — one row per question (**Option A**: per-dimension judge
+scores live inside `detail`, so rubrics with different dimensions share one
+table); `UNIQUE (eval_run_id, task_id, metric)`:
 
 | Column | Example |
 |--------|---------|
 | `id` | UUID |
-| `eval_run_id` | FK |
-| `model_id` | FK → `models` |
-| `task_id` | string | `it_support_014` |
-| `score` | float | `1.0` or rubric 0–5 |
-| `metric` | string | `accuracy` \| `rouge_l` \| `judge_score` |
-| `latency_ms` | int | `890` |
-| `tokens_in` / `tokens_out` | int | |
-| `cost_usd` | decimal, nullable | |
-| `detail` | JSONB | `{"judge_reason": "...", "reference": "..."}` |
+| `eval_run_id` | FK (ON DELETE CASCADE) |
+| `task_id` | string — `it-support-001` |
+| `metric` | `judge_score` today; `rouge_l` etc. land as extra rows for the same task (summarization suite) |
+| `score` | the rubric-weighted `overall`; NULL when failed |
+| `candidate_failed` / `judge_failed` | booleans — failed questions are queryable, never dropped |
+| `latency_ms`, `tokens_in` / `tokens_out`, `cost_usd` | per-question operational |
+| `detail` | JSONB — `{"candidate_response", "scores": {dim: {score, rationale}}, "error", "schema_version"}` |
 
-Shapes: `evaluator/schemas.py`.
+Note: the sketched `eval_results.model_id` FK was dropped — model identity
+lives on `eval_runs.gateway_model_id`; a FK to the shared `models` table can
+be added once that table exists (cross-team decision pending).
+
+Row contract: `evaluator/schemas.py` (`SCHEMA_VERSION` is carried into
+`detail` for future migrations).
 
 ---
 
