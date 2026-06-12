@@ -15,6 +15,8 @@ _DB_DIR = Path(__file__).resolve().parent.parent / "evaluator" / "db"
 sys.path.insert(0, str(_DB_DIR))
 
 from load_results import (  # noqa: E402
+    load_file,
+    load_into,
     result_rows,
     run_row,
     split_suite_version,
@@ -71,6 +73,15 @@ class SuiteRowTest(unittest.TestCase):
         self.assertEqual(s["version"], "v1")
         self.assertEqual(s["rubric_version"], "it_support_v1")
 
+    def test_known_rubric_maps_to_yaml_path(self) -> None:
+        s = suite_row([_jsonl_row()])
+        self.assertEqual(s["yaml_path"], "tasks/rubrics/it_support.yaml")
+
+    def test_unknown_rubric_has_null_yaml_path(self) -> None:
+        row = _jsonl_row()
+        row["adaptation"]["rubric_version"] = "mystery_v9"
+        self.assertIsNone(suite_row([row])["yaml_path"])
+
 
 class RunRowTest(unittest.TestCase):
     def test_aggregates_and_identity(self) -> None:
@@ -102,6 +113,109 @@ class ResultRowsTest(unittest.TestCase):
         self.assertTrue(fail["candidate_failed"])
         self.assertIsNone(fail["score"])
         self.assertEqual(fail["detail"]["error"], "empty response")
+
+    def test_schema_version_carried_into_detail(self) -> None:
+        out = result_rows([_jsonl_row()])
+        self.assertEqual(out[0]["detail"]["schema_version"], "1.0.0")
+
+
+class _FakeCursor:
+    """Records every (sql, params) pair; answers fetchone() with a fake id."""
+
+    def __init__(self, log: list) -> None:
+        self._log = log
+
+    def execute(self, sql: str, params: dict) -> None:
+        self._log.append((sql, params))
+
+    def fetchone(self):
+        return ("fake-suite-uuid",)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class _FakeConnection:
+    def __init__(self) -> None:
+        self.log: list = []
+        self.commits = 0
+
+    def cursor(self):
+        return _FakeCursor(self.log)
+
+    def commit(self) -> None:
+        self.commits += 1
+
+
+class LoadIntoTest(unittest.TestCase):
+    """SQL-layer contract, no Postgres: statement order, idempotency clauses,
+    jsonb round-trips, and the suite-id wiring."""
+
+    def setUp(self) -> None:
+        import json as _json
+
+        self._json = _json
+        rows = [_jsonl_row(), _jsonl_row(qid="q2")]
+        self.parsed = [(suite_row(rows), run_row(rows, "f.jsonl"), result_rows(rows))]
+        self.conn = _FakeConnection()
+        load_into(self.conn, self.parsed)
+
+    def test_statement_sequence_and_single_commit(self) -> None:
+        kinds = []
+        for sql, _ in self.conn.log:
+            if "INSERT INTO public.task_suites" in sql:
+                kinds.append("suite_insert")
+            elif "SELECT id FROM public.task_suites" in sql:
+                kinds.append("suite_select")
+            elif "INSERT INTO public.eval_runs" in sql:
+                kinds.append("run_insert")
+            elif "INSERT INTO public.eval_results" in sql:
+                kinds.append("result_insert")
+        self.assertEqual(
+            kinds,
+            ["suite_insert", "suite_select", "run_insert",
+             "result_insert", "result_insert"],
+        )
+        self.assertEqual(self.conn.commits, 1)
+
+    def test_every_insert_is_idempotent(self) -> None:
+        inserts = [sql for sql, _ in self.conn.log if "INSERT" in sql]
+        self.assertEqual(len(inserts), 4)
+        for sql in inserts:
+            self.assertIn("ON CONFLICT", sql)
+
+    def test_jsonb_params_are_json_strings(self) -> None:
+        run_sql, run_params = next(
+            (s, p) for s, p in self.conn.log if "eval_runs" in s)
+        self.assertIn("%(adaptation)s::jsonb", run_sql)
+        self.assertEqual(
+            self._json.loads(run_params["adaptation"])["candidate_model"],
+            "gpt-5-chat",
+        )
+        res_sql, res_params = next(
+            (s, p) for s, p in self.conn.log if "eval_results" in s)
+        self.assertIn("%(detail)s::jsonb", res_sql)
+        self.assertEqual(
+            self._json.loads(res_params["detail"])["schema_version"], "1.0.0")
+
+    def test_run_insert_receives_selected_suite_id(self) -> None:
+        _, run_params = next(
+            (s, p) for s, p in self.conn.log if "eval_runs" in s)
+        self.assertEqual(run_params["suite_id"], "fake-suite-uuid")
+
+
+class LoadFileTest(unittest.TestCase):
+    def test_unparsable_file_returns_none(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "bad.jsonl"
+            bad.write_text("not json", encoding="utf-8")
+            self.assertIsNone(load_file(bad))
 
 
 if __name__ == "__main__":

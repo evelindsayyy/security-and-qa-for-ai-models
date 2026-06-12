@@ -120,9 +120,9 @@ CREATE TABLE IF NOT EXISTS public.eval_results (
 
     -- Everything the UI drills into:
     --   {"candidate_response": "...",
-    --    "reference": "...",
     --    "scores": {"accuracy": {"score": 5, "rationale": "..."}, ...},
-    --    "error": null}
+    --    "error": null,
+    --    "schema_version": "1.0.0"}   -- the EvaluationResult contract version
     detail          JSONB,
 
     -- One result per (run, question, metric): re-importing a file must not

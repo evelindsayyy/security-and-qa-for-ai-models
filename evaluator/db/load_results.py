@@ -46,6 +46,18 @@ def split_suite_version(task_suite_version: str) -> tuple[str, str]:
     return task_suite_version, "v?"
 
 
+# rubric_version -> evaluator-relative rubric path, for task_suites.yaml_path.
+# A static map on purpose: result rows don't record the path, and importing
+# frontend/eval_launch.py from here would be the wrong dependency direction.
+# Unknown rubrics load with yaml_path NULL; backfill by hand if needed
+# (ON CONFLICT DO NOTHING won't update suites loaded before a map entry existed).
+_RUBRIC_PATHS: dict[str, str] = {
+    "it_support_v1": "tasks/rubrics/it_support.yaml",
+    "it_support_v1.1": "tasks/rubrics/it_support_v1.1.yaml",
+    "policy_qa_v1": "tasks/rubrics/policy_qa_v1.yaml",
+}
+
+
 def _percentile(values: list[int], p: float) -> int:
     if not values:
         return 0
@@ -62,11 +74,12 @@ def suite_row(rows: list[dict]) -> dict:
     """task_suites row for one results file."""
     adaptation = rows[0]["adaptation"]
     key, version = split_suite_version(adaptation["task_suite_version"])
+    rubric_version = adaptation.get("rubric_version")
     return {
         "suite_key": key,
         "version": version,
-        "rubric_version": adaptation.get("rubric_version"),
-        "yaml_path": None,  # not recorded in result rows; fill by hand if needed
+        "rubric_version": rubric_version,
+        "yaml_path": _RUBRIC_PATHS.get(rubric_version),
     }
 
 
@@ -115,6 +128,9 @@ def result_rows(rows: list[dict]) -> list[dict]:
                 "candidate_response": r.get("candidate_response", ""),
                 "scores": r.get("scores", {}),
                 "error": r.get("error"),
+                # Row-contract version: future schema migrations need to know
+                # which EvaluationResult shape each stored row conforms to.
+                "schema_version": r.get("schema_version"),
             },
         })
     return out
@@ -172,16 +188,11 @@ ON CONFLICT (eval_run_id, task_id, metric) DO NOTHING
 """
 
 
-def apply_to_db(dsn: str, parsed: list[tuple[dict, dict, list[dict]]]) -> None:
-    """Load everything in one transaction. Requires psycopg (v3)."""
-    try:
-        import psycopg
-    except ImportError:
-        sys.exit(
-            "psycopg is required for --apply:  uv pip install 'psycopg[binary]'"
-        )
-
-    with psycopg.connect(dsn) as conn, conn.cursor() as cur:
+def load_into(conn, parsed: list[tuple[dict, dict, list[dict]]]) -> None:
+    """All cursor work + one commit. `conn` is anything DB-API-shaped
+    (a psycopg connection in production, a fake in tests): needs
+    .cursor() as a context manager and .commit()."""
+    with conn.cursor() as cur:
         for suite, run, results in parsed:
             cur.execute(_SUITE_INSERT, suite)
             cur.execute(_SUITE_SELECT, suite)
@@ -194,7 +205,20 @@ def apply_to_db(dsn: str, parsed: list[tuple[dict, dict, list[dict]]]) -> None:
             for res in results:
                 cur.execute(_RESULT_INSERT,
                             {**res, "detail": json.dumps(res["detail"])})
-        conn.commit()
+    conn.commit()
+
+
+def apply_to_db(dsn: str, parsed: list[tuple[dict, dict, list[dict]]]) -> None:
+    """Connect and load everything in one transaction. Requires psycopg (v3)."""
+    try:
+        import psycopg
+    except ImportError:
+        sys.exit(
+            "psycopg is required for --apply:  uv sync --group db"
+        )
+
+    with psycopg.connect(dsn) as conn:
+        load_into(conn, parsed)
     print(f"Loaded {len(parsed)} run(s). Re-running is safe (ON CONFLICT DO NOTHING).")
 
 
