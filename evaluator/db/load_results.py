@@ -29,8 +29,13 @@ import statistics
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 EVALUATOR = Path(__file__).resolve().parent.parent
 RESULTS_DIR = EVALUATOR / "results"
+
+# Repo convention: one root .env, shell-exported vars take precedence.
+load_dotenv(EVALUATOR.parent / ".env", override=False)
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +132,9 @@ def result_rows(rows: list[dict]) -> list[dict]:
             "detail": {
                 "candidate_response": r.get("candidate_response", ""),
                 "scores": r.get("scores", {}),
+                # jsonb normalizes OBJECT key order, so the rubric's dimension
+                # ordering would be lost — arrays DO keep order, so record it.
+                "dim_order": list(r.get("scores", {}).keys()),
                 "error": r.get("error"),
                 # Row-contract version: future schema migrations need to know
                 # which EvaluationResult shape each stored row conforms to.

@@ -81,6 +81,7 @@ def _db_shape(rows, source_file):
         "detail": {
             "candidate_response": r["candidate_response"],
             "scores": r["scores"],
+            "dim_order": list(r["scores"].keys()),
             "error": r["error"],
             "schema_version": r["schema_version"],
         },

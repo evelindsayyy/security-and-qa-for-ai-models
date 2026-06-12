@@ -118,6 +118,17 @@ class ResultRowsTest(unittest.TestCase):
         out = result_rows([_jsonl_row()])
         self.assertEqual(out[0]["detail"]["schema_version"], "1.0.0")
 
+    def test_dim_order_preserves_rubric_order(self) -> None:
+        # jsonb normalizes object key order; the dim_order ARRAY is what
+        # lets the frontend reconstruct rubric ordering.
+        row = _jsonl_row()
+        row["scores"] = {
+            "tone": {"score": 3, "rationale": "x"},
+            "accuracy": {"score": 5, "rationale": "y"},
+        }
+        out = result_rows([row])
+        self.assertEqual(out[0]["detail"]["dim_order"], ["tone", "accuracy"])
+
 
 class _FakeCursor:
     """Records every (sql, params) pair; answers fetchone() with a fake id."""

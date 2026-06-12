@@ -19,8 +19,14 @@ import os
 import statistics
 import time
 from datetime import timezone
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 from frontend.path_safety import is_safe_slug
+
+# Repo convention: one root .env, shell-exported vars take precedence.
+load_dotenv(Path(__file__).parent.parent / ".env", override=False)
 
 # Helpers shared with the file path — eval_run_data imports THIS module only
 # lazily (inside functions), so this top-level import is not circular.
@@ -102,6 +108,18 @@ def _ts(dt) -> str:
         return str(dt)
 
 
+def _ordered_dims(results: list[dict]) -> list[str]:
+    """Rubric-ordered dimension union. jsonb normalizes object key order, so
+    the loader records the original order as a detail['dim_order'] ARRAY
+    (arrays keep order); fall back to scores keys for rows loaded before
+    that field existed."""
+    return list(dict.fromkeys(
+        d for r in results
+        for d in (r["detail"].get("dim_order")
+                  or list(r["detail"].get("scores") or {}))
+    ))
+
+
 def _aggregate_db_run(run: dict, results: list[dict]) -> dict:
     """Build the comparison-table row dict (same keys as _aggregate_file)."""
     n = len(results)
@@ -110,8 +128,7 @@ def _aggregate_db_run(run: dict, results: list[dict]) -> dict:
     cand_fail = sum(1 for r in results if r["candidate_failed"])
     judge_fail = sum(1 for r in results if r["judge_failed"])
 
-    dims = list(dict.fromkeys(
-        d for r in results for d in (r["detail"].get("scores") or {})))
+    dims = _ordered_dims(results)
     dim_means: dict[str, float | None] = {}
     for d in dims:
         vals = [r["detail"]["scores"][d]["score"] for r in results
@@ -220,12 +237,14 @@ def get_run_detail_db(slug: str) -> dict | None:
     adaptation = adaptation or {}
     questions_by_id = _load_suite_questions(
         adaptation.get("task_suite_version", ""))
-    dims = list(dict.fromkeys(
-        d for r in results for d in (r["detail"].get("scores") or {})))
+    dims = _ordered_dims(results)
 
     questions_rows = []
     for r in results:
         scores = r["detail"].get("scores") or {}
+        # rubric order for THIS row (jsonb lost the object key order)
+        row_dims = [d for d in (r["detail"].get("dim_order") or list(scores))
+                    if d in scores]
         if r["candidate_failed"]:
             status = "CAND_FAIL"
         elif r["judge_failed"]:
@@ -240,7 +259,7 @@ def get_run_detail_db(slug: str) -> dict | None:
             "dim_scores": {
                 d: (scores[d]["score"] if d in scores else None) for d in dims
             },
-            "rationales": {d: scores[d]["rationale"] for d in scores},
+            "rationales": {d: scores[d]["rationale"] for d in row_dims},
             "overall": r["score"],
             "latency_ms": r["latency_ms"],
             "cost_usd": float(r["cost_usd"] or 0),
