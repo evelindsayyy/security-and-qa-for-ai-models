@@ -59,7 +59,10 @@ def candidate_models() -> tuple[str, ...]:
 
 
 # Judges the team has actually calibrated (cross-judge experiment, week 4).
-JUDGE_MODELS: tuple[str, ...] = ("Llama 4 Maverick", "Llama 3.3", "gpt-oss-120b")
+# Per docs/judge-selection.md (interim decision, week 4): Maverick is the
+# primary judge, gpt-oss-120b the strict spot-check for Llama candidates.
+# Llama 3.3 was dropped — leniency ceiling (all 5s on strong candidates).
+JUDGE_MODELS: tuple[str, ...] = ("Llama 4 Maverick", "gpt-oss-120b")
 
 # MT-Bench rule: judge must come from a different model family than the
 # candidate. Family is derived from the Gateway id prefix.
@@ -229,12 +232,21 @@ def start_run(
         cmd = build_command(candidate, judge, suite_key, max_tokens, stem)
         with log_path.open("wb") as log_f:
             log_f.write(f"=== command: {' '.join(cmd)} ===\n".encode())
+            # PYTHONUNBUFFERED: stream the runner's stdout into the log as it
+            # happens — without it, a killed process loses everything Python
+            # had buffered (observed: a .log with only this header line).
+            env = os.environ.copy()
+            env["PYTHONUNBUFFERED"] = "1"
             proc = subprocess.Popen(
                 cmd,
                 cwd=str(ROOT if docker_launch.use_docker() else EVALUATOR),
                 stdout=log_f,
                 stderr=subprocess.STDOUT,
-                env=os.environ.copy(),
+                env=env,
+                # Own process group: stopping/restarting the Flask dev server
+                # must not kill an in-flight run (it writes one row per
+                # question, so orphaned completion is safe and useful).
+                start_new_session=True,
             )
         _RUNNING[stem] = proc
         _INFLIGHT[combo] = stem

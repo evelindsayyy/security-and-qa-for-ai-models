@@ -203,7 +203,7 @@ class LaunchRoutesTest(unittest.TestCase):
             eval_launch.subprocess, "Popen", return_value=fake_proc
         ) as popen:
             r = self.client.post("/eval-run/start", data={
-                "candidate": "GPT 4.1 Mini", "judge": "Llama 3.3",
+                "candidate": "GPT 4.1 Mini", "judge": "Llama 4 Maverick",
                 "suite": "it_support_v1", "max_tokens": "500",
             })
         self.assertEqual(r.status_code, 302)
@@ -217,7 +217,7 @@ class LaunchRoutesTest(unittest.TestCase):
         fake_proc = mock.Mock()
         fake_proc.poll.return_value = None  # still running
         data = {
-            "candidate": "gpt-5.1-chat", "judge": "Llama 3.3",
+            "candidate": "gpt-5.1-chat", "judge": "Llama 4 Maverick",
             "suite": "policy_qa_v1.1", "max_tokens": "500",
         }
         with mock.patch.object(
