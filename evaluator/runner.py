@@ -152,6 +152,14 @@ def _parse_args() -> argparse.Namespace:
                    default=HERE / "prompts" / "judge" / "reference_based_v1.txt")
     p.add_argument("--temperature", type=float, default=0.2)
     p.add_argument("--max-tokens", type=int, default=2000)
+    # Self-hosted candidates: point the CANDIDATE at any OpenAI-compatible
+    # server (vLLM on the DCC: http://localhost:8000/v1; Ollama locally:
+    # http://localhost:11434/v1). The judge always stays on the Gateway —
+    # judging is an API call regardless of where the candidate runs. Cost
+    # for unknown self-hosted models records as $0 (real cost is GPU energy).
+    p.add_argument("--candidate-endpoint", type=str, default=None,
+                   help="OpenAI-compatible base URL serving the candidate "
+                        "(default: the Duke Gateway)")
     # Reasoning judges (e.g. gpt-oss-120b) spend hidden thinking tokens from
     # the same budget; 600 leaves them no room for the ~200-token JSON verdict
     # and they come back empty/truncated. Raise to ~2000 for those judges.
@@ -243,7 +251,13 @@ def main() -> int:
 
     counts = {"ok": 0, "candidate_failed": 0, "judge_failed": 0}
     t_run_start = time.perf_counter()
-    candidate_model_version = time.strftime("Gateway %Y-%m", time.gmtime())
+    # Record WHERE the candidate ran. Result rows from a self-hosted serving
+    # of the same model name must be distinguishable from Gateway rows — the
+    # deployment (build, quantization, sampler defaults) can change answers.
+    if args.candidate_endpoint:
+        candidate_model_version = f"self-hosted {args.candidate_endpoint}"
+    else:
+        candidate_model_version = time.strftime("Gateway %Y-%m", time.gmtime())
 
     with out_path.open("w", encoding="utf-8") as out_f, \
          trace_path.open("w", encoding="utf-8") as trace_f:
@@ -259,6 +273,7 @@ def main() -> int:
                     system_prompt=system_prompt,
                     temperature=args.temperature,
                     max_tokens=args.max_tokens,
+                    endpoint=args.candidate_endpoint,
                 )
                 cand_dur = time.perf_counter() - t0
 

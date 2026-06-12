@@ -34,9 +34,35 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
 
+from openai import OpenAI
+
 from _gateway import gateway_client
 
 _CACHE_DIR = Path(__file__).parent / "cache" / "candidates"
+
+# Clients for self-hosted endpoints (Ollama on a laptop, vLLM on the DCC),
+# one per base_url, built lazily. The judge always stays on the Gateway —
+# only the CANDIDATE can be re-pointed.
+_ENDPOINT_CLIENTS: dict[str, OpenAI] = {}
+
+
+def _client_for(endpoint: Optional[str]) -> OpenAI:
+    """Gateway client by default; a per-endpoint client when overridden.
+
+    Self-hosted OpenAI-compatible servers (vLLM, Ollama) accept any api_key
+    unless explicitly configured, so a placeholder is fine; set
+    CANDIDATE_API_KEY in the env if the server enforces one.
+    """
+    if endpoint is None:
+        return gateway_client()
+    client = _ENDPOINT_CLIENTS.get(endpoint)
+    if client is None:
+        client = OpenAI(
+            base_url=endpoint,
+            api_key=os.environ.get("CANDIDATE_API_KEY", "local-self-hosted"),
+        )
+        _ENDPOINT_CLIENTS[endpoint] = client
+    return client
 
 
 # Result dataclass
@@ -60,15 +86,22 @@ class CandidateResult:
 
 def _cache_key( # hash the inputs that should produce identical outputs
     *, model: str, system_prompt: str, question: str, temperature: float,
-    max_tokens: int,
+    max_tokens: int, endpoint: Optional[str] = None,
 ) -> str:
     # max_tokens is part of the key: for reasoning models the budget changes
     # the visible output (a starved budget yields empty text), so a re-run
     # with a different budget must miss the cache and call the API.
     raw = (
         f"{model}|{system_prompt}|{question}|{temperature:.4f}|{max_tokens}"
-    ).encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()
+    )
+    # endpoint joins the key ONLY when overridden: the same model name served
+    # by a different deployment (Gateway vs local vLLM build/quantization) can
+    # answer differently, so their caches must not collide. Appending only
+    # when set keeps every pre-override cache entry valid (default key shape
+    # is byte-identical to before).
+    if endpoint:
+        raw += f"|{endpoint}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def _cache_path(key: str) -> Path: # where to store/look for that hash
@@ -119,8 +152,13 @@ def generate_candidate(
     temperature: float = 0.2,
     max_tokens: int = 500,
     timeout_sec: float = 30.0,
+    endpoint: Optional[str] = None,
 ) -> CandidateResult:
-    """Send ``question`` to ``model`` via the Duke AI Gateway.
+    """Send ``question`` to ``model`` via the Duke AI Gateway — or, when
+    ``endpoint`` is given, via any OpenAI-compatible server at that base URL
+    (vLLM on the DCC: ``http://localhost:8000/v1``; Ollama on a laptop:
+    ``http://localhost:11434/v1``). The judge is unaffected; only the
+    candidate is re-pointed.
 
     Never raises on API failure — returns a ``CandidateResult`` with
     ``failed=True`` and the error string. The runner inspects ``failed``
@@ -135,14 +173,15 @@ def generate_candidate(
         question=question,
         temperature=temperature,
         max_tokens=max_tokens,
+        endpoint=endpoint,
     )
     cached = _cache_read(key) # look in the cache for that key; if found, return it immediately without calling the API
     if cached is not None:
         return cached
 
     t0 = time.perf_counter()
-    try: # otherwise call the Gateway API, and capture latency and token usage. If it fails, return a CandidateResult with failed=True and the error message.
-        client = gateway_client().with_options(timeout=timeout_sec)
+    try: # otherwise call the API, and capture latency and token usage. If it fails, return a CandidateResult with failed=True and the error message.
+        client = _client_for(endpoint).with_options(timeout=timeout_sec)
         resp = client.chat.completions.create(
             model=model,
             messages=[

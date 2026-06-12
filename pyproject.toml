@@ -45,6 +45,10 @@ benchmarks = [
     "requests>=2.32.0",
     "tqdm>=4.67.0",
 ]
+# vLLM for self-hosting open models on the DCC (scripts/dcc/start_vllm.sh).
+# CUDA/Linux-only, multi-GB install — do NOT install on a laptop. On the
+# cluster:  uv sync --group dcc
+dcc = ["vllm>=0.8; sys_platform == 'linux'"]
 
 [tool.ruff.lint.per-file-ignores]
 "scanner/db/load_scans.py" = ["E402"]
