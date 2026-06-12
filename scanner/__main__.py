@@ -48,25 +48,19 @@ from scanner.report_text import (
 from scanner.schemas import ScanResult, build_scan_result_from_combined
 
 
-def _ensure_model(model_id: str, no_download: bool) -> None:
-    """
-    Guarantee weights exist locally before a debug subcommand runs.
-
-    Raises FileNotFoundError when ``--no-download`` is set and ``models/<slug>`` is missing.
-    """
+def _ensure_model(model_id: str) -> None:
+    """Download weights when ``models/<slug>`` is missing (debug subcommands)."""
     if not model_dir(model_id).exists():
-        if no_download:
-            raise FileNotFoundError(f"{model_dir(model_id)} missing — drop --no-download to fetch")
         download_model(model_id)
 
 
 def cmd_scan(args: argparse.Namespace) -> int:
-    """Full pipeline: download (optional) → tools → ``scan_result.json``."""
+    """Full pipeline: download → tools → ``scan_result.json``."""
     for model_id in args.models:
         print(f"scanning {model_id} ...")
         result = scan_model(
             model_id,
-            auto_download=not args.no_download,
+            auto_download=True,
             run_modelscan=not args.skip_modelscan,
             run_fickling=not args.skip_fickling,
             run_modelaudit=not args.skip_modelaudit,
@@ -94,7 +88,7 @@ def cmd_metadata(args: argparse.Namespace) -> int:
 def cmd_modelscan(args: argparse.Namespace) -> int:
     """Debug: run ModelScan alone; write ``modelscan_report.json`` + ``.txt`` summary."""
     for model_id in args.models:
-        _ensure_model(model_id, args.no_download)
+        _ensure_model(model_id)
         mdir = model_dir(model_id)
         out = output_dir(model_id)
         payload = run_modelscan(mdir)
@@ -107,7 +101,7 @@ def cmd_modelscan(args: argparse.Namespace) -> int:
 def cmd_fickling(args: argparse.Namespace) -> int:
     """Debug: run Fickling on all pickle-family weights in the repo."""
     for model_id in args.models:
-        _ensure_model(model_id, args.no_download)
+        _ensure_model(model_id)
         mdir = model_dir(model_id)
         out = output_dir(model_id)
         report = run_fickling_if_applicable(mdir)
@@ -127,7 +121,7 @@ def cmd_modelaudit(args: argparse.Namespace) -> int:
     Re-runs ModelScan + Fickling only to supply context for actionable filtering.
     """
     for model_id in args.models:
-        _ensure_model(model_id, args.no_download)
+        _ensure_model(model_id)
         mdir = model_dir(model_id)
         out = output_dir(model_id)
         fmt = format_summarize(mdir)
@@ -147,7 +141,7 @@ def cmd_modelaudit(args: argparse.Namespace) -> int:
 def cmd_deps(args: argparse.Namespace) -> int:
     """Debug: pip-audit + OSV dependency scan only."""
     for model_id in args.models:
-        _ensure_model(model_id, args.no_download)
+        _ensure_model(model_id)
         mdir = model_dir(model_id)
         out = output_dir(model_id)
         report = run_dependency_scan(mdir)
@@ -165,7 +159,7 @@ def cmd_deps(args: argparse.Namespace) -> int:
 def cmd_secrets(args: argparse.Namespace) -> int:
     """Debug: TruffleHog secret scan only."""
     for model_id in args.models:
-        _ensure_model(model_id, args.no_download)
+        _ensure_model(model_id)
         mdir = model_dir(model_id)
         out = output_dir(model_id)
         report = run_trufflehog(mdir)
@@ -242,12 +236,9 @@ def main() -> int:
         description="Track A HF artifact scanner (package: scanner/)",
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    nd = argparse.ArgumentParser(add_help=False)
-    nd.add_argument("--no-download", action="store_true")
     refresh_parser = sub.add_parser(
         "refresh-supply-chain",
         help="deps+secrets only; update existing scan_result.json",
-        parents=[nd],
     )
     refresh_parser.add_argument(
         "models",
@@ -261,7 +252,7 @@ def main() -> int:
     )
     refresh_parser.set_defaults(func=cmd_refresh_supply_chain)
 
-    scan_parser = sub.add_parser("scan", help="full pipeline -> scan_result.json", parents=[nd])
+    scan_parser = sub.add_parser("scan", help="full pipeline -> scan_result.json")
     scan_parser.add_argument("models", nargs="+")
     for flag, dest in [
         ("--skip-modelscan", "skip_modelscan"),
@@ -282,7 +273,7 @@ def main() -> int:
         ("secrets", cmd_secrets, "trufflehog only (debug)"),
         ("validate", cmd_validate, "pydantic-check existing json"),
     ]:
-        p = sub.add_parser(name, help=help_text, parents=[nd] if name != "validate" else [])
+        p = sub.add_parser(name, help=help_text)
         p.add_argument("models", nargs="+")
         if name == "validate":
             p.add_argument("--file", default=None, help="default scan_result.json")

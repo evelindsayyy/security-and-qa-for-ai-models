@@ -19,8 +19,8 @@ If you're about to design a new rubric, jump to [The 8-step design process](#the
 evaluator/tasks/rubrics/
 ├── _shared_dimensions.yaml   # the dimension library (definitions, scales, anchors)
 ├── it_support_v1.yaml        # locked v1 (currently what the runner reads)
-├── it_support_v1.1.yaml      # DRAFT — same semantics as v1, refactored to reference shared
-├── policy_qa_v1.yaml         # DRAFT — new task, anchors not yet expert-calibrated
+├── it_support_v1.1.yaml      # WIP — same semantics as v1, refactored to reference shared
+├── policy_qa_v1.yaml         # WIP — new task, anchors not yet expert-calibrated
 └── <new_task>_v1.yaml        # new task rubrics land here
 ```
 
@@ -50,7 +50,7 @@ Every rubric's `evaluation_steps` starts with:
 
 > If the candidate response is empty, whitespace-only, or a bare refusal that does not engage the question, score 1 on every dimension and write 'empty response' or 'refusal without engagement' as the rationale. Do not confabulate. Skip the rest of these steps.
 
-Reason: in week-3 runs, reasoning models (gpt-5-mini, gpt-5-nano) sometimes spent their full `max_tokens` budget on hidden tokens and emitted no visible text. Without this branch, the judge confabulated 5/5 ratings for empty inputs — that's not "the model is great", that's "the judge made something up".
+Reason: in early runs, reasoning models (gpt-5-mini, gpt-5-nano) sometimes spent their full `max_tokens` budget on hidden tokens and emitted no visible text. Without this branch, the judge confabulated 5/5 ratings for empty inputs — that's not "the model is great", that's "the judge made something up".
 
 ---
 
@@ -159,11 +159,11 @@ If you start from a list of dimensions ("accuracy, completeness, helpfulness, �
 
 ### Pitfall 3 — Ignoring the empty-response case
 
-See the week-3 gpt-5-mini incident. Always include the empty/refusal branch as step 1 of `evaluation_steps`.
+See the gpt-5-mini empty-response incident. Always include the empty/refusal branch as step 1 of `evaluation_steps`.
 
 ### Pitfall 4 — Over-weighting tone
 
-Tone is subjective and runs on a 1-3 scale, which makes it noisy. Weight it ≤ 0.15 across all task rubrics unless you have a specific reason. If stakeholders push for "but tone matters!" — show them the validation-study Cohen's Kappa numbers from week 7-8 and let the data make the case.
+Tone is subjective and runs on a 1-3 scale, which makes it noisy. Weight it ≤ 0.15 across all task rubrics unless you have a specific reason. If stakeholders push for "but tone matters!" — show them the validation-study Cohen's Kappa numbers and let the data make the case.
 
 ### Pitfall 5 — Picking weights before pilot data
 
@@ -181,11 +181,13 @@ Copy-pasting `it_support.yaml` and renaming dimensions is faster than designing 
 
 ## How this fits the project plan
 
-- **Week 4:** Refactor `it_support_v1` → `it_support_v1.1` referencing shared library (mechanical, ~30 min). Design `_shared_dimensions.yaml` (this exists as a draft already). Identify which 3-5 Duke tasks the project will cover — talk to mentor.
-- **Week 5:** Apply OIT-reviewed references → `it_support_v2.jsonl` + `it_support_v2.yaml`. Design + pilot one new rubric (likely `policy_qa_v1`). Re-weight after pilot.
-- **Week 6:** Design + pilot a second new rubric. Run pipeline against all locked rubrics.
-- **Week 7:** Feature freeze. All rubrics locked.
-- **Weeks 7-8:** Validation study runs against multiple rubrics, not just IT support.
+Rough sequencing (step-by-step milestones live in the GitLab tracker):
+
+- Refactor `it_support_v1` → `it_support_v1.1` referencing the shared library; design `_shared_dimensions.yaml`. Identify the 3–5 Duke tasks the project will cover.
+- Apply OIT-reviewed references → `it_support_v2.jsonl` + `it_support_v2.yaml`; design + pilot one new rubric (likely `policy_qa_v1`); re-weight after pilot.
+- Design + pilot a second new rubric; run the pipeline against all locked rubrics.
+- Feature freeze: all rubrics locked.
+- Validation study runs against multiple rubrics, not just IT support.
 
 The shared library means a single edit (e.g., revising the `accuracy` definition) propagates to every task rubric that references it. Without the library, every task rubric has its own copy and they drift.
 
@@ -195,8 +197,8 @@ The shared library means a single edit (e.g., revising the `accuracy` definition
 
 - `evaluator/tasks/rubrics/_shared_dimensions.yaml` — the dimension library
 - `evaluator/tasks/rubrics/it_support_v1.yaml` — locked v1 (what the runner currently reads)
-- `evaluator/tasks/rubrics/it_support_v1.1.yaml` — DRAFT refactor referencing shared
-- `evaluator/tasks/rubrics/policy_qa_v1.yaml` — DRAFT new task rubric
+- `evaluator/tasks/rubrics/it_support_v1.1.yaml` — work-in-progress refactor referencing shared
+- `evaluator/tasks/rubrics/policy_qa_v1.yaml` — work-in-progress new task rubric
 - `evaluator/metrics.yaml` — taxonomy of what the Efficacy pillar measures (three HELM buckets)
 - `evaluator/README.md` — known limitations section names the rubric issues this doc addresses
 

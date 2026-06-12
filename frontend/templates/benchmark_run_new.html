@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Start a benchmark run{% endblock %}
+
+{% block content %}
+<div class="eval-comparison">
+  <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmark results</a></p>
+  <h1>Start a benchmark run</h1>
+  <p class="sub">
+    Launches <code>benchmarks/run_benchmark.py</code> via Docker (default).
+    Models are the live gateway catalog; benchmarks are the public pilots in
+    <code>benchmarks/</code>.
+  </p>
+
+  <form method="post" action="{{ url_for('benchmark_run_start') }}" class="launch-form">
+    <label>Benchmark
+      <select name="benchmark" id="benchmark">
+        {% for b in benchmarks %}
+        <option value="{{ b.key }}">{{ b.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>Model
+      <select name="model" id="model">
+        {% for m in models %}
+        <option value="{{ m }}" {% if m == 'GPT 4.1 Mini' %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+      <span class="form-hint">exact gateway id — see <a href="{{ url_for('models_catalog') }}">model catalog</a></span>
+    </label>
+
+    <button type="submit" class="btn-primary">▶ Start run</button>
+  </form>
+</div>
+{% endblock %}

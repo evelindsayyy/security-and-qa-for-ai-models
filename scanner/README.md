@@ -2,6 +2,8 @@
 
 Track A — HF artifact scanning: **ModelScan** + **Fickling** + **ModelAudit** + **pip-audit/OSV** + **TruffleHog** → **risk scorer** → `scan_result.json` (Postgres-ready per [`docs/data-model.md`](../docs/data-model.md)).
 
+Scans can be launched and viewed from the **frontend** (`/scans` → "Start a new scan"); see [`frontend/README.md`](../frontend/README.md). The CLI below is the same pipeline.
+
 ## Pipeline
 
 ```text
@@ -48,13 +50,14 @@ Defense-in-depth: the same payload may be reported by more than one tool. Correl
 
 ## DGX/VM setup
 
+Secrets (`HF_TOKEN`, optional) come from the repo-root `.env`. Run from the repo root;
+set `UID`/`GID` so output files are owned by you (not root):
+
 ```bash
-cd scanner/docker
-cp .env.example .env
-sed -i "s/^UID=.*/UID=$(id -u)/" .env && sed -i "s/^GID=.*/GID=$(id -g)/" .env
-docker compose build
-docker compose run --rm scanner python -m scanner scan gpt2
-docker compose run --rm scanner python -m scanner validate gpt2
+export UID=$(id -u) GID=$(id -g)
+docker compose --env-file .env -f scanner/docker/compose.yml build
+docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner python -m scanner scan gpt2
+docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner python -m scanner validate gpt2
 ```
 
 Outputs: `scanner/output/<slug>/scan_result.json` (primary), `combined_scan.json`, `modelscan_report.json`, `modelaudit_report.json` when applicable.
@@ -62,10 +65,10 @@ Outputs: `scanner/output/<slug>/scan_result.json` (primary), `combined_scan.json
 ## New models
 
 ```bash
-docker compose run --rm scanner python -m scanner scan <HF_REPO_ID>
+docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner python -m scanner scan <HF_REPO_ID>
 ```
 
-Hub `org/model` → `models/org--model/`, `output/org--model/scan_result.json`. Set `HF_TOKEN` in `.env` for gated models.
+Hub `org/model` → weights download into `models/org--model/` for the duration of the scan, then **`output/org--model/scan_result.json` is kept** and weights are **deleted automatically** (unless `SCAN_KEEP_WEIGHTS=1` for CLI debugging). Every scan re-downloads from Hugging Face Hub.
 
 ## CLI
 
@@ -89,7 +92,8 @@ Hub `org/model` → `models/org--model/`, `output/org--model/scan_result.json`. 
 | `scanner/*.py` | Production |
 | `experiments/` | OSV, Trivy spikes |
 | `unit_tests/` | Host unit tests |
-| `models/`, `output/` | DGX data (gitignored) |
+| `models/<slug>/` | HF weights **during** scan; auto-deleted after `scan_result.json` (see `SCAN_KEEP_WEIGHTS`) |
+| `output/<slug>/` | Persistent scan JSON + logs (UI / ingest source of truth) |
 
 ## Source file map 
 

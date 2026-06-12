@@ -3,7 +3,6 @@ venv/
 .venv/
 **/.venv/
 .env
-scanner/docker/.env
 
 # Ignore system files
 .DS_Store
@@ -50,6 +49,7 @@ test_results/
 # Evaluator cache — regenerable, large, contains responses
 evaluator/cache/
 evaluator/results/
+benchmarks/results/
 
 # AI-only briefings — personal notes for Claude, not project documentation
 evaluator/CLAUDE.md
@@ -65,10 +65,8 @@ testing/scanning/models/*
 !testing/scanning/models/README.md
 testing/scanning/output/*
 !testing/scanning/output/README.md
-safety/promptfoo/docker/.env
 safety/promptfoo/output/*
 !safety/promptfoo/output/README.md
-safety/garak/docker/.env
 safety/promptfoo/.promptfoo/
 safety/garak/output/*
 !safety/garak/output/README.md

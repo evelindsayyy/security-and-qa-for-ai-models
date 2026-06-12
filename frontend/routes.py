@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from flask import render_template
 
-from frontend.gateway_catalog import get_gateway_catalog
+from gateway.catalog import get_gateway_catalog
 
 
 def _hub_context() -> dict:
@@ -106,7 +106,6 @@ def register_routes(app):
         hf_repo = request.form.get("hf_repo", "")
         error = validate_launch(
             hf_repo,
-            no_download=bool(request.form.get("no_download")),
             skip_modelscan=not request.form.get("run_modelscan"),
             skip_fickling=not request.form.get("run_fickling"),
             skip_modelaudit=not request.form.get("run_modelaudit"),
@@ -117,7 +116,6 @@ def register_routes(app):
             return error, 400
         slug, _already = start_run(
             hf_repo,
-            no_download=bool(request.form.get("no_download")),
             skip_modelscan=not request.form.get("run_modelscan"),
             skip_fickling=not request.form.get("run_fickling"),
             skip_modelaudit=not request.form.get("run_modelaudit"),
@@ -243,6 +241,62 @@ def register_routes(app):
 
         return render_template("benchmarks.html", **get_benchmarks_data())
 
+    @app.route("/benchmarks/new")
+    def benchmark_run_new():
+        from frontend.benchmark_launch import get_launch_options
+
+        return render_template("benchmark_run_new.html", **get_launch_options())
+
+    @app.route("/benchmarks/start", methods=["POST"])
+    def benchmark_run_start():
+        from flask import redirect, request, url_for
+
+        from frontend.benchmark_launch import start_run, validate_launch
+
+        benchmark_key = request.form.get("benchmark", "")
+        model = request.form.get("model", "")
+        error = validate_launch(benchmark_key, model)
+        if error:
+            return error, 400
+        slug, _already = start_run(benchmark_key, model)
+        return redirect(url_for("benchmark_detail", slug=slug, status="running"))
+
+    @app.route("/benchmarks/<slug>/status")
+    def benchmark_run_status(slug: str):
+        from flask import jsonify
+
+        from frontend.benchmark_launch import get_status
+
+        return jsonify(get_status(slug))
+
+    @app.route("/benchmarks/<slug>")
+    def benchmark_detail(slug: str):
+        from flask import request
+
+        from frontend.benchmark_data import get_benchmark_detail
+
+        detail = get_benchmark_detail(slug)
+        if detail is None or request.args.get("status") == "running":
+            from frontend.benchmark_launch import get_status
+
+            status = get_status(slug)
+            if status["status"] in ("running", "failed"):
+                return render_template(
+                    "benchmark_detail.html",
+                    missing=False,
+                    running=True,
+                    run_status=status,
+                    slug=slug,
+                )
+
+        if detail is None:
+            return render_template(
+                "benchmark_detail.html",
+                missing=True,
+                slug=slug,
+            )
+        return render_template("benchmark_detail.html", missing=False, **detail)
+
     @app.route("/safety")
     def safety():
         from frontend.safety_data import get_safety_data
@@ -320,19 +374,6 @@ def register_routes(app):
             )
         return render_template("safety_detail.html", missing=False, **detail)
 
-    @app.route("/benchmarks/<slug>")
-    def benchmark_detail(slug: str):
-        from frontend.benchmark_data import get_benchmark_detail
-
-        detail = get_benchmark_detail(slug)
-        if detail is None:
-            return render_template(
-                "benchmark_detail.html",
-                missing=True,
-                slug=slug,
-            )
-        return render_template("benchmark_detail.html", missing=False, **detail)
-
     @app.route("/models")
     def models_catalog():
         gw = get_gateway_catalog()
@@ -345,6 +386,17 @@ def register_routes(app):
             gateway_fetched_at=gw["fetched_at"],
             gateway_error=gw["error"],
             gateway_deprecated=gw["deprecated"],
+        )
+
+    @app.route("/gateway/refresh", methods=["POST"])
+    def gateway_refresh():
+        from flask import redirect, request, url_for
+
+        # Force a live re-fetch so the catalog + every launch dropdown picks up
+        # new/removed gateway models immediately (instead of waiting for the cache TTL).
+        get_gateway_catalog(force_refresh=True)
+        return redirect(
+            request.form.get("next") or request.referrer or url_for("models_catalog")
         )
 
     @app.route("/hello")

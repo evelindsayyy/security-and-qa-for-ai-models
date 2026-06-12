@@ -16,6 +16,9 @@
     <div class="progress-card">
       <p class="progress-meta">status: <b id="prog-state">{{ run_status.status }}</b></p>
       <pre class="log-snippet" id="prog-log">{{ run_status.message }}</pre>
+      <p id="prog-retry" class="sub" style="display: none;">
+        <a href="{{ url_for('scan_run_new') }}" id="prog-retry-link">Start a new scan →</a>
+      </p>
     </div>
     <script>
       (function () {
@@ -25,7 +28,10 @@
             document.getElementById("prog-state").textContent = s.status;
             if (s.message) document.getElementById("prog-log").textContent = s.message;
             if (s.status === "complete") window.location = "/scans/" + slug;
-            else if (s.status === "failed") document.getElementById("prog-state").textContent = "failed";
+            else if (s.status === "failed") {
+              document.getElementById("prog-state").textContent = "failed";
+              document.getElementById("prog-retry").style.display = "block";
+            }
           });
         }
         setInterval(poll, 5000);

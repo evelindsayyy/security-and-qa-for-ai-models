@@ -6,18 +6,16 @@ For the full pipeline (policy + Garak + merge), use [`../run_safety.sh`](../run_
 
 ## Setup (once)
 
-```bash
-cp safety/promptfoo/docker/.env.example safety/promptfoo/docker/.env
-# OPENAI_API_KEY, GATEWAY_MODEL
+Secrets come from the repo-root `.env` (gateway token, used as `OPENAI_API_KEY`).
 
-docker compose --env-file safety/promptfoo/docker/.env \
-  -f safety/promptfoo/docker/compose.yml build
+```bash
+docker compose --env-file .env -f safety/promptfoo/docker/compose.yml build
 ```
 
 ## Session variables
 
 ```bash
-export PF_DC="docker compose --env-file safety/promptfoo/docker/.env -f safety/promptfoo/docker/compose.yml"
+export PF_DC="docker compose --env-file .env -f safety/promptfoo/docker/compose.yml"
 export GATEWAY_MODEL="GPT 4.1 Mini"
 export SLUG=gpt-4.1-mini
 mkdir -p safety/promptfoo/output/${SLUG}
@@ -43,7 +41,7 @@ Equivalent via wrapper (policy only — skips Garak and red-team):
 
 ## Run red-team
 
-Requires `PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=true` in `docker/.env`.
+Red-team generation stays local (`PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=true`, set in `compose.yml`).
 
 ```bash
 $PF_DC run --rm -e GATEWAY_MODEL="$GATEWAY_MODEL" -e REDTEAM_GRADER_MODEL="${REDTEAM_GRADER_MODEL:-GPT 4.1 Mini}" promptfoo \

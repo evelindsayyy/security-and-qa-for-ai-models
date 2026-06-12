@@ -58,11 +58,12 @@ litellm.suppress_debug_info = True
 # CONFIGURATION
 # ============================================================================
 
-BASE_URL = os.getenv("LITELLM_BASE_URL", "https://litellm.oit.duke.edu/v1")
-API_KEY = os.getenv("LITELLM_API_KEY")
+BASE_URL = os.getenv("LITELLM_BASE_URL") or os.getenv("DUKE_GATEWAY_URL") or "https://litellm.oit.duke.edu/v1"
+API_KEY = os.getenv("LITELLM_API_KEY") or os.getenv("DUKE_GATEWAY_KEY") or os.getenv("OPENAI_API_KEY")
 MODEL = os.getenv("CONSISTENCY_MODEL", "openai/Llama 3.3")
-OUTPUT_DIR = os.getenv("CONSISTENCY_OUTPUT", "test_results")
-QUESTIONS_FILE = os.getenv("CONSISTENCY_QUESTIONS", "consistency_questions.json")
+HERE = Path(__file__).resolve().parent
+OUTPUT_DIR = os.getenv("CONSISTENCY_OUTPUT", str(HERE / "results"))
+QUESTIONS_FILE = os.getenv("CONSISTENCY_QUESTIONS", str(HERE / "consistency_questions.json"))
 QUESTION_LIMIT = int(os.getenv("CONSISTENCY_LIMIT", "5")) # 0 means no limit
 
 # BERTScore language model to use for scoring

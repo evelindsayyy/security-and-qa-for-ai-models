@@ -24,9 +24,8 @@ import os
 import dotenv  # Load environment variables from .env file
 dotenv.load_dotenv()
 
-# Add TruthfulQA to path for imports
-TRUTHFULQA_PATH = Path(__file__).parent.parent.parent / "TruthfulQA"
-sys.path.insert(0, str(TRUTHFULQA_PATH))
+HERE = Path(__file__).resolve().parent
+TRUTHFULQA_CSV = HERE / "TruthfulQA.csv"
 
 utilities = None
 ANSWER_COL = 'Correct Answers'
@@ -67,9 +66,14 @@ def get_split_answers(row, col):
 # ============================================================================
 
 BASE_URL = os.getenv("TQA_BASE_URL", "https://litellm.oit.duke.edu/v1")
-API_KEY = os.getenv("TQA_API_KEY") or os.getenv("LITELLM_API_KEY")
+API_KEY = (
+    os.getenv("TQA_API_KEY")
+    or os.getenv("LITELLM_API_KEY")
+    or os.getenv("DUKE_GATEWAY_KEY")
+    or os.getenv("OPENAI_API_KEY")
+)
 MODEL = os.getenv("TQA_MODEL", "gpt-5.1")
-OUTPUT_DIR = os.getenv("TQA_OUTPUT_DIR", "test_results")
+OUTPUT_DIR = os.getenv("TQA_OUTPUT_DIR", str(HERE / "results"))
 TQA_LIMIT = os.getenv("TQA_LIMIT", "50")
 TEST_LIMIT = int(TQA_LIMIT) if TQA_LIMIT.isdigit() and int(TQA_LIMIT) > 0 else None
 
@@ -174,7 +178,7 @@ class TruthfulQATestRunner:
         output = {
             "model": model_name,
             "timestamp": timestamp,
-            "summary": eval_metrics,
+            "metrics": eval_metrics,
             "responses": [
                 {
                     "question": row['Question'],

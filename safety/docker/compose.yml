@@ -1,0 +1,29 @@
+# Orchestrates safety/run_safety.sh (Promptfoo + Garak docker sub-stacks + merge).
+# Browser launches call ensure_stack("safety") then compose run this service.
+# Secrets come from the repo-root .env (see .env.example). Run from the repo root:
+#
+#   docker compose --env-file .env \
+#     -f safety/docker/compose.yml run --rm safety \
+#     ./safety/run_safety.sh "GPT 4.1 Mini"
+
+services:
+  safety:
+    build:
+      context: ../..
+      dockerfile: safety/docker/Dockerfile
+
+    user: "${UID:-1000}:${GID:-1000}"
+
+    volumes:
+      - ../..:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    environment:
+      - GATEWAY_MODEL=${GATEWAY_MODEL:-GPT 4.1 Mini}
+      - REDTEAM_GRADER_MODEL=${REDTEAM_GRADER_MODEL:-GPT 4.1 Mini}
+      - PYTHONPATH=/app
+
+    working_dir: /app
+
+    stdin_open: true
+    tty: true

@@ -1,0 +1,29 @@
+# Browser + CLI efficacy runs — see evaluator/README.md
+# Secrets come from the repo-root .env (see .env.example). Run from the repo root:
+#
+#   docker compose --env-file .env \
+#     -f evaluator/docker/compose.yml run --rm evaluator \
+#     python runner.py --candidate-model "gpt-5-chat" --judge-model "Llama 4 Maverick"
+
+services:
+  evaluator:
+    build:
+      context: ../..
+      dockerfile: evaluator/docker/Dockerfile
+
+    user: "${UID:-1000}:${GID:-1000}"
+
+    volumes:
+      - ../results:/app/evaluator/results
+      - ../cache:/app/evaluator/cache
+
+    environment:
+      - DUKE_GATEWAY_URL=${DUKE_GATEWAY_URL:-https://litellm.oit.duke.edu/v1}
+      - DUKE_GATEWAY_KEY=${DUKE_GATEWAY_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://litellm.oit.duke.edu/v1}
+
+    working_dir: /app/evaluator
+
+    stdin_open: true
+    tty: true

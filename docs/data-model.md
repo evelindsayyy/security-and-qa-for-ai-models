@@ -1,6 +1,6 @@
 # Data model
 
-Target **PostgreSQL** schema for week 5 [`api/`](../api/README.md) (see [`architecture.md`](architecture.md)). Weeks 3–4: each package writes **JSON** with the same logical shapes (validated by Pydantic in code). Week 5 adds an **ingest** step that maps those JSON documents onto the tables below (JSON → Pydantic → SQLAlchemy); see [`architecture.md`](architecture.md#results-persistence-json--postgres-ingest). Compute hosts emit JSON; only the application VM writes to Postgres.
+Target **PostgreSQL** schema for [`api/`](../api/README.md). Today each package writes **JSON** with the same logical shapes (Pydantic in code); a VM-side **ingest** maps JSON → SQLAlchemy rows — see [`architecture.md`](architecture.md#why-json--postgres). Only the application VM writes to Postgres.
 
 Catalog keys: [`gateway-models.md`](gateway-models.md).
 
@@ -11,13 +11,15 @@ Catalog keys: [`gateway-models.md`](gateway-models.md).
 - One **`models`** row per gateway model (`gateway_model_id`; optional `hf_repo` when weights are on-prem).
 - **Scanning:** `models` → `scans` → `findings` (HF artifact jobs only).
 - **Safety:** `models` → `safety_runs` → `safety_findings` (gateway inference).
-- **Efficacy:** `task_suites` → `eval_runs` → `eval_results` (each result links to one `models` row).
-- **UI reads normalized fields;** investigators can drill into `tool_results` or `detail` JSONB.
+- **Efficacy — Duke suites:** `task_suites` → `eval_runs` → `eval_results` (LLM-as-judge; cost/latency/tokens).
+- **Efficacy — public benchmarks:** `benchmark_runs` (IFEval, TruthfulQA, MMLU, …) — shared run envelope, benchmark-specific detail in JSONB.
+- **UI reads normalized fields;** investigators drill into `tool_results`, `detail`, or `metrics` JSONB.
 
 ```text
 models ──┬── scans ── findings
          ├── safety_runs ── safety_findings
-         └── eval_runs ── eval_results
+         ├── eval_runs ── eval_results
+         └── benchmark_runs
 task_suites ── eval_runs
 ```
 
@@ -109,11 +111,11 @@ One red-team job against one or more gateway models.
 | `description` | text |
 | `probe_id` | string | `duke.policy.003` |
 
-Week 3 work: run garak and promptfoo, save sample JSON, then lock Pydantic types in `safety/schemas.py` to match this table.
+Pydantic types in `safety/schemas.py` match this table.
 
 ---
 
-## `task_suites` / `eval_runs` / `eval_results` (Track B — efficacy)
+## `task_suites` / `eval_runs` / `eval_results` (Track B — Duke efficacy)
 
 **`task_suites`:**
 
@@ -156,15 +158,41 @@ Week 3 work: run garak and promptfoo, save sample JSON, then lock Pydantic types
 | `cost_usd` | decimal, nullable | |
 | `detail` | JSONB | `{"judge_reason": "...", "reference": "..."}` |
 
-TruthfulQA W2 columns (`provider_name`, `accuracy`) fold into this shape when we promote benchmark runs to `evaluator/`.
+Shapes: `evaluator/schemas.py`.
+
+---
+
+## `benchmark_runs` (Track B — public benchmarks)
+
+Public academic benchmarks from `benchmarks/` (IFEval, TruthfulQA, MMLU, ToMi, consistency). **Separate from `eval_runs`:** benchmark-defined automatic scoring (accuracy, pass-rate, BERTScore), not an LLM judge; own frontend tab.
+
+One shared table — each benchmark produces the same run envelope (`frontend/benchmark_data.py`); per-item detail in JSONB. New benchmark = code change in `benchmarks/`, not a schema migration.
+
+**`benchmark_runs`:**
+
+| Column | Type (sketch) | Example |
+|--------|---------------|---------|
+| `id` | UUID | |
+| `model_id` | FK → `models` | |
+| `gateway_model_id` | string | `gpt-4.1-mini` |
+| `benchmark_key` | string | `ifeval` \| `truthfulqa` \| `mmlu` \| `tomi` \| `consistency` |
+| `inference_backend` | string | `gateway` \| `dcc` |
+| `status` | string | `complete` |
+| `headline_metric` | string | `pass_rate` \| `accuracy` \| `mean_f1` |
+| `headline_value` | float | `0.83` |
+| `n_items` | int | `120` |
+| `metrics` | JSONB | benchmark summary, e.g. MMLU `per_subject` |
+| `items` | JSONB | per-item rows for drill-down |
+| `run_params` | JSONB, nullable | e.g. `{"mmlu_sample": 200}` |
+| `started_at` / `completed_at` | timestamptz | |
+
+If a benchmark needs SQL filtering over items, promote to child `benchmark_items` (`run_id`, `idx`, `passed`, `score`, `payload` JSONB) — envelope unchanged.
 
 ---
 
 ## `deployment_context`
 
-Describes how the model is offered so probes and tasks match reality (ITSO). Stored on `models` and/or copied onto `safety_runs` (and optionally eval runs).
-
-Example (fields still being agreed in a Team W3 issue):
+How the model is offered (ITSO). Stored on `models` and/or copied onto `safety_runs`.
 
 ```json
 {
@@ -180,7 +208,7 @@ Example (fields still being agreed in a Team W3 issue):
 
 ## Nutrition label aggregate (`GET /models/{id}`)
 
-Week 5 API returns one JSON document per model, for example:
+Example shape:
 
 ```json
 {
@@ -191,10 +219,11 @@ Week 5 API returns one JSON document per model, for example:
   "safety": { "latest_run_id": "…", "pass_rate": 0.85, "categories": [] },
   "efficacy": [
     { "suite_key": "it_support", "score": 0.78, "run_at": "2026-05-28T12:00:00Z" }
+  ],
+  "benchmarks": [
+    { "benchmark_key": "ifeval", "headline_metric": "pass_rate", "headline_value": 0.83, "n_items": 120 }
   ]
 }
 ```
 
-Exact nesting is owned by `api/` + `frontend/` in week 5–6; table shapes above are the source of truth.
-
----
+Exact nesting is owned by `api/` + `frontend/`; table shapes above are the source of truth.

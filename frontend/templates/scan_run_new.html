@@ -7,7 +7,14 @@
   <p class="back"><a href="{{ url_for('scans') }}">← all scans</a></p>
   <h1>Start an HF scan</h1>
   <p class="sub">
-    Launches <code>python -m scanner scan</code> on the server. All tools enabled by default.
+    Launches the scanner via Docker Compose
+    (<code>{{ compose_file }}</code>) — same isolated image as the DGX CLI workflow
+    (ModelScan, Fickling, TruffleHog, etc.). Weights are downloaded for the scan and
+    removed afterward — only <code>scan_result.json</code> is kept under
+    <code>scanner/output/</code>.
+    {% if not docker_available %}
+    <span class="form-warning">Docker Compose is not available on this host — build the image first or set <code>SCAN_LAUNCH_MODE=host</code>.</span>
+    {% endif %}
   </p>
 
   <form method="post" action="{{ url_for('scan_run_start') }}" class="launch-form">
@@ -33,11 +40,6 @@
       <label><input type="checkbox" name="run_modelaudit" checked> ModelAudit</label>
       <label><input type="checkbox" name="run_deps" checked> pip-audit / OSV (dependencies)</label>
       <label><input type="checkbox" name="run_secrets" checked> TruffleHog (secrets)</label>
-    </fieldset>
-
-    <fieldset>
-      <legend>Download</legend>
-      <label><input type="checkbox" name="no_download"> Skip download — use cached weights only</label>
     </fieldset>
 
     <button type="submit" class="btn-primary">▶ Start scan</button>

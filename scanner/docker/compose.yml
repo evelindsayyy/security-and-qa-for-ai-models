@@ -1,5 +1,8 @@
-# from repo root: docker compose -f scanner/docker/compose.yml build
-# or: cd scanner/docker && docker compose build
+# Secrets (HF_TOKEN) come from the repo-root .env (see .env.example).
+# From repo root:
+#   docker compose --env-file .env -f scanner/docker/compose.yml build
+#   docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner \
+#     python -m scanner scan gpt2
 
 services:
   scanner:
@@ -17,6 +20,8 @@ services:
     environment:
       - HF_TOKEN=${HF_TOKEN:-}
       - MODEL_ID=${MODEL_ID:-distilbert-base-uncased}
+      # Weights under models/<slug>/ are removed after scan unless SCAN_KEEP_WEIGHTS=1
+      - SCAN_KEEP_WEIGHTS=${SCAN_KEEP_WEIGHTS:-}
       # OSV API queries require outbound HTTPS from the container.
 
     stdin_open: true

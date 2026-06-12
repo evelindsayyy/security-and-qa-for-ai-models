@@ -11,6 +11,11 @@ Run from repo root:
 
 from __future__ import annotations
 
+import os
+
+# Browser launches default to Docker; unit tests exercise the host argv path.
+os.environ.setdefault("FRONTEND_LAUNCH_MODE", "host")
+
 import re
 import unittest
 from unittest import mock
@@ -20,6 +25,18 @@ from frontend import eval_launch
 
 
 class ValidateLaunchTest(unittest.TestCase):
+    def setUp(self) -> None:
+        # Keep unit tests offline + deterministic: the candidate allowlist is
+        # normally the live gateway catalog, but here we pin it to the curated
+        # priced set (avoids a network call — and the OpenAI client's uname
+        # subprocess — on the validate path).
+        patcher = mock.patch.object(
+            eval_launch, "candidate_models",
+            return_value=eval_launch._CANDIDATE_FALLBACK,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_valid_combo_passes(self) -> None:
         self.assertIsNone(
             eval_launch.validate_launch(
@@ -148,6 +165,15 @@ class GetStatusTest(unittest.TestCase):
 
 class LaunchRoutesTest(unittest.TestCase):
     def setUp(self) -> None:
+        # Offline + deterministic candidate allowlist (see ValidateLaunchTest).
+        # Also avoids the OpenAI client's platform/uname subprocess, which
+        # would otherwise inflate the patched global subprocess.Popen count.
+        patcher = mock.patch.object(
+            eval_launch, "candidate_models",
+            return_value=eval_launch._CANDIDATE_FALLBACK,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.client = create_app({"TESTING": True}).test_client()
 
     def test_form_renders(self) -> None:

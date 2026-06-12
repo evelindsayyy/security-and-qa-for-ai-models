@@ -1,24 +1,25 @@
 # Testing (manual spikes)
 
-**Pre-production scripts** for gateway and eval — run tools, inspect output, learn formats.  
-**Not** automated unit tests → [`unit_tests/`](../unit_tests/).  
-**Not** HF scanning → [`scanner/`](../scanner/).
+Pre-production scripts for gateway connectivity and one-off experiments.
+**Not** automated tests → [`unit_tests/`](../unit_tests/). **Not** production pillars.
 
 ## Layout
 
 | Path | Purpose |
 |------|---------|
 | `test_gateway.py` | Gateway smoke (OpenAI SDK) |
-| `gateway/` | Gateway spike scripts |
-| `eval/` | Track B efficacy spikes (TruthfulQA, etc.) |
-| `basic_tests/` | Legacy TruthfulQA/compare scripts (optional) |
+| `gateway/` | Gateway spike scripts — see [`gateway/README.md`](gateway/README.md) |
+| `eval/` | Early TruthfulQA spike (data only) |
+| `basic_tests/` | **Moved** → [`benchmarks/`](../benchmarks/) |
+| `scanning/` | Pre-scanner spikes (superseded by [`scanner/`](../scanner/)) |
 
 ## Gateway smoke
 
 ```bash
-python testing/test_gateway.py
+uv run python testing/test_gateway.py
 ```
 
-## Eval
+## Benchmarks & efficacy
 
-See [`eval/README.md`](eval/README.md).
+- **Public benchmarks** (TruthfulQA, IFEval, MMLU, …): [`benchmarks/`](../benchmarks/)
+- **Duke efficacy eval** (LLM-as-judge): [`evaluator/`](../evaluator/)

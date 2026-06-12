@@ -25,16 +25,18 @@ from scanner.modelaudit_scan import run_modelaudit_scoped
 from scanner.dependency_scan import run_dependency_scan
 from scanner.secret_scan import run_trufflehog
 from scanner.paths import (
+    delete_model_weights,
     dump_json,
     list_scan_output_slugs,
     model_dir,
     output_dir,
     slug_to_model_id,
+    weights_retained,
 )
 from scanner.pickle_scan import (
     modelscan_summary_trimmed,
     run_fickling_if_applicable,
-    run_modelscan,
+    run_modelscan as execute_modelscan,
 )
 from scanner.risk_scorer import score as risk_score
 from scanner.schemas import ScanResult, build_scan_result, build_scan_result_from_combined
@@ -201,7 +203,11 @@ def scan_model(
     format_summary = format_summarize(mdir)
 
     # Step 2–4: defense-in-depth scanners (overlap is intentional; deduped later).
-    modelscan_payload = run_modelscan(mdir) if run_modelscan else {"summary": {"total_issues": 0}, "scanned_files": []}
+    modelscan_payload = (
+        execute_modelscan(mdir)
+        if run_modelscan
+        else {"summary": {"total_issues": 0}, "scanned_files": []}
+    )
     fickling = run_fickling_if_applicable(mdir) if run_fickling else None
     modelaudit = (
         run_modelaudit_scoped(mdir, format_summary, modelscan_payload, fickling_report=fickling)
@@ -272,6 +278,9 @@ def scan_model(
     )
 
     dump_json(out / "scan_result.json", result.model_dump(mode="json"))
+
+    if not weights_retained():
+        delete_model_weights(hf_repo)
 
     if write_combined:
         # Legacy flat JSON kept for unit test fixtures and spike comparisons.

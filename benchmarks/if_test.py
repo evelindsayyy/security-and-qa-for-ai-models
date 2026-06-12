@@ -14,16 +14,18 @@ from litellm import completion
 from tqdm import tqdm
 from datetime import datetime, timezone
 import sys
-sys.path.insert(0, ".")  # so ifeval_official/ is importable
+from pathlib import Path
+sys.path.insert(0, ".")  # so instructions_registry is importable
 import instructions_registry
 
 load_dotenv()
 
-BASE_URL = os.getenv("LITELLM_BASE_URL", "https://litellm.oit.duke.edu/v1")
-API_KEY = os.getenv("LITELLM_API_KEY")
+BASE_URL = os.getenv("LITELLM_BASE_URL") or os.getenv("DUKE_GATEWAY_URL") or "https://litellm.oit.duke.edu/v1"
+API_KEY = os.getenv("LITELLM_API_KEY") or os.getenv("DUKE_GATEWAY_KEY") or os.getenv("OPENAI_API_KEY")
 MODEL = os.getenv("IFEVAL_MODEL", "openai/gpt-5.4")
 OUTPUT_FILE = os.getenv("IFEVAL_OUTPUT")
-OUTPUT_DIR = os.getenv("IFEVAL_OUTPUT_DIR", "test_results")
+HERE = Path(__file__).resolve().parent
+OUTPUT_DIR = os.getenv("IFEVAL_OUTPUT_DIR", str(HERE / "results"))
 SAMPLE_SIZE = int(os.getenv("IFEVAL_SAMPLE", "10"))
 SEED = int(os.getenv("IFEVAL_SEED", "42"))
 

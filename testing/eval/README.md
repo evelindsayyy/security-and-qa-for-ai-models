@@ -1,31 +1,12 @@
 # Efficacy evaluation spikes (Track B)
 
-Spike scripts before `evaluator/` (week 3+). Goal: run tools, inspect output, map to [`docs/data-model.md`](../../docs/data-model.md) (`eval_runs`, `eval_results`).
+Legacy spikes. **Production:** [`evaluator/`](../evaluator/) (Duke efficacy) and [`benchmarks/`](../benchmarks/) (TruthfulQA, IFEval, etc.).
 
-## TruthfulQA MCQ (week 2)
+This folder keeps early TruthfulQA data and summary CSVs for reference only.
 
 | Path | Role |
 |------|------|
-| `truthfulqa/evaluate_truthfulqa_mcq.py` | Multi-model MCQ eval via OpenAI-compatible gateway |
-| `truthfulqa/datasets/TruthfulQA.csv` | Dataset |
-| `truthfulqa/models.gateway.json` | Provider aliases → LiteLLM `model` strings |
-| `output/samples/truthfulqa_w2_summary.csv` | Committed W2 summary (n=50) |
-| `output/` | Regenerated detail CSVs (gitignored) |
+| `truthfulqa/datasets/TruthfulQA.csv` | Dataset copy (canonical copy under `benchmarks/`) |
+| `output/samples/` | Committed summary CSV |
 
-**Week 2 results (n=50, seed=42):**
-
-| provider_name | model | accuracy |
-|---------------|-------|----------|
-| duke-gpt54 | gpt-5.4 | 0.90 |
-| duke-mistral | Mistral on-site | 0.74 |
-| duke-llama33 | Llama 3.3 | 0.62 |
-
-```bash
-export DUKE_AI_GATEWAY_API_KEY=...
-cd testing/eval/truthfulqa
-python evaluate_truthfulqa_mcq.py --limit 50
-```
-
-**Next (W3):** Move patterns into `evaluator/`; run **MVP suites** on one gateway model (not only IT support).
-
-Framework: [`docs/track-b-framework.md`](../../docs/track-b-framework.md). GitLab: [`.gitlab/README.md`](../../.gitlab/README.md).
+Run new evals via `/eval-run` or `/benchmarks` in the frontend — not scripts here.

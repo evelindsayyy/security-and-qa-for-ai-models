@@ -6,16 +6,12 @@
 {% block content %}
 <div class="eval-comparison">
   <h1>Benchmark results</h1>
+  <p><a class="btn-primary" href="{{ url_for('benchmark_run_new') }}">▶ Start a new run</a></p>
 
   {% if not has_runs %}
     <p class="sub empty">
-      no benchmark output found in:
-      <ul>
-        {% for p in search_paths %}<li><code>{{ p }}</code></li>{% endfor %}
-      </ul>
-      run one of <code>testing/basic_tests/tqa_test.py</code>,
-      <code>if_test.py</code>, <code>mmlu_test.py</code>, <code>tomi_test.py</code>,
-      or <code>consistency_test.py</code> to produce output.
+      No benchmark output yet. Use <b>Start a new run</b> above, or run from CLI:
+      <code>python benchmarks/run_benchmark.py --benchmark truthfulqa --model "GPT 4.1 Mini"</code>
     </p>
   {% else %}
     <p class="sub">
@@ -23,8 +19,14 @@
       {{ kinds|join(" · ") }}
     </p>
 
+    <div class="table-controls">
+      <label>Benchmark <select id="f-kind"><option value="">all</option></select></label>
+      <label>Model <select id="f-model"><option value="">all</option></select></label>
+      <span class="controls-hint">click a row for per-question detail</span>
+    </div>
+
     <div class="table-wrap">
-    <table class="run-table">
+    <table class="run-table" id="bench-table">
       <thead>
         <tr>
           <th class="col-nowrap">Benchmark</th>
@@ -50,7 +52,9 @@
             data-href="{{ url_for('benchmark_detail', slug=r.slug) }}"
             tabindex="0"
             role="link"
-            aria-label="Open {{ r.kind_label }} results for {{ r.model }}">
+            aria-label="Open {{ r.kind_label }} results for {{ r.model }}"
+            data-kind="{{ r.kind_label }}"
+            data-model="{{ r.model }}">
           <td class="col-nowrap"><span class="badge {{ badge_class }}">{{ r.kind_label }}</span></td>
           <td><span class="model">{{ r.model }}</span></td>
           <td class="num overall {{ score_class }}">
@@ -66,21 +70,42 @@
     </table>
     </div>
 
+    <script>
+      (function () {
+        const tbody = document.querySelector("#bench-table tbody");
+        const rows = Array.from(tbody.querySelectorAll("tr"));
+        for (const [id, key] of [["f-kind", "kind"], ["f-model", "model"]]) {
+          const sel = document.getElementById(id);
+          [...new Set(rows.map(r => r.dataset[key]))].sort().forEach(v => {
+            const o = document.createElement("option");
+            o.value = v; o.textContent = v;
+            sel.appendChild(o);
+          });
+          sel.addEventListener("change", render);
+        }
+        function render() {
+          const fk = document.getElementById("f-kind").value;
+          const fm = document.getElementById("f-model").value;
+          tbody.innerHTML = "";
+          rows.filter(r =>
+            (!fk || r.dataset.kind === fk) &&
+            (!fm || r.dataset.model === fm)
+          ).forEach(r => tbody.appendChild(r));
+        }
+      })();
+    </script>
+
     <section class="key">
       <h2>How to read this table</h2>
       <dl class="legend-grid">
         <dt>TruthfulQA</dt>
         <dd>Multiple-choice accuracy — higher means the model picks the truthful answer more often.</dd>
-
         <dt>IFEval</dt>
-        <dd>Fraction of prompts whose constraints (e.g. "include 3 bullet points") the response satisfied.</dd>
-
+        <dd>Fraction of prompts whose constraints the response satisfied.</dd>
         <dt>Consistency</dt>
         <dd>Mean BERTScore F1 between responses to rephrasings of the same question.</dd>
-
         <dt>MMLU</dt>
-        <dd>Multiple-choice accuracy across academic subjects.</dd>
-
+        <dd>Multiple-choice accuracy across academic subjects (sampled subset by default).</dd>
         <dt>ToMi</dt>
         <dd>Theory-of-mind accuracy on belief-tracking stories.</dd>
       </dl>

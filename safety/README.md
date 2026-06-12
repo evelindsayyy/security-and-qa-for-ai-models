@@ -2,27 +2,26 @@
 
 Promptfoo + Garak → per-tool [`SafetyRunResult`](schemas.py) → merged [`MergedSafetyResult`](schemas.py) for the nutrition-label safety pillar. Shapes match [`docs/data-model.md`](../docs/data-model.md).
 
-**Model id:** any LiteLLM string from [`docs/gateway-models.md`](../docs/gateway-models.md) (case-sensitive). Outputs go under `<slug>/` (e.g. `gpt-4.1-mini`).
+**Model id:** any string from the live [`gateway/`](../gateway/README.md) catalog (`/models` or `python -m gateway`). Case-sensitive.
+
+Runs can be launched and viewed from the **frontend** (`/safety` → "Start a new run"); see [`frontend/README.md`](../frontend/README.md). The CLI below is the same pipeline.
 
 ## One-time setup
 
-```bash
-cp safety/promptfoo/docker/.env.example safety/promptfoo/docker/.env
-cp safety/garak/docker/.env.example safety/garak/docker/.env
-# OPENAI_API_KEY, OPENAICOMPATIBLE_API_KEY (= DUKE_GATEWAY_KEY)
+Secrets come from the repo-root `.env` (copy `.env.example`, paste your gateway token).
+Build the two sub-stack images once:
 
-docker compose --env-file safety/promptfoo/docker/.env \
-  -f safety/promptfoo/docker/compose.yml build
-docker compose --env-file safety/garak/docker/.env \
-  -f safety/garak/docker/compose.yml build
+```bash
+docker compose --env-file .env -f safety/promptfoo/docker/compose.yml build
+docker compose --env-file .env -f safety/garak/docker/compose.yml build
 ```
 
 ## End-to-end (recommended)
 
-[`run_safety.sh`](run_safety.sh) runs **Promptfoo policy + red-team + Garak + merge** by default. Model comes from `GATEWAY_MODEL` in `promptfoo/docker/.env`.
+[`run_safety.sh`](run_safety.sh) runs **Promptfoo policy + red-team + Garak + merge** by default. Model comes from the `GATEWAY_MODEL` environment variable (default `GPT 4.1 Mini`).
 
 ```bash
-# full pipeline — uses GATEWAY_MODEL from docker/.env (default GPT 4.1 Mini)
+# full pipeline — default model GPT 4.1 Mini (override with GATEWAY_MODEL or an argument)
 ./safety/run_safety.sh
 
 # another model
