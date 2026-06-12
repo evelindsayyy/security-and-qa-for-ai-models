@@ -25,9 +25,6 @@ from dotenv import load_dotenv
 
 from frontend.path_safety import is_safe_slug
 
-# Repo convention: one root .env, shell-exported vars take precedence.
-load_dotenv(Path(__file__).parent.parent / ".env", override=False)
-
 # Helpers shared with the file path — eval_run_data imports THIS module only
 # lazily (inside functions), so this top-level import is not circular.
 from frontend.eval_run_data import (
@@ -36,6 +33,10 @@ from frontend.eval_run_data import (
     _percentile,
     _truncate,
 )
+
+# Repo convention: one root .env, shell-exported vars take precedence.
+# (Runs after imports; only needs to happen before _dsn() is first called.)
+load_dotenv(Path(__file__).parent.parent / ".env", override=False)
 
 _CONNECT_TIMEOUT_S = 2
 _AVAILABILITY_TTL_S = 60.0
