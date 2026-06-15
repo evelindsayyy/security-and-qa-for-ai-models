@@ -42,10 +42,10 @@
     </fieldset>
 
     <label>Max tokens (candidate completion budget)
-      <input type="number" name="max_tokens" id="max_tokens" value="500"
+      <input type="number" name="max_tokens" id="max_tokens" value="2000"
              min="{{ max_tokens_min }}" max="{{ max_tokens_max }}">
-      <span class="form-hint">reasoning models spend this budget on hidden thinking first:
-        gpt-5-mini needs 2000+, gpt-5-nano needs 4000 (measured week 4)</span>
+      <span class="form-hint">completion budget for the candidate. Chat models (GPT 4.1 Mini, gpt-5-chat) work at 500–2000;
+        reasoning models (gpt-5-mini, gpt-5-nano) need 2000–4000.</span>
     </label>
 
     <p id="family-warning" class="form-warning" style="display: none;">

@@ -11,6 +11,7 @@
       <a href="{{ url_for('index') }}">Home</a>
       <a href="{{ url_for('models_catalog') }}">Model catalog</a>
       <a href="{{ url_for('scans') }}">Scans</a>
+      <a href="{{ url_for('safety') }}">Safety</a>
       <a href="{{ url_for('eval_run') }}">Eval</a>
       <a href="{{ url_for('benchmarks') }}">Benchmarks</a>
     </nav>
@@ -19,5 +20,55 @@
   <main>
     {% block content %}{% endblock %}
   </main>
+  <script>
+  (function () {
+    function go(row) {
+      var href = row.getAttribute("data-href");
+      if (href) window.location.href = href;
+    }
+    document.addEventListener("click", function (e) {
+      var row = e.target.closest("tr.row-link");
+      if (!row || e.target.closest("a, button, input, select, textarea, label, .expandable-toggle")) return;
+      go(row);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      var row = e.target.closest("tr.row-link");
+      if (!row) return;
+      e.preventDefault();
+      go(row);
+    });
+
+    function initExpandables(root) {
+      (root || document).querySelectorAll(".expandable").forEach(function (el) {
+        if (el.dataset.expandableInit) return;
+        el.dataset.expandableInit = "1";
+        var body = el.querySelector(".expandable-body");
+        var btn = el.querySelector(".expandable-toggle");
+        if (!body || !btn) return;
+        function checkOverflow() {
+          if (el.classList.contains("is-expanded")) return;
+          var overflowed = body.scrollHeight > body.clientHeight + 2;
+          el.classList.toggle("is-overflow", overflowed);
+          btn.hidden = !overflowed;
+        }
+        checkOverflow();
+        btn.addEventListener("click", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var expanded = el.classList.toggle("is-expanded");
+          btn.setAttribute("aria-expanded", expanded ? "true" : "false");
+          btn.textContent = expanded ? "See less" : "See more";
+          if (!expanded) checkOverflow();
+        });
+      });
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", function () { initExpandables(); });
+    } else {
+      initExpandables();
+    }
+  })();
+  </script>
 </body>
 </html>

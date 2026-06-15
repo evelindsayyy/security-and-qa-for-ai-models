@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import expandable %}
 
 {% block title %}Model catalog{% endblock %}
 
@@ -11,9 +12,12 @@
     {% else %}
       0 gateway models loaded
     {% endif %}
-    · {% if hf_count %}<b>{{ hf_count }}</b>{% else %}0{% endif %} hf scan result{{ "" if hf_count == 1 else "s" }} on disk
-    · gateway: <code>{{ gateway_source }}</code>
+    · notes from <code>gateway/catalog.py</code>
     {% if gateway_fetched_at %} · fetched {{ gateway_fetched_at }}{% endif %}
+    <form method="post" action="{{ url_for('gateway_refresh') }}" class="refresh-form">
+      <input type="hidden" name="next" value="{{ url_for('models_catalog') }}">
+      <button type="submit" class="btn-secondary" title="Re-fetch GET /v1/models now">&#8635; Refresh</button>
+    </form>
   </p>
 
   {% if gateway_error %}
@@ -64,49 +68,15 @@
   </table>
   {% endif %}
 
-  <h2 class="section-title">HF scan models (artifact scanning)</h2>
-  <p class="section-hint">
-    live from <code>{{ hf_source }}</code> under <code>{{ hf_output_dir }}</code> — only repos you have scanned appear here.
-  </p>
-  {% if hf_error and not hf %}
-  <p class="empty pillar-stat">{{ hf_error }}</p>
-  {% endif %}
-  {% if hf %}
-  <table class="run-table">
-    <thead>
-      <tr>
-        <th>HF repo</th>
-        <th>Slug</th>
-        <th>Risk</th>
-        <th>Scanned</th>
-        <th>Notes</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for m in hf %}
-      <tr class="{% if m.is_warn %}row-warn{% endif %}">
-        <td><span class="model">{{ m.id }}</span></td>
-        <td><code>{{ m.slug }}</code></td>
-        <td>
-          <span class="tier tier-{{ m.severity_tier }}">{{ m.severity_tier }}</span>
-          {{ m.overall_risk_score }}
-        </td>
-        <td class="dim">{{ m.scanned_at }}</td>
-        <td>{{ m.notes or "—" }}</td>
-        <td><a href="{{ url_for('scan_detail', slug=m.slug) }}">detail</a></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
-
   <section class="key">
-    <h2>how to use this catalog</h2>
+    <h2>How to use this catalog</h2>
     <ul>
-      <li><b>gateway</b> rows are live from the duke ai gateway — use for safety red-team and efficacy eval (<a href="{{ url_for('eval_run') }}">eval runs</a>).</li>
-      <li><b>hf</b> rows are for pre-deploy file scanning (<a href="{{ url_for('scans') }}">scan results</a>).</li>
-      <li>refresh docs: <code>uv run python testing/gateway/list_models.py</code> or open this page with gateway env set.</li>
+      <li>Rows are live from the Duke AI Gateway — copy ids exactly (spaces and capitals matter).</li>
+      <li>Use these ids for <a href="{{ url_for('eval_run') }}">efficacy eval</a>,
+          <a href="{{ url_for('benchmarks') }}">public benchmarks</a>, and
+          <a href="{{ url_for('safety') }}">safety</a> runs.</li>
+      <li>Artifact scanning uses Hugging Face repo ids — see <a href="{{ url_for('scans') }}">scan results</a>.</li>
+      <li>Refresh: use the button above, or run <code>uv run python -m gateway</code>.</li>
     </ul>
   </section>
 </div>

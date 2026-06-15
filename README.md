@@ -2,175 +2,110 @@
 
 Code+ 2026 — Duke Office of Information Technology
 
----
+Automated **nutrition labels** for Duke AI Gateway models: security (scanning + safety) and efficacy (Duke task suites + public benchmarks).
 
-## Overview
+| Pillar | Question |
+|--------|----------|
+| **Scanning** | Can model files or dependencies compromise Duke infrastructure? |
+| **Safety** | Can the model be misused or violate policy at inference time? |
+| **Efficacy** | How well does it perform on Duke-relevant and standard benchmark tasks? |
 
-Duke's AI Gateway publishes models to 40,000+ community members but lacks automated vetting before publication. This project produces a **nutrition label** per model across two pillars:
-
-| Pillar | Part | Question |
-|--------|------|----------|
-| **Security** | **Scanning** | Can model files or dependencies compromise Duke infrastructure? |
-| **Security** | **Safety** | Can the model be used to cause harm or violate policy at inference time? |
-| **Efficacy** | | How well does the model perform on Duke-relevant tasks (IT support, coursework help, research, med education, creative writing, summarization, and related MVP suites)? |
-
-**Track A** (scanning + safety) delivers the **security** pillar. **Track B** delivers **efficacy**.
-
-Deliverable: structured, publishable results for OIT and the AI Gateway — depth on ~10 gateway models today, with a path to on-prem open-source models later.
+**Docs:** [`docs/README.md`](docs/README.md) · **Tracks:** [A (security)](docs/track-a-framework.md) · [B (efficacy)](docs/track-b-framework.md)
 
 ---
 
-## Stakeholders
+## Quick start
 
-| Name | Role | Engagement |
-|------|------|------------|
-| Charley Kneifel | CTO, Duke OIT | Executive sponsor; variation-testing input |
-| Michael Faber | AI Gateway / Innovation Co-Lab | Primary product user; nutrition label for OIT site |
-| Alex Merck, Nick Tripp | Duke IT Security Office (ITSO) | Threat model, deployment-context requirements |
-| Michael Roman | ITSO (via Alex) | Security coordination |
-| Vanessa Simmons, George Bowen | Code+ project leads | Oversight and infrastructure |
-
----
-
-## Team and tracks
-
-| Track | Members | Focus |
-|-------|---------|-------|
-| **A — Scanning & Safety** | Raphael Karamagi, Nithi Vechalapu | Security pillar: HF scanning, CVEs, secrets; inference safety and red team |
-| **B — Evaluation** | Grace Zhan, Jack Yi | Efficacy benchmarks, task suites, metrics, operational performance |
-
-Docs: [`docs/README.md`](docs/README.md) · Track A: [`docs/track-a-framework.md`](docs/track-a-framework.md) · Track B: [`docs/track-b-framework.md`](docs/track-b-framework.md) · GitLab: [`.gitlab/README.md`](.gitlab/README.md)
-
-**Planning:** GitLab — [`.gitlab/README.md`](.gitlab/README.md); technical direction in `docs/`
-
----
-
-## Deployment context
-
-| Today | Coming |
-|-------|--------|
-| ~10 **gateway** models (Azure/OpenAI/Meta cloud APIs — see [`docs/gateway-models.md`](docs/gateway-models.md)) | On-prem HF hosting (then **scanning** + safety on those repos) |
-| **Safety** and efficacy run against gateway IDs via LiteLLM | **Scanning** on HF artifacts before deploy |
-| Mistral phased out — exclude from new tests | Confirm catalog with OIT |
-
-Evaluation is **deployment-aware** (chatbot vs agentic, tools, data access, guardrails, commercial vs OSS). See ITSO notes in [`docs/team-tracks.md`](docs/team-tracks.md).
+```bash
+uv sync
+cp .env.example .env   # paste DUKE_GATEWAY_KEY from dashboard.ai.duke.edu
+uv run flask --app frontend:create_app run --debug
+# → http://127.0.0.1:5000  (/scans  /safety  /eval-run  /benchmarks  /models)
+```
 
 ---
 
 ## Repository layout
 
 ```
-scanner/        # Track A: scanning package (HF artifacts)
-safety/         # Track A: safety (inference / red team)
-evaluator/      # Track B: efficacy evaluation via AI Gateway
-tasks/          # YAML task suites and rubrics
-models/         # Gateway catalog seed placeholder (week 3+)
-api/            # Flask REST API (week 5+)
-frontend/       # Nutrition label UI (Flask W3+)
-unit_tests/     # Automated unit tests 
-testing/        # Manual gateway/eval spikes; scanning → scanner/
-docs/           # See docs/README.md
+scanner/              Track A — HF artifact scanning
+safety/               Track A — promptfoo + garak red team
+evaluator/            Track B — Duke efficacy (LLM-as-judge, runner.py)
+benchmarks/           Track B — public benchmarks (TruthfulQA, IFEval, MMLU, …)
+gateway/              Live gateway catalog (GET /v1/models)
+frontend/             Nutrition-label UI
+tasks/                Rubrics and suite placeholders
+scripts/              Foundry and DCC/vLLM example workflows
+testing/              Manual spikes (gateway smoke, legacy paths)
+docs/                 Architecture, data model, tool matrix
+api/                  Flask REST API (planned — persistence layer)
+unit_tests/           Automated tests
 ```
 
-Runtime data is gitignored (`scanner/models`, `scanner/output`, `testing/eval/output`, `instance/`). Each has a README so the path is documented.
+Runtime outputs are gitignored (`scanner/output`, `evaluator/results`, `benchmarks/results`, `safety/output`). Each pillar README documents its paths.
 
 ---
 
-## Tech stack
+## CLI (one command per pillar)
 
-| Layer | Choice |
-|-------|--------|
-| Language | Python 3.11+ |
-| Inference | LiteLLM to Duke AI Gateway (OpenAI-compatible) |
-| Security scanning | ModelScan, Fickling, ModelAudit (content-routed); pip-audit/OSV planned |
-| Containers | Docker Compose on DGX (`asus-dgx-04.oit.duke.edu`) |
-| API / DB / jobs | Flask, PostgreSQL, Celery + Redis (weeks 5+) |
-| UI | `frontend/` — Flask (W3+), full label W6 (mockups) |
-| CI | GitLab CI |
+**Scan** (HF repo → `scanner/output/<slug>/scan_result.json`):
 
-Tool matrix: [`docs/tool-stack.md`](docs/tool-stack.md)
+```bash
+docker compose --env-file .env -f scanner/docker/compose.yml \
+  run --rm scanner python -m scanner scan gpt2
+```
+
+**Safety** (gateway model → merged JSON under `safety/output/`):
+
+```bash
+./safety/run_safety.sh "GPT 4.1 Mini"
+```
+
+**Efficacy** (candidate + judge → `evaluator/results/*.jsonl`):
+
+```bash
+docker compose --env-file .env -f evaluator/docker/compose.yml \
+  run --rm evaluator python runner.py \
+  --candidate-model "GPT 4.1 Mini" --judge-model "Llama 4 Maverick"
+```
+
+**Public benchmark** (TruthfulQA, IFEval, … → `benchmarks/results/`):
+
+```bash
+docker compose --env-file .env \
+  -f benchmarks/docker/compose.yml run --rm benchmarks \
+  python run_benchmark.py --benchmark truthfulqa --model "GPT 4.1 Mini"
+```
+
+Pillar details: [`scanner/README.md`](scanner/README.md) · [`safety/README.md`](safety/README.md) · [`evaluator/README.md`](evaluator/README.md) · [`benchmarks/README.md`](benchmarks/README.md) · [`frontend/README.md`](frontend/README.md)
 
 ---
 
-## Documentation
+## Gateway catalog
 
-See [`docs/README.md`](docs/README.md) for the full index.
+Single live source — [`gateway/`](gateway/README.md) (`GET /v1/models`, 5‑min cache):
+
+```bash
+uv run python -m gateway          # grouped listing
+uv run python -m gateway --json   # machine-readable
+```
+
+Frontend `/models` and all launch dropdowns read this package. Reference table: [`docs/gateway-models.md`](docs/gateway-models.md).
 
 ---
 
-## Getting started
-
-**Frontend (Flask):**
-
-```bash
-uv sync
-uv run flask --app frontend:create_app run --debug
-# or: python main.py  →  /  /dashboard  /models
-```
-
-See [`frontend/README.md`](frontend/README.md).
-
-**Gateway test (host or container):**
-
-```bash
-cp .env.example .env
-# Set OPENAI_API_KEY / DUKE_AI_GATEWAY_API_KEY from dashboard.ai.duke.edu
-pip install -r requirements.txt
-python testing/test_gateway.py
-```
-
-
-**Scanner unit test (host, no Docker):**
-
-```bash
-uv run python -m unittest unit_tests.test_risk_scorer -v
-```
-
-**HF scanning (DGX/VM, Docker only):**
-
-```bash
-cd scanner/docker
-cp .env.example .env && sed -i "s/^UID=.*/UID=$(id -u)/" .env && sed -i "s/^GID=.*/GID=$(id -g)/" .env
-docker compose build
-docker compose run --rm scanner python -m scanner scan gpt2
-```
-
-See [`scanner/README.md`](scanner/README.md). Spikes: [`scanner/experiments/`](scanner/experiments/).
-
----
-
-## Environment variables
+## Environment
 
 See `.env.example`. Never commit `.env`.
 
-- `DUKE_AI_GATEWAY_API_KEY` / `OPENAI_API_KEY` — Duke AI Gateway (same token; see `.env.example`)
-- `HUGGINGFACE_TOKEN` — Hugging Face Hub (gated models)
-- `DATABASE_URL`, `REDIS_URL` — when API stack is live
+- `DUKE_GATEWAY_URL`, `DUKE_GATEWAY_KEY` — gateway endpoint + token (aliases: `OPENAI_BASE_URL`, `OPENAI_API_KEY`)
+- `HF_TOKEN` — gated HF models (scanning)
+- `FRONTEND_LAUNCH_MODE=host` — skip Docker for browser launches
 
 ---
 
 ## Links
 
 - [Code+ project page](https://codeplus.duke.edu/project/security-quality-assurance-tools-dukes-ai-models/)
-- [GitLab repository](https://gitlab.oit.duke.edu/codeplus/security-and-qa-for-ai-models)
-- [Duke AI Suite](https://oit.duke.edu/ai-suite)
-- [AI Gateway dashboard](https://dashboard.ai.duke.edu)
-
----
-
-## Status
-
-| Milestone | Status |
-|-----------|--------|
-| Stakeholder calls (Charley, Michael Faber) | Done |
-| ITSO call (Alex, Nick) | Done |
-| Gateway API test | Done |
-| Security scanning spike (ModelScan, Fickling, OSV/pip-audit) | Done |
-| Track / tool / evaluation docs | Done |
-| Scanning spikes + TruthfulQA pilot | Done |
-| Safety schemas + promptfoo; Team Docker/CI | Week 3 |
-| Scanner + safety packages | Weeks 3–4 |
-| Evaluation (`evaluator/`) | W3: MVP suites, 1 gateway model; W4+: pilot scale |
-| API + persistence | Week 5 |
-| Dashboard + DGX deploy | Week 6 |
-| Stakeholder demo, scope freeze | Week 7 |
+- [GitLab](https://gitlab.oit.duke.edu/codeplus/security-and-qa-for-ai-models)
+- [Duke AI Suite](https://oit.duke.edu/ai-suite) · [Gateway dashboard](https://dashboard.ai.duke.edu)

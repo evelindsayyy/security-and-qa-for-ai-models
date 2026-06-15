@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import expandable %}
 
 {% block title %}{% if missing %}Benchmark not found{% else %}{{ kind_label }} — {{ model }}{% endif %}{% endblock %}
 
@@ -6,8 +7,33 @@
 <div class="scan-detail">
   {% if missing %}
     <h1>Benchmark not found</h1>
-    <p class="sub empty">no file matching slug <code>{{ slug }}</code> in <code>testing/basic_tests/test_results/</code>.</p>
+    <p class="sub empty">no file matching slug <code>{{ slug }}</code> in benchmark results.</p>
     <p><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
+  {% elif running %}
+    <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
+    <h1>Benchmark run in progress</h1>
+    <p class="sub">slug <code>{{ slug }}</code> · updates every 5 seconds</p>
+    <div class="progress-card">
+      <p class="progress-meta">
+        status: <b id="prog-state">{{ run_status.status }}</b>
+      </p>
+      <p class="progress-fail" id="fail-hint" style="display: {{ 'block' if run_status.status == 'failed' else 'none' }};">
+        Run failed — check <code>benchmarks/results/{{ slug }}.log</code>.
+      </p>
+    </div>
+    <script>
+      const poll = setInterval(async () => {
+        const r = await fetch("{{ url_for('benchmark_run_status', slug=slug) }}");
+        if (!r.ok) return;
+        const s = await r.json();
+        document.getElementById("prog-state").textContent = s.status;
+        if (s.status === "complete") { clearInterval(poll); location.href = location.pathname; }
+        if (s.status === "failed") {
+          clearInterval(poll);
+          document.getElementById("fail-hint").style.display = "block";
+        }
+      }, 5000);
+    </script>
   {% else %}
     <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
     <h1>{{ kind_label }} — {{ model }}</h1>
@@ -18,115 +44,275 @@
     </p>
 
     <div class="summary-row">
-      <span class="badge badge-pilot">{{ kind_label }}</span>
-      <span class="summary-score">
-        {{ headline_metric }} <b>{{ headline_display }}</b>
-      </span>
-      <span class="dim">n = {{ n }}</span>
-      {% if raw_row_count and raw_row_count > 50 %}
-        <span class="dim">showing first 50 of {{ raw_row_count }} rows</span>
-      {% endif %}
+      <div class="summary-chips">
+        <span class="badge badge-pilot">{{ kind_label }}</span>
+        <span class="summary-score">
+          {{ headline_metric }} <b>{{ headline_display }}</b>
+        </span>
+        <span class="dim">n = {{ n }}</span>
+        {% if raw_row_count and raw_row_count > 50 %}
+          <span class="dim">detail view: first 50 of {{ raw_row_count }}</span>
+        {% endif %}
+      </div>
     </div>
 
-    {# ---- TruthfulQA branch ---- #}
+    {% if meta %}
+    <details class="tool-panel" open>
+      <summary>About {{ meta.title or kind_label }}</summary>
+      <p>{{ meta.about }}</p>
+      {% if meta.source %}
+        <p class="dim">Source:
+          {% if meta.source.startswith('http') %}
+            <a href="{{ meta.source }}" rel="noopener noreferrer">{{ meta.source }}</a>
+          {% else %}
+            {{ meta.source }}
+          {% endif %}
+        </p>
+      {% endif %}
+    </details>
+    {% endif %}
+
+    {# ---- TruthfulQA ---- #}
     {% if kind == 'truthfulqa' %}
-      <h2>Per-question responses</h2>
+      <h2>Per question ({{ responses|length }}{% if raw_row_count > responses|length %} of {{ raw_row_count }}{% endif %})</h2>
       {% if responses %}
-      <table class="run-table">
-        <thead>
-          <tr>
-            <th>Question</th>
-            <th class="num">Correct</th>
-            <th class="num">Model answer</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in responses %}
-          <tr class="{% if r.model_answer != r.correct_letter %}row-warn{% endif %}">
-            <td class="snippet">{{ r.question }}</td>
-            <td class="num">{{ r.correct_letter or '—' }}</td>
-            <td class="num">{{ r.model_answer or '—' }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+        {% for r in responses %}
+        {% set passed = r.model_answer == r.correct_letter %}
+        <details class="finding-detail {% if not passed %}finding-fail{% endif %}">
+          <summary>
+            {% if passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+            · correct <b>{{ r.correct_letter or '—' }}</b>
+            · model <b>{{ r.model_answer or '—' }}</b>
+            {% if r.question %}
+              · <span class="finding-summary-title">{{ r.question[:100] }}{% if r.question|length > 100 %}…{% endif %}</span>
+            {% endif %}
+          </summary>
+          <div class="finding-detail-panel benchmark-item-panel">
+            <h3>Question</h3>
+            {{ expandable(r.question or "—", clamp=4) }}
+            {% if r.answer_text %}
+            <h3>Model answer (text)</h3>
+            {{ expandable(r.answer_text, clamp=3) }}
+            {% endif %}
+            <dl class="benchmark-meta-dl">
+              <dt>Correct letter</dt><dd>{{ r.correct_letter or '—' }}</dd>
+              <dt>Model letter</dt><dd>{{ r.model_answer or '—' }}</dd>
+              <dt>Outcome</dt><dd>{% if passed %}Model picked the truthful option.{% else %}Model did not pick the correct letter — counts against accuracy.{% endif %}</dd>
+            </dl>
+          </div>
+        </details>
+        {% endfor %}
       {% else %}
-      <p class="empty">no responses recorded.</p>
+        <p class="empty">no per-question responses recorded.</p>
       {% endif %}
     {% endif %}
 
-    {# ---- IFEval branch ---- #}
+    {# ---- IFEval ---- #}
     {% if kind == 'ifeval' %}
-      <h2>Per-prompt judgments</h2>
+      <h2>Per prompt ({{ raw_rows|length }}{% if raw_row_count > raw_rows|length %} of {{ raw_row_count }}{% endif %})</h2>
       {% if raw_rows %}
-      <table class="run-table">
-        <thead>
-          <tr>
-            <th>Key</th>
-            <th>Instructions</th>
-            <th>Prompt (truncated)</th>
-            <th>Pass?</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in raw_rows %}
-          <tr class="{% if not r.judge.passed %}row-warn{% endif %}">
-            <td class="dim"><code>{{ r.key }}</code></td>
-            <td class="dim">{{ r.instruction_id_list|join(", ") if r.instruction_id_list else '—' }}</td>
-            <td class="snippet">{{ r.prompt[:120] }}{% if r.prompt|length > 120 %}…{% endif %}</td>
-            <td>
-              {% if r.judge.passed %}
-                <span class="status-ok">PASS</span>
-              {% else %}
-                <span class="badge badge-warn">FAIL</span>
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+        {% for r in raw_rows %}
+        <details class="finding-detail {% if not r.judge.passed %}finding-fail{% endif %}">
+          <summary>
+            {% if r.judge.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+            <code>{{ r.key }}</code>
+            {% if r.instruction_id_list %}
+              · <span class="dim">{{ r.instruction_id_list|join(", ") }}</span>
+            {% endif %}
+            {% if r.prompt %}
+              · <span class="finding-summary-title">{{ r.prompt[:80] }}{% if r.prompt|length > 80 %}…{% endif %}</span>
+            {% endif %}
+          </summary>
+          <div class="finding-detail-panel benchmark-item-panel">
+            <h3>Prompt</h3>
+            {{ expandable(r.prompt or "—", clamp=4) }}
+            <h3>Model response</h3>
+            {{ expandable(r.response or "—", clamp=6) }}
+            {% if r.judge.per_instruction %}
+            <h3>Constraint checks</h3>
+            <table class="run-table compact-table">
+              <thead><tr><th>Instruction</th><th class="col-nowrap">Pass?</th></tr></thead>
+              <tbody>
+                {% for inst in r.judge.per_instruction %}
+                <tr class="{% if inst.passed is sameas false %}row-warn{% endif %}">
+                  <td><code>{{ inst.instruction_id or inst.id or '—' }}</code></td>
+                  <td class="col-nowrap">
+                    {% if inst.passed %}<span class="status-ok">yes</span>
+                    {% elif inst.passed is sameas false %}<span class="status-fail">no</span>
+                    {% else %}—{% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% endif %}
+          </div>
+        </details>
+        {% endfor %}
       {% else %}
-      <p class="empty">no rows in this jsonl.</p>
+        <p class="empty">no rows in this jsonl.</p>
       {% endif %}
     {% endif %}
 
-    {# ---- Consistency branch ---- #}
+    {# ---- Consistency ---- #}
     {% if kind == 'consistency' %}
-      <h2>Per-question consistency (mean F1)</h2>
+      <h2>Per topic ({{ questions|length }}{% if raw_row_count > questions|length %} of {{ raw_row_count }}{% endif %})</h2>
       {% if questions %}
-      <table class="run-table">
-        <thead>
-          <tr>
-            <th>Question</th>
-            <th class="num">F1</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for q in questions %}
-          <tr class="{% if (q.mean_f1 or 0) < 0.7 %}row-warn{% endif %}">
-            <td class="snippet">
-              {% if q.question %}{{ q.question }}
-              {% elif q.id %}<code>{{ q.id }}</code>
-              {% else %}—{% endif %}
-            </td>
-            <td class="num">
-              {% if q.mean_f1 is not none %}
-                {{ "%.3f"|format(q.mean_f1) }}
-              {% elif q.f1 is not none %}
-                {{ "%.3f"|format(q.f1) }}
-              {% else %}—{% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+        {% for q in questions %}
+        {% set f1 = q.bertscore.mean_f1 if q.bertscore else none %}
+        {% set weak = f1 is not none and f1 < 0.75 %}
+        <details class="finding-detail {% if weak %}finding-fail{% endif %}">
+          <summary>
+            {% if f1 is not none %}
+              mean F1 <b>{{ "%.3f"|format(f1) }}</b>
+            {% else %}<span class="dim">no score</span>{% endif %}
+            {% if q.topic %}· {{ q.topic }}{% elif q.id %}· <code>{{ q.id }}</code>{% endif %}
+            {% if q.paraphrases and q.paraphrases[0] %}
+              · <span class="finding-summary-title">{{ q.paraphrases[0][:80] }}{% if q.paraphrases[0]|length > 80 %}…{% endif %}</span>
+            {% elif q.question %}
+              · <span class="finding-summary-title">{{ q.question[:80] }}…</span>
+            {% endif %}
+          </summary>
+          <div class="finding-detail-panel benchmark-item-panel">
+            {% if q.paraphrases %}
+            <h3>Paraphrases (same meaning, different wording)</h3>
+            <ol class="benchmark-choice-list">
+              {% for p in q.paraphrases %}
+              <li>{{ expandable(p, clamp=3) }}</li>
+              {% endfor %}
+            </ol>
+            {% endif %}
+            {% if q.responses %}
+            <h3>Model responses (one per paraphrase)</h3>
+            {% for resp in q.responses %}
+            <p class="dim">Response {{ loop.index }}</p>
+            {{ expandable(resp, clamp=4) }}
+            {% endfor %}
+            {% endif %}
+            {% if q.bertscore and q.bertscore.pairs %}
+            <h3>BERTScore pairs</h3>
+            <table class="run-table compact-table">
+              <thead><tr><th>Pair</th><th class="num">F1</th></tr></thead>
+              <tbody>
+                {% for pair in q.bertscore.pairs %}
+                <tr>
+                  <td class="dim">response {{ pair.response_a }} ↔ {{ pair.response_b }}</td>
+                  <td class="num">{{ "%.3f"|format(pair.f1) if pair.f1 is not none else "—" }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% endif %}
+            <dl class="benchmark-meta-dl">
+              <dt>mean F1</dt><dd>{{ "%.3f"|format(f1) if f1 is not none else "—" }} — closer to 1.0 means more consistent wording-invariant answers.</dd>
+              {% if q.bertscore and q.bertscore.min_f1 is not none %}
+              <dt>min F1</dt><dd>{{ "%.3f"|format(q.bertscore.min_f1) }} (weakest paraphrase pair)</dd>
+              {% endif %}
+            </dl>
+          </div>
+        </details>
+        {% endfor %}
       {% else %}
-      <p class="empty">no per-question data.</p>
+        <p class="empty">no per-topic data.</p>
+      {% endif %}
+    {% endif %}
+
+    {# ---- MMLU ---- #}
+    {% if kind == 'mmlu' %}
+      {% if per_subject %}
+      <details class="tool-panel">
+        <summary>Per-subject accuracy ({{ per_subject|length }} subjects)</summary>
+        <table class="run-table compact-table">
+          <thead><tr><th>Subject</th><th class="num">Accuracy</th><th class="num">Correct</th></tr></thead>
+          <tbody>
+            {% for subject, stats in per_subject|dictsort %}
+            <tr>
+              <td>{{ subject|replace("_", " ") }}</td>
+              <td class="num">{{ "%.1f"|format((stats.accuracy or 0) * 100) }}%</td>
+              <td class="num">{{ stats.correct }}/{{ stats.total }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </details>
+      {% endif %}
+
+      <h2>Sample questions ({{ results|length }}{% if raw_row_count > results|length %} of {{ raw_row_count }}{% endif %})</h2>
+      {% if results %}
+        {% for r in results %}
+        <details class="finding-detail {% if not r.passed %}finding-fail{% endif %}">
+          <summary>
+            {% if r.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+            · {{ r.subject|replace("_", " ") }}
+            · correct <b>{{ r.correct_answer }}</b> · model <b>{{ r.model_answer }}</b>
+            {% if r.question %}
+              · <span class="finding-summary-title">{{ r.question[:70] }}{% if r.question|length > 70 %}…{% endif %}</span>
+            {% endif %}
+          </summary>
+          <div class="finding-detail-panel benchmark-item-panel">
+            <h3>Question</h3>
+            {{ expandable(r.question or "—", clamp=4) }}
+            {% if r.choices %}
+            <h3>Choices</h3>
+            <ul class="benchmark-choice-list">
+              {% for choice in r.choices %}
+              {% set letter = "ABCD"[loop.index0] %}
+              <li class="{% if letter == r.correct_answer %}choice-correct{% elif letter == r.model_answer and not r.passed %}choice-wrong{% endif %}">
+                <b>{{ letter }}.</b> {{ choice }}
+                {% if letter == r.correct_answer %}<span class="dim"> (correct)</span>{% endif %}
+                {% if letter == r.model_answer %}<span class="dim"> (model)</span>{% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+            <dl class="benchmark-meta-dl">
+              <dt>Subject</dt><dd>{{ r.subject|replace("_", " ") }}</dd>
+              <dt>Correct</dt><dd>{{ r.correct_answer }}</dd>
+              <dt>Model picked</dt><dd>{{ r.model_answer }}</dd>
+            </dl>
+          </div>
+        </details>
+        {% endfor %}
+      {% endif %}
+    {% endif %}
+
+    {# ---- ToMi ---- #}
+    {% if kind == 'tomi' %}
+      <h2>Per story ({{ results|length }}{% if raw_row_count > results|length %} of {{ raw_row_count }}{% endif %})</h2>
+      {% if results %}
+        {% for r in results %}
+        <details class="finding-detail {% if not r.passed %}finding-fail{% endif %}">
+          <summary>
+            {% if r.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+            · <span class="dim">{{ r.question_type }}</span>
+            · correct <b>{{ r.correct_answer }}</b> · model <b>{{ r.model_answer }}</b>
+            {% if r.question %}
+              · <span class="finding-summary-title">{{ r.question[:70] }}…</span>
+            {% endif %}
+          </summary>
+          <div class="finding-detail-panel benchmark-item-panel">
+            {% if r.story %}
+            <h3>Story</h3>
+            {{ expandable(r.story, clamp=4) }}
+            {% endif %}
+            <h3>Question</h3>
+            {{ expandable(r.question or "—", clamp=2) }}
+            <dl class="benchmark-meta-dl">
+              <dt>Type</dt><dd><code>{{ r.question_type }}</code> — see “About ToMi” for what each type tests.</dd>
+              <dt>Correct answer</dt><dd>{{ r.correct_answer }}</dd>
+              <dt>Model answer</dt><dd>{{ r.model_answer }}</dd>
+              <dt>Outcome</dt><dd>{% if r.passed %}Answer matches expected belief/reality tracking.{% else %}Mismatch — model may have failed theory-of-mind reasoning for this story.{% endif %}</dd>
+            </dl>
+          </div>
+        </details>
+        {% endfor %}
+      {% else %}
+        <p class="empty">no per-story results.</p>
       {% endif %}
     {% endif %}
 
     <details>
-      <summary>Raw summary fields</summary>
+      <summary>Raw run summary (JSON)</summary>
       <pre class="json-block">{{ {
           "kind": kind,
           "model": model,

@@ -1,6 +1,8 @@
 # Scanner (`scanner/`)
 
-Track A — HF artifact scanning: **ModelScan** + **Fickling** + **ModelAudit** → **risk scorer** → `scan_result.json` (Postgres-ready per [`docs/data-model.md`](../docs/data-model.md)).
+Track A — HF artifact scanning: **ModelScan** + **Fickling** + **ModelAudit** + **pip-audit/OSV** + **TruffleHog** → **risk scorer** → `scan_result.json` (Postgres-ready per [`docs/data-model.md`](../docs/data-model.md)).
+
+Scans can be launched and viewed from the **frontend** (`/scans` → "Start a new scan"); see [`frontend/README.md`](../frontend/README.md). The CLI below is the same pipeline.
 
 ## Pipeline
 
@@ -9,6 +11,8 @@ download → format_detector
          → ModelScan (whole repo; extension-routed)
          → Fickling (every pickle-family weight file)
          → ModelAudit (all candidate files; content-routed inside ModelAudit)
+         → pip-audit + OSV (dependency manifests)
+         → TruffleHog (filesystem secrets)
          → risk_scorer (deduped findings) → scan_result.json
 ```
 
@@ -17,6 +21,8 @@ download → format_detector
 | **ModelScan** | Pickle / H5 / SavedModel paths; may skip `.bin`/`.pt` by extension |
 | **Fickling** | Pickle AST on each pickle-family file (`per_file` in `tool_results`) |
 | **ModelAudit** | Magic-byte routing across 45+ formats; overlaps ModelScan/Fickling by design |
+| **pip-audit + OSV** | Python CVEs via requirements; OSV corroborates and covers other manifests |
+| **TruffleHog** | Leaked credentials/secrets in repo files (redacted in output) |
 | **Risk scorer** | Max severity across tools; dedupes `(file, signal)`; `corroborated_by` when tools agree |
 
 Defense-in-depth: the same payload may be reported by more than one tool. Correlated findings merge into one row.
@@ -29,6 +35,9 @@ Defense-in-depth: the same payload may be reported by more than one tool. Correl
 | Fickling LIKELY_UNSAFE, ModelScan clean | Stays **low**, score ~18 (benign PyTorch pickles) |
 | Fickling LIKELY_OVERTLY_MALICIOUS | **high** tier signal |
 | ModelAudit actionable (medium+) | Raises tier; install-missing warnings filtered |
+| pip-audit/OSV HIGH/CRITICAL CVE | Raises tier |
+| TruffleHog verified secret | **critical** tier |
+| TruffleHog unverified secret | **high** tier |
 | `safetensors_only` | Fickling omitted from label |
 
 **Calibration**
@@ -37,16 +46,18 @@ Defense-in-depth: the same payload may be reported by more than one tool. Correl
 |-------|----------------|-------|
 | gpt2, distilbert, BAAI/bge-small-en-v1.5 | low / 18 | Benign stacked pickle; ModelAudit warnings filtered |
 | neimasilk/modelscan-extension-mismatch-poc | critical / 95 | ModelScan 0 issues; Fickling + ModelAudit flag disguised pickles |
+| scan-test/supply-chain-demo | medium / 40 | Local fixture: `requirements.txt` (pip-audit + OSV); optional secret patterns in `credentials.env` |
 
 ## DGX/VM setup
 
+Secrets (`HF_TOKEN`, optional) come from the repo-root `.env`. Run from the repo root;
+set `UID`/`GID` so output files are owned by you (not root):
+
 ```bash
-cd scanner/docker
-cp .env.example .env
-sed -i "s/^UID=.*/UID=$(id -u)/" .env && sed -i "s/^GID=.*/GID=$(id -g)/" .env
-docker compose build
-docker compose run --rm scanner python -m scanner scan gpt2
-docker compose run --rm scanner python -m scanner validate gpt2
+export UID=$(id -u) GID=$(id -g)
+docker compose --env-file .env -f scanner/docker/compose.yml build
+docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner python -m scanner scan gpt2
+docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner python -m scanner validate gpt2
 ```
 
 Outputs: `scanner/output/<slug>/scan_result.json` (primary), `combined_scan.json`, `modelscan_report.json`, `modelaudit_report.json` when applicable.
@@ -54,21 +65,25 @@ Outputs: `scanner/output/<slug>/scan_result.json` (primary), `combined_scan.json
 ## New models
 
 ```bash
-docker compose run --rm scanner python -m scanner scan <HF_REPO_ID>
+docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner python -m scanner scan <HF_REPO_ID>
 ```
 
-Hub `org/model` → `models/org--model/`, `output/org--model/scan_result.json`. Set `HF_TOKEN` in `.env` for gated models.
+Hub `org/model` → weights download into `models/org--model/` for the duration of the scan, then **`output/org--model/scan_result.json` is kept** and weights are **deleted automatically** (unless `SCAN_KEEP_WEIGHTS=1` for CLI debugging). Every scan re-downloads from Hugging Face Hub.
 
 ## CLI
 
 | Command | Purpose |
 |---------|---------|
 | `scan` | Full pipeline → `scan_result.json` |
+| `refresh-supply-chain` | pip-audit/OSV + TruffleHog only; update existing JSON (no ModelScan rerun) |
+| `refresh-supply-chain --all` | Same for every model under `output/` |
 | `validate` | Check existing JSON |
 | `metadata` | Hub file list only |
 | `modelscan` | Debug: ModelScan only |
 | `fickling` | Debug: Fickling only |
 | `modelaudit` | Debug: ModelAudit only (content-routed) |
+| `deps` | Debug: pip-audit + OSV only |
+| `secrets` | Debug: TruffleHog only |
 
 ## Layout
 
@@ -77,7 +92,8 @@ Hub `org/model` → `models/org--model/`, `output/org--model/scan_result.json`. 
 | `scanner/*.py` | Production |
 | `experiments/` | OSV, Trivy spikes |
 | `unit_tests/` | Host unit tests |
-| `models/`, `output/` | DGX data (gitignored) |
+| `models/<slug>/` | HF weights **during** scan; auto-deleted after `scan_result.json` (see `SCAN_KEEP_WEIGHTS`) |
+| `output/<slug>/` | Persistent scan JSON + logs (UI / ingest source of truth) |
 
 ## Source file map 
 
@@ -90,6 +106,8 @@ Hub `org/model` → `models/org--model/`, `output/org--model/scan_result.json`. 
 | `format_detector.py` | File categories + `safetensors_only` / Fickling flags |
 | `pickle_scan.py` | ModelScan whole-repo + Fickling per pickle-family file |
 | `modelaudit_scan.py` | Content-routed ModelAudit + noise filtering |
+| `dependency_scan.py` | pip-audit + OSV combiner for dependency manifests |
+| `secret_scan.py` | TruffleHog filesystem secret scan |
 | `risk_scorer.py` | Merge tools → tier, score, deduped `findings[]` |
 | `schemas.py` | Pydantic `ScanResult` / `Finding` (Postgres-ready) |
 | `paths.py` | `MODELS_ROOT`, `OUTPUT_ROOT`, slug helpers |

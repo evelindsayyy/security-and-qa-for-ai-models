@@ -1,173 +1,142 @@
 # Architecture
 
-> Draft — **components, flows, deployment.** Tables and field examples: [`data-model.md`](data-model.md).
+System components and how a run flows end to end. Schema and field examples: [`data-model.md`](data-model.md).
 
-## Overview
+## Pillars
 
-Two nutrition-label pillars (**security**, **efficacy**) — two development tracks. See [`README.md`](README.md) and [`team-tracks.md`](team-tracks.md).
+Two nutrition-label pillars, two tracks:
 
-| Pillar | Part | Component | Track | Team |
-|--------|------|-----------|-------|------|
-| **Security** | Scanning | `scanner/` | A | Raphael, Nithi |
-| **Security** | Safety | `safety/` | A | Raphael, Nithi |
-| **Efficacy** | | `evaluator/` | B | Grace, Jack |
+| Pillar | Components | Track |
+|--------|------------|-------|
+| **Security** | `scanner/` (artifacts) + `safety/` (inference red-team) | A |
+| **Efficacy** | `evaluator/` (Duke judge suites) + `benchmarks/` (public benchmarks) | B |
 
-**Track A** delivers the **security** pillar: **scanning** (artifacts before deploy) and **safety** (inference harm, policy, red team). **Track B** delivers **efficacy** via Duke task suites and public benchmark subsets (see [`track-b-framework.md`](track-b-framework.md)), plus operational metrics (latency, tokens, cost, failure rate).
+Every run produces structured JSON that lands in Postgres. `api/` (Flask) serves it; `frontend/` (Flask) renders the label. Teams and schedule: [`team-tracks.md`](team-tracks.md).
 
-All tracks push structured results to a shared Postgres database. **`api/`** (Flask, week 5+) serves JSON; **`frontend/`** (Flask from week 3, full label UI by week 6) is the nutrition label UI per Grace's mockups.
+## How a run flows
 
-## System context
+A run is asynchronous: the browser **POST**s to start a job (immediate `job_id`), a worker runs the pillar, results land in Postgres via ingest, then the browser **GET**s status and results. Only step 3 differs by job type.
 
-### Write paths (one per job type)
-
-Each POST picks a Celery task, one external system, and one result family in Postgres. Redis is only the handoff from Flask to Celery.
-
-**Scan** — user submits a Hugging Face model repo (`POST /scans`). Artifact inspection does not use the Duke gateway.
+**Today (prototype):** the frontend uses HTML routes (`POST /scans/start`, `GET /scans/<slug>/status`, …) and reads JSON from disk. **W5 target:** the same flow through `api/` REST paths below and Postgres.
 
 ```mermaid
-flowchart TD
-  UI1[Frontend] --> API1[Flask POST /scans]
-  API1 --> PGq1[Postgres: scan queued]
-  API1 --> R1[Redis]
-  API1 --> ID1[scan_id]
-  R1 --> CEL1[Celery: scanner]
-  CEL1 --> HF[Hugging Face Hub]
-  CEL1 --> PGs1[Postgres: scans + findings]
+flowchart TB
+  A([Analyst browser])
+
+  subgraph VM["Application VM — only host that can reach Postgres"]
+    FE["frontend/ + api/ (Flask)"]
+    R[("Redis")]
+    W["Celery worker"]
+    ING["ingest"]
+    DB[("Postgres")]
+  end
+
+  subgraph BK["Model backends — no database access"]
+    SC["scanner/<br/>Docker sandbox · DGX"]
+    GW["Duke AI Gateway · LiteLLM<br/>cloud / API models"]
+    DC["vLLM · DCC SLURM GPU<br/>open-weight models"]
+  end
+
+  A -->|"1 POST /scans · /safety · /evals · /benchmarks<br/>(returns job_id)"| FE
+  FE -->|"2 enqueue task"| R
+  R --> W
+  FE -.->|"job_id to browser"| A
+  W -->|"3a scan: HF files"| SC
+  W -->|"3b safety / eval / benchmark: chat"| GW
+  W -->|"3c safety / eval / benchmark: chat"| DC
+  SC & GW & DC -->|"4 results"| W
+  W -->|"5 write JSON artifact"| ING
+  ING -->|"5 upsert rows"| DB
+  A -->|"6 GET /scans/{id} · /safety/{id} · /evals/{id} · /benchmarks/{id}<br/>(poll status)"| FE
+  FE -->|"6 read status"| DB
+  A -->|"7 GET /scans/{id} · GET /models · GET /models/{id}<br/>(full label / results)"| FE
+  FE -->|"7 read results"| DB
 ```
 
-**Safety** — user starts red-team / policy probes on gateway models (`POST /safety`). Probes call live models via chat API.
+| Step | HTTP | Path (`api/`) | What happens |
+|------|------|------------------|--------------|
+| 1 | **POST** | `/scans`, `/safety`, `/evals`, `/benchmarks` | Start job; enqueue Celery task; return `job_id` |
+| 2 | — | (internal) | Worker pulls task from Redis |
+| 3 | — | (internal) | Worker calls DGX, Gateway, or DCC |
+| 4 | — | (internal) | Backend returns; worker builds JSON |
+| 5 | — | (internal) | Ingest validates JSON → Postgres rows |
+| 6 | **GET** | `/scans/{id}`, … | Poll until `status` is complete or failed |
+| 7 | **GET** | `/scans/{id}`, `/models`, `/models/{id}` | Read structured results / full nutrition label |
 
-```mermaid
-flowchart TD
-  UI2[Frontend] --> API2[Flask POST /safety]
-  API2 --> PGq2[Postgres: safety_run queued]
-  API2 --> R2[Redis]
-  API2 --> ID2[safety_run_id]
-  R2 --> CEL2[Celery: safety]
-  CEL2 --> GW1[Duke AI Gateway]
-  CEL2 --> PGs2[Postgres: safety_runs + safety_findings]
-```
+Prototype equivalents: `POST /scans/start` → `GET /scans/<slug>/status` → `GET /scans/<slug>` (same pattern for `/safety`, `/eval-run`, `/benchmarks`).
 
-**Eval** — user runs a task suite against one or more gateway models (`POST /evals`). Scoring uses gateway inference, not HF downloads.
+| Host | Runs | Notes |
+|------|------|-------|
+| **Application VM** | Flask, Celery + Redis, ingest, Postgres | always on; **only** host that can reach Postgres |
+| **DGX** | `scanner/` in a Docker sandbox | isolates untrusted model files; no DB access |
+| **Duke AI Gateway** | cloud / API model inference (LiteLLM) | default chat backend |
+| **DCC** | open-weight inference (vLLM on SLURM GPU) | optional; no DB access |
 
-```mermaid
-flowchart TD
-  UI3[Frontend] --> API3[Flask POST /evals]
-  API3 --> PGq3[Postgres: eval_run queued]
-  API3 --> R3[Redis]
-  API3 --> ID3[eval_run_id]
-  R3 --> CEL3[Celery: evaluator]
-  CEL3 --> GW2[Duke AI Gateway]
-  CEL3 --> PGs3[Postgres: eval_runs + eval_results]
-```
+Three hosts because Postgres is firewalled to the VM, untrusted files need isolation, and open weights need a GPU. Developers reach Postgres over the Duke VPN or an SSH tunnel.
 
-| Job | POST | Celery package | External | Postgres tables |
-|-----|------|----------------|----------|-----------------|
-| Scan | `/scans` | `scanner/` | Hugging Face Hub (files) | `scans`, `findings` |
-| Safety | `/safety` | `safety/` | Duke AI Gateway (chat) | `safety_runs`, `safety_findings` |
-| Eval | `/evals` | `evaluator/` | Duke AI Gateway (chat) | `eval_runs`, `eval_results` |
+## Key concepts
 
-Track A: scanning + safety. Track B: evaluator.
+### Application VM
 
-### Read path (GET)
+The **application VM** is the always-on Linux server Duke OIT provides for this project. It runs the parts users share: `frontend/`, `api/`, background job workers, and the database client. **Only this VM has a network route to Postgres**. Long scan/safety/eval jobs are orchestrated from here; heavy or untrusted work is delegated outward and only JSON results come back.
 
-Same for all three job types: the frontend calls a GET endpoint with the job id (or model id for history); Flask returns JSON from Postgres.
+### Celery and Redis
 
-```mermaid
-flowchart TD
-  UI[Frontend] --> API[Flask GET]
-  API --> PGr[Postgres: read status + results]
-```
+| Piece | Role |
+|-------|------|
+| **Redis** | A small in-memory **message queue** (broker). Holds a list of “jobs waiting to run.” |
+| **Celery** | Python **background worker** framework. Workers pull jobs from Redis and run them outside the HTTP request. |
 
-| When | GET endpoint | What the user sees |
-|------|--------------|-------------------|
-| Poll a scan | `GET /scans/{id}` | `status`, risk level, findings |
-| Poll safety | `GET /safety/{id}` | probe pass/fail by category |
-| Poll eval | `GET /evals/{id}` | per-task scores, comparison |
-| Browse label | `GET /models`, `GET /models/{id}` | inventory + full scan/safety/eval history |
+When a user clicks “Start scan,” the API must not block for 20 minutes. Flask enqueues a Celery task, returns a `job_id` immediately, and a worker runs the scanner later. 
+
+### Ingest
+
+**Ingest** is the step that **loads a finished JSON file into Postgres** on the application VM. Compute hosts write JSON but cannot reach the database; ingest runs where the DB connection exists. It reads the file → validates with Pydantic → inserts/updates SQL rows per [`data-model.md`](data-model.md).  
+
+### JSON → Postgres (summary)
+
+Pillars define the contract in code (`scanner/schemas.py`, `safety/schemas.py`, `evaluator/schemas.py`, etc.) — same logical shapes as the Postgres tables. Flow: **job → Pydantic/dataclass → JSON file → ingest (psycopg) → Postgres → GET API → UI**. Detail: [`data-model.md`](data-model.md).
+
+**Persistence approach:** versioned **SQL schema files** plus **psycopg** loaders — the pattern in [`evaluator/db/`](../evaluator/db/README.md). Ingest modules expose testable pure transforms and apply with `--apply`; reads use parameterized SQL. Pydantic/dataclass validation happens on JSON before load. [`data-model.md`](data-model.md) is the column reference; disk JSON remains the pipeline source of truth until ingest runs. Database server: `codeplus-postgres-test-01.oit.duke.edu` (OIT); credentials on the application VM only.
+
+## Inference: two backends
+
+Safety and efficacy reach a model over an OpenAI-compatible chat API. The backend is a flag; everything after the chat call is identical.
+
+| Backend | Models | Default? |
+|---------|--------|----------|
+| **Duke AI Gateway** (LiteLLM) | cloud / API-key | yes — gateway guardrails apply |
+| **DCC** (SLURM + vLLM) | open-source weights | optional — bypasses the gateway by design |
+
+## Jobs and endpoints
+
+`POST` starts a job and returns a `job_id`; `GET` polls it.
+
+| Job | Track | Endpoint | Backend (step 3) | Postgres |
+|-----|-------|----------|-------------------|----------|
+| Scan | A | `/scans` | Hugging Face files | `scans`, `findings` |
+| Safety | A | `/safety` | gateway / DCC | `safety_runs`, `safety_findings` |
+| Eval | B | `/evals` | gateway / DCC | `eval_runs`, `eval_results` |
+| Benchmark | B | `/benchmarks` | gateway / DCC | `benchmark_runs` |
+
+`GET /models` and `GET /models/{id}` return the inventory and a model's full label across all pillars.
+
+## Why JSON → Postgres
+
+Compute hosts can't reach the database, so each job writes a JSON artifact first; **ingest** on the VM loads it into Postgres (see [Key concepts](#key-concepts)). Artifacts also serve as the frontend's offline data source today and provide an audit trail. Ingest is idempotent (keyed on run id). Outputs are gitignored; only small fixtures are committed.
 
 ## Components
 
-### Scanner — `scanner/` (scanning — Track A)
+- **`scanner/`** (A) — pulls HF files and runs artifact checks (format, pickle/fickling, ModelAudit, dependencies, secrets) into a risk score → `ScanResult`. See [`track-a-framework.md`](track-a-framework.md), [`tool-stack.md`](tool-stack.md).
+- **`safety/`** (A) — garak + promptfoo + Duke policy probes over LiteLLM → `MergedSafetyResult`. Probe subsets follow deployment context (chatbot vs agentic).
+- **`evaluator/`** (B) — Duke task suites scored by an LLM judge against YAML rubrics; records scores plus cost / latency / tokens → `eval_runs`. Postgres path: [`evaluator/db/`](../evaluator/db/README.md). See [`track-b-framework.md`](track-b-framework.md).
+- **`benchmarks/`** (B) — public benchmarks (IFEval, TruthfulQA, MMLU, ToMi, consistency); each has its own scoring but a shared run envelope → `benchmark_runs`.
+- **`api/`** (planned) — Flask + Celery + Redis; enqueues jobs, serves results.
+- **`frontend/`** — nutrition-label UI; reads JSON today, `api/` once persistence lands. Launch buttons run the real pillars via Docker. See [`frontend/README.md`](../frontend/README.md).
 
-Pure-Python, artifact-level. Given a Hugging Face model ID, it pulls files via the HF Hub library and runs:
+## Open questions
 
-- **Format detector** — classifies files (safetensors, pickle/PyTorch, ONNX, config, code, other).
-- **ModelAudit** — content-routed scan of candidate model files (defense-in-depth with ModelScan/Fickling).
-- **Pickle inspector** — uses [fickling](https://github.com/trailofbits/fickling) to walk the serialization AST and flag dangerous operations (designed to catch attacks like nullifAI).
-- **Dependency scanner** — `pip-audit` + direct OSV API queries against `requirements.txt` / `pyproject.toml` shipped alongside the model.
-- **Secret scanner** — [TruffleHog](tool-stack.md) wrapper for credentials accidentally committed to model repos.
-- **Risk scorer** — max tier across ModelScan, Fickling, and ModelAudit; dedupes correlated findings (`corroborated_by`).
-
-Output: a `ScanResult` document persisted to Postgres. Details: [`track-a-framework.md`](track-a-framework.md). Tools: [`tool-stack.md`](tool-stack.md).
-
-### Safety — `safety/` (safety — Track A)
-
-Inference-level policy, harm, and red-team checks via LiteLLM (gateway or on-prem).
-
-- **garak** — broad automated vulnerability probes.
-- **promptfoo** — declarative YAML red-team suites and CI regression ([promptfoo](https://github.com/promptfoo/promptfoo)).
-- **Duke probes** — institutional policy scenarios (may live in promptfoo configs).
-- **Deployment context** — probe subsets by chatbot vs agentic, tools, guardrails.
-
-Output: `SafetyResult` in Postgres. See [`track-a-framework.md`](track-a-framework.md), [`tool-stack.md`](tool-stack.md).
-
-### Evaluator — `evaluator/` (efficacy — Track B)
-
-Gateway task evaluation via LiteLLM. Loads Duke suites from `tasks/`; records scores and operational metrics (latency, tokens, cost). Suite list and rollout: [`track-b-framework.md`](track-b-framework.md). Week 5: `eval_runs` / `eval_results` in Postgres.
-
-### API — `api/`
-
-Flask application (factory pattern) wrapping security (scanning + safety) and efficacy. Long-running scans and evals are enqueued to Celery; routes return a job id without blocking.
-
-| Endpoint | Purpose |
-|---|---|
-| `POST /scans` | submit a scan job (HF model ID in) → returns `scan_id` |
-| `GET /scans/{id}` | status + structured results |
-| `GET /models` | inventory with latest risk score per model |
-| `GET /models/{id}` | full report — scan + eval + safety history |
-| `POST /safety` | submit a safety probe run (model IDs + deployment context) |
-| `GET /safety/{id}` | safety profile + per-category pass/fail |
-| `POST /evals` | submit an efficacy eval run (list of model IDs + task suite) |
-| `GET /evals/{id}` | results, including cross-model comparison |
-
-### Async jobs and database
-
-Long jobs: Flask → Redis → Celery → Postgres (see [System context](#system-context)). Schema: [`data-model.md`](data-model.md). Week 5: migrations and API persistence.
-
-### Frontend — `frontend/`
-
-Nutrition label UI. See [`frontend/README.md`](../frontend/README.md).
-
-| Week | Focus |
-|------|--------|
-| 3 | Flask app; model list (`/models`); align with mockups |
-| 4–5 | Model detail stubs; call `api/` when live |
-| 6 | Full label — list, detail (scan / safety / efficacy), submit-scan form |
-
-Stack may add Next.js/Tailwind in the same directory; Recharts for charts. Auth: Duke Shibboleth if available, else VM firewall for prototype.
-
-## Job flows (scan, safety, eval)
-
-End-to-end paths and GET pairing: [System context](#system-context). Summary:
-
-| Job | Start (POST) | Poll / view (GET) |
-|-----|--------------|-------------------|
-| Scan | `POST /scans` → `scanner/` → Hugging Face Hub | `GET /scans/{id}` |
-| Safety | `POST /safety` → `safety/` → Duke AI Gateway | `GET /safety/{id}` |
-| Eval | `POST /evals` → `evaluator/` → Duke AI Gateway | `GET /evals/{id}` |
-
-## Deployment
-
-- **Target:** GPU VM provisioned by Duke OIT.
-- **Containerization:** Docker + Docker Compose. One command starts API + worker + Redis + Postgres + frontend.
-- **Production compose:** no hot reload, proper restart policies, secrets from environment variables.
-- **CI/CD:** GitLab CI runs lint, unit tests, and a Docker build check on every push to `main`.
-
-## Open Questions
-
-- Async backend — Celery + Redis is the default; SLURM only if Duke OIT exposes the cluster scheduler from the GPU VM.
-- Frontend stack — Flask in `frontend/` now; Next.js + Tailwind possible week 6 in the same directory.
-- Auth — Duke Shibboleth preferred; prototype may run unauthenticated behind the VM firewall.
-- LiteLLM guardrail hooks — document integration path (week 5); prototype may ship without hooks.
-- Public benchmark pilot — IFEval vs DocBench-style subset (see track-b-framework).
+- Frontend stack — Flask now; possibly Next.js + Tailwind later.
+- Auth — Duke Shibboleth preferred; the prototype may run behind the VM firewall.
+- LiteLLM guardrail hooks — integration path TBD.
+- Benchmark catalog — which pilots become standing suites.

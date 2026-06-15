@@ -51,7 +51,7 @@ Schemas: `schemas.py` (`ScanRequest`, `ScanResult`, `Finding`).
 
 ## Trivy (Nithi)
 
-Separate image with Trivy installed. Decision vs pip-audit/OSV: W3 GitLab issue.
+Separate image with Trivy installed. Production scanning standardized on pip-audit + OSV (see [`docs/tool-stack.md`](../../docs/tool-stack.md)).
 
 ```bash
 docker compose -f docker/compose.trivy.yml build

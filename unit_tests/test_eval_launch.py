@@ -11,6 +11,11 @@ Run from repo root:
 
 from __future__ import annotations
 
+import os
+
+# Browser launches default to Docker; unit tests exercise the host argv path.
+os.environ.setdefault("FRONTEND_LAUNCH_MODE", "host")
+
 import re
 import unittest
 from unittest import mock
@@ -20,6 +25,18 @@ from frontend import eval_launch
 
 
 class ValidateLaunchTest(unittest.TestCase):
+    def setUp(self) -> None:
+        # Keep unit tests offline + deterministic: the candidate allowlist is
+        # normally the live gateway catalog, but here we pin it to the curated
+        # priced set (avoids a network call — and the OpenAI client's uname
+        # subprocess — on the validate path).
+        patcher = mock.patch.object(
+            eval_launch, "candidate_models",
+            return_value=eval_launch._CANDIDATE_FALLBACK,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_valid_combo_passes(self) -> None:
         self.assertIsNone(
             eval_launch.validate_launch(
@@ -76,7 +93,7 @@ class ValidateLaunchTest(unittest.TestCase):
 class BuildCommandTest(unittest.TestCase):
     def test_command_is_argv_list_with_expected_flags(self) -> None:
         cmd = eval_launch.build_command(
-            "gpt-5-chat", "Llama 4 Maverick", "policy_qa_v1", 500, "stem123"
+            "gpt-5-chat", "Llama 4 Maverick", "policy_qa_v1.1", 500, "stem123"
         )
         self.assertIsInstance(cmd, list)
         self.assertIn("--candidate-model", cmd)
@@ -127,7 +144,7 @@ class GetStatusTest(unittest.TestCase):
         self.assertEqual(s["progress"], n)
 
     def test_running_while_registered_process_alive(self) -> None:
-        slug = "20990101T000000Z_policy_qa_v1_x"
+        slug = "20990101T000000Z_policy_qa_v1.1_x"
         (self.dir / f"{slug}.jsonl").write_text("{}\n", encoding="utf-8")
         proc = mock.Mock()
         proc.poll.return_value = None  # alive
@@ -137,7 +154,7 @@ class GetStatusTest(unittest.TestCase):
         self.assertEqual(s["progress"], 1)
 
     def test_failed_when_process_exited_with_partial_file(self) -> None:
-        slug = "20990101T000000Z_policy_qa_v1_x"
+        slug = "20990101T000000Z_policy_qa_v1.1_x"
         (self.dir / f"{slug}.jsonl").write_text("{}\n", encoding="utf-8")
         proc = mock.Mock()
         proc.poll.return_value = 1  # exited
@@ -148,6 +165,15 @@ class GetStatusTest(unittest.TestCase):
 
 class LaunchRoutesTest(unittest.TestCase):
     def setUp(self) -> None:
+        # Offline + deterministic candidate allowlist (see ValidateLaunchTest).
+        # Also avoids the OpenAI client's platform/uname subprocess, which
+        # would otherwise inflate the patched global subprocess.Popen count.
+        patcher = mock.patch.object(
+            eval_launch, "candidate_models",
+            return_value=eval_launch._CANDIDATE_FALLBACK,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.client = create_app({"TESTING": True}).test_client()
 
     def test_form_renders(self) -> None:
@@ -177,7 +203,7 @@ class LaunchRoutesTest(unittest.TestCase):
             eval_launch.subprocess, "Popen", return_value=fake_proc
         ) as popen:
             r = self.client.post("/eval-run/start", data={
-                "candidate": "GPT 4.1 Mini", "judge": "Llama 3.3",
+                "candidate": "GPT 4.1 Mini", "judge": "Llama 4 Maverick",
                 "suite": "it_support_v1", "max_tokens": "500",
             })
         self.assertEqual(r.status_code, 302)
@@ -191,8 +217,8 @@ class LaunchRoutesTest(unittest.TestCase):
         fake_proc = mock.Mock()
         fake_proc.poll.return_value = None  # still running
         data = {
-            "candidate": "gpt-5.1-chat", "judge": "Llama 3.3",
-            "suite": "policy_qa_v1", "max_tokens": "500",
+            "candidate": "gpt-5.1-chat", "judge": "Llama 4 Maverick",
+            "suite": "policy_qa_v1.1", "max_tokens": "500",
         }
         with mock.patch.object(
             eval_launch.subprocess, "Popen", return_value=fake_proc

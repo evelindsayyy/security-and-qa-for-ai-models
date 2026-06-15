@@ -1,16 +1,10 @@
 # Evaluator (Track B)
 
-Gateway **efficacy** evaluation via Duke LiteLLM: candidate generation, LLM-as-judge scoring, and JSONL results aligned with [`docs/data-model.md`](../docs/data-model.md).
+Gateway **efficacy** evaluation via Duke task suites and an LLM-as-judge (`runner.py`).
 
-## Status
+Public academic benchmarks (TruthfulQA, IFEval, MMLU, …) are a sibling pillar — see [`../benchmarks/`](../benchmarks/README.md) (`/benchmarks` tab).
 
-| Component | Status |
-|-----------|--------|
-| `schemas.py`, `candidate.py`, `judge.py`, `_gateway.py` | In repo |
-| `runner.py` (IT support E2E) | In repo |
-| IT support suite + rubric + prompts | In repo |
-| Smoke run on one gateway model | Done when `evaluator/results/*.jsonl` exists |
-View aggregated runs in the draft UI: `uv run flask --app frontend:create_app run` → `/eval-run`.
+Launch from the browser or CLI; both use Docker by default from the frontend.
 
 ## Quickstart
 
@@ -35,7 +29,16 @@ uv run python runner.py \
 
 - `evaluator/results/<UTC>_<suite>_<candidate>.jsonl` — one `EvaluationResult` per line
 - `evaluator/results/<same>_trace.jsonl` — raw responses for debugging
-- `evaluator/cache/` — candidate/judge caches (re-runs are cheap)
+- `evaluator/cache/` — candidate/judge caches (re-runs are cheap). **Docker:** `evaluator/cache` is bind-mounted in `evaluator/docker/compose.yml` so the container user (host UID/GID) can write cache files.
+
+**Docker (browser or CLI):** secrets come from the repo-root `.env`.
+
+```bash
+docker compose --env-file .env \
+  -f evaluator/docker/compose.yml run --rm evaluator \
+  python runner.py --candidate-model "GPT 4.1 Mini" --judge-model "Llama 4 Maverick" \
+  --max-tokens 2000 --judge-max-tokens 2000
+```
 
 **4. Summarize** a run with the aggregator (positional path, plain stdout table):
 
@@ -47,7 +50,7 @@ Reports per-dimension means, weighted overall, mean + p95 latency, total tokens,
 
 ## What to expect
 
-A clean run on the IT support suite (`n = 12`) takes ~3 minutes wall-clock and a few cents of gateway budget. Sample numbers from the four week-3 candidates, all judged by `Llama 4 Maverick`:
+A clean run on the IT support suite (`n = 12`) takes ~3 minutes wall-clock and a few cents of gateway budget. Sample numbers from four candidates, all judged by `Llama 4 Maverick`:
 
 | candidate | overall | accuracy | completeness | policy | tone | total cost | note |
 |---|---|---|---|---|---|---|---|
@@ -61,7 +64,7 @@ Open `/eval-run` in the frontend to see the same comparison sorted best-first, w
 ## Known limitations (v1)
 
 - **Placeholder references.** `tasks/it_support_v1.jsonl` answers were drafted from publicly inferable Duke OIT facts (NetID, Cisco AnyConnect, Duo, SecureW2, Box, ePrint, OIT 919-684-2200). Scores against them are sufficient to validate the pipeline runs, not to draw conclusions about model quality. Replace with OIT-staff-written references before reporting scores as meaningful.
-- **Reasoning models + `max_tokens=500`.** GPT-5 reasoning variants (`gpt-5-mini`, `gpt-5-nano`, `o4-mini`) spend the full budget on hidden tokens and emit empty visible text. The runner records this honestly; the `/eval-run` table flags it as `⚠ N/n empty`. Pass `--max-tokens 2000` (or use a `-chat` variant) for a real comparison.
+- **Reasoning models + low `max_tokens`.** GPT-5 reasoning variants (`gpt-5-mini`, `gpt-5-nano`, `o4-mini`) spend the full budget on hidden tokens and emit empty visible text. The runner records this honestly; the `/eval-run` table flags it as `⚠ N/n empty`. Defaults are now `--max-tokens 2000` and `--judge-max-tokens 2000`; reasoning models may still need 4000.
 - **Tone ceiling on GPT-family candidates.** All three GPT candidates scored 3/3 on tone. `Llama 4 Scout` was the first to come off the ceiling (2.75). The anchor isn't broken — the test set is just uniformly easy on tone for OpenAI outputs.
 - **Judge bias not corrected.** Position, verbosity, and self-preference biases are documented in `tasks/rubrics/it_support.yaml` limitations but not algorithmically corrected. The weeks 7-8 validation study against human raters will quantify them.
 

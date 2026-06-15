@@ -1,0 +1,18 @@
+{# Reusable UI fragments — import: {% from '_macros.html' import expandable %} #}
+
+{% macro expandable(text, classes='', clamp=2) %}
+{% if text %}
+<div class="expandable {{ classes }}" data-clamp="{{ clamp }}">
+  <div class="expandable-body">{{ text }}</div>
+  <button type="button" class="expandable-toggle" hidden aria-expanded="false">See more</button>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro tier_label(level) %}
+<span class="tier tier-{{ level }}">{{ level }}</span>
+{% endmacro %}
+
+{% macro source_badge(source) %}
+<span class="badge badge-{{ source }}">{{ source }}</span>
+{% endmacro %}

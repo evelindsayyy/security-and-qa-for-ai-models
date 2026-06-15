@@ -10,17 +10,18 @@ from typing import Optional
 import litellm
 from litellm import APIConnectionError, APIError, RateLimitError, Timeout
 
-DUKE_GATEWAY_BASE_URL = os.getenv(
-    "DUKE_GATEWAY_BASE_URL", "https://litellm.oit.duke.edu/v1"
+DUKE_GATEWAY_BASE_URL = (
+    os.getenv("DUKE_GATEWAY_URL")
+    or os.getenv("DUKE_GATEWAY_BASE_URL")
+    or "https://litellm.oit.duke.edu/v1"
 )
-DUKE_GATEWAY_API_KEY_ENV = "DUKE_AI_GATEWAY_API_KEY"
 
 
 def get_api_key() -> str:
-    key = os.getenv(DUKE_GATEWAY_API_KEY_ENV)
+    key = os.getenv("DUKE_GATEWAY_KEY") or os.getenv("DUKE_AI_GATEWAY_API_KEY")
     if not key:
         raise RuntimeError(
-            f"Set {DUKE_GATEWAY_API_KEY_ENV} in the environment (see .env.example). "
+            "Set DUKE_GATEWAY_KEY in the environment (see .env.example). "
             "Never commit API keys."
         )
     return key

@@ -1,65 +1,75 @@
 # Frontend (`frontend/`)
 
-Temporary, read-only progress viewer for the Duke model nutrition label. It loads JSON from local pipeline output directories so users can see real scanning and efficacy results without Postgres or the API.
+Progress viewer for the Duke model nutrition label. Loads JSON from local pipeline output; scan, safety, eval, and benchmark pillars support **browser-launched runs** (Docker + live polling).
 
-The production UI (week 6) will read from the database via `api/` and support interactive runs. This draft only reflects whatever is already on disk under `scanner/output/` and `evaluator/results/` (both gitignored — each developer sees their own fresh data after running the tools locally).
+Production UI will read from Postgres via `api/`. This draft reads disk under `scanner/output/`, `evaluator/results/`, `benchmarks/results/`, and `safety/output/`.
 
 ## Run locally
 
 ```bash
 uv sync
 uv run flask --app frontend:create_app run --debug
-# or: python main.py
+# if port 5000 is busy:
+uv run flask --app frontend:create_app run --debug --port 5001
 ```
+
+Open the frontend and click one of the start buttons:
+
+- `http://127.0.0.1:5001/scans/new` runs an HF artifact scan.
+- `http://127.0.0.1:5001/benchmarks/new` runs a public benchmark.
+- `http://127.0.0.1:5001/eval-run/new` runs an efficacy eval.
+- `http://127.0.0.1:5001/safety/new` runs an inference safety test.
+
+Browser launches use Docker by default. Set `FRONTEND_LAUNCH_MODE=host` before starting Flask to run via local Python instead.
 
 ## Routes
 
 | Route | Purpose |
 |-------|---------|
-| `/` | Hub — scan/eval counts, safety placeholder, gateway model list |
-| `/scans` | All HF `scan_result.json` rows from `scanner/output/` |
-| `/scans/<slug>` | One scan detail (findings, coverage, tool_results) |
-| `/eval-run` | Aggregated efficacy runs from `evaluator/results/*.jsonl` |
-| `/models` | Live gateway catalog (`GET /v1/models`) + static HF scan list |
+| `/` | Hub — pillar counts + gateway link |
+| `/models` | Live gateway catalog |
+| `/scans`, `/scans/new`, `/scans/start`, `/scans/<slug>` | HF scanning |
+| `/eval-run`, `/eval-run/new`, … | Duke efficacy (LLM-as-judge) |
+| `/benchmarks`, `/benchmarks/new`, … | Public benchmarks (TruthfulQA, IFEval, …) |
+| `/safety`, `/safety/new`, … | Inference safety |
 
-## Populate data (read-only UI — run tools separately)
+Each pillar has `/<slug>/status` JSON for in-progress polling.
 
-**Scanning (DGX or host with scanner deps):**
+## Populate data
 
-```bash
-cd scanner/docker   # or host with requirements installed
-python -m scanner scan gpt2
-# → scanner/output/gpt2/scan_result.json
-```
-
-**Efficacy (gateway env required):**
-
-```bash
-# .env at repo root: DUKE_GATEWAY_URL, DUKE_GATEWAY_KEY (see evaluator/README.md)
-cd evaluator
-uv run python runner.py \
-  --candidate-model "gpt-5-chat" \
-  --judge-model "Llama 4 Maverick"
-# → evaluator/results/<timestamp>_it_support_v1_gpt-5-chat.jsonl
-```
-
-Refresh the browser after new files appear; no restart needed.
+| Pillar | Browser | CLI |
+|--------|---------|-----|
+| Scan | `/scans/new` | `scanner scan <hf_id>` |
+| Efficacy | `/eval-run/new` | `evaluator/runner.py` |
+| Benchmarks | `/benchmarks/new` | `benchmarks/run_benchmark.py` |
+| Safety | `/safety/new` | `./safety/run_safety.sh` |
 
 ## Layout
 
 | Module | Role |
 |--------|------|
-| `gateway_catalog.py` | Live gateway ids via `GET /v1/models` (5 min cache) |
-| `hf_scan_catalog.py` | HF scan rows from `scanner/output/*/scan_result.json` |
-| `scan_data.py` | Load and summarize `scanner/output/*/scan_result.json` |
-| `eval_run_data.py` | Load and summarize `evaluator/results/*.jsonl` |
-| `routes.py` | Flask routes (lazy imports for eval/scanner loaders) |
-| `templates/` | Jinja HTML |
-| `static/style.css` | Shared table + tier badge styles |
+| [`gateway/`](../gateway/) | Live catalog for `/models` and dropdowns |
+| `*_data.py` / `*_launch.py` | Read results + spawn Docker/host subprocess |
+| `docker_launch.py` | Shared Docker helper (root `.env`, UID/GID, `docker compose build`) |
+| `routes.py`, `templates/`, `static/` | UI |
+
+## Browser-launched runs
+
+Docker Compose by default. Every stack reads the repo-root `.env` (one gateway token); `docker_launch.py` exports the host UID/GID and builds the image once per stack.
+
+| Pillar | Compose | Service |
+|--------|---------|---------|
+| Scan | `scanner/docker/compose.yml` | `scanner` |
+| Safety | `safety/docker/compose.yml` | `safety` |
+| Eval | `evaluator/docker/compose.yml` | `evaluator` |
+| Benchmarks | `benchmarks/docker/compose.yml` | `benchmarks` |
+
+Set `FRONTEND_LAUNCH_MODE=host` for host Python (unit tests, debugging).
 
 ## Related docs
 
-- [`docs/architecture.md`](../docs/architecture.md) — target API and UI
-- [`docs/data-model.md`](../docs/data-model.md) — Postgres shapes
-- [`scanner/README.md`](../scanner/README.md) — artifact scanning
-- [`evaluator/README.md`](../evaluator/README.md) — efficacy runner
+- [`docs/architecture.md`](../docs/architecture.md)
+- [`benchmarks/README.md`](../benchmarks/README.md)
+- [`scanner/README.md`](../scanner/README.md)
+- [`safety/README.md`](../safety/README.md)
+- [`evaluator/README.md`](../evaluator/README.md)

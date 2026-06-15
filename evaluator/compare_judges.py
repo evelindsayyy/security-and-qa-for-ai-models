@@ -1,22 +1,31 @@
 """
-compare_judges.py — one-off experiment, not part of the production pipeline.
+compare_judges.py — judge-comparison tooling, not part of the production pipeline.
 
-Runs two judge models on the same (question, reference, candidate_response)
-tuple and prints scores + rationales side-by-side. Purpose: gauge whether
-the judge-model choice meaningfully moves the rubric numbers — relevant to
-the methodology question "is Llama 3.3 strong enough to judge GPT-5 outputs,
-or does the ceiling effect matter here?"
+Two modes:
 
-This is exploration. The weeks-7-8 validation study (human raters vs judge,
-Pearson + Cohen's Kappa per dimension) formalizes this question; today is
-just a fast first look using the cached candidate response from Monday.
+1. Live single-question probe (default, week-3 original): runs two judge
+   models on the same (question, reference, candidate_response) tuple and
+   prints scores + rationales side-by-side.
 
-Run:  cd evaluator && python compare_judges.py
+       cd evaluator && python compare_judges.py
+
+2. From-results analysis (week-4 Thursday): reads every results JSONL on
+   disk and computes the decision-relevant cross-judge statistics —
+   per-judge candidate rankings, pairwise mean deltas, rank concordance
+   (do judges ORDER candidates the same?), leniency, and discrimination
+   (strong-weak gap). This is what the interim judge selection is based
+   on; the weeks-7-8 validation study (human raters, Pearson + Kappa)
+   remains the final arbiter.
+
+       cd evaluator && python compare_judges.py --from-results --suite it_support_v1
 """
 
 from __future__ import annotations
 
+import argparse
 import json
+import statistics
+from itertools import combinations
 from pathlib import Path
 
 from candidate import generate_candidate
@@ -121,5 +130,159 @@ def main() -> None:
             print(f"  ({j}, score={ds.score})  {ds.rationale}")
 
 
+# ---------------------------------------------------------------------------
+# From-results analysis (week 4 Thursday) — pure functions + a report printer
+# ---------------------------------------------------------------------------
+
+
+def load_result_entries(results_dir: Path) -> list[dict]:
+    """One summary dict per results JSONL: who judged whom on what, and the
+    mean overall. Skips trace files and anything unparsable."""
+    entries: list[dict] = []
+    for path in sorted(results_dir.glob("*.jsonl")):
+        if "_trace" in path.name:
+            continue
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                rows = [json.loads(line) for line in f if line.strip()]
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not rows:
+            continue
+        adaptation = rows[0]["adaptation"]
+        overalls = [r["overall"] for r in rows if r.get("overall") is not None]
+        if not overalls:
+            continue
+        entries.append({
+            "file": path.name,
+            "timestamp": rows[0]["timestamp"],
+            "suite": adaptation["task_suite_version"],
+            "candidate": adaptation["candidate_model"],
+            "judge": adaptation["judge_model"],
+            "judge_prompt": adaptation["judge_prompt_version"],
+            "n": len(rows),
+            "n_scored": len(overalls),
+            "mean_overall": statistics.mean(overalls),
+        })
+    return entries
+
+
+def latest_per_combo(entries: list[dict]) -> list[dict]:
+    """Keep only the newest entry per (suite, candidate, judge) — older runs
+    of the same combo are superseded (e.g. pre-bugfix reruns)."""
+    best: dict[tuple, dict] = {}
+    for e in sorted(entries, key=lambda e: e["timestamp"]):
+        best[(e["suite"], e["candidate"], e["judge"])] = e
+    return list(best.values())
+
+
+def judge_agreement(entries: list[dict], suite: str) -> dict:
+    """Cross-judge statistics for one suite.
+
+    Returns:
+        by_judge:  {judge: {candidate: mean_overall}}
+        ranking:   {judge: [candidates best-first]}
+        discrimination: {judge: strongest-weakest gap} (None if <2 candidates)
+        pairwise:  per judge pair on shared candidates — mean delta (a-b),
+                   mean |delta|, and rank concordance: the fraction of shared
+                   candidate PAIRS both judges order the same way. 1.0 means
+                   judge choice never changes a ranking conclusion.
+    """
+    pool = [e for e in latest_per_combo(entries) if e["suite"] == suite]
+    judges = sorted({e["judge"] for e in pool})
+    by_judge = {
+        j: {e["candidate"]: e["mean_overall"] for e in pool if e["judge"] == j}
+        for j in judges
+    }
+    ranking = {
+        j: sorted(scores, key=lambda c: scores[c], reverse=True)
+        for j, scores in by_judge.items()
+    }
+    discrimination = {
+        j: (max(s.values()) - min(s.values()) if len(s) >= 2 else None)
+        for j, s in by_judge.items()
+    }
+    pairwise = []
+    for a, b in combinations(judges, 2):
+        shared = sorted(set(by_judge[a]) & set(by_judge[b]))
+        if not shared:
+            continue
+        deltas = [by_judge[a][c] - by_judge[b][c] for c in shared]
+        pairs = list(combinations(shared, 2))
+        concordant = sum(
+            1 for c1, c2 in pairs
+            if (by_judge[a][c1] - by_judge[a][c2])
+            * (by_judge[b][c1] - by_judge[b][c2]) > 0
+        )
+        pairwise.append({
+            "a": a,
+            "b": b,
+            "shared": shared,
+            "mean_delta": statistics.mean(deltas),
+            "mean_abs_delta": statistics.mean(abs(d) for d in deltas),
+            "rank_concordance": (concordant / len(pairs)) if pairs else None,
+        })
+    return {
+        "suite": suite,
+        "judges": judges,
+        "by_judge": by_judge,
+        "ranking": ranking,
+        "discrimination": discrimination,
+        "pairwise": pairwise,
+    }
+
+
+def report_from_results(results_dir: Path, suite: str) -> None:
+    entries = load_result_entries(results_dir)
+    stats = judge_agreement(entries, suite)
+    if not stats["judges"]:
+        print(f"No scored runs found for suite {suite!r} in {results_dir}")
+        return
+
+    print(f"=== Cross-judge analysis: suite {suite} ===")
+    print()
+    candidates = sorted({c for s in stats["by_judge"].values() for c in s})
+    header = f"{'judge':18s}" + "".join(f"{c[:16]:>18s}" for c in candidates) \
+        + f"{'discrim.':>10s}"
+    print(header)
+    print("-" * len(header))
+    for j in stats["judges"]:
+        scores = stats["by_judge"][j]
+        cells = "".join(
+            f"{scores[c]:>18.2f}" if c in scores else f"{'—':>18s}"
+            for c in candidates
+        )
+        d = stats["discrimination"][j]
+        print(f"{j:18s}{cells}{d:>10.2f}" if d is not None else f"{j:18s}{cells}{'—':>10s}")
+
+    print()
+    print("Rankings (best first):")
+    for j in stats["judges"]:
+        print(f"  {j:18s} {'  >  '.join(stats['ranking'][j])}")
+
+    print()
+    print("Pairwise agreement on shared candidates:")
+    for p in stats["pairwise"]:
+        conc = (
+            f"{p['rank_concordance']:.0%}" if p["rank_concordance"] is not None
+            else "n/a (<2 shared)"
+        )
+        print(
+            f"  {p['a']} vs {p['b']}:  shared={len(p['shared'])}  "
+            f"mean Δ={p['mean_delta']:+.2f}  mean |Δ|={p['mean_abs_delta']:.2f}  "
+            f"rank concordance={conc}"
+        )
+
+
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Judge comparison tooling.")
+    parser.add_argument("--from-results", action="store_true",
+                        help="analyze existing results JSONLs instead of "
+                             "running the live single-question probe")
+    parser.add_argument("--suite", default="it_support_v1",
+                        help="suite version to analyze (from-results mode)")
+    args = parser.parse_args()
+    if args.from_results:
+        report_from_results(Path(__file__).parent / "results", args.suite)
+    else:
+        main()

@@ -19,32 +19,30 @@ Code+ 2026 — Duke OIT. The nutrition label has two pillars — **security** (s
 
 | Track | Members | Delivers | Code |
 |-------|---------|----------|------|
-| **A — Scanning & Safety** | Raphael Karamagi, Nithi Vechalapu | **Security** pillar | `scanner/`, `safety/` (W3+) |
+| **A — Scanning & Safety** | Raphael Karamagi, Nithi Vechalapu | **Security** pillar | `scanner/`, `safety/` |
 | **B — Evaluation** | Grace Zhan, Jack Yi | **Efficacy** pillar | `evaluator/`, `tasks/` |
 
 ---
 
-## Weekly outcomes 
+## Phases
 
-| Week | Focus | Track A | Track B |
-|------|------|---------|---------|
-| 1 | Scaffold | Tool research | Gateway test |
-| 2 | scan/eval spikes, `docs/data-model.md` sketch, gateway doc | HF scan spike; TruthfulQA pilot | Gateway smoke |
-| 3 | Docker, CI, catalog, `frontend/` | `scanner/` three-tool pipeline done; safety + 1-model efficacy (Fri) | `evaluator/` schemas + judge (Grace); runner + 1 model |
-| 4 | E2E tests; frontend stubs | Scan E2E; safety 3 models | MVP suites on 3 pilot models |
-| 5 | Postgres + `api/` | `/scans`, `/safety` | `/evals` |
-| 6 | `frontend/` full UI | Scanning + safety views | Efficacy charts |
-| 7 | Demo freeze | Full gateway safety + HF samples | Gateway efficacy |
-| 8–9 | Hardening / handoff | FP study | Judge validation |
-| 10 | Stretch | Optional | Optional |
+Dated, step-by-step milestones live in the GitLab tracker; this is the high-level shape.
 
-Shared: `frontend/`, `api/` (W5+), Postgres, Celery, GitLab CI.
+| Phase | Focus | Track A | Track B |
+|-------|-------|---------|---------|
+| Spikes | Scaffold, gateway smoke, data-model sketch | HF scan + tool research | Gateway smoke; TruthfulQA pilot |
+| Pipelines (now) | Docker stacks, catalog, `frontend/`, E2E on gateway models | `scanner/` 3-tool pipeline; safety merge on pilot models | `evaluator/` runner + judge; MVP suites + benchmarks |
+| Persistence (next) | Postgres + `api/` ingest + read API | `/scans`, `/safety` | `/evals` |
+| Full UI | `frontend/` reads `api/` | Scanning + safety views | Efficacy charts |
+| Demo freeze | Representative catalog; documented limits | Gateway safety + HF samples | Gateway efficacy |
+
+Shared: `frontend/`, `api/`, Postgres, Celery, GitLab CI.
 
 ---
 
 ## Deployment context
 
-~10 cloud gateway models today; on-prem HF coming. ITSO: probes must match deployment type (chatbot vs agentic, tools, guardrails).
+~35 cloud gateway models today; on-prem HF coming. ITSO: probes must match deployment type (chatbot vs agentic, tools, guardrails).
 
 | Deployment | Scanning | Safety | Efficacy |
 |------------|----------|--------|----------|
@@ -59,6 +57,6 @@ Shared: `frontend/`, `api/` (W5+), Postgres, Celery, GitLab CI.
 |-------|--------|
 | A — scanning | ModelScan, Fickling, ModelAudit, pip-audit, OSV, TruffleHog |
 | A — safety | garak, promptfoo, Duke probes |
-| B | LiteLLM, Duke YAML, ROUGE-L, LLM-as-judge |
+| B | LiteLLM, Duke YAML, ROUGE-L, LLM-as-judge, IFEval, TruthfulQA, MMLU, ToMi, consistency |
 
 Details: [`tool-stack.md`](tool-stack.md).

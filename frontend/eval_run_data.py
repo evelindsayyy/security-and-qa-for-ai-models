@@ -133,7 +133,7 @@ def _load_suite_questions(suite_version: str) -> dict[str, str]:
     return questions
 
 
-def get_run_detail(slug: str) -> dict | None:
+def _get_run_detail_files(slug: str) -> dict | None:
     """Full payload for one results JSONL — per-question rows with rationales.
 
     Slug is the JSONL filename without the .jsonl extension. Returns None
@@ -235,16 +235,18 @@ def get_run_detail(slug: str) -> dict | None:
     }
 
 
-def get_runs_data() -> dict:
-    """Return per-run aggregates for every results JSONL in RESULTS_DIR.
+def _postprocess_runs(runs: list[dict]) -> dict:
+    """Shared tail for both data paths (files and DB): dedupe to the latest
+    run per (candidate, judge, suite), sort best-first, flag ``is_best``,
+    and build the page-level summary fields."""
+    # Result filenames are timestamped, so the lexicographically-largest
+    # filename is newest. This drops superseded runs (e.g. an old
+    # "12/12 empty" row that a fresh run already fixed) instead of showing both.
+    latest: dict[tuple, dict] = {}
+    for r in sorted(runs, key=lambda r: r["filename"]):
+        latest[(r["candidate_model"], r["judge_model"], r["suite"])] = r
+    runs = list(latest.values())
 
-    Adds an ``is_best`` flag to the highest-overall run that has no artifact
-    note, so the template can highlight the row that's actually best.
-    """
-    if not RESULTS_DIR.exists():
-        return {"has_runs": False, "results_dir": str(RESULTS_DIR), "runs": []}
-    files = [p for p in RESULTS_DIR.glob("*.jsonl") if "_trace" not in p.name]
-    runs = [r for r in (_aggregate_file(p) for p in files) if r is not None]
     # Best first by overall mean; None sinks to bottom.
     runs.sort(key=lambda r: (r["overall"] or 0), reverse=True)
     for r in runs:
@@ -268,3 +270,45 @@ def get_runs_data() -> dict:
         "judge_summary": " · ".join(judges) if judges else "",
         "n_summary": "/".join(str(n) for n in suite_ns) if suite_ns else "",
     }
+
+
+def _get_runs_data_files() -> dict:
+    """File-based comparison data: aggregate every results JSONL on disk."""
+    if not RESULTS_DIR.exists():
+        return {"has_runs": False, "results_dir": str(RESULTS_DIR), "runs": []}
+    files = [p for p in RESULTS_DIR.glob("*.jsonl") if "_trace" not in p.name]
+    runs = [r for r in (_aggregate_file(p) for p in files) if r is not None]
+    return _postprocess_runs(runs)
+
+
+# ---------------------------------------------------------------------------
+# Public entry points — dispatch to Postgres when configured and reachable,
+# silently fall back to files otherwise. Files remain the source of truth;
+# the DB is a read projection (see evaluator/db/README.md).
+# ---------------------------------------------------------------------------
+
+
+def get_runs_data() -> dict:
+    try:
+        from frontend import eval_db_data
+
+        if eval_db_data.available():
+            return eval_db_data.get_runs_data_db()
+    except Exception:
+        pass  # any DB hiccup -> files, never a broken page
+    return _get_runs_data_files()
+
+
+def get_run_detail(slug: str) -> dict | None:
+    try:
+        from frontend import eval_db_data
+
+        if eval_db_data.available():
+            detail = eval_db_data.get_run_detail_db(slug)
+            if detail is not None:
+                return detail
+            # slug not loaded into the DB yet (e.g. a just-finished run) —
+            # fall through to the file.
+    except Exception:
+        pass
+    return _get_run_detail_files(slug)
