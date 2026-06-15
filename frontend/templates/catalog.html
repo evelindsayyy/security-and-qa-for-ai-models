@@ -12,7 +12,7 @@
     {% else %}
       0 gateway models loaded
     {% endif %}
-    · notes from <code>gateway/catalog.py</code>
+    · profiles from <code>gateway/catalog.py</code> · prices from the evaluator cost table
     {% if gateway_fetched_at %} · fetched {{ gateway_fetched_at }}{% endif %}
     <form method="post" action="{{ url_for('gateway_refresh') }}" class="refresh-form">
       <input type="hidden" name="next" value="{{ url_for('models_catalog') }}">
@@ -33,7 +33,9 @@
     <thead>
       <tr>
         <th>Model id</th>
-        <th>Notes</th>
+        <th>Profile</th>
+        <th class="num">Input $/1M</th>
+        <th class="num">Output $/1M</th>
       </tr>
     </thead>
     <tbody>
@@ -41,6 +43,8 @@
       <tr>
         <td><span class="model">{{ m.id }}</span></td>
         <td>{{ m.notes or "—" }}</td>
+        <td class="num">{{ "$%.2f"|format(m.price_in) if m.price_in is not none else "—" }}</td>
+        <td class="num">{{ "$%.2f"|format(m.price_out) if m.price_out is not none else "—" }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -76,6 +80,7 @@
           <a href="{{ url_for('benchmarks') }}">public benchmarks</a>, and
           <a href="{{ url_for('safety') }}">safety</a> runs.</li>
       <li>Artifact scanning uses Hugging Face repo ids — see <a href="{{ url_for('scans') }}">scan results</a>.</li>
+      <li><b>Prices</b> are USD per 1M tokens (input / output) from the evaluator cost table — a dated snapshot covering priced chat models; others show "—". Verify against current Duke rates before quoting.</li>
       <li>Refresh: use the button above, or run <code>uv run python -m gateway</code>.</li>
     </ul>
   </section>
