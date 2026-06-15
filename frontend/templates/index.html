@@ -18,10 +18,10 @@
       {% if scan_has %}
         <p class="pillar-stat"><b>{{ scan_count }}</b> model{{ "s" if scan_count != 1 else "" }} scanned</p>
         <p class="pillar-stat">highest risk: <span class="tier tier-{{ scan_worst_tier }}">{{ scan_worst_tier }}</span> ({{ scan_worst_score }})</p>
-        <p><a href="{{ url_for('scans') }}">View scans →</a></p>
+        <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('scan_run_new') }}">▶ Start scan</a><a href="{{ url_for('scans') }}">View scans →</a></p>
       {% else %}
         <p class="empty">no scan_result.json found — run <code>python -m scanner scan &lt;hf_id&gt;</code> on dgx</p>
-        <p><a href="{{ url_for('scans') }}">Scans page →</a></p>
+        <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('scan_run_new') }}">▶ Start scan</a><a href="{{ url_for('scans') }}">Scans page →</a></p>
       {% endif %}
     </div>
 
@@ -33,10 +33,10 @@
         {% if eval_best_overall is not none %}
           <p class="pillar-stat">best overall (mean): <b>{{ "%.2f"|format(eval_best_overall) }}</b></p>
         {% endif %}
-        <p><a href="{{ url_for('eval_run') }}">View eval runs →</a></p>
+        <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('eval_run_new') }}">▶ Start eval</a><a href="{{ url_for('eval_run') }}">View eval runs →</a></p>
       {% else %}
         <p class="empty">no results jsonl — run <code>evaluator/runner.py</code> with gateway env set</p>
-        <p><a href="{{ url_for('eval_run') }}">Eval runs page →</a></p>
+        <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('eval_run_new') }}">▶ Start eval</a><a href="{{ url_for('eval_run') }}">Eval runs page →</a></p>
       {% endif %}
     </div>
 
@@ -48,11 +48,22 @@
         <p class="pillar-stat">highest risk: <span class="tier tier-{{ safety_worst_tier }}">{{ safety_worst_tier }}</span>
           {% if safety_worst_pass_rate is not none %}({{ "%.0f"|format(safety_worst_pass_rate * 100) }}% pass){% endif %}
         </p>
-        <p><a href="{{ url_for('safety') }}">View safety results →</a></p>
+        <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('safety_run_new') }}">▶ Start safety</a><a href="{{ url_for('safety') }}">View safety results →</a></p>
       {% else %}
         <p class="empty">no merged_safety_result.json — run promptfoo + garak, then <code>safety.merge</code></p>
-        <p><a href="{{ url_for('safety') }}">Safety page →</a></p>
+        <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('safety_run_new') }}">▶ Start safety</a><a href="{{ url_for('safety') }}">Safety page →</a></p>
       {% endif %}
+    </div>
+
+    <div class="pillar-card">
+      <h2>Benchmarks</h2>
+      <p class="pillar-meta">TruthfulQA · IFEval · MMLU</p>
+      {% if benchmark_has %}
+        <p class="pillar-stat"><b>{{ benchmark_count }}</b> run{{ "s" if benchmark_count != 1 else "" }} on disk</p>
+      {% else %}
+        <p class="empty">no benchmark results yet</p>
+      {% endif %}
+      <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('benchmark_run_new') }}">▶ Start benchmark</a><a href="{{ url_for('benchmarks') }}">View benchmarks →</a></p>
     </div>
   </section>
 

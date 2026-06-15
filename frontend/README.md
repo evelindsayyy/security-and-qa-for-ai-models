@@ -9,7 +9,18 @@ Production UI will read from Postgres via `api/`. This draft reads disk under `s
 ```bash
 uv sync
 uv run flask --app frontend:create_app run --debug
+# if port 5000 is busy:
+uv run flask --app frontend:create_app run --debug --port 5001
 ```
+
+Open the frontend and click one of the start buttons:
+
+- `http://127.0.0.1:5001/scans/new` runs an HF artifact scan.
+- `http://127.0.0.1:5001/benchmarks/new` runs a public benchmark.
+- `http://127.0.0.1:5001/eval-run/new` runs an efficacy eval.
+- `http://127.0.0.1:5001/safety/new` runs an inference safety test.
+
+Browser launches use Docker by default. Set `FRONTEND_LAUNCH_MODE=host` before starting Flask to run via local Python instead.
 
 ## Routes
 

@@ -25,6 +25,8 @@ def _hub_context() -> dict:
     safety_count = 0
     safety_worst_pass_rate = None
     safety_worst_tier = "—"
+    benchmark_has = False
+    benchmark_count = 0
 
     try:
         from frontend.scan_data import get_scans_data
@@ -61,6 +63,15 @@ def _hub_context() -> dict:
     except Exception:
         pass
 
+    try:
+        from frontend.benchmark_data import get_benchmarks_data
+
+        bench = get_benchmarks_data()
+        benchmark_has = bench["has_runs"]
+        benchmark_count = len(bench["runs"])
+    except Exception:
+        pass
+
     gw = get_gateway_catalog()
     return {
         "gateway_models": gw["models"],
@@ -77,6 +88,8 @@ def _hub_context() -> dict:
         "safety_count": safety_count,
         "safety_worst_pass_rate": safety_worst_pass_rate,
         "safety_worst_tier": safety_worst_tier,
+        "benchmark_has": benchmark_has,
+        "benchmark_count": benchmark_count,
     }
 
 

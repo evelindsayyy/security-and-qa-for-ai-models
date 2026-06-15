@@ -13,6 +13,8 @@ services:
       dockerfile: safety/docker/Dockerfile
 
     user: "${UID:-1000}:${GID:-1000}"
+    group_add:
+      - "${DOCKER_GID:-998}"
 
     volumes:
       - ../..:/app
@@ -21,7 +23,13 @@ services:
     environment:
       - GATEWAY_MODEL=${GATEWAY_MODEL:-GPT 4.1 Mini}
       - REDTEAM_GRADER_MODEL=${REDTEAM_GRADER_MODEL:-GPT 4.1 Mini}
+      - OPENAICOMPATIBLE_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - PYTHONPATH=/app
+      - HOME=/app/safety/garak/output/.garak-home
+      - XDG_DATA_HOME=/app/safety/garak/output/.garak-data
+      - XDG_CACHE_HOME=/app/safety/garak/output/.garak-cache
+      - XDG_CONFIG_HOME=/app/safety/garak/output/.garak-config
 
     working_dir: /app
 

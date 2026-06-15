@@ -114,8 +114,15 @@ print(normalize_gateway_model_id(os.environ['GATEWAY_MODEL']))
 mkdir -p "safety/promptfoo/output/${SLUG}" "safety/garak/output/${SLUG}" "safety/output/${SLUG}"
 
 # Sub-stacks read the single repo-root .env (mounted at /app/.env in the orchestrator).
-PF_DC="docker compose --env-file .env -f safety/promptfoo/docker/compose.yml"
-GARAK_DC="docker compose --env-file .env -f safety/garak/docker/compose.yml"
+# The safety container uses `docker-compose` when available so nested runs work even
+# when the image does not expose the Docker v2 plugin.
+if command -v docker-compose >/dev/null 2>&1; then
+  PF_DC="docker-compose --env-file .env -f safety/promptfoo/docker/compose.yml"
+  GARAK_DC="docker-compose --env-file .env -f safety/garak/docker/compose.yml"
+else
+  PF_DC="docker compose --env-file .env -f safety/promptfoo/docker/compose.yml"
+  GARAK_DC="docker compose --env-file .env -f safety/garak/docker/compose.yml"
+fi
 
 echo "Safety run: model=${MODEL} slug=${SLUG} redteam=${REDTEAM}"
 
@@ -162,16 +169,16 @@ fi
 
 if ! $SKIP_GARAK; then
   echo "--- Garak scan ---"
-  GARAK_RUN_CFG="safety/garak/output/${SLUG}/garak_run.yaml"
+  GARAK_RUN_CFG="/app/safety/garak/output/${SLUG}/garak_run.yaml"
   sed "s|report_dir: .*|report_dir: /app/safety/garak/output/${SLUG}|" \
-    safety/garak/garak_duke.yaml > "$GARAK_RUN_CFG"
-  GARAK_CMD=(python -m garak --config "output/${SLUG}/garak_run.yaml" -n "${MODEL}")
+    safety/garak/garak_duke.yaml > "${GARAK_RUN_CFG}"
+  GARAK_CMD=(python -m garak --config "${GARAK_RUN_CFG}" -n "${MODEL}")
   if [[ -n "$GARAK_PROBES" ]]; then
     GARAK_CMD+=(-p "$GARAK_PROBES")
   fi
 
   set +e
-  $GARAK_DC run --rm garak "${GARAK_CMD[@]}"
+  "${GARAK_CMD[@]}"
   GARAK_RC=$?
   set -e
 

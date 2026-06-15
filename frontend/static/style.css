@@ -432,7 +432,7 @@ header nav a:hover {
 .run-table td.score-mid    { color: #856404; }
 .run-table td.score-weak   { color: #842029; }
 
-/* home hub — three pillar cards */
+/* home hub pillar cards */
 .pillars {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -474,6 +474,15 @@ header nav a:hover {
   margin-top: 0.5rem;
   font-weight: 600;
   font-size: 14px;
+}
+.pillar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.pillar-actions .btn-primary {
+  color: #fff;
 }
 .pillar-pending {
   background: #fafafa;

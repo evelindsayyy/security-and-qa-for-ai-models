@@ -18,3 +18,7 @@ scanner/output
 evaluator/results
 evaluator/cache
 benchmarks/results
+
+safety/garak_testing/output
+safety/promptfoo_testing/output
+safety/**/__pycache__

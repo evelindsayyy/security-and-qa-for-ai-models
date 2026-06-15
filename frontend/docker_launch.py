@@ -79,7 +79,13 @@ def compose_run_argv(
     argv += ["-f", str(compose), "run", "--rm", "-T"]
     # UID/GID inside the container so nested compose (safety) and bind-mounted
     # output files use the host user, not root.
-    for key, val in {**_uid_gid_env(), **(extra_env or {})}.items():
+    # Also pass the host docker.sock group id so the safety container can access
+    # the daemon via the mounted socket.
+    for key, val in {
+        **_uid_gid_env(),
+        **_docker_gid_env(),
+        **(extra_env or {}),
+    }.items():
         argv.extend(["-e", f"{key}={val}"])
     argv.extend([service, *inner_cmd])
     return argv
@@ -112,9 +118,24 @@ def _uid_gid_env() -> dict[str, str]:
     return {"UID": str(os.getuid()), "GID": str(os.getgid())}
 
 
+def _docker_sock_gid() -> int | None:
+    try:
+        return os.stat("/var/run/docker.sock").st_gid
+    except FileNotFoundError:
+        return None
+
+
+def _docker_gid_env() -> dict[str, str]:
+    gid = _docker_sock_gid()
+    return {"DOCKER_GID": str(gid)} if gid is not None else {}
+
+
 def _export_uid_gid() -> None:
-    """Put UID/GID in the process env so Compose interpolates the host user."""
-    os.environ.update(_uid_gid_env())
+    """Put UID/GID and the Docker socket GID in the process env so Compose
+    interpolates the host user and grants access to /var/run/docker.sock.
+    """
+    env = {**_uid_gid_env(), **_docker_gid_env()}
+    os.environ.update(env)
 
 
 def _compose_cmd(compose: Path) -> list[str]:
