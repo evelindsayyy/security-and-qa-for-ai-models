@@ -52,10 +52,30 @@ The program loads questions from TruthfulQA.csv. Sets up multiple-choice questio
 
 3. IFEval - if_test.py
 
+IFEval measures a model's ability to follow exact instructions according to the prompt. The dataset is loaded from HuggingFace. There are also files instructions_registry.py, instructions_util.py, and instructions.py, which helps set up the official judge.
+
 4. Consistency - consistency_test.py
+
+Consistency measures a model's ability to give the same answer when a prompt is paraphrased. The questions are in consistency_questions.json. The similarity of the answers are measured using BERTscore.
 
 5. MBPP - mbpp_test.py
 
+MBPP tests a model's ability to generate correct code. It is a set of Python problems built to be solved by entry-level programmers. The questions are loaded from HuggingFace.
+
 6. QuALITY - quality_test.py
 
+QuALITY tests a model's reading comprehension. The questions are loaded from HuggingFace. It makes the model read a long passage of text, then asks it multiple-choice questions about the passage.
+
 7. ToMi - tomi_test.py
+
+ToMi is a test often used in psychology. It tests one's ability to perceive others' beliefs, even when they might be false. The questions are loaded from tomi_questions.txt. An example question is:
+
+    Jackson entered the hall.
+    Chloe entered the hall.
+    The boots is in the bathtub.
+    Jackson exited the hall.
+    Jackson entered the dining_room.
+    Chloe moved the boots to the pantry.
+    Where does Chloe think that Jackson searches for the boots?
+
+(The correct answer is "bathtub")
