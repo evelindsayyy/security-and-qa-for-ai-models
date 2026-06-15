@@ -11,6 +11,7 @@ Project guides & info. **GitLab:** [`.gitlab/README.md`](../.gitlab/README.md).
 | [`architecture.md`](architecture.md) | System design, `api/`, `frontend/`, deployment |
 | [`../frontend/README.md`](../frontend/README.md) | Nutrition label UI |
 | [`data-model.md`](data-model.md) | Postgres plan — tables, example fields, JSON → DB path |
+| [`../dbutils/README.md`](../dbutils/README.md) | Shared Postgres ingest helpers |
 | [`tool-stack.md`](tool-stack.md) | Tools and rationale |
 | [`../scripts/README.md`](../scripts/README.md) | Non-gateway inference helpers (DCC/vLLM, Azure Foundry) |
 

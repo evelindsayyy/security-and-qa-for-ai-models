@@ -26,7 +26,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-# Postgres driver for evaluator/db/ (loader --apply + the dashboard's DB read
-# path). Optional on purpose: plain `uv sync` skips it; install with
+# Postgres driver for dbutils + pillar ingest (--apply) and optional UI read paths.
+# Optional on purpose: plain `uv sync` skips it; install with
 #   uv sync --group db
 db = ["psycopg[binary]>=3.2"]
