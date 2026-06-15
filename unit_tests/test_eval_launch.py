@@ -234,5 +234,124 @@ class LaunchRoutesTest(unittest.TestCase):
         self.assertEqual(r.get_json()["status"], "not_found")
 
 
+class CustomQuestionsTest(unittest.TestCase):
+    """Custom 'bring your own' question sets — validation, suite writing,
+    and resolution, with a temp custom-suites dir (no real files left behind)."""
+
+    def setUp(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        patcher = mock.patch.object(
+            eval_launch, "CUSTOM_SUITES_DIR", Path(self._tmp.name)
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _good(self) -> str:
+        import json
+        return "\n".join(json.dumps(q) for q in [
+            {"question": "Q1?", "reference": "A1"},
+            {"question": "Q2?", "reference": "A2", "id": "my-2"},
+        ])
+
+    def test_valid_parse_assigns_ids(self) -> None:
+        qs, err = eval_launch.validate_custom_questions(self._good())
+        self.assertIsNone(err)
+        self.assertEqual([q["id"] for q in qs], ["custom-001", "my-2"])
+
+    def test_missing_reference_rejected(self) -> None:
+        _, err = eval_launch.validate_custom_questions('{"question": "q"}')
+        self.assertIn("reference", err)
+
+    def test_bad_json_rejected(self) -> None:
+        _, err = eval_launch.validate_custom_questions("not json")
+        self.assertIn("not valid JSON", err)
+
+    def test_empty_rejected(self) -> None:
+        _, err = eval_launch.validate_custom_questions("   \n  ")
+        self.assertIn("no questions", err)
+
+    def test_too_many_rejected(self) -> None:
+        import json
+        many = "\n".join(
+            json.dumps({"question": f"q{i}", "reference": "a"})
+            for i in range(eval_launch.CUSTOM_MAX_QUESTIONS + 1)
+        )
+        _, err = eval_launch.validate_custom_questions(many)
+        self.assertIn("too many", err)
+
+    def test_oversized_field_rejected(self) -> None:
+        import json
+        big = json.dumps({"question": "x" * (eval_launch.CUSTOM_MAX_FIELD_CHARS + 1),
+                          "reference": "a"})
+        _, err = eval_launch.validate_custom_questions(big)
+        self.assertIn("exceeds", err)
+
+    def test_write_and_resolve(self) -> None:
+        qs, _ = eval_launch.validate_custom_questions(self._good())
+        key = eval_launch.write_custom_suite(qs)
+        self.assertTrue(key.startswith("custom_"))
+        self.assertIsNotNone(eval_launch._suite_cfg(key))
+        self.assertEqual(eval_launch.suite_question_count(key), 2)
+        self.assertIn(key, eval_launch._all_suite_keys())
+        # marked ad-hoc in metadata
+        import json
+        meta = json.loads(
+            (eval_launch.CUSTOM_SUITES_DIR / f"{key}.jsonl").read_text().splitlines()[0])
+        self.assertTrue(meta["custom"])
+        self.assertEqual(meta["task_suite_version"], key)
+
+    def test_unknown_suite_still_rejected(self) -> None:
+        self.assertIsNone(eval_launch._suite_cfg("custom_does_not_exist"))
+
+    def test_build_command_targets_custom_file(self) -> None:
+        qs, _ = eval_launch.validate_custom_questions(self._good())
+        key = eval_launch.write_custom_suite(qs)
+        cmd = eval_launch.build_command("gpt-5-chat", "Llama 4 Maverick", key, 500, "stem")
+        self.assertTrue(any("custom" in str(c) for c in cmd))
+
+
+class CustomRouteTest(unittest.TestCase):
+    def setUp(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        for attr in ("CUSTOM_SUITES_DIR",):
+            p = mock.patch.object(eval_launch, attr, Path(self._tmp.name))
+            p.start()
+            self.addCleanup(p.stop)
+        cand = mock.patch.object(
+            eval_launch, "candidate_models",
+            return_value=eval_launch._CANDIDATE_FALLBACK,
+        )
+        cand.start()
+        self.addCleanup(cand.stop)
+        self.client = create_app({"TESTING": True}).test_client()
+
+    def test_invalid_questions_rejected(self) -> None:
+        r = self.client.post("/eval-run/start-custom", data={
+            "candidate": "gpt-5-chat", "judge": "Llama 4 Maverick",
+            "max_tokens": "500", "questions": "not json",
+        })
+        self.assertEqual(r.status_code, 400)
+
+    def test_valid_custom_spawns_and_redirects(self) -> None:
+        fake = mock.Mock()
+        fake.poll.return_value = None
+        with mock.patch.object(eval_launch.subprocess, "Popen", return_value=fake):
+            r = self.client.post("/eval-run/start-custom", data={
+                "candidate": "gpt-5-chat", "judge": "Llama 4 Maverick",
+                "max_tokens": "500",
+                "questions": '{"question": "Q?", "reference": "A"}',
+            })
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("custom_", r.headers["Location"])
+
+
 if __name__ == "__main__":
     unittest.main()

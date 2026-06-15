@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}{% if missing %}Model not found{% else %}{{ model }} — efficacy{% endif %}{% endblock %}
+
+{% block content %}
+<div class="eval-comparison">
+  {% if missing %}
+    <h1>Model not found</h1>
+    <p class="sub empty">no evaluation runs for <code>{{ slug }}</code>.</p>
+    <p><a href="{{ url_for('eval_run') }}">← all runs</a></p>
+  {% else %}
+    <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
+    <h1>{{ model }}</h1>
+    <p class="sub">
+      efficacy across {{ suites|length }} suite{{ "" if suites|length == 1 else "s" }} ·
+      {{ n_runs }} run{{ "" if n_runs == 1 else "s" }}
+      {% if best_overall is not none %}· best overall <b>{{ "%.2f"|format(best_overall) }}</b> / 5{% endif %}
+      · total cost ${{ "%.4f"|format(total_cost_usd) }}
+    </p>
+
+    <table class="run-table">
+      <thead>
+        <tr>
+          <th>Suite</th>
+          <th>Judge</th>
+          {% for dim in dim_columns %}
+          <th class="num">{{ dim|replace("_", " ") }}</th>
+          {% endfor %}
+          <th class="num">Overall</th>
+          <th class="num">Latency (mean / p95)</th>
+          <th class="num">Cost</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in runs %}
+        <tr>
+          <td><span class="model">{{ r.suite }}</span></td>
+          <td><span class="dim">{{ r.judge_model }}</span></td>
+          {% for dim in dim_columns %}
+          <td class="num">{{ "%.2f"|format(r.dim_means[dim]) if r.dim_means.get(dim) is not none else "—" }}</td>
+          {% endfor %}
+          <td class="num overall">{{ "%.2f"|format(r.overall) if r.overall is not none else "—" }}</td>
+          <td class="num">{{ r.mean_latency_ms }} / {{ r.p95_latency_ms }} ms</td>
+          <td class="num">${{ "%.4f"|format(r.total_cost_usd) }}</td>
+          <td><a href="{{ url_for('eval_run_detail', slug=r.slug) }}">detail</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <section class="key">
+      <h2>About this view</h2>
+      <p class="form-hint">
+        One row per task suite this model was evaluated on (latest run per
+        judge). Scores come from the judge against each suite's rubric; the
+        nutrition-label idea is to read quality, speed, and cost together.
+        Scanning and safety results for this model live on their own pages.
+      </p>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

@@ -819,3 +819,26 @@ header nav a:hover {
   .legend-grid { grid-template-columns: 1fr; row-gap: 0.2rem; }
   .legend-grid dd { margin-bottom: 0.6rem; }
 }
+
+/* custom "bring your own questions" section on the launch page */
+.custom-suite { margin-top: 1.5rem; max-width: 480px; }
+.custom-suite > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #012169;
+  padding: 0.5rem 0;
+}
+.custom-suite textarea {
+  display: block;
+  width: 100%;
+  margin-top: 0.3rem;
+  padding: 8px 10px;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #222;
+  background: #fcfcfc;
+  border: 1px solid #d5d9e2;
+  border-radius: 6px;
+  box-sizing: border-box;
+  resize: vertical;
+}
+.custom-suite textarea:focus { outline: 2px solid #012169; outline-offset: 1px; }

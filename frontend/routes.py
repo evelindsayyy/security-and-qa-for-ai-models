@@ -209,6 +209,38 @@ def register_routes(app):
         slug, _already = start_run(candidate, judge, suite_key, max_tokens)
         return redirect(url_for("eval_run_detail", slug=slug, status="running"))
 
+    @app.route("/eval-run/start-custom", methods=["POST"])
+    def eval_run_start_custom():
+        from flask import redirect, request, url_for
+
+        from frontend.eval_launch import (
+            start_run,
+            validate_custom_questions,
+            validate_launch,
+            write_custom_suite,
+        )
+
+        candidate = request.form.get("candidate", "")
+        judge = request.form.get("judge", "")
+        try:
+            max_tokens = int(request.form.get("max_tokens", ""))
+        except ValueError:
+            return "max_tokens must be an integer", 400
+
+        # Validate the user's pasted questions as data before anything touches
+        # the filesystem or a subprocess (the custom-content security boundary).
+        questions, q_error = validate_custom_questions(request.form.get("questions", ""))
+        if q_error is not None:
+            return f"custom questions: {q_error}", 400
+
+        suite_key = write_custom_suite(questions)
+        error = validate_launch(candidate, judge, suite_key, max_tokens)
+        if error is not None:
+            return error, 400
+
+        slug, _already = start_run(candidate, judge, suite_key, max_tokens)
+        return redirect(url_for("eval_run_detail", slug=slug, status="running"))
+
     @app.route("/eval-run/<slug>/status")
     def eval_run_status(slug: str):
         from flask import jsonify
@@ -400,6 +432,15 @@ def register_routes(app):
             gateway_error=gw["error"],
             gateway_deprecated=gw["deprecated"],
         )
+
+    @app.route("/models/<slug>")
+    def model_detail(slug: str):
+        from frontend.eval_run_data import get_model_detail
+
+        detail = get_model_detail(slug)
+        if detail is None:
+            return render_template("model_detail.html", missing=True, slug=slug)
+        return render_template("model_detail.html", missing=False, **detail)
 
     @app.route("/gateway/refresh", methods=["POST"])
     def gateway_refresh():

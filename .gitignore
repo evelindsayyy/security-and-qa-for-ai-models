@@ -50,6 +50,8 @@ test_results/
 # Evaluator cache — regenerable, large, contains responses
 evaluator/cache/
 evaluator/results/
+# User-generated ad-hoc "bring your own" suites (not locked/comparable)
+evaluator/tasks/custom/
 benchmarks/results/
 
 # AI-only briefings — personal notes for Claude, not project documentation

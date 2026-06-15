@@ -116,6 +116,9 @@ def _load_suite_questions(suite_version: str) -> dict[str, str]:
     missing — the detail page degrades to id-only.
     """
     suite_path = EVALUATOR / "tasks" / f"{suite_version}.jsonl"
+    # Custom ("bring your own") suites live under tasks/custom/.
+    if not suite_path.is_file() and suite_version.startswith("custom_"):
+        suite_path = EVALUATOR / "tasks" / "custom" / f"{suite_version}.jsonl"
     questions: dict[str, str] = {}
     if not suite_path.is_file():
         return questions
@@ -239,6 +242,10 @@ def _postprocess_runs(runs: list[dict]) -> dict:
     """Shared tail for both data paths (files and DB): dedupe to the latest
     run per (candidate, judge, suite), sort best-first, flag ``is_best``,
     and build the page-level summary fields."""
+    # Custom ("bring your own") runs are ad-hoc, not a locked comparable suite —
+    # keep them out of the cross-model comparison table (they're still reachable
+    # by slug from the launch redirect / detail page).
+    runs = [r for r in runs if not str(r.get("suite", "")).startswith("custom_")]
     # Result filenames are timestamped, so the lexicographically-largest
     # filename is newest. This drops superseded runs (e.g. an old
     # "12/12 empty" row that a fresh run already fixed) instead of showing both.
@@ -246,6 +253,8 @@ def _postprocess_runs(runs: list[dict]) -> dict:
     for r in sorted(runs, key=lambda r: r["filename"]):
         latest[(r["candidate_model"], r["judge_model"], r["suite"])] = r
     runs = list(latest.values())
+    for r in runs:
+        r["model_slug"] = model_slug(r["candidate_model"])  # for /models/<slug>
 
     # Best first by overall mean; None sinks to bottom.
     runs.sort(key=lambda r: (r["overall"] or 0), reverse=True)
@@ -279,6 +288,41 @@ def _get_runs_data_files() -> dict:
     files = [p for p in RESULTS_DIR.glob("*.jsonl") if "_trace" not in p.name]
     runs = [r for r in (_aggregate_file(p) for p in files) if r is not None]
     return _postprocess_runs(runs)
+
+
+def model_slug(name: str) -> str:
+    """URL-safe slug for a gateway model id ('GPT 4.1 Mini' → 'GPT-4.1-Mini').
+
+    Mirrors evaluator/runner._safe_slug without importing the (heavy) runner
+    module. Many-to-one in theory, unique across our model set in practice.
+    """
+    return "".join(c if c.isalnum() or c in "-_." else "-" for c in name)
+
+
+def get_model_detail(slug: str) -> dict | None:
+    """Per-model nutrition label: one model's eval runs across every suite.
+
+    Reuses the dispatched ``get_runs_data()`` (DB when available, files
+    otherwise), so this works on both paths. Returns None if no run matches.
+    """
+    if not is_safe_slug(slug):
+        return None
+    runs = [r for r in get_runs_data()["runs"] if model_slug(r["candidate_model"]) == slug]
+    if not runs:
+        return None
+    runs.sort(key=lambda r: (r["suite"], r["judge_model"]))
+    dim_columns = list(dict.fromkeys(d for r in runs for d in r["dims"]))
+    overalls = [r["overall"] for r in runs if r["overall"] is not None]
+    return {
+        "slug": slug,
+        "model": runs[0]["candidate_model"],
+        "runs": runs,
+        "dim_columns": dim_columns,
+        "n_runs": len(runs),
+        "suites": sorted({r["suite"] for r in runs}),
+        "best_overall": max(overalls) if overalls else None,
+        "total_cost_usd": sum(r["total_cost_usd"] for r in runs),
+    }
 
 
 # ---------------------------------------------------------------------------
