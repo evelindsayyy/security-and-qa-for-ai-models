@@ -1,6 +1,6 @@
 # Data model
 
-Target **PostgreSQL** schema for [`api/`](../api/README.md). Today each package writes **JSON** with the same logical shapes (Pydantic in code); a VM-side **ingest** maps JSON → SQLAlchemy rows — see [`architecture.md`](architecture.md#why-json--postgres). Only the application VM writes to Postgres.
+Target **PostgreSQL** schema for [`api/`](../api/README.md). Each package writes **JSON** with the same logical shapes (Pydantic or dataclass in code); a VM-side **ingest** loads validated JSON into Postgres via **psycopg** — see [`architecture.md`](architecture.md#json--postgres-summary). Only the application VM writes to Postgres.
 
 Catalog keys: [`gateway-models.md`](gateway-models.md).
 

@@ -95,7 +95,9 @@ When a user clicks “Start scan,” the API must not block for 20 minutes. Flas
 
 ### JSON → Postgres (summary)
 
-Pillars already define the contract in code (`scanner/schemas.py`, `safety/schemas.py`, etc.) — same field names as the Postgres tables. Flow: **job → Pydantic/dataclass → JSON file → ingest → SQLAlchemy → Postgres → GET API → UI**. Detail: [`data-model.md`](data-model.md). Database server is provisioned by the team lead / OIT (`codeplus-postgres-test-01.oit.duke.edu`); the repo adds SQLAlchemy models and Alembic migrations in W5.
+Pillars define the contract in code (`scanner/schemas.py`, `safety/schemas.py`, `evaluator/schemas.py`, etc.) — same logical shapes as the Postgres tables. Flow: **job → Pydantic/dataclass → JSON file → ingest (psycopg) → Postgres → GET API → UI**. Detail: [`data-model.md`](data-model.md).
+
+**Persistence approach:** versioned **SQL schema files** plus **psycopg** loaders — the pattern in [`evaluator/db/`](../evaluator/db/README.md). Ingest modules expose testable pure transforms and apply with `--apply`; reads use parameterized SQL. Pydantic/dataclass validation happens on JSON before load. [`data-model.md`](data-model.md) is the column reference; disk JSON remains the pipeline source of truth until ingest runs. Database server: `codeplus-postgres-test-01.oit.duke.edu` (OIT); credentials on the application VM only.
 
 ## Inference: two backends
 
@@ -127,7 +129,7 @@ Compute hosts can't reach the database, so each job writes a JSON artifact first
 
 - **`scanner/`** (A) — pulls HF files and runs artifact checks (format, pickle/fickling, ModelAudit, dependencies, secrets) into a risk score → `ScanResult`. See [`track-a-framework.md`](track-a-framework.md), [`tool-stack.md`](tool-stack.md).
 - **`safety/`** (A) — garak + promptfoo + Duke policy probes over LiteLLM → `MergedSafetyResult`. Probe subsets follow deployment context (chatbot vs agentic).
-- **`evaluator/`** (B) — Duke task suites scored by an LLM judge against YAML rubrics; records scores plus cost / latency / tokens → `eval_runs`. See [`track-b-framework.md`](track-b-framework.md).
+- **`evaluator/`** (B) — Duke task suites scored by an LLM judge against YAML rubrics; records scores plus cost / latency / tokens → `eval_runs`. Postgres path: [`evaluator/db/`](../evaluator/db/README.md). See [`track-b-framework.md`](track-b-framework.md).
 - **`benchmarks/`** (B) — public benchmarks (IFEval, TruthfulQA, MMLU, ToMi, consistency); each has its own scoring but a shared run envelope → `benchmark_runs`.
 - **`api/`** (planned) — Flask + Celery + Redis; enqueues jobs, serves results.
 - **`frontend/`** — nutrition-label UI; reads JSON today, `api/` once persistence lands. Launch buttons run the real pillars via Docker. See [`frontend/README.md`](../frontend/README.md).
