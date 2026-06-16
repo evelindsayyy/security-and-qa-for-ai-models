@@ -15,8 +15,9 @@ reverts to pure file reads.
 
 from __future__ import annotations
 
-from dbutils import connect, load_repo_env, resolve_dsn
-from dbutils.connection import DsnAvailability
+import time
+
+from dbutils import load_repo_env, resolve_dsn
 
 from frontend.path_safety import is_safe_slug
 from frontend.scan_data import (
@@ -29,16 +30,38 @@ from scanner.paths import safe_dir_name, slug_to_model_id
 load_repo_env()
 
 _DSN_KEYS = ("POSTGRES_DSN", "DATABASE_URL")
-_DB_AVAIL = DsnAvailability(lambda: resolve_dsn(*_DSN_KEYS), ttl_s=60.0, connect_timeout_s=2.0)
+_CONNECT_TIMEOUT_S = 2
+_AVAILABILITY_TTL_S = 60.0
+_avail_cache = {"checked_at": 0.0, "ok": False}
+
+
+def _dsn() -> str | None:
+    return resolve_dsn(*_DSN_KEYS)
 
 
 def available() -> bool:
-    """True when a DSN is configured and Postgres answers a connect."""
-    return _DB_AVAIL.available()
+    """True when a DSN is configured, psycopg is installed, and Postgres answers."""
+    dsn = _dsn()
+    if not dsn:
+        return False
+    now = time.monotonic()
+    if now - _avail_cache["checked_at"] < _AVAILABILITY_TTL_S:
+        return _avail_cache["ok"]
+    try:
+        import psycopg
+
+        with psycopg.connect(dsn, connect_timeout=_CONNECT_TIMEOUT_S):
+            ok = True
+    except Exception:
+        ok = False
+    _avail_cache.update(checked_at=now, ok=ok)
+    return ok
 
 
 def _connect():
-    return connect(resolve_dsn(*_DSN_KEYS), connect_timeout_s=2)
+    import psycopg
+
+    return psycopg.connect(_dsn(), connect_timeout=_CONNECT_TIMEOUT_S)
 
 
 _LATEST_SCANS_SQL = """
