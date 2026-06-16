@@ -62,9 +62,9 @@ variables:
 
 ssh-deploy-smoke:
   stage: deploy-smoke
-  image: alpine:3.20
+  image: alpine/git:2.49.1
   before_script:
-    - apk add --no-cache openssh-client
+    - command -v ssh
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
     - cp "$DEPLOY_SSH_KNOWN_HOSTS" ~/.ssh/known_hosts
