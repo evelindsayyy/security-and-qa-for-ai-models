@@ -21,10 +21,22 @@ Labels: `scanning` · `safety` · `gateway` · `efficacy` · `evaluator` · `fro
 | Milestone | Status / goal |
 |-----------|----------------|
 | W1–W2 | **Closed** — spikes, docs |
-| **W3** | **Current** — packages, catalog, CI, frontend, MVP efficacy on 1 gateway model |
-| W4 | E2E scan; safety + MVP efficacy on 3 gateway models |
-| W5 | Flask `api/`, Postgres, Celery |
+| **W3** | **Closed** — packages, catalog, frontend, MVP efficacy |
+| **W4** | **Closing** — E2E scan/safety/eval; CI landed Jun 16 |
+| **W5** | **Current** — Postgres, `api/`, Celery, unified ingest |
 | W6–W7 | Full UI, demo freeze |
+
+---
+
+## CI (shared VM / VCM)
+
+GitLab jobs run on the **Code+ shared VM** with runner tag **`codeplus`**.
+
+1. Register a GitLab runner on the VCM with tag **`codeplus`** (shell executor recommended).
+2. VM needs: **git**, **docker** (+ compose plugin), **curl**; **uv** is auto-installed on first pipeline if absent.
+3. Pipeline stages: **lint** (ruff) → **unit-tests** → **build** (`docker compose … build`) → **deploy-manual** (requires `.env` on the runner host).
+
+Config: [`.gitlab-ci.yml`](../.gitlab-ci.yml). Commands and Docker details: [`docs/docker.md`](../docs/docker.md).
 
 ---
 

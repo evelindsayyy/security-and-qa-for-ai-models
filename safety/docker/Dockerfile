@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
 
 WORKDIR /app
 
@@ -13,12 +13,13 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin bash \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt pyproject.toml /app/
-RUN pip install --no-cache-dir python-dotenv pyyaml openai pydantic litellm garak
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project --group safety
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH=/app
 
 COPY safety/ /app/safety/
 COPY gateway/ /app/gateway/
-
-ENV PYTHONPATH=/app
 
 CMD ["bash", "safety/run_safety.sh", "--help"]

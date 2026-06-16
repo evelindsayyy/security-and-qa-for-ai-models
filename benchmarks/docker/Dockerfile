@@ -1,15 +1,15 @@
-FROM python:3.11-slim
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
 
 WORKDIR /app
 
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir \
-    openai python-dotenv pyyaml litellm pydantic huggingface-hub \
-    pandas numpy requests datasets tqdm bert-score
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project --group benchmarks
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH=/app
 
 COPY benchmarks/ /app/benchmarks/
 
-ENV PYTHONPATH=/app
 WORKDIR /app/benchmarks
 
 CMD ["python", "run_benchmark.py", "--help"]

@@ -23,7 +23,7 @@ A run is asynchronous: the browser **POST**s to start a job (immediate `job_id`)
 flowchart TB
   A([Analyst browser])
 
-  subgraph VM["Application VM — only host that can reach Postgres"]
+  subgraph VM["Application VM"]
     FE["frontend/ + api/ (Flask)"]
     R[("Redis")]
     W["Celery worker"]
@@ -31,10 +31,10 @@ flowchart TB
     DB[("Postgres")]
   end
 
-  subgraph BK["Model backends — no database access"]
+  subgraph BK["Backends"]
     SC["scanner/<br/>Docker sandbox · DGX"]
-    GW["Duke AI Gateway · LiteLLM<br/>cloud / API models"]
-    DC["vLLM · DCC SLURM GPU<br/>open-weight models"]
+    GW["Duke AI Gateway · LiteLLM"]
+    DC["vLLM · DCC SLURM GPU"]
   end
 
   A -->|"1 POST /scans · /safety · /evals · /benchmarks<br/>(returns job_id)"| FE
@@ -67,18 +67,18 @@ Prototype equivalents: `POST /scans/start` → `GET /scans/<slug>/status` → `G
 
 | Host | Runs | Notes |
 |------|------|-------|
-| **Application VM** | Flask, Celery + Redis, ingest, Postgres | always on; **only** host that can reach Postgres |
-| **DGX** | `scanner/` in a Docker sandbox | isolates untrusted model files; no DB access |
-| **Duke AI Gateway** | cloud / API model inference (LiteLLM) | default chat backend |
-| **DCC** | open-weight inference (vLLM on SLURM GPU) | optional; no DB access |
+| **Application VM** | Flask app ([`docker/`](../docker/)), Celery + Redis, ingest | Shared UI and job orchestration |
+| **DGX** | `scanner/` in a Docker sandbox | Isolates untrusted model files |
+| **Duke AI Gateway** | cloud / API inference (LiteLLM) | Default chat backend |
+| **DCC** | open-weight inference (vLLM on SLURM) | Optional GPU backend |
 
-Three hosts because Postgres is firewalled to the VM, untrusted files need isolation, and open weights need a GPU. Developers reach Postgres over the Duke VPN or an SSH tunnel.
+Multiple hosts: untrusted scans stay sandboxed on DGX; the gateway and DCC serve inference; the application VM runs the shared UI and workers. **Docker layout:** [`docker.md`](docker.md).
 
 ## Key concepts
 
 ### Application VM
 
-The **application VM** is the always-on Linux server Duke OIT provides for this project. It runs the parts users share: `frontend/`, `api/`, background job workers, and the database client. **Only this VM has a network route to Postgres**. Long scan/safety/eval jobs are orchestrated from here; heavy or untrusted work is delegated outward and only JSON results come back.
+The **application VM** is the always-on Linux server Duke OIT provides for this project. It runs the shared UI (`frontend/`), planned `api/`, background workers, and ingest. Long jobs are orchestrated from here; heavy or untrusted work is delegated to DGX, the gateway, or DCC.
 
 ### Celery and Redis
 
@@ -91,7 +91,7 @@ When a user clicks “Start scan,” the API must not block for 20 minutes. Flas
 
 ### Ingest
 
-**Ingest** is the step that **loads a finished JSON file into Postgres** on the application VM. Compute hosts write JSON but cannot reach the database; ingest runs where the DB connection exists. It reads the file → validates with Pydantic → inserts/updates SQL rows per [`data-model.md`](data-model.md).  
+**Ingest** loads a finished JSON file into Postgres: read file → validate with Pydantic → upsert rows per [`data-model.md`](data-model.md). Jobs write JSON first by design (audit trail, idempotent reload, decoupled from DB outages).
 
 ### JSON → Postgres (summary)
 
@@ -123,7 +123,7 @@ Safety and efficacy reach a model over an OpenAI-compatible chat API. The backen
 
 ## Why JSON → Postgres
 
-Compute hosts can't reach the database, so each job writes a JSON artifact first; **ingest** on the VM loads it into Postgres (see [Key concepts](#key-concepts)). Artifacts also serve as the frontend's offline data source today and provide an audit trail. Ingest is idempotent (keyed on run id). Outputs are gitignored; only small fixtures are committed.
+Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [Key concepts](#key-concepts)). Artifacts are the UI's offline source today and provide an audit trail. Ingest is idempotent (keyed on run id). Large outputs stay gitignored; only small fixtures are committed.
 
 ## Components
 

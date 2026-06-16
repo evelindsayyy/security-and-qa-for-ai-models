@@ -124,7 +124,7 @@ def print_model_stats(response: ModelResponse, extra_stats: bool) -> None:
         if response.latency > 0:
             print(f"Tokens/Second:        {response.completion_tokens / response.latency:.2f}")
     
-    print(f"\nOutput:")
+    print("\nOutput:")
     print(response.output)
 
 
@@ -141,16 +141,16 @@ if __name__ == "__main__":
     print("=" * 60)
     
     # Call first model
-    print(f"\nCalling gpt-5.4...", flush=True)
+    print("\nCalling gpt-5.4...", flush=True)
     response1 = call_model("openai/gpt-5.4", messages)
     print_model_stats(response1, extra_stats=False)
     
     # Call second model
-    print(f"\n\nCalling Llama 3.3...", flush=True)
+    print("\n\nCalling Llama 3.3...", flush=True)
     response2 = call_model("openai/Llama 3.3", messages)
     print_model_stats(response2, extra_stats=False)
     
     # Call third model
-    print(f"\n\nCalling gpt-5-mini...", flush=True)
+    print("\n\nCalling gpt-5-mini...", flush=True)
     response3 = call_model("openai/gpt-5-mini", messages)
     print_model_stats(response3, extra_stats=False)

@@ -22,7 +22,7 @@ from scanner.db.load_scans import (  # noqa: E402
     load_into,
     scan_row,
 )
-from scanner.schemas import ScanResult, build_scan_result_from_combined
+from scanner.schemas import build_scan_result_from_combined
 
 
 def _scan_payload(**overrides) -> dict:

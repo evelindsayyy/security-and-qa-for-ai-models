@@ -9,6 +9,8 @@ Project guides & info. **GitLab:** [`.gitlab/README.md`](../.gitlab/README.md).
 | [`track-b-framework.md`](track-b-framework.md) | Efficacy pillar (Track B) |
 | [`gateway-models.md`](gateway-models.md) | Gateway catalog; HF scan list; test tiers |
 | [`architecture.md`](architecture.md) | System design, `api/`, `frontend/`, deployment |
+| [`cli.md`](cli.md) | All CLI commands (UI, pillar jobs, tests, ingest) |
+| [`docker.md`](docker.md) | Docker model — layers, sibling launches, CI |
 | [`../frontend/README.md`](../frontend/README.md) | Nutrition label UI |
 | [`data-model.md`](data-model.md) | Postgres plan — tables, example fields, JSON → DB path |
 | [`../dbutils/README.md`](../dbutils/README.md) | Shared Postgres ingest helpers |

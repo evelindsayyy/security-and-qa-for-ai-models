@@ -1,23 +1,14 @@
-# This file is a template, and might need editing before it works on your project.
-# This is a sample GitLab CI/CD configuration file that should run without any modifications.
-# It demonstrates a basic 3 stage CI/CD pipeline. Instead of real tests or scripts,
-# it uses echo commands to simulate the pipeline execution.
+# GitLab CI — Duke Code+ shared VM (VCM).
 #
-# A pipeline is composed of independent jobs that run scripts, grouped into stages.
-# Stages run in sequential order, but jobs within stages run in parallel.
+# Merged from team-lead skeleton (tag codeplus, interruptible, compose build/deploy)
+# and project jobs (uv, ruff, unit tests, real compose paths).
 #
-# For more information, see: https://docs.gitlab.com/ee/ci/yaml/#stages
-#
-# You can copy and paste this template into a new `.gitlab-ci.yml` file.
-# You should not add this template to an existing `.gitlab-ci.yml` file by using the `include:` keyword.
-#
-# To contribute improvements to CI/CD templates, please follow the Development guide at:
-# https://docs.gitlab.com/development/cicd/templates/
-# This specific template is located at:
-# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Getting-Started.gitlab-ci.yml
+# VM prerequisites: git, docker + compose plugin, curl; uv auto-installed if missing.
+# Lint/test need no secrets. Deploy is manual and requires .env on the runner host.
 
-stages:          # List of stages for jobs, and their order of execution
+stages:
   - lint
+  - test
   - build
   - deploy
 
@@ -25,19 +16,52 @@ default:
   interruptible: true
   tags:
     - codeplus
-  
-lint-job:
+
+variables:
+  UV_CACHE_DIR: "${CI_PROJECT_DIR}/.cache/uv"
+  PIP_CACHE_DIR: "${CI_PROJECT_DIR}/.cache/pip"
+  DOCKER_HOST: "unix:///var/run/docker.sock"
+
+.default_uv:
+  cache:
+    key:
+      files:
+        - uv.lock
+    paths:
+      - .cache/uv
+      - .venv
+  before_script:
+    - export PATH="${HOME}/.local/bin:${PATH}"
+    - command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
+    - uv sync --frozen --group dev
+
+lint:
+  extends: .default_uv
   stage: lint
   script:
-    - echo "lint"
+    - uv run ruff check .
 
-build-job:       # This job runs in the build stage, which runs first.
+unit-tests:
+  extends: .default_uv
+  stage: test
+  script:
+    - uv run python -m unittest discover -s unit_tests -v
+
+build-images:
   stage: build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
-    - docker compose -f /path-to-compose.yml build
+    - docker compose --project-name qa-ai-models -f docker/compose.yml build
+    - docker compose --project-name qa-ai-models -f scanner/docker/compose.yml build
 
-deploy-job:      # This job runs in the deploy stage.
-  stage: deploy  # It only runs when *both* jobs in the test stage complete successfully.
+deploy-manual:
+  stage: deploy
   environment: production
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
   script:
-    - docker compose up -d
+    - test -f .env || (echo "ERROR: .env missing on runner host — copy from .env.example" && exit 1)
+    - docker compose --env-file .env -f docker/compose.yml up -d --build

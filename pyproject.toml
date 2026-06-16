@@ -30,3 +30,13 @@ dependencies = [
 # Optional on purpose: plain `uv sync` skips it; install with
 #   uv sync --group db
 db = ["psycopg[binary]>=3.2"]
+# CI and local test runs: uv sync --group dev
+dev = ["pytest>=8.0"]
+# Safety orchestrator (run_safety.sh / safety/docker): uv sync --group safety
+safety = ["garak>=0.9.0"]
+# Public benchmark runners (benchmarks/docker): uv sync --group benchmarks
+benchmarks = ["numpy>=2.0.0", "pandas>=2.0.0", "requests>=2.32.0", "tqdm>=4.67.0"]
+
+[tool.ruff.lint.per-file-ignores]
+"scanner/db/load_scans.py" = ["E402"]
+"unit_tests/*" = ["E402"]

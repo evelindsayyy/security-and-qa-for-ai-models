@@ -1,14 +1,15 @@
-FROM python:3.11-slim
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
 
 WORKDIR /app
 
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir \
-    openai python-dotenv pyyaml litellm pydantic huggingface-hub
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH=/app
 
 COPY evaluator/ /app/evaluator/
 
-ENV PYTHONPATH=/app
 WORKDIR /app/evaluator
 
 CMD ["python", "runner.py", "--help"]

@@ -22,6 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 ENV_FILE = ROOT / ".env"
+COMPOSE_PROJECT_NAME = os.environ.get("COMPOSE_PROJECT_NAME", "qa-ai-models")
 
 # stack_key -> (compose_file relative to ROOT, service name)
 STACKS: dict[str, tuple[Path, str]] = {
@@ -73,7 +74,7 @@ def compose_run_argv(
 ) -> list[str]:
     """Build ``docker compose --env-file .env run --rm -T <service> …`` argv for *stack*."""
     compose, service = _stack_paths(stack)
-    argv = ["docker", "compose"]
+    argv = ["docker", "compose", "--project-name", COMPOSE_PROJECT_NAME]
     if ENV_FILE.is_file():
         argv += ["--env-file", str(ENV_FILE)]
     argv += ["-f", str(compose), "run", "--rm", "-T"]
@@ -131,15 +132,17 @@ def _docker_gid_env() -> dict[str, str]:
 
 
 def _export_uid_gid() -> None:
-    """Put UID/GID and the Docker socket GID in the process env so Compose
-    interpolates the host user and grants access to /var/run/docker.sock.
-    """
-    env = {**_uid_gid_env(), **_docker_gid_env()}
+    """Put UID/GID, Docker socket GID, and compose project name in the process env."""
+    env = {
+        **_uid_gid_env(),
+        **_docker_gid_env(),
+        "COMPOSE_PROJECT_NAME": COMPOSE_PROJECT_NAME,
+    }
     os.environ.update(env)
 
 
 def _compose_cmd(compose: Path) -> list[str]:
-    cmd = ["docker", "compose"]
+    cmd = ["docker", "compose", "--project-name", COMPOSE_PROJECT_NAME]
     if ENV_FILE.is_file():
         cmd += ["--env-file", str(ENV_FILE)]
     return cmd + ["-f", str(compose)]
