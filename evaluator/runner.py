@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -44,6 +45,42 @@ from schemas import (
 
 
 HERE = Path(__file__).parent
+
+
+# ---------------------------------------------------------------------------
+# Optional DB sync (--load-db) — best-effort, never fails the run
+# ---------------------------------------------------------------------------
+
+
+def _maybe_load_db(out_path: Path, dsn: Optional[str]) -> None:
+    """Load one just-written results file into Postgres. Best-effort.
+
+    Any problem — no DSN, psycopg missing, DB unreachable, parse miss — is
+    reported to stderr and swallowed. The run has already written its JSONL
+    (the source of truth); the DB is only an acceleration projection, so a
+    failed sync must never turn a successful run into a failure.
+    """
+    resolved = dsn or os.environ.get("EFFICACY_DB_DSN") or os.environ.get("DATABASE_URL")
+    if not resolved:
+        print("  WARN: --load-db set but no DSN (EFFICACY_DB_DSN / DATABASE_URL "
+              "/ --db-dsn); skipping DB load.", file=sys.stderr)
+        return
+    try:
+        # Imported lazily so a plain run never pulls in the db module.
+        sys.path.insert(0, str(HERE))
+        from db.load_results import apply_to_db, load_file
+
+        parsed = load_file(out_path)
+        if parsed is None:
+            print(f"  WARN: --load-db could not parse {out_path.name}; skipping.",
+                  file=sys.stderr)
+            return
+        apply_to_db(resolved, [parsed])
+        print(f"  DB: synced {out_path.name} into Postgres.")
+    except Exception as e:  # never crash the run over a projection sync
+        print(f"  WARN: --load-db failed ({type(e).__name__}: {e}); the results "
+              f"file is intact, run `python db/load_results.py --apply` later.",
+              file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +203,19 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--judge-max-tokens", type=int, default=2000,
                    help="completion budget for judge calls (default 2000; "
                         "use 2000+ for reasoning-model judges)")
+    # After writing the results file, also sync it into Postgres (the
+    # dashboard's read projection) via evaluator/db/load_results.py. Opt-in:
+    # default off so tests, offline runs, and the no-DB contract are
+    # unaffected. Best-effort: a missing DSN or unreachable DB (off-VPN) logs
+    # a warning and the run still succeeds — the JSONL file stays the source
+    # of truth. Needs a DSN (--db-dsn or EFFICACY_DB_DSN / DATABASE_URL) and
+    # the `db` dependency group (uv sync --group db).
+    p.add_argument("--load-db", action="store_true",
+                   help="after the run, load its results into Postgres "
+                        "(best-effort; needs a DSN + the db dep group)")
+    p.add_argument("--db-dsn", type=str, default=None,
+                   help="Postgres DSN for --load-db "
+                        "(default: EFFICACY_DB_DSN / DATABASE_URL env)")
     p.add_argument("--output-dir", type=Path, default=HERE / "results")
     # Lets a caller (the frontend launch flow) dictate the results filename
     # stem so it can predict the output path before the run starts. The
@@ -439,6 +489,11 @@ def main() -> int:
     )
     print(f"Results: {out_path}")
     print(f"Trace:   {trace_path}")
+
+    # Opt-in projection into Postgres for the dashboard's DB read path.
+    if args.load_db:
+        _maybe_load_db(out_path, args.db_dsn)
+
     return 0
 
 

@@ -197,6 +197,10 @@ def build_command(
             "--max-tokens", str(max_tokens),
             "--judge-max-tokens", "2000",
             "--output-name", stem,
+            # Auto-sync browser-launched runs into Postgres so the dashboard's
+            # DB never drifts behind the files. Best-effort in the runner: if
+            # no DSN is reachable (off-VPN) the run still succeeds from files.
+            "--load-db",
         ]
 
     if docker_launch.use_docker():
