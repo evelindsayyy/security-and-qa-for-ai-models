@@ -63,5 +63,5 @@ deploy-manual:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: manual
   script:
-    - test -f .env || (echo "ERROR: .env missing on runner host — copy from .env.example" && exit 1)
-    - docker compose --env-file .env -f docker/compose.yml up -d --build
+    - 'test -f .env || (echo "ERROR .env missing on runner host - copy from .env.example" && exit 1)'
+    - ./docker/run.sh up -d --build
