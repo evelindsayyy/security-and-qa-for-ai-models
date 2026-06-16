@@ -47,6 +47,9 @@ scripts/dcc/.vllm-session.env
 # Ignore tqa test results
 test_results/
 
+# Scratch / local learning notes (teach-code skill output)
+tmp/
+
 # Evaluator cache — regenerable, large, contains responses
 evaluator/cache/
 evaluator/results/
