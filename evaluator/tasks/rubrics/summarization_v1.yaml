@@ -1,0 +1,154 @@
+# =============================================================================
+# Summarization Evaluation Rubric — v1 (DRAFT — anchors not yet expert-calibrated)
+# =============================================================================
+# For tasks where a model is given a Duke-related document and asked to
+# produce a short, faithful summary. The judge sees the source document
+# (the "question"), a reference summary, and the candidate summary.
+#
+# Distinct from it_support / policy_qa:
+#   - There is no "right answer to look up"; there is source text the
+#     summary must stay true to. So FAITHFULNESS (no hallucination) is the
+#     cardinal dimension, weighted highest.
+#   - CONCISION matters here in a way it doesn't elsewhere — brevity is the
+#     point of a summary, not a side concern.
+#   - No citation_precision / policy_adherence dimensions (not a QA task).
+#
+# Status: DRAFT. Anchors are from the shared library, calibrated against
+# methodology, NOT against expert references. References in
+# tasks/summarization_v1.jsonl are PLACEHOLDER until a domain reviewer
+# writes real gold summaries (Step 2 of the rubric design process).
+#
+# Design lineage:
+#   - HELM: task-conditional dimension set (faithfulness/coverage/concision
+#     are summarization-specific)
+#   - G-Eval: anchored scale + evaluation_steps + JSON output
+#   - SummEval (arXiv 2007.12626): the consistency / relevance / fluency
+#     framing maps to faithfulness / coverage / concision+tone here
+#   - MT-Bench: judge biases named in limitations; same validation protocol
+# =============================================================================
+
+rubric_version: "summarization_v1"
+task_type: "summarization"
+shared_dimensions_lib: "_shared_dimensions.yaml"
+shared_dimensions_version: "shared_v1"
+
+description: |
+  Evaluation rubric for Duke document summarization. Applied by an
+  LLM-as-judge that has the source document, a reference summary, and the
+  candidate summary. Faithfulness is weighted highest because a fluent,
+  well-covered summary that hallucinates is worse than useless.
+
+
+# -----------------------------------------------------------------------------
+# Dimensions  (all four from the shared library)
+# -----------------------------------------------------------------------------
+
+dimensions:
+
+  faithfulness:
+    from: shared
+    weight: 0.40
+    task_note: >
+      Every claim in the candidate summary must be traceable to the source
+      document. A summary that adds a plausible-sounding fact, contact
+      number, date, or recommendation NOT in the source scores low even if
+      the addition is "helpful" — for a summary, fidelity to the source
+      outranks helpfulness.
+
+  coverage:
+    from: shared
+    weight: 0.30
+    task_note: >
+      The summary should hit the source's main points. Judge coverage
+      against the reference summary's selection of key points; a candidate
+      that omits a headline point the reference includes scores below 3.
+      Length-appropriate: a one-sentence summary need not capture every
+      qualifier, but it must capture the central message.
+
+  concision:
+    from: shared
+    weight: 0.20
+    task_note: >
+      Summaries should be short and dense. Penalize restating the prompt,
+      preamble ("This document discusses..."), copying whole sentences
+      verbatim from the source, or padding. A candidate noticeably longer
+      than the reference without added information is not a 3.
+
+  tone:
+    from: shared
+    weight: 0.10
+    task_note: >
+      Audience: a busy Duke reader skimming for the gist. Tone target is
+      clear, plain, professional prose. Coarse 1-3 scale; secondary to the
+      content dimensions.
+
+
+# -----------------------------------------------------------------------------
+# Aggregation
+# -----------------------------------------------------------------------------
+
+aggregation:
+  method: "weighted_normalized"
+  weights_sum_to: 1.0
+  display_scale: 5
+  note: |
+    Per HELM, per-dimension scores remain the headline; the weighted
+    overall exists for dashboard sortability.
+
+    Weight rationale (record for v2 conversations):
+      faithfulness 0.40 — hallucination is the cardinal failure of summarization
+      coverage     0.30 — missing the main point makes a faithful summary useless
+      concision    0.20 — brevity is the purpose of a summary (coarse 1-3 scale)
+      tone         0.10 — secondary readability signal (coarse 1-3 scale)
+
+
+# -----------------------------------------------------------------------------
+# Evaluation steps (G-Eval CoT)
+# -----------------------------------------------------------------------------
+
+evaluation_steps:
+  - "If the candidate response is empty, whitespace-only, or a bare refusal that does not engage the task, score 1 on every dimension and write 'empty response' or 'refusal without engagement' as the rationale. Do not confabulate. Skip the rest of these steps."
+  - "Read the source document (the question) and list its main points and any specific facts (dates, figures, names, contacts)."
+  - "Read the reference summary to see which points a good short summary selects."
+  - "Read the candidate summary."
+  - "For FAITHFULNESS, check every claim in the candidate against the source. Any fact, number, name, or recommendation NOT present in the source is a faithfulness violation, even if plausible. Note the specific unsupported claim in the rationale."
+  - "For COVERAGE, check whether the candidate includes the source's main points (judged against what the reference chose to include). Note any headline point the candidate omitted."
+  - "For CONCISION, check for preamble, repetition, verbatim copying, or padding. Compare length to the reference; longer-without-more-information is not a 3."
+  - "For TONE, judge whether the summary reads as clear, plain, professional prose for a skimming reader."
+  - "Assign each dimension's score from the shared library's anchored scale. When between anchors, pick the LOWER score and explain why."
+  - "Provide a one-sentence rationale per dimension. For faithfulness, cite the specific unsupported claim if any; for coverage, cite the specific omitted point if any."
+  - "Output valid JSON matching the schema. No prose outside the JSON. No markdown fences."
+
+
+# -----------------------------------------------------------------------------
+# Validation
+# -----------------------------------------------------------------------------
+
+validation:
+  sample_size_min: 30
+  sample_size_target: 50
+  raters_min: 2
+  rater_expertise_required: "Duke staff familiar with the source-document domains"
+  metrics_to_report:
+    - "Pearson correlation per dimension (judge vs. human mean)"
+    - "Cohen's Kappa per dimension (treating scores as ordinal categories)"
+    - "Agreement within one point (percentage of cases where |judge - human| <= 1)"
+  reference_metric_note: |
+    A reference-overlap metric (ROUGE-L and/or BERTScore against the
+    reference summary) is planned as an automatic cross-check alongside the
+    judge — deferred to a later week as a standalone scorer so it doesn't
+    require a runner/schema change. When added, report its correlation with
+    the judge's faithfulness + coverage scores.
+
+
+# -----------------------------------------------------------------------------
+# Known limitations (v1)
+# -----------------------------------------------------------------------------
+
+limitations:
+  - "Reference-based with a single gold summary. Many valid summaries exist; coverage is judged against one reference's point selection, which may undercount equally-valid alternative selections. A multi-reference v2 would reduce this."
+  - "Documents are short (a paragraph). Long-document and multi-document summarization (where coverage and faithfulness trade off harder) are out of scope for v1."
+  - "PLACEHOLDER references — written by me, not domain experts. Step 2 of the rubric design process (collect expert reference summaries) is required before locking."
+  - "No automatic reference-overlap metric yet (ROUGE-L / BERTScore) — judge-only for v1; see validation.reference_metric_note."
+  - "Concision and tone are coarse 1-3 scales; expect lower judge-human agreement on them than on faithfulness/coverage."
+  - "Judge bias not corrected. Same MT-Bench caveats as the other rubrics."

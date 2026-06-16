@@ -85,6 +85,12 @@ SUITES: dict[str, dict] = {
         "rubric": EVALUATOR / "tasks" / "rubrics" / "policy_qa_v1.yaml",
         "system_prompt": EVALUATOR / "prompts" / "system" / "it_support_v1.txt",
     },
+    "summarization_v1": {
+        "label": "Document summarization (6 docs, pilot)",
+        "suite": EVALUATOR / "tasks" / "summarization_v1.jsonl",
+        "rubric": EVALUATOR / "tasks" / "rubrics" / "summarization_v1.yaml",
+        "system_prompt": EVALUATOR / "prompts" / "system" / "summarization_v1.txt",
+    },
 }
 
 # reference_based_v2 builds its output schema from the rubric, so it works
