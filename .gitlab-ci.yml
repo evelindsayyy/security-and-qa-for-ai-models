@@ -62,7 +62,7 @@ variables:
 
 ssh-deploy-smoke:
   stage: deploy-smoke
-  image: alpine/git:2.49.1
+  image: gitlab-registry.oit.duke.edu/codeplus/security-and-qa-for-ai-models/dev:local
   before_script:
     - command -v ssh
     - mkdir -p ~/.ssh

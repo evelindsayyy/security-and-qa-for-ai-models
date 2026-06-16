@@ -1,0 +1,25 @@
+FROM python:3.13-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV UV_CACHE_DIR=/home/app/.cache/uv \
+    UV_LINK_MODE=copy
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        bash \
+        ca-certificates \
+        curl \
+        git \
+        openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --create-home --shell /bin/bash app
+RUN mkdir -p /home/app/.cache/uv /home/app/.venv \
+    && chown -R app:app /home/app/.cache /home/app/.venv
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
+
+WORKDIR /workspace
+USER app
+
+CMD ["bash"]

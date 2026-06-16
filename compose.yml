@@ -1,0 +1,36 @@
+services:
+  dev:
+    profiles: [dev]
+    image: ${DEV_IMAGE:-gitlab-registry.oit.duke.edu/codeplus/security-and-qa-for-ai-models/dev:local}
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    working_dir: /workspace
+    environment:
+      UV_PROJECT_ENVIRONMENT: /home/app/.venv
+    volumes:
+      - .:/workspace
+      - dev-venv:/home/app/.venv
+      - uv-cache:/home/app/.cache/uv
+    command: bash
+
+  frontend:
+    profiles: [dev]
+    image: ${DEV_IMAGE:-gitlab-registry.oit.duke.edu/codeplus/security-and-qa-for-ai-models/dev:local}
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - 3000:5001
+    volumes:
+      - .:/workspace
+      - dev-venv:/home/app/.venv
+      - uv-cache:/home/app/.cache/uv
+    working_dir: /workspace
+    environment:
+      UV_PROJECT_ENVIRONMENT: /home/app/.venv
+    command: uv run flask --app frontend:create_app run --debug --port 5001 --host 0.0.0.0
+
+volumes:
+  dev-venv:
+  uv-cache:
