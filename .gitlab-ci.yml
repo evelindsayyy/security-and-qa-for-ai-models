@@ -1,3 +1,5 @@
+# Previous pipeline preserved while testing the shared-runner SSH deploy flow.
+#
 # This file is a template, and might need editing before it works on your project.
 # This is a sample GitLab CI/CD configuration file that should run without any modifications.
 # It demonstrates a basic 3 stage CI/CD pipeline. Instead of real tests or scripts,
@@ -15,29 +17,58 @@
 # https://docs.gitlab.com/development/cicd/templates/
 # This specific template is located at:
 # https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Getting-Started.gitlab-ci.yml
+#
+# stages:          # List of stages for jobs, and their order of execution
+#   - lint
+#   - build
+#   - deploy
+#
+# default:
+#   interruptible: true
+#   tags:
+#     - codeplus
+#
+# lint-job:
+#   stage: lint
+#   script:
+#     - echo "lint"
+#
+# build-job:       # This job runs in the build stage, which runs first.
+#   stage: build
+#   script:
+#     - docker compose -f /path-to-compose.yml build
+#
+# deploy-job:      # This job runs in the deploy stage.
+#   stage: deploy  # It only runs when *both* jobs in the test stage complete successfully.
+#   environment: production
+#   script:
+#     - docker compose up -d
 
-stages:          # List of stages for jobs, and their order of execution
-  - lint
-  - build
-  - deploy
+workflow:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "ssh-deploy-smoke"'
+    - when: never
+
+stages:
+  - deploy-smoke
 
 default:
   interruptible: true
   tags:
-    - codeplus
-  
-lint-job:
-  stage: lint
-  script:
-    - echo "lint"
+    - oit-shared-unprivileged
 
-build-job:       # This job runs in the build stage, which runs first.
-  stage: build
-  script:
-    - docker compose -f /path-to-compose.yml build
+variables:
+  DEPLOY_SMOKE_IMAGE: ubuntu:latest
 
-deploy-job:      # This job runs in the deploy stage.
-  stage: deploy  # It only runs when *both* jobs in the test stage complete successfully.
-  environment: production
+ssh-deploy-smoke:
+  stage: deploy-smoke
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache openssh-client
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - cp "$DEPLOY_SSH_KNOWN_HOSTS" ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+    - chmod 400 "$DEPLOY_SSH_PRIVATE_KEY"
   script:
-    - docker compose up -d
+    - ssh -i "$DEPLOY_SSH_PRIVATE_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" "docker pull ${DEPLOY_SMOKE_IMAGE}"
