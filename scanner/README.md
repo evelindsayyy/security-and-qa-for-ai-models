@@ -85,6 +85,14 @@ Hub `org/model` → weights download into `models/org--model/` for the duration 
 | `deps` | Debug: pip-audit + OSV only |
 | `secrets` | Debug: TruffleHog only |
 
+## Postgres ingest
+
+Projection of `scan_result.json` into shared Postgres (`qa_ai_models`).
+Uses **`dbutils/`** + `scanner/db/load_scans.py` (dry-run default, `--apply` to write).
+Frontend `/scans` reads DB when `POSTGRES_DSN` is set, else disk.
+
+See [`scanner/db/README.md`](db/README.md) for schema apply, load, and verify SQL.
+
 ## Layout
 
 | Path | Role |
@@ -94,6 +102,7 @@ Hub `org/model` → weights download into `models/org--model/` for the duration 
 | `unit_tests/` | Host unit tests |
 | `models/<slug>/` | HF weights **during** scan; auto-deleted after `scan_result.json` (see `SCAN_KEEP_WEIGHTS`) |
 | `output/<slug>/` | Persistent scan JSON + logs (UI / ingest source of truth) |
+| `db/` | Postgres schema + loader (`scan_schema.sql`, `load_scans.py`) |
 
 ## Source file map 
 
