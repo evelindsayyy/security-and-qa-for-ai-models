@@ -94,12 +94,12 @@ uv sync --group db   # psycopg — optional; plain uv sync skips it
 
 ## Planned pillar loaders (W5)
 
-| Pillar | Directory | Input |
-|--------|-----------|-------|
-| Scanner | `scanner/db/` | `scanner/output/<slug>/scan_result.json` |
-| Safety | `safety/db/` | `safety/output/<model>/merged_safety_result.json` |
-| Benchmarks | `benchmarks/db/` | `benchmarks/results/*.{json,jsonl}` |
-| Evaluator | `evaluator/db/` | *(standalone today — migrate to dbutils later)* |
+| Pillar | Directory | Input | Uses `dbutils`? |
+|--------|-----------|-------|-----------------|
+| Scanner | `scanner/db/` | `scanner/output/<slug>/scan_result.json` | Yes (`load_scans.py`) |
+| Safety | `safety/db/` | `safety/output/<model>/merged_safety_result.json` | Planned |
+| Benchmarks | `benchmarks/db/` | `benchmarks/results/*.{json,jsonl}` | Planned |
+| Evaluator | `evaluator/db/` | `evaluator/results/*.jsonl` | No (standalone; migrate later) |
 
 Unified orchestrator ``api/ingest`` (W5-15) should call each pillar's ``load_into``.
 

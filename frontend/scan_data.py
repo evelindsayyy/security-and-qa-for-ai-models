@@ -78,13 +78,8 @@ def _severity_summary(findings: list[dict]) -> str:
     return ", ".join(parts) if parts else "—"
 
 
-def _summarize_scan(path: Path, slug: str) -> dict | None:
-    """load one scan_result.json into a table row. none if parse fails."""
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-
+def _summarize_from_data(data: dict, slug: str) -> dict:
+    """Build a list-table row from an in-memory ScanResult-shaped dict."""
     findings = data.get("findings") or []
     sev_counts = Counter(
         (f.get("severity") or "unknown").lower() for f in findings if isinstance(f, dict)
@@ -108,6 +103,15 @@ def _summarize_scan(path: Path, slug: str) -> dict | None:
         "status": data.get("status") or "unknown",
         "fickling_severity": data.get("fickling_severity"),
     }
+
+
+def _summarize_scan(path: Path, slug: str) -> dict | None:
+    """load one scan_result.json into a table row. none if parse fails."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return _summarize_from_data(data, slug)
 
 
 def _parse_findings(findings_raw: list) -> list[dict]:
@@ -305,55 +309,8 @@ def _file_format_rows(file_formats: dict) -> list[dict]:
     return rows
 
 
-def get_scans_data() -> dict:
-    """
-    list every scan_result.json under scanner/output/, sorted highest risk first.
-
-    surfaces the malicious poc at the top for stakeholder demos when present.
-    """
-    if not OUTPUT_DIR.exists():
-        return {
-            "has_scans": False,
-            "output_dir": str(OUTPUT_DIR),
-            "scans": [],
-            "tier_summary": "",
-        }
-
-    rows: list[dict] = []
-    for path in sorted(OUTPUT_DIR.glob("*/scan_result.json")):
-        slug = path.parent.name
-        row = _summarize_scan(path, slug)
-        if row:
-            rows.append(row)
-
-    rows.sort(key=lambda r: r["overall_risk_score"], reverse=True)
-
-    tiers = sorted({r["severity_tier"] for r in rows})
-    tier_summary = ", ".join(tiers) if tiers else ""
-
-    return {
-        "has_scans": bool(rows),
-        "output_dir": str(OUTPUT_DIR),
-        "scans": rows,
-        "tier_summary": tier_summary,
-    }
-
-
-def get_scan_detail(slug: str) -> dict | None:
-    """
-    structured scan payload for one slug — findings, tool panels, coverage stats.
-
-    returns none if the slug dir or scan_result.json is missing.
-    """
-    path = OUTPUT_DIR / slug / "scan_result.json"
-    if not path.is_file():
-        return None
-
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-
+def _build_scan_detail(slug: str, data: dict) -> dict:
+    """Structured scan payload from ScanResult-shaped ``data``."""
     findings = _parse_findings(data.get("findings") or [])
     tool = data.get("tool_results") or {}
     meta = data.get("scan_metadata") or {}
@@ -417,3 +374,86 @@ def get_scan_detail(slug: str) -> dict | None:
             },
         },
     }
+
+
+def _get_scans_data_files() -> dict:
+    """
+    list every scan_result.json under scanner/output/, sorted highest risk first.
+
+    surfaces the malicious poc at the top for stakeholder demos when present.
+    """
+    if not OUTPUT_DIR.exists():
+        return {
+            "has_scans": False,
+            "output_dir": str(OUTPUT_DIR),
+            "scans": [],
+            "tier_summary": "",
+        }
+
+    rows: list[dict] = []
+    for path in sorted(OUTPUT_DIR.glob("*/scan_result.json")):
+        slug = path.parent.name
+        row = _summarize_scan(path, slug)
+        if row:
+            rows.append(row)
+
+    rows.sort(key=lambda r: r["overall_risk_score"], reverse=True)
+
+    tiers = sorted({r["severity_tier"] for r in rows})
+    tier_summary = ", ".join(tiers) if tiers else ""
+
+    return {
+        "has_scans": bool(rows),
+        "output_dir": str(OUTPUT_DIR),
+        "scans": rows,
+        "tier_summary": tier_summary,
+    }
+
+
+def _get_scan_detail_files(slug: str) -> dict | None:
+    """
+    structured scan payload for one slug — findings, tool panels, coverage stats.
+
+    returns none if the slug dir or scan_result.json is missing.
+    """
+    path = OUTPUT_DIR / slug / "scan_result.json"
+    if not path.is_file():
+        return None
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+    return _build_scan_detail(slug, data)
+
+
+# ---------------------------------------------------------------------------
+# Public entry points — dispatch to Postgres when configured and reachable,
+# silently fall back to files otherwise. Files remain the source of truth;
+# the DB is a read projection (see scanner/db/README.md).
+# ---------------------------------------------------------------------------
+
+
+def get_scans_data() -> dict:
+    try:
+        from frontend import scan_db_data
+
+        if scan_db_data.available():
+            return scan_db_data.get_scans_data_db()
+    except Exception:
+        pass
+    return _get_scans_data_files()
+
+
+def get_scan_detail(slug: str) -> dict | None:
+    try:
+        from frontend import scan_db_data
+
+        if scan_db_data.available():
+            detail = scan_db_data.get_scan_detail_db(slug)
+            if detail is not None:
+                return detail
+    except Exception:
+        pass
+    return _get_scan_detail_files(slug)

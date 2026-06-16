@@ -97,7 +97,7 @@ When a user clicks “Start scan,” the API must not block for 20 minutes. Flas
 
 Pillars define the contract in code (`scanner/schemas.py`, `safety/schemas.py`, `evaluator/schemas.py`, etc.) — same logical shapes as the Postgres tables. Flow: **job → Pydantic/dataclass → JSON file → ingest (psycopg) → Postgres → GET API → UI**. Detail: [`data-model.md`](data-model.md).
 
-**Persistence approach:** versioned **SQL schema files** plus **psycopg** loaders — established in [`evaluator/db/`](../evaluator/db/README.md) (standalone today). Shared plumbing for **new** pillar loaders lives in [`dbutils/`](../dbutils/README.md) (env, file IO, connect, JSONB params, dry-run CLI, schema apply). Ingest modules expose testable pure transforms and apply with `--apply`; reads use parameterized SQL. [`data-model.md`](data-model.md) is the column reference; disk JSON remains the pipeline source of truth until ingest runs.
+**Persistence approach:** versioned **SQL schema files** plus **psycopg** loaders — established in [`evaluator/db/`](../evaluator/db/README.md) (eval, standalone) and [`scanner/db/`](../scanner/db/README.md) (scan, on **`dbutils`**). Shared plumbing for new pillar loaders lives in [`dbutils/`](../dbutils/README.md). Ingest modules expose testable pure transforms and apply with `--apply`; reads use parameterized SQL with disk fallback in the frontend.
 
 ## Inference: two backends
 
