@@ -63,12 +63,5 @@ variables:
 ssh-deploy-smoke:
   stage: deploy-smoke
   image: gitlab-registry.oit.duke.edu/codeplus/security-and-qa-for-ai-models/dev:local
-  before_script:
-    - command -v ssh
-    - mkdir -p "$CI_PROJECT_DIR/.ssh"
-    - chmod 700 "$CI_PROJECT_DIR/.ssh"
-    - cp "$DEPLOY_SSH_KNOWN_HOSTS" "$CI_PROJECT_DIR/.ssh/known_hosts"
-    - chmod 644 "$CI_PROJECT_DIR/.ssh/known_hosts"
-    - chmod 400 "$DEPLOY_SSH_PRIVATE_KEY"
   script:
-    - ssh -i "$DEPLOY_SSH_PRIVATE_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$CI_PROJECT_DIR/.ssh/known_hosts" "$DEPLOY_USER@$DEPLOY_HOST" "docker pull ${DEPLOY_SMOKE_IMAGE}"
+    - scripts/ci/ssh-exec.sh docker pull "$DEPLOY_SMOKE_IMAGE"
