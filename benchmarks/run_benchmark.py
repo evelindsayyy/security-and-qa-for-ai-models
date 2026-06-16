@@ -150,7 +150,12 @@ def run(benchmark_key: str, model: str, output_stem: str | None = None) -> Path:
     shutil.copy2(src, dest)
     if src.resolve() != dest.resolve():
         src.unlink()
-    log_path.unlink(missing_ok=True)
+    # On Windows the frontend launcher may still hold this log open (Popen
+    # stdout); ignore lock errors — results JSON is what matters.
+    try:
+        log_path.unlink(missing_ok=True)
+    except OSError:
+        pass
     return dest
 
 
