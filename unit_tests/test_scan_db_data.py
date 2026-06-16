@@ -69,11 +69,32 @@ class DbRowMatchesFileRowTest(unittest.TestCase):
             path.write_text(json.dumps(data), encoding="utf-8")
             file_row = scan_data._summarize_scan(path, slug)
 
-        db_row = scan_db_data._summarize_db_scan(_db_scan_tuple(data))
+        db_row = scan_db_data._summarize_db_scan(_db_scan_tuple(data), data.get("findings") or [])
         assert db_row is not None
         self.assertEqual(set(file_row), set(db_row))
         for key in file_row:
             self.assertEqual(file_row[key], db_row[key], f"mismatch on {key!r}")
+
+    def test_summarize_db_scan_counts_findings(self) -> None:
+        findings = [
+            {
+                "id": "a1",
+                "severity": "high",
+                "source": "modelscan",
+                "title": "Pickle",
+            },
+            {
+                "id": "a2",
+                "severity": "low",
+                "source": "fickling",
+                "title": "Benign pickle",
+            },
+        ]
+        data = _scan_data_dict(findings=findings)
+        row = scan_db_data._summarize_db_scan(_db_scan_tuple(data), findings)
+        assert row is not None
+        self.assertEqual(row["n_findings"], 2)
+        self.assertEqual(row["severity_summary"], "1 high, 1 low")
 
 
 class AvailabilityTest(unittest.TestCase):

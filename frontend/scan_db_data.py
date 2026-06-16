@@ -6,8 +6,9 @@ Freshness model: the database holds whatever the loader last synced; brand-new
 scans exist only as files until the next ``load_scans.py --apply``. So
 ``get_scans_data_db()`` MERGES: DB rows are preferred per slug (latest
 ``completed_at`` per hf_repo), and any scan_result.json on disk not yet in the
-DB is summarized from the file. Detail falls back to disk when the slug is
-missing from Postgres.
+DB is summarized from the file. Findings for list-table columns (count +
+severity breakdown) are batch-loaded from ``public.findings``. Detail falls
+back to disk when the slug is missing from Postgres.
 
 Severable by design: delete this module and the dispatcher in scan_data.py
 reverts to pure file reads.
@@ -89,6 +90,14 @@ WHERE scan_id = %(scan_id)s::uuid
 ORDER BY severity, source, title
 """
 
+_FINDINGS_FOR_SCANS_SQL = """
+SELECT scan_id::text, finding_key, source, title, severity, file_path, description,
+       raw_tool_severity, remediation, corroborated_by
+FROM public.findings
+WHERE scan_id = ANY(%(scan_ids)s::uuid[])
+ORDER BY scan_id, severity, source, title
+"""
+
 
 def _slug_for_scan(hf_repo: str, scan_metadata: dict | None) -> str:
     meta = scan_metadata or {}
@@ -113,7 +122,7 @@ def _findings_to_json(rows: list[tuple]) -> list[dict]:
                 "id": finding_key,
                 "source": source,
                 "title": title,
-                "severity": severity,
+                "severity": (severity or "unknown").lower(),
                 "file_path": file_path,
                 "description": description or "",
                 "raw_tool_severity": raw_tool_severity,
@@ -160,11 +169,24 @@ def _scan_tuple_to_data(
     }
 
 
-def _summarize_db_scan(scan_row: tuple) -> dict | None:
+def _fetch_findings_by_scan_id(conn, scan_ids: list[str]) -> dict[str, list[dict]]:
+    """Batch-load findings for list-table rows (one query for all scan ids)."""
+    if not scan_ids:
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(_FINDINGS_FOR_SCANS_SQL, {"scan_ids": scan_ids})
+        rows = cur.fetchall()
+    grouped: dict[str, list[dict]] = {scan_id: [] for scan_id in scan_ids}
+    for scan_id, *finding in rows:
+        grouped.setdefault(scan_id, []).extend(_findings_to_json([finding]))
+    return grouped
+
+
+def _summarize_db_scan(scan_row: tuple, findings_json: list[dict] | None = None) -> dict | None:
     """Comparison-table row from one scans tuple (same keys as _summarize_from_data)."""
     meta = scan_row[7] or {}
     slug = _slug_for_scan(scan_row[1], meta)
-    data = _scan_tuple_to_data(scan_row, [])
+    data = _scan_tuple_to_data(scan_row, findings_json or [])
     return _summarize_from_data(data, slug)
 
 
@@ -183,7 +205,12 @@ def get_scans_data_db() -> dict:
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(_LATEST_SCANS_SQL)
-            db_rows = [_summarize_db_scan(row) for row in cur.fetchall()]
+            scan_rows = cur.fetchall()
+        findings_by_scan = _fetch_findings_by_scan_id(conn, [row[0] for row in scan_rows])
+        db_rows = [
+            _summarize_db_scan(row, findings_by_scan.get(row[0], []))
+            for row in scan_rows
+        ]
     db_rows = [r for r in db_rows if r is not None]
 
     seen_slugs = {r["slug"] for r in db_rows}
