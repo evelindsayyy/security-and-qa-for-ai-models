@@ -10,7 +10,7 @@ How the images fit together. For commands, see [`cli.md`](cli.md).
 | Job sandboxes | `*/docker/` | One-shot scan / safety / eval / benchmark runs |
 | Safety sub-tools | `safety/promptfoo/docker/`, `safety/garak/docker/` | Nested from the safety orchestrator |
 
-Dependencies live in [`pyproject.toml`](../pyproject.toml) + [`uv.lock`](../uv.lock) — no root `requirements.txt`. Optional groups: `dev` (pytest, ruff), `db` (psycopg), `safety`, `benchmarks`.
+Dependencies live in [`pyproject.toml`](../pyproject.toml) + [`uv.lock`](../uv.lock). Optional groups: `dev` (pytest, ruff), `db` (psycopg), `scanner`, `safety`, `benchmarks`.
 
 ## When Docker is used
 
