@@ -57,12 +57,8 @@ def _rate_class(rate: float | None) -> str:
     return "rate-weak"
 
 
-def _summarize_merged(path: Path, slug: str) -> dict | None:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-
+def _summarize_merged_data(data: dict, slug: str) -> dict:
+    """Build a list-table row from an in-memory MergedSafetyResult-shaped dict."""
     findings = data.get("findings") or []
     runs = data.get("runs") or []
     n_failed = sum(
@@ -99,6 +95,14 @@ def _summarize_merged(path: Path, slug: str) -> dict | None:
         "completed_at": data.get("completed_at") or "—",
         "status": data.get("status") or "unknown",
     }
+
+
+def _summarize_merged(path: Path, slug: str) -> dict | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return _summarize_merged_data(data, slug)
 
 
 def _parse_findings(findings_raw: list) -> list[dict]:
@@ -193,44 +197,8 @@ def _suite_panels(runs: list, tool_results: dict, findings: list[dict]) -> list[
     return panels
 
 
-def get_safety_data() -> dict:
-    """list every merged_safety_result.json under safety/output/."""
-    if not OUTPUT_DIR.exists():
-        return {
-            "has_safety": False,
-            "output_dir": str(OUTPUT_DIR),
-            "models": [],
-        }
-
-    rows: list[dict] = []
-    for path in sorted(OUTPUT_DIR.glob("*/merged_safety_result.json")):
-        slug = path.parent.name
-        row = _summarize_merged(path, slug)
-        if row:
-            rows.append(row)
-
-    # Worst first: lowest calibrated composite score, then lowest pass rate.
-    rows.sort(key=lambda r: (r["composite_score"], r["summary_pass_rate"]))
-
-    return {
-        "has_safety": bool(rows),
-        "output_dir": str(OUTPUT_DIR),
-        "models": rows,
-        "suite_labels": [_suite_label(s) for s in _SUITE_ORDER],
-    }
-
-
-def get_safety_detail(slug: str) -> dict | None:
-    """structured safety payload for one gateway model slug."""
-    path = OUTPUT_DIR / slug / "merged_safety_result.json"
-    if not path.is_file():
-        return None
-
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-
+def _build_safety_detail(slug: str, data: dict) -> dict:
+    """Structured safety payload from a MergedSafetyResult-shaped dict."""
     findings = _parse_findings(data.get("findings") or [])
     runs = data.get("runs") or []
     n_failed = sum(1 for f in findings if not f["passed"])
@@ -261,3 +229,72 @@ def get_safety_detail(slug: str) -> dict | None:
             "deployment_context": data.get("deployment_context"),
         },
     }
+
+
+def _get_safety_data_files() -> dict:
+    """List every merged_safety_result.json under safety/output/."""
+    if not OUTPUT_DIR.exists():
+        return {
+            "has_safety": False,
+            "output_dir": str(OUTPUT_DIR),
+            "models": [],
+        }
+
+    rows: list[dict] = []
+    for path in sorted(OUTPUT_DIR.glob("*/merged_safety_result.json")):
+        slug = path.parent.name
+        row = _summarize_merged(path, slug)
+        if row:
+            rows.append(row)
+
+    rows.sort(key=lambda r: (r["composite_score"], r["summary_pass_rate"]))
+
+    return {
+        "has_safety": bool(rows),
+        "output_dir": str(OUTPUT_DIR),
+        "models": rows,
+        "suite_labels": [_suite_label(s) for s in _SUITE_ORDER],
+    }
+
+
+def _get_safety_detail_files(slug: str) -> dict | None:
+    """Structured safety payload for one gateway model slug, read from disk."""
+    path = OUTPUT_DIR / slug / "merged_safety_result.json"
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return _build_safety_detail(slug, data)
+
+
+# ---------------------------------------------------------------------------
+# Public entry points — dispatch to Postgres when configured and reachable,
+# silently fall back to files otherwise. Files remain the source of truth;
+# the DB is a read projection (see safety/db/README.md).
+# ---------------------------------------------------------------------------
+
+
+def get_safety_data() -> dict:
+    try:
+        from frontend import safety_db_data
+
+        if safety_db_data.available():
+            return safety_db_data.get_safety_data_db()
+    except Exception:
+        pass
+    return _get_safety_data_files()
+
+
+def get_safety_detail(slug: str) -> dict | None:
+    try:
+        from frontend import safety_db_data
+
+        if safety_db_data.available():
+            detail = safety_db_data.get_safety_detail_db(slug)
+            if detail is not None:
+                return detail
+    except Exception:
+        pass
+    return _get_safety_detail_files(slug)

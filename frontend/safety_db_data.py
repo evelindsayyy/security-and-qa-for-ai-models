@@ -1,0 +1,245 @@
+"""
+Postgres-backed data source for /safety — same dict contracts as safety_data.py,
+used only when POSTGRES_DSN is set and reachable.
+
+Freshness model: the database holds whatever the loader last synced; brand-new
+safety runs exist only as files until the next ``load_safety.py --apply``. So
+``get_safety_data_db()`` MERGES: DB rows are preferred per gateway_model_id, and
+any merged_safety_result.json on disk not yet in the DB is summarized from the
+file. Findings for list-table columns are batch-loaded from
+``public.safety_findings``. Detail falls back to disk when the slug is missing
+from Postgres.
+
+Severable by design: delete this module and the dispatcher in safety_data.py
+reverts to pure file reads.
+"""
+
+from __future__ import annotations
+
+import time
+
+from dbutils import load_repo_env, resolve_dsn
+
+from frontend.safety_data import (
+    OUTPUT_DIR,
+    _build_safety_detail,
+    _summarize_merged,
+    _summarize_merged_data,
+)
+
+load_repo_env()
+
+_DSN_KEYS = ("POSTGRES_DSN", "DATABASE_URL")
+_CONNECT_TIMEOUT_S = 2
+_AVAILABILITY_TTL_S = 60.0
+_avail_cache = {"checked_at": 0.0, "ok": False}
+
+_SUITE_ORDER = ("promptfoo_duke_policy_v1", "promptfoo_duke_redteam_v1", "garak_subset_v1")
+
+
+def _dsn() -> str | None:
+    return resolve_dsn(*_DSN_KEYS)
+
+
+def available() -> bool:
+    """True when a DSN is configured, psycopg is installed, and Postgres answers."""
+    dsn = _dsn()
+    if not dsn:
+        return False
+    now = time.monotonic()
+    if now - _avail_cache["checked_at"] < _AVAILABILITY_TTL_S:
+        return _avail_cache["ok"]
+    try:
+        import psycopg
+
+        with psycopg.connect(dsn, connect_timeout=_CONNECT_TIMEOUT_S):
+            ok = True
+    except Exception:
+        ok = False
+    _avail_cache.update(checked_at=now, ok=ok)
+    return ok
+
+
+def _connect():
+    import psycopg
+
+    return psycopg.connect(_dsn(), connect_timeout=_CONNECT_TIMEOUT_S)
+
+
+_LATEST_RUNS_SQL = """
+SELECT DISTINCT ON (gateway_model_id)
+    id::text, gateway_model_id, display_name, status, deployment_context,
+    summary_pass_rate, safety_tier, adversarial_tier, composite_tier,
+    composite_score, missing_suites, runs, tool_results, started_at, completed_at
+FROM public.safety_runs
+ORDER BY gateway_model_id, completed_at DESC NULLS LAST
+"""
+
+_DETAIL_RUN_SQL = """
+SELECT id::text, gateway_model_id, display_name, status, deployment_context,
+       summary_pass_rate, safety_tier, adversarial_tier, composite_tier,
+       composite_score, missing_suites, runs, tool_results, started_at, completed_at
+FROM public.safety_runs
+WHERE gateway_model_id = %(gateway_model_id)s
+ORDER BY completed_at DESC NULLS LAST
+LIMIT 1
+"""
+
+_FINDINGS_SQL = """
+SELECT finding_key, category, source, passed, severity, title, description,
+       probe_id, probe_suite, corroborated_by
+FROM public.safety_findings
+WHERE run_id = %(run_id)s::uuid
+ORDER BY passed, severity, source, probe_id
+"""
+
+_FINDINGS_FOR_RUNS_SQL = """
+SELECT run_id::text, finding_key, category, source, passed, severity, title,
+       description, probe_id, probe_suite, corroborated_by
+FROM public.safety_findings
+WHERE run_id = ANY(%(run_ids)s::uuid[])
+ORDER BY run_id, passed, severity, source, probe_id
+"""
+
+
+def _findings_to_json(rows: list[tuple]) -> list[dict]:
+    out: list[dict] = []
+    for (
+        finding_key,
+        category,
+        source,
+        passed,
+        severity,
+        title,
+        description,
+        probe_id,
+        probe_suite,
+        corroborated_by,
+    ) in rows:
+        out.append(
+            {
+                "id": finding_key,
+                "category": (category or "unknown").lower(),
+                "source": (source or "unknown").lower(),
+                "passed": bool(passed),
+                "severity": (severity or "unknown").lower(),
+                "title": title or "—",
+                "description": description or "",
+                "probe_id": probe_id or "—",
+                "probe_suite": probe_suite,
+                "corroborated_by": corroborated_by or [],
+            }
+        )
+    return out
+
+
+def _run_tuple_to_data(run_row: tuple, findings_json: list[dict]) -> dict:
+    """Rebuild MergedSafetyResult-shaped dict from DB columns."""
+    (
+        _run_id,
+        gateway_model_id,
+        display_name,
+        status,
+        deployment_context,
+        summary_pass_rate,
+        safety_tier,
+        adversarial_tier,
+        composite_tier,
+        composite_score,
+        missing_suites,
+        runs,
+        tool_results,
+        started_at,
+        completed_at,
+    ) = run_row
+    return {
+        "gateway_model_id": gateway_model_id,
+        "display_name": display_name,
+        "status": status or "complete",
+        "deployment_context": deployment_context or {},
+        "summary_pass_rate": float(summary_pass_rate or 0.0),
+        "safety_tier": safety_tier or "low",
+        "adversarial_tier": adversarial_tier or "low",
+        "composite_tier": composite_tier or "low",
+        "composite_score": float(composite_score or 0.0),
+        "missing_suites": missing_suites or [],
+        "runs": runs or [],
+        "findings": findings_json,
+        "tool_results": tool_results or {},
+        "started_at": str(started_at) if started_at else None,
+        "completed_at": str(completed_at) if completed_at else None,
+    }
+
+
+def _summarize_db_run(run_row: tuple, findings_json: list[dict] | None = None) -> dict | None:
+    """List-table row from one safety_runs tuple (same keys as _summarize_merged_data)."""
+    slug = run_row[1]  # gateway_model_id doubles as slug
+    data = _run_tuple_to_data(run_row, findings_json or [])
+    return _summarize_merged_data(data, slug)
+
+
+def _fetch_findings_by_run_id(conn, run_ids: list[str]) -> dict[str, list[dict]]:
+    """Batch-load findings for list-table rows (one query for all run ids)."""
+    if not run_ids:
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(_FINDINGS_FOR_RUNS_SQL, {"run_ids": run_ids})
+        rows = cur.fetchall()
+    grouped: dict[str, list[dict]] = {run_id: [] for run_id in run_ids}
+    for run_id, *finding in rows:
+        grouped.setdefault(run_id, []).extend(_findings_to_json([finding]))
+    return grouped
+
+
+def get_safety_data_db() -> dict:
+    """DB-preferred merge of every known safety run (DB rows + not-yet-loaded files)."""
+    from frontend.safety_data import _SUITE_ORDER as _SO
+    from frontend.safety_data import _suite_label
+
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(_LATEST_RUNS_SQL)
+            run_rows = cur.fetchall()
+        findings_by_run = _fetch_findings_by_run_id(conn, [row[0] for row in run_rows])
+        db_rows = [
+            _summarize_db_run(row, findings_by_run.get(row[0], []))
+            for row in run_rows
+        ]
+    db_rows = [r for r in db_rows if r is not None]
+
+    seen_slugs = {r["slug"] for r in db_rows}
+    file_rows: list[dict] = []
+    if OUTPUT_DIR.exists():
+        for path in sorted(OUTPUT_DIR.glob("*/merged_safety_result.json")):
+            slug = path.parent.name
+            if slug in seen_slugs:
+                continue
+            row = _summarize_merged(path, slug)
+            if row is not None:
+                file_rows.append(row)
+
+    rows = db_rows + file_rows
+    rows.sort(key=lambda r: (r["composite_score"], r["summary_pass_rate"]))
+
+    return {
+        "has_safety": bool(rows),
+        "output_dir": str(OUTPUT_DIR),
+        "models": rows,
+        "suite_labels": [_suite_label(s) for s in _SO],
+    }
+
+
+def get_safety_detail_db(slug: str) -> dict | None:
+    """Detail-page payload from Postgres; None if slug isn't loaded."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(_DETAIL_RUN_SQL, {"gateway_model_id": slug})
+            run_row = cur.fetchone()
+            if run_row is None:
+                return None
+
+            cur.execute(_FINDINGS_SQL, {"run_id": run_row[0]})
+            findings_json = _findings_to_json(cur.fetchall())
+
+    data = _run_tuple_to_data(run_row, findings_json)
+    return _build_safety_detail(slug, data)
