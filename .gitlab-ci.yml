@@ -36,6 +36,7 @@ variables:
 lint:
   extends: .default_uv
   stage: lint
+  image: gitlab-registry.oit.duke.edu/codeplus/security-and-qa-for-ai-models/dev
   script:
     - uv run ruff check .
 
