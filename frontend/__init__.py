@@ -24,4 +24,10 @@ def create_app(test_config=None):
 
     os.makedirs(app.instance_path, exist_ok=True)
     register_routes(app)
+
+    # JSON API blueprint(s) under /api (Track A will add scans/safety here).
+    # Lazy import keeps app composition free of any frontend<->api import cycle.
+    from api import register_api
+
+    register_api(app)
     return app
