@@ -30,7 +30,9 @@ from typing import Optional
 
 # Bump this when the result-row contract changes. Downstream consumers can
 # refuse rows whose schema_version they don't recognize.
-SCHEMA_VERSION = "1.0.0"
+#   1.1.0 — added Adaptation.inference_backend + .hf_repo (additive + optional;
+#           1.0.0 rows still parse because the new fields default).
+SCHEMA_VERSION = "1.1.0"
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +74,12 @@ class Adaptation:
     rubric_version: str
     judge_model: str
     judge_prompt_version: str
+    # Provenance for self-hosted candidates (schema 1.1.0, additive). Defaulted
+    # so 1.0.0 rows and existing callers stay valid. 'gateway' = Duke AI Gateway;
+    # 'dcc' = self-hosted vLLM on the cluster; 'ollama' = a local server. hf_repo
+    # is the canonical Hugging Face id of the exact weights when self-hosted.
+    inference_backend: str = "gateway"
+    hf_repo: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

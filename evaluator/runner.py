@@ -197,6 +197,17 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--candidate-endpoint", type=str, default=None,
                    help="OpenAI-compatible base URL serving the candidate "
                         "(default: the Duke Gateway)")
+    # Provenance for self-hosted candidates: which backend served the model and
+    # the exact weights, recorded into Adaptation so a self-hosted row is never
+    # confused with a Gateway row of the same name. For the DCC open-weight eval:
+    #   --candidate-endpoint http://<node>:8000/v1 \
+    #   --inference-backend dcc --hf-repo Qwen/Qwen2.5-7B-Instruct
+    p.add_argument("--inference-backend", type=str, default="gateway",
+                   help="where the candidate ran: gateway | dcc | ollama "
+                        "(default: gateway)")
+    p.add_argument("--hf-repo", type=str, default=None,
+                   help="canonical Hugging Face repo id of the candidate when "
+                        "self-hosted, e.g. Qwen/Qwen2.5-7B-Instruct")
     # Reasoning judges (e.g. gpt-oss-120b) spend hidden thinking tokens from
     # the same budget; 600 leaves them no room for the ~200-token JSON verdict
     # and they come back empty/truncated. Raise to ~2000 for those judges.
@@ -372,6 +383,8 @@ def main() -> int:
                     rubric_version=rubric_version,
                     judge_model=args.judge_model,
                     judge_prompt_version=judge_prompt_version,
+                    inference_backend=args.inference_backend,
+                    hf_repo=args.hf_repo,
                 )
                 operational = Operational(
                     latency_ms=cand.latency_ms,
@@ -450,6 +463,8 @@ def main() -> int:
                         rubric_version=rubric_version,
                         judge_model=args.judge_model,
                         judge_prompt_version=judge_prompt_version,
+                        inference_backend=args.inference_backend,
+                        hf_repo=args.hf_repo,
                     ),
                     candidate_response="",
                     scores={},
