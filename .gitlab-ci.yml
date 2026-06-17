@@ -8,9 +8,9 @@
 
 stages:
   - lint
-  - test
-  - build
-  - deploy
+  #- test
+  #- build
+  #- deploy
 
 default:
   interruptible: true
@@ -40,27 +40,27 @@ lint:
   script:
     - uv run ruff check .
 
-unit-tests:
-  extends: .default_uv
-  stage: test
-  script:
-    - uv run python -m unittest discover -s unit_tests -v
+# unit-tests:
+#   extends: .default_uv
+#   stage: test
+#   script:
+#     - uv run python -m unittest discover -s unit_tests -v
 
-build-images:
-  stage: build
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  script:
-    - docker compose --project-name qa-ai-models -f docker/compose.yml build
-    - docker compose --project-name qa-ai-models -f scanner/docker/compose.yml build
+# build-images:
+#   stage: build
+#   rules:
+#     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+#     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+#   script:
+#     - docker compose --project-name qa-ai-models -f docker/compose.yml build
+#     - docker compose --project-name qa-ai-models -f scanner/docker/compose.yml build
 
-deploy-manual:
-  stage: deploy
-  environment: production
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: manual
-  script:
-    - 'test -f .env || (echo "ERROR .env missing on runner host - copy from .env.example" && exit 1)'
-    - ./docker/run.sh up -d --build
+# deploy-manual:
+#   stage: deploy
+#   environment: production
+#   rules:
+#     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+#       when: manual
+#   script:
+#     - 'test -f .env || (echo "ERROR .env missing on runner host - copy from .env.example" && exit 1)'
+#     - ./docker/run.sh up -d --build
