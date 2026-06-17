@@ -21,6 +21,10 @@ def test_garak_default_probe_spec_includes_extended_modules_and_cli_override() -
     config = Path("safety/garak/garak_duke.yaml").read_text(encoding="utf-8")
     script = Path("safety/run_safety.sh").read_text(encoding="utf-8")
 
-    assert "misleading,leakreplay,latentinjection,propile,divergence" in config
+    # Expanded probe list (individual classes, not module shorthand).
+    assert "latentinjection.LatentInjectionReport" in config
+    assert "leakreplay" in config
+    assert "divergence" in config
+    assert "lmrc.QuackMedicine" in config
     assert 'GARAK_CMD+=(-p "$GARAK_PROBES")' in script
 
