@@ -9,9 +9,8 @@ expects /output/gpt2/combined_scan.json (or MODEL_ID env for other models).
 
 import json
 import sys
-from pathlib import Path
 
-from scan_helpers import get_model_id, output_dir, safe_dir_name
+from scan_helpers import get_model_id, output_dir
 from schemas import ScanResult, build_scan_result_from_combined
 
 

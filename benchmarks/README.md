@@ -24,6 +24,7 @@ any benchmark with one argv shape.
 uv run python benchmarks/run_benchmark.py --benchmark truthfulqa --model "GPT 4.1 Mini"
 
 # docker (matches the browser launch)
+export UID=$(id -u) GID=$(id -g)
 docker compose --env-file .env \
   -f benchmarks/docker/compose.yml run --rm benchmarks \
   python run_benchmark.py --benchmark ifeval --model "gpt-5-chat"

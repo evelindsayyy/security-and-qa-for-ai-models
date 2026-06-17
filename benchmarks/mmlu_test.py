@@ -19,7 +19,6 @@ ENV VARIABLES:
 
 import json
 import os
-import re
 import traceback
 from collections import defaultdict
 from pathlib import Path

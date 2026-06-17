@@ -1,24 +1,40 @@
-# Narrow build context for all pillar images (scanner, evaluator, safety).
+# Narrow build context for pillar + app images.
 # Runtime dirs are bind-mounted at `docker compose run` time.
-**
-!requirements.txt
-!pyproject.toml
-!scanner/**
-!evaluator/**
-!benchmarks/**
-!gateway/**
-!safety/**
 
-# Re-exclude large or permission-sensitive runtime trees
-safety/garak/output
-safety/promptfoo/output
-safety/output
+# Exclude everything, then whitelist source trees needed for builds.
+**
+!pyproject.toml
+!uv.lock
+!main.py
+!frontend/
+!frontend/**
+!gateway/
+!gateway/**
+!dbutils/
+!dbutils/**
+!scanner/
+!scanner/**
+!evaluator/
+!evaluator/**
+!benchmarks/
+!benchmarks/**
+!safety/
+!safety/**
+!docker/
+!docker/**
+
+# Re-exclude large or permission-sensitive runtime trees (incl. root-owned garak caches)
 scanner/models
 scanner/output
 evaluator/results
 evaluator/cache
 benchmarks/results
-
+safety/garak/output
+safety/garak/output/**
+safety/promptfoo/output
+safety/promptfoo/output/**
+safety/output
+safety/output/**
 safety/garak_testing/output
 safety/promptfoo_testing/output
-safety/**/__pycache__
+**/__pycache__

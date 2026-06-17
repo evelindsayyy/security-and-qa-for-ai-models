@@ -20,7 +20,6 @@ week 4 middle ground: hf_hub_download(repo_id, filename="requirements.txt") — 
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from huggingface_hub import HfApi
 

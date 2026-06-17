@@ -1,0 +1,41 @@
+# Containerized Flask UI for the application VM.
+#
+# Start with the launcher (auto-detects user, Docker socket group, and repo path):
+#   ./docker/run.sh up --build
+#
+# The repo is mounted at the SAME absolute path (HOST_REPO) inside and outside
+# the container. Browser "Start" buttons spawn pillar stacks via the mounted
+# Docker socket, and their bind mounts resolve on the host daemon correctly.
+# Postgres/Redis are external (POSTGRES_DSN in .env).
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    group_add:
+      - "${DOCKER_GID:-998}"
+
+    ports:
+      - "${APP_PORT:-5000}:5000"
+
+    env_file:
+      - ../.env
+
+    environment:
+      - PYTHONPATH=${HOST_REPO:-/workspace}
+      - HOME=${HOST_REPO:-/workspace}/.docker-home
+      - COMPOSE_PROJECT_NAME=qa-ai-models
+      - COMPOSE_IGNORE_ORPHANS=1
+      - FRONTEND_LAUNCH_MODE=${FRONTEND_LAUNCH_MODE:-docker}
+
+    volumes:
+      - ${HOST_REPO:-..}:${HOST_REPO:-/workspace}
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    working_dir: ${HOST_REPO:-/workspace}
+
+    stdin_open: true
+    tty: true

@@ -15,6 +15,7 @@ from safety.safety_scorer import merge_safety_runs
 from safety.schemas import SafetySeverity
 
 _ROOT = Path(__file__).resolve().parent.parent
+_FIXTURES = _ROOT / "unit_tests" / "fixtures"
 
 
 class SafetyScorerTest(unittest.TestCase):
@@ -24,10 +25,10 @@ class SafetyScorerTest(unittest.TestCase):
 
     def test_merge_promptfoo_and_garak_samples(self) -> None:
         promptfoo = json.loads(
-            (_ROOT / "safety/promptfoo/output/gpt-4.1-mini/safety_result.json").read_text()
+            (_FIXTURES / "promptfoo_gpt41mini_safety_result.json").read_text()
         )
         garak = json.loads(
-            (_ROOT / "safety/garak/output/gpt-4.1-mini/safety_result.json").read_text()
+            (_FIXTURES / "garak_gpt41mini_safety_result.json").read_text()
         )
         merged = merge_safety_runs([promptfoo, garak])
 
@@ -39,7 +40,7 @@ class SafetyScorerTest(unittest.TestCase):
         from safety.exporters.promptfoo import export_from_promptfoo_eval
 
         payload = json.loads(
-            (_ROOT / "safety/promptfoo/output/gpt-4.1-mini/redteam_eval.json").read_text()
+            (_FIXTURES / "promptfoo_gpt41mini_redteam_eval.json").read_text()
         )
         doc = export_from_promptfoo_eval(
             payload, source_file="redteam_eval.json", probe_suite="promptfoo_duke_redteam_v1"
@@ -49,8 +50,9 @@ class SafetyScorerTest(unittest.TestCase):
         self.assertTrue(doc["findings"][0]["probe_id"].startswith("promptfoo.redteam."))
 
     def test_garak_pass_rate_is_per_module(self) -> None:
-        garak_path = _ROOT / "safety/garak/output/gpt-4.1-mini/safety_result.json"
-        garak = json.loads(garak_path.read_text())
+        garak = json.loads(
+            (_FIXTURES / "garak_gpt41mini_safety_result.json").read_text()
+        )
         self.assertAlmostEqual(garak["summary_pass_rate"], 4 / 9, places=3)
 
     def test_garak_probe_categories(self) -> None:
