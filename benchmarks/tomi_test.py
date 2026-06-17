@@ -25,7 +25,7 @@ import re
 import traceback
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List
 from litellm import completion
 import litellm
 import dotenv

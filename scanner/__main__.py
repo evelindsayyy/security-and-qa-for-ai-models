@@ -24,14 +24,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from pathlib import Path
 
 from scanner.download import download_model
 from scanner.metadata import build_metadata_report
 from scanner.paths import dump_json, model_dir, output_dir
 from scanner.pickle_scan import (
-    analyze_pytorch_bin,
-    find_pickle_weights,
     run_fickling_if_applicable,
     run_modelscan,
 )

@@ -25,11 +25,10 @@ import os
 import re
 import subprocess
 import sys
-import tempfile
 import traceback
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 from datasets import load_dataset
 from litellm import completion
 import litellm

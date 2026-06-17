@@ -36,7 +36,7 @@ Dated, step-by-step milestones live in the GitLab tracker; this is the high-leve
 | Full UI | `frontend/` reads `api/` | Scanning + safety views | Efficacy charts |
 | Demo freeze | Representative catalog; documented limits | Gateway safety + HF samples | Gateway efficacy |
 
-Shared: `frontend/`, `api/`, Postgres, Celery, GitLab CI.
+Shared: `frontend/`, `api/`, Postgres, GitLab CI.
 
 ---
 

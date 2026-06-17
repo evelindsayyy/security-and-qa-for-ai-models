@@ -311,6 +311,97 @@
       {% endif %}
     {% endif %}
 
+    {# ---- MBPP ---- #}
+    {% if kind == 'mbpp' %}
+      {% for r in results %}
+      <details class="finding-detail {% if not r.passed %}finding-fail{% endif %}">
+        <summary>
+          {% if r.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+          · task {{ r.task_id }} · {{ r.tests_passed }}/{{ r.tests_total }} tests
+        </summary>
+        <div class="finding-detail-panel benchmark-item-panel">
+          <h3>Problem</h3>
+          {{ expandable(r.problem or "—", clamp=4) }}
+        
+          <h3>Generated code</h3>
+          <pre class="code-block">{{ r.generated_code or "—" }}</pre>
+
+          <dl class="benchmark-meta-dl">
+            <dt>Task ID</dt><dd><code>{{ r.task_id }}</code></dd>
+            <dt>Tests</dt><dd>{{ r.tests_passed }}/{{ r.tests_total }}</dd>
+            <dt>Outcome</dt><dd>{% if r.passed %}All tests passed.{% else %}One or more tests failed.{% endif %}</dd>
+          </dl>
+
+          {% if not r.passed and r.test_results %}
+            {% for t in r.test_results %}
+              {% if not t.passed %}
+                <h3>First failing test</h3>
+                {% if t.test %}{{ expandable(t.test, clamp=2) }}{% endif %}
+                {% if t.error %}
+                  <h3>Error</h3>
+                  <pre class="log-snippet">{{ t.error }}</pre>
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        </div>
+      </details>
+
+      {% endfor %}
+    {% endif %}
+
+    {# ---- QuALITY ---- #}
+    {% if kind == 'quality' %}
+    {% for r in results %}
+    <details class="finding-detail {% if not r.passed %}finding-fail{% endif %}">
+      <summary>
+        {% if r.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+        · article {{ r.article_id }}
+        {% if r.hard %}· <span class="dim">HARD</span>{% endif %}
+        · correct <b>{{ r.correct_answer }}</b> · model <b>{{ r.model_answer }}</b>
+        {% if r.question %}
+          · <span class="finding-summary-title">{{ r.question[:70] }}{% if r.question|length > 70 %}…{% endif %}</span>
+        {% endif %}
+      </summary>
+      <div class="finding-detail-panel benchmark-item-panel">
+        {% if r.title %}
+        <h3>Article</h3>
+        <p class="dim">{{ r.title }} <span class="dim">(id {{ r.article_id }})</span></p>
+        {% endif %}
+
+        <h3>Question</h3>
+        {{ expandable(r.question or "—", clamp=4) }}
+
+        {% if r.options %}
+        <h3>Choices</h3>
+        <ul class="benchmark-choice-list">
+          {% for choice in r.options %}
+          {% set letter = "ABCD"[loop.index0] %}
+          <li class="{% if letter == r.correct_answer %}choice-correct{% elif letter == r.model_answer and not r.passed %}choice-wrong{% endif %}">
+            <b>{{ letter }}.</b> {{ choice }}
+            {% if letter == r.correct_answer %}<span class="dim"> (correct)</span>{% endif %}
+            {% if letter == r.model_answer %}<span class="dim"> (model)</span>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        <dl class="benchmark-meta-dl">
+          <dt>Article id</dt><dd><code>{{ r.article_id }}</code></dd>
+          {% if r.question_unique_id %}
+          <dt>Question id</dt><dd><code>{{ r.question_unique_id }}</code></dd>
+          {% endif %}
+          <dt>Difficulty</dt><dd>{% if r.hard %}Hard{% else %}Standard{% endif %}</dd>
+          <dt>Correct</dt><dd>{{ r.correct_answer or "—" }}</dd>
+          <dt>Model picked</dt><dd>{{ r.model_answer or "—" }}</dd>
+          <dt>Outcome</dt>
+          <dd>{% if r.passed %}Model picked the correct letter.{% else %}Mismatch — counts against accuracy.{% endif %}</dd>
+        </dl>
+      </div>
+    </details>
+    {% endfor %}
+    {% endif %}
+
     <details>
       <summary>Raw run summary (JSON)</summary>
       <pre class="json-block">{{ {

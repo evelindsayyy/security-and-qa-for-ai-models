@@ -124,7 +124,7 @@ def print_model_stats(response: ModelResponse, extra_stats: bool) -> None:
         if response.latency > 0:
             print(f"Tokens/Second:        {response.completion_tokens / response.latency:.2f}")
     
-    print(f"\nOutput:")
+    print("\nOutput:")
     print(response.output)
 
 

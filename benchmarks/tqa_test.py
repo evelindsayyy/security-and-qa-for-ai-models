@@ -11,8 +11,6 @@ USAGE:
 """
 
 import pandas as pd
-import numpy as np
-import sys
 import json
 import requests
 import random
@@ -93,7 +91,6 @@ class TruthfulQATestRunner:
     
     def format_mc_question(self, row: pd.Series) -> Dict[str, Any]:
         """Format a question row into a multiple-choice question dict."""
-        question = row['Question'].strip()
         correct = get_split_answers(row, ANSWER_COL)
         incorrect = get_split_answers(row, INCORRECT_COL)
         all_choices = (correct[:1] + incorrect[:3])  # Take 1 correct and up to 3 incorrect

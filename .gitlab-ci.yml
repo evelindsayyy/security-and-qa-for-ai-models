@@ -1,0 +1,46 @@
+# GitLab CI — Duke Code+ shared runners (docker+machine).
+#
+# Lint + unit tests only. Shared runners have no host Docker socket and DinD is
+# not configured (TLS certs missing), so image builds are not run in CI — verify
+# locally before merge (see docs/cli.md).
+
+stages:
+  - lint
+  - test
+  #- build
+  #- deploy
+
+default:
+  interruptible: true
+  image: gitlab-registry.oit.duke.edu/codeplus/security-and-qa-for-ai-models/dev:local
+
+.default_ci:
+  before_script:
+    - uv sync --frozen --group dev
+
+lint:
+  extends: .default_ci
+  stage: lint
+  script:
+    - uv run ruff check .
+
+unit-tests:
+  extends: .default_ci
+  stage: test
+  script:
+    - uv run python -m unittest discover -s unit_tests -v
+
+# build-images: requires a runner with Docker (host socket or working DinD).
+# Duke shared runners not seeming to provide either. 
+#   docker compose --project-name qa-ai-models -f docker/compose.yml build
+#   docker compose --project-name qa-ai-models -f scanner/docker/compose.yml build
+
+# deploy-manual:
+#   stage: deploy
+#   environment: production
+#   rules:
+#     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+#       when: manual
+#   script:
+#     - 'test -f .env || (echo "ERROR .env missing on runner host - copy from .env.example" && exit 1)'
+#     - ./docker/run.sh up -d --build

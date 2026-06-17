@@ -43,7 +43,9 @@
                               'ifeval': 'badge-ifeval',
                               'consistency': 'badge-consistency',
                               'mmlu': 'badge-mmlu',
-                              'tomi': 'badge-tomi'}.get(r.kind, 'badge-pilot') %}
+                              'tomi': 'badge-tomi',
+                              'mbpp': 'badge-mbpp',
+                              'quality': 'badge-quality'}.get(r.kind, 'badge-pilot') %}
         {% set v = r.headline_value or 0 %}
         {% if v >= 0.8 %}{% set score_class = 'score-strong' %}
         {% elif v >= 0.6 %}{% set score_class = 'score-mid' %}
@@ -108,6 +110,10 @@
         <dd>Multiple-choice accuracy across academic subjects (sampled subset by default).</dd>
         <dt>ToMi</dt>
         <dd>Theory-of-mind accuracy on belief-tracking stories.</dd>
+        <dt>MBPP</dt>
+        <dd>Fraction of code generation problems where all unit tests passed.</dd>
+        <dt>QuALITY</dt>
+        <dd>Long-document reading comprehension accuracy</dd>
       </dl>
     </section>
   {% endif %}

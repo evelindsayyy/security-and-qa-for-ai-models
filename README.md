@@ -2,105 +2,83 @@
 
 Code+ 2026 — Duke Office of Information Technology
 
-Automated **nutrition labels** for Duke AI Gateway models: security (scanning + safety) and efficacy (Duke task suites + public benchmarks).
+Automated **nutrition labels** for Duke AI Gateway models: **security** (artifact scanning + inference safety) and **efficacy** (Duke judge suites + public benchmarks).
 
 | Pillar | Question |
 |--------|----------|
-| **Scanning** | Can model files or dependencies compromise Duke infrastructure? |
-| **Safety** | Can the model be misused or violate policy at inference time? |
-| **Efficacy** | How well does it perform on Duke-relevant and standard benchmark tasks? |
+| **Scanning** | Can model files or dependencies compromise infrastructure? |
+| **Safety** | Can the model be misused or violate policy at inference? |
+| **Efficacy** | How well does it perform on Duke-relevant and standard tasks? |
 
-**Docs:** [`docs/README.md`](docs/README.md) · **Tracks:** [A (security)](docs/track-a-framework.md) · [B (efficacy)](docs/track-b-framework.md)
 
 ---
 
-## Quick start
+## Where to go next
 
-```bash
-uv sync
-cp .env.example .env   # paste DUKE_GATEWAY_KEY from dashboard.ai.duke.edu
-uv run flask --app frontend:create_app run --debug
-# → http://127.0.0.1:5000  (/scans  /safety  /eval-run  /benchmarks  /models)
-```
+| I want to… | Start here |
+|------------|------------|
+| **Run the UI** on my machine | [Quick start](#quick-start) |
+| **CLI** — scans, safety, eval, benchmarks, tests | [`docs/cli.md`](docs/cli.md) |
+| **Docker model** (containerized UI, sibling jobs) | [`docs/docker.md`](docs/docker.md) |
+| **Understand the system** (VM, DGX, ingest, background jobs) | [`docs/architecture.md`](docs/architecture.md) |
+| **Postgres schema and ingest** | [`docs/data-model.md`](docs/data-model.md) · [`dbutils/README.md`](dbutils/README.md) |
+| **Track A** (scanning + safety) | [`docs/track-a-framework.md`](docs/track-a-framework.md) |
+| **Track B** (evaluator + benchmarks) | [`docs/track-b-framework.md`](docs/track-b-framework.md) |
+| **Gateway models and HF scan tiers** | [`docs/gateway-models.md`](docs/gateway-models.md) |
+| **All documentation** | [`docs/README.md`](docs/README.md) |
+
+**Pillar READMEs:** [`scanner/`](scanner/README.md) · [`safety/`](safety/README.md) · [`evaluator/`](evaluator/README.md) · [`benchmarks/`](benchmarks/README.md) · [`frontend/`](frontend/README.md) · [`gateway/`](gateway/README.md)
 
 ---
 
 ## Repository layout
 
 ```
-scanner/              Track A — HF artifact scanning
-safety/               Track A — promptfoo + garak red team
-evaluator/            Track B — Duke efficacy (LLM-as-judge, runner.py)
-benchmarks/           Track B — public benchmarks (TruthfulQA, IFEval, MMLU, …)
-gateway/              Live gateway catalog (GET /v1/models)
-frontend/             Nutrition-label UI
-tasks/                Rubrics and suite placeholders
-scripts/              Foundry and DCC/vLLM example workflows
-testing/              Manual spikes (gateway smoke, legacy paths)
-docs/                 Architecture, data model, tool matrix
-api/                  Flask REST API (planned — persistence layer)
-unit_tests/           Automated tests
+scanner/       Track A — HF artifact scanning
+safety/        Track A — promptfoo + garak red team
+evaluator/     Track B — Duke LLM-as-judge suites
+benchmarks/    Track B — public benchmarks (IFEval, TruthfulQA, …)
+gateway/       Live gateway catalog
+frontend/      Nutrition-label UI
+docker/        Containerized UI for the application VM
+dbutils/       Shared Postgres ingest helpers
+docs/          Architecture, data model, frameworks
+api/           Flask REST + workers (planned)
+unit_tests/    Automated tests
 ```
 
-Runtime outputs are gitignored (`scanner/output`, `evaluator/results`, `benchmarks/results`, `safety/output`). Each pillar README documents its paths.
+Runtime outputs are gitignored (`scanner/output`, `safety/output`, `evaluator/results`, `benchmarks/results`).
 
 ---
 
-## CLI (one command per pillar)
-
-**Scan** (HF repo → `scanner/output/<slug>/scan_result.json`):
+## Quick start
 
 ```bash
-docker compose --env-file .env -f scanner/docker/compose.yml \
-  run --rm scanner python -m scanner scan gpt2
+git clone git@gitlab.oit.duke.edu:codeplus/security-and-qa-for-ai-models.git
+cd security-and-qa-for-ai-models
+uv sync --group dev --group scanner --group benchmarks
+cp .env.example .env          # paste DUKE_GATEWAY_KEY from dashboard.ai.duke.edu
+uv run flask --app frontend:create_app run --debug
+# → http://127.0.0.1:5000
 ```
 
-**Safety** (gateway model → merged JSON under `safety/output/`):
+Dependencies: [`pyproject.toml`](pyproject.toml) + [`uv.lock`](uv.lock).
 
-```bash
-./safety/run_safety.sh "GPT 4.1 Mini"
-```
-
-**Efficacy** (candidate + judge → `evaluator/results/*.jsonl`):
-
-```bash
-docker compose --env-file .env -f evaluator/docker/compose.yml \
-  run --rm evaluator python runner.py \
-  --candidate-model "GPT 4.1 Mini" --judge-model "Llama 4 Maverick"
-```
-
-**Public benchmark** (TruthfulQA, IFEval, … → `benchmarks/results/`):
-
-```bash
-docker compose --env-file .env \
-  -f benchmarks/docker/compose.yml run --rm benchmarks \
-  python run_benchmark.py --benchmark truthfulqa --model "GPT 4.1 Mini"
-```
-
-Pillar details: [`scanner/README.md`](scanner/README.md) · [`safety/README.md`](safety/README.md) · [`evaluator/README.md`](evaluator/README.md) · [`benchmarks/README.md`](benchmarks/README.md) · [`frontend/README.md`](frontend/README.md)
-
----
-
-## Gateway catalog
-
-Single live source — [`gateway/`](gateway/README.md) (`GET /v1/models`, 5‑min cache):
-
-```bash
-uv run python -m gateway          # grouped listing
-uv run python -m gateway --json   # machine-readable
-```
-
-Frontend `/models` and all launch dropdowns read this package. Reference table: [`docs/gateway-models.md`](docs/gateway-models.md).
+**Containerized UI** (application VM): `./docker/run.sh up --build`.
+**All CLI commands:** [`docs/cli.md`](docs/cli.md).
 
 ---
 
 ## Environment
 
-See `.env.example`. Never commit `.env`.
+One repo-root [`.env.example`](.env.example) → `.env` (never commit). Key variables:
 
-- `DUKE_GATEWAY_URL`, `DUKE_GATEWAY_KEY` — gateway endpoint + token (aliases: `OPENAI_BASE_URL`, `OPENAI_API_KEY`)
-- `HF_TOKEN` — gated HF models (scanning)
-- `FRONTEND_LAUNCH_MODE=host` — skip Docker for browser launches
+- `DUKE_GATEWAY_URL`, `DUKE_GATEWAY_KEY` — gateway chat and catalog (aliases: `OPENAI_*`)
+- `HF_TOKEN` — gated Hugging Face downloads (scanning)
+- `POSTGRES_DSN`, `EFFICACY_DB_DSN` — optional Postgres ingest and UI DB read paths
+- `APP_PORT`, `FRONTEND_LAUNCH_MODE` — optional app UI tweaks
+
+Host-specific values (user id, Docker socket group, repo path) are auto-detected by `./docker/run.sh`.
 
 ---
 

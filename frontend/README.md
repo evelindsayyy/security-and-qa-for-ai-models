@@ -1,26 +1,23 @@
 # Frontend (`frontend/`)
 
-Progress viewer for the Duke model nutrition label. Loads JSON from local pipeline output; scan, safety, eval, and benchmark pillars support **browser-launched runs** (Docker + live polling).
+Nutrition-label UI. Reads JSON from pillar output dirs; supports **browser-launched runs** (Docker + polling).
 
-Production UI will read from Postgres via `api/`. This draft reads disk under `scanner/output/`, `evaluator/results/`, `benchmarks/results/`, and `safety/output/`.
+Planned: read from Postgres via `api/`. Today: `scanner/output/`, `safety/output/`, `evaluator/results/`, `benchmarks/results/`.
 
-## Run locally
+## Run
+
+**Local (fastest):**
 
 ```bash
 uv sync
 uv run flask --app frontend:create_app run --debug
-# if port 5000 is busy:
-uv run flask --app frontend:create_app run --debug --port 5001
 ```
 
-Open the frontend and click one of the start buttons:
+Launch pages: `/scans/new` · `/safety/new` · `/eval-run/new` · `/benchmarks/new`
 
-- `http://127.0.0.1:5001/scans/new` runs an HF artifact scan.
-- `http://127.0.0.1:5001/benchmarks/new` runs a public benchmark.
-- `http://127.0.0.1:5001/eval-run/new` runs an efficacy eval.
-- `http://127.0.0.1:5001/safety/new` runs an inference safety test.
+Set `FRONTEND_LAUNCH_MODE=host` to skip Docker for launches (debugging, unit tests).
 
-Browser launches use Docker by default. Set `FRONTEND_LAUNCH_MODE=host` before starting Flask to run via local Python instead.
+**Containerized (application VM):** [`docs/docker.md`](../docs/docker.md).
 
 ## Routes
 
@@ -30,19 +27,10 @@ Browser launches use Docker by default. Set `FRONTEND_LAUNCH_MODE=host` before s
 | `/models` | Live gateway catalog |
 | `/scans`, `/scans/new`, `/scans/start`, `/scans/<slug>` | HF scanning |
 | `/eval-run`, `/eval-run/new`, … | Duke efficacy (LLM-as-judge) |
-| `/benchmarks`, `/benchmarks/new`, … | Public benchmarks (TruthfulQA, IFEval, …) |
+| `/benchmarks`, `/benchmarks/new`, … | Public benchmarks |
 | `/safety`, `/safety/new`, … | Inference safety |
 
 Each pillar has `/<slug>/status` JSON for in-progress polling.
-
-## Populate data
-
-| Pillar | Browser | CLI |
-|--------|---------|-----|
-| Scan | `/scans/new` | `scanner scan <hf_id>` |
-| Efficacy | `/eval-run/new` | `evaluator/runner.py` |
-| Benchmarks | `/benchmarks/new` | `benchmarks/run_benchmark.py` |
-| Safety | `/safety/new` | `./safety/run_safety.sh` |
 
 ## Layout
 
@@ -50,26 +38,11 @@ Each pillar has `/<slug>/status` JSON for in-progress polling.
 |--------|------|
 | [`gateway/`](../gateway/) | Live catalog for `/models` and dropdowns |
 | `*_data.py` / `*_launch.py` | Read results + spawn Docker/host subprocess |
-| `docker_launch.py` | Shared Docker helper (root `.env`, UID/GID, `docker compose build`) |
+| `docker_launch.py` | Shared Docker helper (`.env`, UID/GID, compose build) |
 | `routes.py`, `templates/`, `static/` | UI |
-
-## Browser-launched runs
-
-Docker Compose by default. Every stack reads the repo-root `.env` (one gateway token); `docker_launch.py` exports the host UID/GID and builds the image once per stack.
-
-| Pillar | Compose | Service |
-|--------|---------|---------|
-| Scan | `scanner/docker/compose.yml` | `scanner` |
-| Safety | `safety/docker/compose.yml` | `safety` |
-| Eval | `evaluator/docker/compose.yml` | `evaluator` |
-| Benchmarks | `benchmarks/docker/compose.yml` | `benchmarks` |
-
-Set `FRONTEND_LAUNCH_MODE=host` for host Python (unit tests, debugging).
 
 ## Related docs
 
 - [`docs/architecture.md`](../docs/architecture.md)
-- [`benchmarks/README.md`](../benchmarks/README.md)
-- [`scanner/README.md`](../scanner/README.md)
-- [`safety/README.md`](../safety/README.md)
-- [`evaluator/README.md`](../evaluator/README.md)
+- [`docs/docker.md`](../docs/docker.md)
+- Pillar READMEs: [`scanner/`](../scanner/README.md) · [`safety/`](../safety/README.md) · [`evaluator/`](../evaluator/README.md) · [`benchmarks/`](../benchmarks/README.md)

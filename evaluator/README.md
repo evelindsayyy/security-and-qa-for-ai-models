@@ -31,9 +31,10 @@ uv run python runner.py \
 - `evaluator/results/<same>_trace.jsonl` — raw responses for debugging
 - `evaluator/cache/` — candidate/judge caches (re-runs are cheap). **Docker:** `evaluator/cache` is bind-mounted in `evaluator/docker/compose.yml` so the container user (host UID/GID) can write cache files.
 
-**Docker (browser or CLI):** secrets come from the repo-root `.env`.
+**Docker (browser or CLI):** secrets come from the repo-root `.env`. Set ownership so cache/results are writable:
 
 ```bash
+export UID=$(id -u) GID=$(id -g)
 docker compose --env-file .env \
   -f evaluator/docker/compose.yml run --rm evaluator \
   python runner.py --candidate-model "GPT 4.1 Mini" --judge-model "Llama 4 Maverick" \

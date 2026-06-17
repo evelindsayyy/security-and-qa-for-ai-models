@@ -8,11 +8,9 @@ Docker via docker_launch. One in-flight run per (benchmark, model) combo.
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 import sys
 import threading
-import time
 from pathlib import Path
 
 from frontend import docker_launch
@@ -24,7 +22,7 @@ RESULTS_DIR = BENCHMARKS_DIR / "results"
 RUNNER = BENCHMARKS_DIR / "run_benchmark.py"
 
 sys.path.insert(0, str(BENCHMARKS_DIR))
-from run_benchmark import BENCHMARKS, predict_stem  # noqa: E402
+from benchmarks.run_benchmark import BENCHMARKS, predict_stem  # noqa: E402
 
 _CANDIDATE_CATEGORIES = frozenset({"general_chat", "codex", "research"})
 

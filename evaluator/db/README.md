@@ -20,8 +20,7 @@ cp .env.example .env          # if you don't have one; then fill in:
 # EFFICACY_DB_DSN="postgresql://USER:PASSWORD@codeplus-postgres-test-01.oit.duke.edu:5432/qa_ai_models"
 ```
 
-The server is firewalled — Duke network/VPN required. Credentials come from
-the team lead; never commit them.
+Set `EFFICACY_DB_DSN` in `.env` (credentials from team lead; never commit them).
 
 ## Apply the schema (one-time)
 

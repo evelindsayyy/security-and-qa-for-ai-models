@@ -46,7 +46,7 @@ class Finding(BaseModel):
 
 
 class ScanRequest(BaseModel):
-    """Future API/Celery job payload shape (not wired in CLI yet)."""
+    """Future api/ POST job payload shape (not wired in CLI yet)."""
 
     model_id: str
     scan_types: list[str] = Field(default_factory=lambda: ["artifact"])
@@ -65,7 +65,7 @@ class ScanResult(BaseModel):
     """
     Primary artifact written to ``output/<slug>/scan_result.json``.
 
-    ``status`` will support queued/running when Celery workers land (week 5).
+    ``status`` will support queued/running via the Postgres job row when api/ lands (week 5).
     ``fickling_severity`` is kept at top level for quick UI badges on benign pickles.
     """
 

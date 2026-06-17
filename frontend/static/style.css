@@ -265,7 +265,9 @@ header nav a:hover {
 .badge-ifeval,
 .badge-consistency,
 .badge-mmlu,
-.badge-tomi {
+.badge-tomi,
+.badge-mbpp,
+.badge-quality {
   background: #eef1f5;
   color: #445566;
   border: 1px solid #dde2e8;

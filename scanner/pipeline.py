@@ -313,7 +313,7 @@ def scan_model_to_path(hf_repo: str, output_path: Path | None = None) -> Path:
     """
     Convenience wrapper: run ``scan_model`` and optionally override output path.
 
-    Used by tests and future Celery tasks that need a explicit filesystem target.
+    Used by tests and background launchers that need an explicit filesystem target.
     """
     result = scan_model(hf_repo)
     path = output_path or (output_dir(hf_repo) / "scan_result.json")

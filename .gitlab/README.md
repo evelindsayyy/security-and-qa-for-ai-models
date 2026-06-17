@@ -21,10 +21,22 @@ Labels: `scanning` · `safety` · `gateway` · `efficacy` · `evaluator` · `fro
 | Milestone | Status / goal |
 |-----------|----------------|
 | W1–W2 | **Closed** — spikes, docs |
-| **W3** | **Current** — packages, catalog, CI, frontend, MVP efficacy on 1 gateway model |
-| W4 | E2E scan; safety + MVP efficacy on 3 gateway models |
-| W5 | Flask `api/`, Postgres, Celery |
+| **W3** | **Closed** — packages, catalog, frontend, MVP efficacy |
+| **W4** | **Closed** — E2E scan/safety/eval; CI on shared runners (Jun 17) |
+| **W5** | **Current** — Postgres, `api/`, unified ingest |
 | W6–W7 | Full UI, demo freeze |
+
+---
+
+## CI (shared runners)
+
+GitLab jobs run on Duke **shared runners** (`docker+machine`).
+
+1. Pipeline stages: **lint** (ruff) → **unit-tests** (unittest).
+2. No Docker build in CI — verify image builds locally before merge (`docs/cli.md`).
+3. Deploy is manual and commented out (needs `.env` + runner with Docker).
+
+Config: [`.gitlab-ci.yml`](../.gitlab-ci.yml). **MR !32 merged Jun 17** (slim deps, lint+test only).
 
 ---
 
