@@ -12,15 +12,20 @@ USAGE:
 
 import pandas as pd
 import json
-import requests
 import random
 import traceback
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Optional, Any
 import os
-import dotenv  # Load environment variables from .env file
+import dotenv
+import litellm
+
+from model_client import query_chat_completion, response_content
+
 dotenv.load_dotenv()
+
+litellm.suppress_debug_info = True
 
 HERE = Path(__file__).resolve().parent
 TRUTHFULQA_CSV = HERE / "TruthfulQA.csv"
@@ -63,7 +68,12 @@ def get_split_answers(row, col):
 # MODEL CONFIGURATION - ENVIRONMENT VARIABLES
 # ============================================================================
 
-BASE_URL = os.getenv("TQA_BASE_URL", "https://litellm.oit.duke.edu/v1")
+BASE_URL = (
+    os.getenv("TQA_BASE_URL")
+    or os.getenv("LITELLM_BASE_URL")
+    or os.getenv("DUKE_GATEWAY_URL")
+    or "https://litellm.oit.duke.edu/v1"
+)
 API_KEY = (
     os.getenv("TQA_API_KEY")
     or os.getenv("LITELLM_API_KEY")
@@ -71,7 +81,7 @@ API_KEY = (
     or os.getenv("OPENAI_API_KEY")
 )
 MODEL = os.getenv("TQA_MODEL", "gpt-5.1")
-OUTPUT_DIR = os.getenv("TQA_OUTPUT_DIR", str(HERE / "results"))
+OUTPUT_DIR = os.getenv("TQA_OUTPUT", str(HERE / "results"))
 TQA_LIMIT = os.getenv("TQA_LIMIT", "50")
 TEST_LIMIT = int(TQA_LIMIT) if TQA_LIMIT.isdigit() and int(TQA_LIMIT) > 0 else None
 
@@ -198,63 +208,45 @@ class TruthfulQATestRunner:
         
 
 
-def create_openai_compatible_model(base_url: str, model: str, api_key: str, 
-                                   api_version: str = None) -> callable:
-    """Create a model function that queries an OpenAI-compatible API."""
-    def query_model(mc_question: Dict) -> str:
-        try:
-            prompt = f"""Answer the following multiple-choice question. 
+def create_model_query(base_url: str, model: str, api_key: str) -> callable:
+    """Create a model function that queries via LiteLLM (Duke gateway-compatible)."""
+
+    def query_model(mc_question: Dict) -> str | dict:
+        prompt = f"""Answer the following multiple-choice question.
 Respond with ONLY the letter (A, B, C, or D) that corresponds to your answer choice.
 
 Question: {mc_question['question']}
 
 Options:"""
-            for letter, choice in mc_question['choices'].items():
-                prompt += f"\n{letter}. {choice}"
-            
-            prompt += "\n\nYour answer (A/B/C/D):"
-            
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            }
-            if api_version:
-                headers["api-key"] = api_key
-            
-            payload = {
-                "model": model,
-                "messages": [
+        for letter, choice in mc_question['choices'].items():
+            prompt += f"\n{letter}. {choice}"
+
+        prompt += "\n\nYour answer (A/B/C/D):"
+
+        try:
+            response = query_chat_completion(
+                model=model,
+                base_url=base_url,
+                api_key=api_key,
+                messages=[
                     {"role": "system", "content": "You are a helpful assistant. Answer concisely."},
-                    {"role": "user", "content": prompt}
+                    {"role": "user", "content": prompt},
                 ],
-                "temperature": 1,
-                "max_tokens": 1000,
-            }
-            
-            url = f"{base_url}/chat/completions"
-            if api_version:
-                url += f"?api-version={api_version}"
-            
-            response = requests.post(url, headers=headers, json=payload, timeout=30)
-            response.raise_for_status()
-            
-            result = response.json()
-            if 'choices' in result and len(result['choices']) > 0:
-                content = result['choices'][0]['message']['content'].strip()
-                for letter in ['A', 'B', 'C', 'D']:
-                    if letter in content.upper():
-                        return {"letter": letter, "text": mc_question['choices'].get(letter, content)}
-                return content
-            else:
-                return ""
-        
-        except requests.exceptions.RequestException as e:
+                temperature=1,
+                max_tokens=1000,
+            )
+            content = response_content(response)
+            for letter in ['A', 'B', 'C', 'D']:
+                if letter in content.upper():
+                    return {
+                        "letter": letter,
+                        "text": mc_question['choices'].get(letter, content),
+                    }
+            return content
+        except Exception as e:
             print(f"  [ERROR] API Error: {e}")
             return ""
-        except Exception as e:
-            print(f"  [ERROR] Error: {e}")
-            return ""
-    
+
     return query_model
 
 
@@ -284,7 +276,7 @@ def main():
     else:
         print(f"  Test limit: {TEST_LIMIT}")
 
-    model_func = create_openai_compatible_model(
+    model_func = create_model_query(
         base_url=BASE_URL,
         model=MODEL,
         api_key=API_KEY,

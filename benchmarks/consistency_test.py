@@ -45,10 +45,11 @@ import traceback
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, List
-from litellm import completion
 import litellm
 from bert_score import score as bert_score
 import dotenv
+
+from model_client import query_chat_completion, response_content
 
 dotenv.load_dotenv()
 
@@ -85,14 +86,14 @@ def load_questions(path: str) -> List[Dict]:
 def query_model(model: str, prompt: str) -> str:
     """Send a single prompt to the model and return the response text."""
     try:
-        response = completion(
+        response = query_chat_completion(
             model=model,
-            api_base=BASE_URL,
+            base_url=BASE_URL,
             api_key=API_KEY,
             messages=[{"role": "user", "content": prompt}],
             temperature=1,
         )
-        return response.choices[0].message.content or ""
+        return response_content(response)
     except Exception as e:
         print(f"  [ERROR] API error: {e}")
         return ""

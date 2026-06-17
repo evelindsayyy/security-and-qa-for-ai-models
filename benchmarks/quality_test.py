@@ -7,15 +7,20 @@ from datetime import datetime, timezone
 from typing import Dict, List
 
 from datasets import load_dataset
-from litellm import completion
 import litellm
 import dotenv
+
+from model_client import query_chat_completion, response_content
 
 dotenv.load_dotenv()
 litellm.suppress_debug_info = True
 
-BASE_URL = os.getenv("LITELLM_BASE_URL", "https://litellm.oit.duke.edu/v1")
-API_KEY = os.getenv("LITELLM_API_KEY")
+BASE_URL = os.getenv("LITELLM_BASE_URL") or os.getenv("DUKE_GATEWAY_URL") or "https://litellm.oit.duke.edu/v1"
+API_KEY = (
+    os.getenv("LITELLM_API_KEY")
+    or os.getenv("DUKE_GATEWAY_KEY")
+    or os.getenv("OPENAI_API_KEY")
+)
 MODEL = os.getenv("QUALITY_MODEL", "openai/gpt-5.1")
 OUTPUT_DIR = os.getenv("QUALITY_OUTPUT", "test_results")
 SAMPLE_SIZE = int(os.getenv("QUALITY_SAMPLE", "3"))   # number of articles
@@ -58,16 +63,16 @@ def query_model(article: str, question: str, options: List[str]) -> str:
     )
 
     try:
-        response = completion(
+        response = query_chat_completion(
             model=MODEL,
-            api_base=BASE_URL,
+            base_url=BASE_URL,
             api_key=API_KEY,
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
-            max_tokens=10,
+            max_tokens=64,
         )
 
-        content = response.choices[0].message.content
+        content = response_content(response)
         return parse_answer(content)
 
     except Exception as e:
