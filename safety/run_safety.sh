@@ -169,6 +169,15 @@ fi
 
 if ! $SKIP_GARAK; then
   echo "--- Garak scan ---"
+  # Per-slug XDG dirs so Garak can write logs/cache as the container user (compose
+  # sets shared .garak-* under output/, which may be root-owned from older runs).
+  GARAK_XDG_BASE="${ROOT}/safety/garak/output/${SLUG}"
+  export HOME="${GARAK_XDG_BASE}/.garak-home"
+  export XDG_DATA_HOME="${GARAK_XDG_BASE}/.garak-data"
+  export XDG_CACHE_HOME="${GARAK_XDG_BASE}/.garak-cache"
+  export XDG_CONFIG_HOME="${GARAK_XDG_BASE}/.garak-config"
+  mkdir -p "${HOME}" "${XDG_DATA_HOME}/garak" "${XDG_CACHE_HOME}" "${XDG_CONFIG_HOME}"
+
   GARAK_REPORT_DIR="/app/safety/garak/output/${SLUG}"
   GARAK_RUN_CFG="${GARAK_REPORT_DIR}/garak_run.yaml"
   GATEWAY_MODEL="$MODEL" GARAK_REPORT_DIR="$GARAK_REPORT_DIR" python - <<'PY'

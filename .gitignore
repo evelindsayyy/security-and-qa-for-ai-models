@@ -3,6 +3,7 @@ venv/
 .venv/
 **/.venv/
 .env
+.docker-home/
 
 # Ignore system files
 .DS_Store

@@ -9,7 +9,6 @@ Week 5+: replace with GET /api/scans inventory from Postgres.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from frontend.scan_data import OUTPUT_DIR, get_scans_data
@@ -39,7 +38,7 @@ def get_hf_scan_catalog() -> dict[str, Any]:
             "has_models": False,
             "models": [],
             "count": 0,
-            "source": f"scanner/output/*/scan_result.json",
+            "source": "scanner/output/*/scan_result.json",
             "output_dir": str(OUTPUT_DIR),
             "error": f"Failed to read scan output: {type(exc).__name__}: {exc}",
         }

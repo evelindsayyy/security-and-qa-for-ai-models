@@ -6,5 +6,7 @@ def test_compose_run_argv_includes_docker_gid(monkeypatch) -> None:
 
     argv = docker_launch.compose_run_argv("safety", ["bash", "-lc", "true"])
 
+    assert "--project-name" in argv
+    assert "qa-ai-models" in argv
     assert "-e" in argv
     assert "DOCKER_GID=998" in argv

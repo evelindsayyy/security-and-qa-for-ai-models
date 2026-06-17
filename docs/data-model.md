@@ -44,6 +44,11 @@ Gateway catalog anchor (and optional HF repo for on-prem).
 
 ## `scans` (Track A — scanning)
 
+> **Authoritative DDL:** `scanner/db/scan_schema.sql` (implemented; loader:
+> `scanner/db/load_scans.py`, idempotent, dry-run by default, uses `dbutils/`).
+> Idempotency: `UNIQUE (hf_repo, completed_at)` where `completed_at` =
+> `scan_metadata.scanned_at`. Shared `models` FK on `scans.model_id` deferred.
+
 One HF repo inspection job.
 
 | Column | Example |

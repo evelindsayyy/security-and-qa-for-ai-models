@@ -44,7 +44,7 @@ import itertools
 import traceback
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 from litellm import completion
 import litellm
 from bert_score import score as bert_score

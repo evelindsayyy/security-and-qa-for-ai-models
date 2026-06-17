@@ -20,28 +20,26 @@ docker compose --env-file .env -f safety/garak/docker/compose.yml build
 
 [`run_safety.sh`](run_safety.sh) runs **Promptfoo policy + red-team + Garak + merge** by default. Model comes from the `GATEWAY_MODEL` environment variable (default `GPT 4.1 Mini`).
 
+**Host** (from repo root):
+
 ```bash
-# full pipeline — default model GPT 4.1 Mini (override with GATEWAY_MODEL or an argument)
-./safety/run_safety.sh
-
-# another model
+./safety/run_safety.sh                                    # default model GPT 4.1 Mini
 ./safety/run_safety.sh "gpt-5-chat"
-
-# skip red-team for faster runs
-./safety/run_safety.sh --skip-redteam
-
-# subset of Garak modules (CLI override)
-./safety/run_safety.sh --garak-probes "encoding,promptinject,dan.Dan_11_0"
-
-# skip one suite
+./safety/run_safety.sh --skip-redteam                     # faster
 ./safety/run_safety.sh --skip-garak
 ./safety/run_safety.sh --skip-promptfoo
+./safety/run_safety.sh --garak-probes "encoding,promptinject,dan.Dan_11_0"
+./safety/run_safety.sh --help
 ```
 
 Output: `safety/output/<slug>/merged_safety_result.json` → frontend `/safety/<slug>`.
 
+**Via Docker orchestrator** (needs `DOCKER_GID` in `.env` for nested promptfoo/garak launches):
+
 ```bash
-./safety/run_safety.sh --help
+export UID=$(id -u) GID=$(id -g)
+docker compose --env-file .env -f safety/docker/compose.yml run --rm safety \
+  ./safety/run_safety.sh "GPT 4.1 Mini"
 ```
 
 ## Run suites individually

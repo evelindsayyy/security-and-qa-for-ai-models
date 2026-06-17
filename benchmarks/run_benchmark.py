@@ -46,26 +46,40 @@ BENCHMARKS: dict[str, dict] = {
         "env_output": "IFEVAL_OUTPUT_DIR",
     },
     "mmlu": {
-        "label": "MMLU (sample)",
+        "label": "MMLU (Massive Multitask Language Understanding)",
         "script": "mmlu_test.py",
         "glob": "mmlu_*.json",
         "env_model": "MMLU_MODEL",
         "env_output": "MMLU_OUTPUT",
     },
     "tomi": {
-        "label": "ToMi (theory of mind)",
+        "label": "ToMi (Theory of Mind)",
         "script": "tomi_test.py",
         "glob": "tomi_*.json",
         "env_model": "TOMI_MODEL",
         "env_output": "TOMI_OUTPUT",
     },
     "consistency": {
-        "label": "Consistency (BERTScore)",
+        "label": "Consistency",
         "script": "consistency_test.py",
         "glob": "consistency_*.json",
         "env_model": "CONSISTENCY_MODEL",
         "env_output": "CONSISTENCY_OUTPUT",
     },
+    "mbpp": {
+        "label": "MBPP (Mostly Basic Python Problems)",
+        "script": "mbpp_test.py",
+        "glob": "mbpp_*.json",
+        "env_model": "MBPP_MODEL",
+        "env_output": "MBPP_OUTPUT",
+    },
+    "quality": {
+        "label": "QuALITY",
+        "script": "quality_test.py",
+        "glob": "quality_*.json",
+        "env_model": "QUALITY_MODEL",
+        "env_output": "QUALITY_OUTPUT",
+    }
 }
 
 
@@ -136,7 +150,12 @@ def run(benchmark_key: str, model: str, output_stem: str | None = None) -> Path:
     shutil.copy2(src, dest)
     if src.resolve() != dest.resolve():
         src.unlink()
-    log_path.unlink(missing_ok=True)
+    # On Windows the frontend launcher may still hold this log open (Popen
+    # stdout); ignore lock errors — results JSON is what matters.
+    try:
+        log_path.unlink(missing_ok=True)
+    except OSError:
+        pass
     return dest
 
 

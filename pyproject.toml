@@ -4,29 +4,48 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
+# Core runtime shared by the Flask UI, gateway, evaluator, and unit tests.
+# Heavy scanner/benchmark tools live in optional groups — see dependency-groups.
 dependencies = [
-    "absl-py>=2.4.0",
-    "bert-score>=0.3.13",
-    "datasets>=5.0.0",
     "flask>=3.1.3",
-    "fickling>=0.1.0",
-    "huggingface-hub>=0.34.0",
-    "immutabledict>=4.3.1",
-    "langdetect>=1.0.9",
     "litellm>=1.87.1",
-    "modelaudit>=0.2.45",
-    "modelscan>=0.3.0",
-    "nltk>=3.9.4",
     "openai>=2.38.0",
-    "pip-audit>=2.9.0",
     "pydantic>=2.0.0",
     "python-dotenv>=1.2.2",
     "pyyaml>=6.0.3",
-    "ruff>=0.15.15",
 ]
 
 [dependency-groups]
-# Postgres driver for evaluator/db/ (loader --apply + the dashboard's DB read
-# path). Optional on purpose: plain `uv sync` skips it; install with
+# Postgres driver for dbutils + pillar ingest (--apply) and optional UI read paths.
+# Optional on purpose: plain `uv sync` skips it; install with
 #   uv sync --group db
 db = ["psycopg[binary]>=3.2"]
+# CI and local lint/test: uv sync --group dev
+dev = ["pytest>=8.0", "ruff>=0.15.15"]
+# Scanner pillar (scanner/docker): uv sync --group scanner
+scanner = [
+    "fickling>=0.1.0",
+    "huggingface-hub>=0.34.0",
+    "modelaudit>=0.2.45",
+    "modelscan>=0.3.0",
+    "pip-audit>=2.9.0",
+]
+# Safety orchestrator (run_safety.sh / safety/docker): uv sync --group safety
+safety = ["garak>=0.9.0"]
+# Public benchmark runners (benchmarks/docker): uv sync --group benchmarks
+benchmarks = [
+    "absl-py>=2.4.0",
+    "bert-score>=0.3.13",
+    "datasets>=5.0.0",
+    "immutabledict>=4.3.1",
+    "langdetect>=1.0.9",
+    "nltk>=3.9.4",
+    "numpy>=2.0.0",
+    "pandas>=2.0.0",
+    "requests>=2.32.0",
+    "tqdm>=4.67.0",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"scanner/db/load_scans.py" = ["E402"]
+"unit_tests/*" = ["E402"]

@@ -107,6 +107,32 @@ BENCHMARK_META: dict[str, dict] = {
         ],
         "item_label": "story",
     },
+    "mbpp": {
+        "title": "MBPP (Mostly Basic Python Problems)",
+        "about": (
+            "Code generation benchmark. Model writes Python; unit test checks run against generated code."
+        ),
+        "source": "https://github.com/google-research/google-research/tree/master/mbpp",
+        "fields": [
+            ("accuracy", "Fraction of problems where all unit tests passed."),
+            ("tests_passed / tests_total", "Per-problem test pass count"),
+            ("generated_code", "Extracted Python the model produced.")
+        ],
+        "item_label": "problem",
+    },
+    "quality": {
+        "title": "QuALITY",
+        "about": (
+            "Long-document reading comprehension. Model reads an article, then answers multiple-choice questions."
+        ),
+        "source": "https://github.com/nyu-mll/quality",
+        "fields": [
+            ("accuracy", "Fraction of MCQ questions answered correctly."),
+            ("hard_accuracy", "Accuracy on questions marked as difficult (when present)."),
+            ("model_answer", "Letter A-D the model chose."),
+        ],
+        "item_label": "question",
+    }
 }
 
 
@@ -150,10 +176,20 @@ def _detect_kind(path: Path) -> str | None:
         results = obj.get("results")
         if isinstance(results, list) and results:
             first = results[0]
-            if isinstance(first, dict) and "question_type" in first:
-                return "tomi"
+            if isinstance(first, dict):
+                if "task_id" in first and ("generated_code" in first or "tests_passed" in first):
+                    return "mbpp"
+                if "question_type" in first:
+                    return "tomi"
+                if "article_id" in first and "options" in first:
+                    return "quality"
+        summary = obj.get("summary") or {}
+        if isinstance(summary, dict) and "hard_accuracy" in summary:
+            return "quality"
+        if "hard_only" in obj:
+            return "quality"
         metrics = obj.get("metrics") or obj.get("summary") or {}
-        if isinstance(metrics, dict) and "accuracy" in metrics:
+        if isinstance(metrics, dict) and "accuracy" in metrics and "responses" in obj:
             return "truthfulqa"
     except Exception:
         return None
@@ -283,6 +319,45 @@ def _summarize_ifeval(path: Path) -> dict:
         "n": n,
         "extras": {"passed": passed, "total": n},
     }
+    
+def _summarize_mbpp(path: Path, data: dict) -> dict:
+    summary = data.get("summary") or {}
+    acc = summary.get("accuracy")
+    return {
+        "slug": path.stem,
+        "filename": path.name,
+        "kind": "mbpp",
+        "kind_label": "MBPP",
+        "model": data.get("model") or "—",
+        "timestamp_raw": data.get("timestamp") or "",
+        "timestamp": _format_ts(data.get("timestamp") or ""),
+        "headline_metric": "accuracy",
+        "headline_value": acc,
+        "headline_display": f"{acc:.3f}" if acc is not None else "—",
+        "n": summary.get("total") or len(data.get("results") or []),
+        "extras": {"correct": summary.get("correct")},
+    }
+    
+def _summarize_quality(path: Path, data: dict) -> dict:
+    summary = data.get("summary") or {}
+    acc = summary.get("accuracy")
+    return {
+        "slug": path.stem,
+        "filename": path.name,
+        "kind": "quality",
+        "kind_label": "QuALITY",
+        "model": data.get("model") or "—",
+        "timestamp_raw": data.get("timestamp") or "",
+        "timestamp": _format_ts(data.get("timestamp") or ""),
+        "headline_metric": "accuracy",
+        "headline_value": acc,
+        "headline_display": f"{acc:.1%}" if acc is not None else "—",
+        "n": summary.get("total_questions") or len(data.get("results") or []),
+        "extras": {
+            "hard_accuracy": summary.get("hard_accuracy"),
+            "hard_questions": summary.get("hard_questions"),
+        },
+    }
 
 
 def _summarize_file(path: Path) -> dict | None:
@@ -309,6 +384,10 @@ def _summarize_file(path: Path) -> dict | None:
         return _summarize_mmlu(path, data)
     if kind == "tomi":
         return _summarize_tomi(path, data)
+    if kind == "mbpp":
+        return _summarize_mbpp(path, data)
+    if kind == "quality":
+        return _summarize_quality(path, data)
     return None
 
 
@@ -396,6 +475,16 @@ def get_benchmark_detail(slug: str) -> dict | None:
                     return _attach_meta(summary)
                 if kind == "tomi":
                     summary = _summarize_tomi(path, data)
+                    summary["results"] = (data.get("results") or [])[:50]
+                    summary["raw_row_count"] = len(data.get("results") or [])
+                    return _attach_meta(summary)
+                if kind == "mbpp":
+                    summary = _summarize_mbpp(path, data)
+                    summary["results"] = (data.get("results") or [])[:50]
+                    summary["raw_row_count"] = len(data.get("results") or [])
+                    return _attach_meta(summary)
+                if kind == "quality":
+                    summary = _summarize_quality(path, data)
                     summary["results"] = (data.get("results") or [])[:50]
                     summary["raw_row_count"] = len(data.get("results") or [])
                     return _attach_meta(summary)
