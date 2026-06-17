@@ -22,21 +22,21 @@ Labels: `scanning` · `safety` · `gateway` · `efficacy` · `evaluator` · `fro
 |-----------|----------------|
 | W1–W2 | **Closed** — spikes, docs |
 | **W3** | **Closed** — packages, catalog, frontend, MVP efficacy |
-| **W4** | **Closing** — E2E scan/safety/eval; CI landed Jun 16 |
-| **W5** | **Current** — Postgres, `api/`, Celery, unified ingest |
+| **W4** | **Closed** — E2E scan/safety/eval; CI on shared runners (Jun 17) |
+| **W5** | **Current** — Postgres, `api/`, unified ingest |
 | W6–W7 | Full UI, demo freeze |
 
 ---
 
-## CI (shared VM / VCM)
+## CI (shared runners)
 
-GitLab jobs run on the **Code+ shared VM** with runner tag **`codeplus`**.
+GitLab jobs run on Duke **shared runners** (`docker+machine`).
 
-1. Register a GitLab runner on the VCM with tag **`codeplus`** (shell executor recommended).
-2. VM needs: **git**, **docker** (+ compose plugin), **curl**; **uv** is auto-installed on first pipeline if absent.
-3. Pipeline stages: **lint** (ruff) → **unit-tests** → **build** (`docker compose … build`) → **deploy-manual** (requires `.env` on the runner host).
+1. Pipeline stages: **lint** (ruff) → **unit-tests** (unittest).
+2. No Docker build in CI — verify image builds locally before merge (`docs/cli.md`).
+3. Deploy is manual and commented out (needs `.env` + runner with Docker).
 
-Config: [`.gitlab-ci.yml`](../.gitlab-ci.yml). Commands and Docker details: [`docs/docker.md`](../docs/docker.md).
+Config: [`.gitlab-ci.yml`](../.gitlab-ci.yml). **MR !32 merged Jun 17** (slim deps, lint+test only).
 
 ---
 

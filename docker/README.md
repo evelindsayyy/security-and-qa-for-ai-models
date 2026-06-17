@@ -14,4 +14,4 @@ the host, so browser "Start" buttons can launch pillar jobs as sibling container
 through the mounted Docker socket. See [`docs/docker.md`](../docs/docker.md) for
 the model and [`docs/cli.md`](../docs/cli.md) for all commands.
 
-Postgres and Redis are external (`POSTGRES_DSN`).
+Postgres is external (`POSTGRES_DSN` on OIT host).

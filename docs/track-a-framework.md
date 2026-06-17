@@ -101,7 +101,7 @@ Do not block deploy on Fickling alone when ModelScan and ModelAudit are clean. S
 | Stage | `scanner/` | `safety/` |
 |-------|------------|-----------|
 | Done | package + CLI; deps, secrets, E2E `scan_model()` | `garak` + `promptfoo` + Duke probes; merge → `MergedSafetyResult` on gateway models |
-| Next | Celery worker integration; ingest `ScanResult` → Postgres | Celery worker; ingest `MergedSafetyResult` → Postgres; full label UI in `frontend/` |
+| Next | Background job launcher + ingest `ScanResult` → Postgres | ingest `MergedSafetyResult` → Postgres; full label UI in `frontend/` |
 
 Target layout: [`scanner/README.md`](../scanner/README.md), [`docs/architecture.md`](architecture.md).
 

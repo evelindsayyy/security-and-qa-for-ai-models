@@ -42,9 +42,8 @@ host or in CI is reused when the UI launches a job.
 
 ## CI
 
-GitLab runs on the Code+ shared VM (runner tag **`codeplus`**): lint → unit tests
-→ Docker build → manual deploy on `main`. No gateway secrets in CI. See
-[`.gitlab-ci.yml`](../.gitlab-ci.yml) and [`.gitlab/README.md`](../.gitlab/README.md).
+GitLab runs on Duke **shared runners** (`docker+machine`): lint → unit tests only.
+No Docker builds in CI (runners lack socket/DinD). No gateway secrets. See
+[`.gitlab-ci.yml`](../.gitlab-ci.yml).
 
-Postgres and Redis are external (`POSTGRES_DSN`). The full VM stack (Redis,
-Celery, `api/`) is W5 — see [`architecture.md`](architecture.md).
+Postgres is external (`POSTGRES_DSN` on OIT host). W5 adds `api/` REST on the application VM — see [`architecture.md`](architecture.md).

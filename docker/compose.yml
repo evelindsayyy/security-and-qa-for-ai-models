@@ -6,7 +6,7 @@
 # The repo is mounted at the SAME absolute path (HOST_REPO) inside and outside
 # the container. Browser "Start" buttons spawn pillar stacks via the mounted
 # Docker socket, and their bind mounts resolve on the host daemon correctly.
-# Postgres/Redis are external (POSTGRES_DSN in .env).
+# Postgres is external (POSTGRES_DSN on OIT host).
 
 services:
   web:

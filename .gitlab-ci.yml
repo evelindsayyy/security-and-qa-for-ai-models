@@ -31,7 +31,7 @@ unit-tests:
     - uv run python -m unittest discover -s unit_tests -v
 
 # build-images: requires a runner with Docker (host socket or working DinD).
-# Duke shared runners do not provide either today.
+# Duke shared runners not seeming to provide either. 
 #   docker compose --project-name qa-ai-models -f docker/compose.yml build
 #   docker compose --project-name qa-ai-models -f scanner/docker/compose.yml build
 

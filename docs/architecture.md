@@ -15,9 +15,9 @@ Every run produces structured JSON that lands in Postgres. `api/` (Flask) serves
 
 ## How a run flows
 
-A run is asynchronous: the browser **POST**s to start a job (immediate `job_id`), a worker runs the pillar, results land in Postgres via ingest, then the browser **GET**s status and results. Only step 3 differs by job type.
+A run is asynchronous: the browser **POST**s to start a job (immediate `job_id`), a background launcher runs the pillar, results land in Postgres via ingest, then the browser **GET**s status and results. Only step 3 differs by job type.
 
-**Today (prototype):** the frontend uses HTML routes (`POST /scans/start`, `GET /scans/<slug>/status`, …) and reads JSON from disk. **W5 target:** the same flow through `api/` REST paths below and Postgres.
+**(Prototype Implementation):** the frontend uses HTML routes (`POST /scans/start`, `GET /scans/<slug>/status`, …), spawns jobs via `subprocess` / Docker (`frontend/*_launch.py`), and reads JSON from disk. **Target:** the same flow through `api/` REST paths and Postgres job rows.
 
 ```mermaid
 flowchart TB
@@ -25,8 +25,7 @@ flowchart TB
 
   subgraph VM["Application VM"]
     FE["frontend/ + api/ (Flask)"]
-    R[("Redis")]
-    W["Celery worker"]
+    LAUNCH["background launcher<br/>subprocess + Docker"]
     ING["ingest"]
     DB[("Postgres")]
   end
@@ -38,27 +37,26 @@ flowchart TB
   end
 
   A -->|"1 POST /scans · /safety · /evals · /benchmarks<br/>(returns job_id)"| FE
-  FE -->|"2 enqueue task"| R
-  R --> W
+  FE -->|"2 spawn job (non-blocking)"| LAUNCH
   FE -.->|"job_id to browser"| A
-  W -->|"3a scan: HF files"| SC
-  W -->|"3b safety / eval / benchmark: chat"| GW
-  W -->|"3c safety / eval / benchmark: chat"| DC
-  SC & GW & DC -->|"4 results"| W
-  W -->|"5 write JSON artifact"| ING
+  LAUNCH -->|"3a scan: HF files"| SC
+  LAUNCH -->|"3b safety / eval / benchmark: chat"| GW
+  LAUNCH -->|"3c safety / eval / benchmark: chat"| DC
+  SC & GW & DC -->|"4 results"| LAUNCH
+  LAUNCH -->|"5 write JSON artifact"| ING
   ING -->|"5 upsert rows"| DB
-  A -->|"6 GET /scans/{id} · /safety/{id} · /evals/{id} · /benchmarks/{id}<br/>(poll status)"| FE
+  A -->|"6 GET …/{id}<br/>(poll status)"| FE
   FE -->|"6 read status"| DB
-  A -->|"7 GET /scans/{id} · GET /models · GET /models/{id}<br/>(full label / results)"| FE
+  A -->|"7 GET /models/{id}<br/>(full label)"| FE
   FE -->|"7 read results"| DB
 ```
 
 | Step | HTTP | Path (`api/`) | What happens |
 |------|------|------------------|--------------|
-| 1 | **POST** | `/scans`, `/safety`, `/evals`, `/benchmarks` | Start job; enqueue Celery task; return `job_id` |
-| 2 | — | (internal) | Worker pulls task from Redis |
-| 3 | — | (internal) | Worker calls DGX, Gateway, or DCC |
-| 4 | — | (internal) | Backend returns; worker builds JSON |
+| 1 | **POST** | `/scans`, `/safety`, `/evals`, `/benchmarks` | Create job row; spawn background launcher; return `job_id` |
+| 2 | — | (internal) | `subprocess` / `docker compose run` starts pillar (same as today's UI) |
+| 3 | — | (internal) | Pillar calls DGX, Gateway, or DCC |
+| 4 | — | (internal) | Backend returns; launcher writes JSON |
 | 5 | — | (internal) | Ingest validates JSON → Postgres rows |
 | 6 | **GET** | `/scans/{id}`, … | Poll until `status` is complete or failed |
 | 7 | **GET** | `/scans/{id}`, `/models`, `/models/{id}` | Read structured results / full nutrition label |
@@ -67,27 +65,30 @@ Prototype equivalents: `POST /scans/start` → `GET /scans/<slug>/status` → `G
 
 | Host | Runs | Notes |
 |------|------|-------|
-| **Application VM** | Flask app ([`docker/`](../docker/)), Celery + Redis, ingest | Shared UI and job orchestration |
+| **Application VM** | Flask app ([`docker/`](../docker/)), background launchers, ingest | Shared UI and job orchestration |
 | **DGX** | `scanner/` in a Docker sandbox | Isolates untrusted model files |
 | **Duke AI Gateway** | cloud / API inference (LiteLLM) | Default chat backend |
 | **DCC** | open-weight inference (vLLM on SLURM) | Optional GPU backend |
 
-Multiple hosts: untrusted scans stay sandboxed on DGX; the gateway and DCC serve inference; the application VM runs the shared UI and workers. **Docker layout:** [`docker.md`](docker.md).
+Multiple hosts: untrusted scans stay sandboxed on DGX; the gateway and DCC serve inference; the application VM runs the shared UI and launchers. **Docker layout:** [`docker.md`](docker.md).
 
 ## Key concepts
 
 ### Application VM
 
-The **application VM** is the always-on Linux server Duke OIT provides for this project. It runs the shared UI (`frontend/`), planned `api/`, background workers, and ingest. Long jobs are orchestrated from here; heavy or untrusted work is delegated to DGX, the gateway, or DCC.
+The **application VM** is the always-on Linux server Duke OIT provides for this project. It runs the shared UI (`frontend/`), planned `api/`, background job launchers, and ingest. Long jobs are orchestrated from here; heavy or untrusted work is delegated to DGX, the gateway, or DCC.
 
-### Celery and Redis
+### Background jobs (no Redis for MVP)
+
+Long scans and evals take minutes to hours. HTTP must return a `job_id` immediately — the pillar runs in the background.
 
 | Piece | Role |
 |-------|------|
-| **Redis** | A small in-memory **message queue** (broker). Holds a list of “jobs waiting to run.” |
-| **Celery** | Python **background worker** framework. Workers pull jobs from Redis and run them outside the HTTP request. |
+| **`frontend/*_launch.py`** (today) | `subprocess.Popen` + `threading`; spawns Docker or host CLI; tracks in-flight runs in memory |
+| **`api/`** (W5) | REST `POST` creates a Postgres job row (`queued` → `running` → `complete` / `failed`), calls the same launch helpers, `GET` polls the row |
+| **Postgres** | Job status and results — the queue is the `status` column, not a separate broker |
 
-When a user clicks “Start scan,” the API must not block for 20 minutes. Flask enqueues a Celery task, returns a `job_id` immediately, and a worker runs the scanner later. 
+**Redis and Celery are not required for the summer MVP.** They only enter the picture if you later need multiple worker machines or a dedicated task broker. The repo has zero Redis/Celery code or dependencies today.
 
 ### Ingest
 
@@ -131,7 +132,7 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 - **`safety/`** (A) — garak + promptfoo + Duke policy probes over LiteLLM → `MergedSafetyResult`. Probe subsets follow deployment context (chatbot vs agentic).
 - **`evaluator/`** (B) — Duke task suites scored by an LLM judge against YAML rubrics; records scores plus cost / latency / tokens → `eval_runs`. Postgres path: [`evaluator/db/`](../evaluator/db/README.md). See [`track-b-framework.md`](track-b-framework.md).
 - **`benchmarks/`** (B) — public benchmarks (IFEval, TruthfulQA, MMLU, ToMi, consistency); each has its own scoring but a shared run envelope → `benchmark_runs`.
-- **`api/`** (planned) — Flask + Celery + Redis; enqueues jobs, serves results.
+- **`api/`** (planned W5) — Flask REST; `POST` spawns background jobs via existing launch helpers; `GET` serves Postgres-backed status and results.
 - **`frontend/`** — nutrition-label UI; reads JSON today, `api/` once persistence lands. Launch buttons run the real pillars via Docker. See [`frontend/README.md`](../frontend/README.md).
 
 ## Open questions
