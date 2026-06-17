@@ -1,12 +1,13 @@
 # GitLab CI — Duke Code+ shared runners (docker+machine).
 #
-# Lint/test: uv sync core+dev deps (slim pyproject — no torch/CUDA).
-# Build: Docker-in-Docker (shared runners do not mount host /var/run/docker.sock).
+# Lint + unit tests only. Shared runners have no host Docker socket and DinD is
+# not configured (TLS certs missing), so image builds are not run in CI — verify
+# locally before merge (see docs/cli.md).
 
 stages:
   - lint
   - test
-  - build
+  #- build
   #- deploy
 
 default:
@@ -29,24 +30,10 @@ unit-tests:
   script:
     - uv run python -m unittest discover -s unit_tests -v
 
-build-images:
-  stage: build
-  image: docker:27-cli
-  services:
-    - docker:27-dind
-  variables:
-    DOCKER_HOST: tcp://docker:2376
-    DOCKER_TLS_CERTDIR: "/certs"
-    DOCKER_TLS_VERIFY: "1"
-    DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  before_script:
-    - until docker info; do sleep 1; done
-  script:
-    - docker compose --project-name qa-ai-models -f docker/compose.yml build
-    - docker compose --project-name qa-ai-models -f scanner/docker/compose.yml build
+# build-images: requires a runner with Docker (host socket or working DinD).
+# Duke shared runners do not provide either today.
+#   docker compose --project-name qa-ai-models -f docker/compose.yml build
+#   docker compose --project-name qa-ai-models -f scanner/docker/compose.yml build
 
 # deploy-manual:
 #   stage: deploy

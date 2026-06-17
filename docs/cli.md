@@ -67,6 +67,11 @@ uv run python -m gateway --json   # machine-readable
 uv sync --frozen --group dev
 uv run ruff check .
 uv run python -m unittest discover -s unit_tests -v
+```
+
+Docker image builds are **not** in CI (shared runners lack Docker). Before merge:
+
+```bash
 docker compose --project-name qa-ai-models -f docker/compose.yml build
 docker compose --project-name qa-ai-models -f scanner/docker/compose.yml build
 ```
