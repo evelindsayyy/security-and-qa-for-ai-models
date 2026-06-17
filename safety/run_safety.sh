@@ -169,9 +169,29 @@ fi
 
 if ! $SKIP_GARAK; then
   echo "--- Garak scan ---"
-  GARAK_RUN_CFG="/app/safety/garak/output/${SLUG}/garak_run.yaml"
-  sed "s|report_dir: .*|report_dir: /app/safety/garak/output/${SLUG}|" \
-    safety/garak/garak_duke.yaml > "${GARAK_RUN_CFG}"
+  GARAK_REPORT_DIR="/app/safety/garak/output/${SLUG}"
+  GARAK_RUN_CFG="${GARAK_REPORT_DIR}/garak_run.yaml"
+  GATEWAY_MODEL="$MODEL" GARAK_REPORT_DIR="$GARAK_REPORT_DIR" python - <<'PY'
+import json
+import os
+from pathlib import Path
+
+src = Path("safety/garak/garak_duke.yaml")
+dst = Path(os.environ["GARAK_REPORT_DIR"]) / "garak_run.yaml"
+model = os.environ["GATEWAY_MODEL"]
+report_dir = os.environ["GARAK_REPORT_DIR"]
+
+lines = []
+for line in src.read_text(encoding="utf-8").splitlines():
+    stripped = line.lstrip()
+    indent = line[: len(line) - len(stripped)]
+    if stripped.startswith("target_name:"):
+        line = f"{indent}target_name: {json.dumps(model)}"
+    elif stripped.startswith("report_dir:"):
+        line = f"{indent}report_dir: {report_dir}"
+    lines.append(line)
+dst.write_text("\n".join(lines) + "\n", encoding="utf-8")
+PY
   GARAK_CMD=(python -m garak --config "${GARAK_RUN_CFG}" -n "${MODEL}")
   if [[ -n "$GARAK_PROBES" ]]; then
     GARAK_CMD+=(-p "$GARAK_PROBES")

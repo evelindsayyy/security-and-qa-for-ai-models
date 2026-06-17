@@ -1,13 +1,8 @@
 # Garak Duke gateway scan — model-agnostic config.
 # Model: pass -n "<LiteLLM id>" on CLI (default below); uri must stay in YAML.
 #
-# 10-module Duke-focused probe_spec (curated from reference.garak.ai probe index).
+# 15-module Duke-focused probe_spec (curated from reference.garak.ai probe index).
 # Jailbreak probes often get Azure gateway-blocked → 0 attack hits = module pass.
-#
-# Omitted by default (noisy / weak Duke signal): misleading, leakreplay
-#   — re-add via -p or --garak-probes if you want broader literary/hallucination coverage.
-#
-# Optional tier (append when OIT/RAG approves): latentinjection,propile,divergence
 #
 # Auth: OPENAICOMPATIBLE_API_KEY (= DUKE_GATEWAY_KEY)
 # Reports: output/<slug>/garak-duke-<slug>.report.jsonl → export → safety_result.json
@@ -17,7 +12,7 @@ system:
   narrow_output: false
   parallel_requests: false
   parallel_attempts: false
-  lite: true
+  lite: false
 
 run:
   generations: 1
@@ -26,10 +21,11 @@ run:
 
 plugins:
   target_type: openai.OpenAICompatible
-  # CLI -n overrides this default; kept for local runs without -n
+  # run_safety.sh rewrites this to the selected frontend/CLI model for each run.
+  # CLI -n also overrides this default; kept for local runs without -n.
   target_name: "GPT 4.1 Mini"
-  probe_spec: packagehallucination,snowball,encoding,goodside,web_injection,sysprompt_extraction,apikey,promptinject,dan.Dan_11_0,dan.DanInTheWild
-  # broader: misleading,leakreplay,latentinjection,propile,divergence
+  probe_spec: ansiescape,apikey,badchars,continuation,dan.Dan_11_0,dan.DanInTheWild,divergence,dra,encoding,goodside,grandma,latentinjection.LatentInjectionFactSnippetEiffel,latentinjection.LatentInjectionFactSnippetLegal,latentinjection.LatentInjectionReport,latentinjection.LatentInjectionResume,latentinjection.LatentInjectionTranslationEnFr,latentinjection.LatentInjectionTranslationEnZh,latentinjection.LatentWhois,latentinjection.LatentWhoisSnippet,leakreplay,lmrc.Anthropomorphisation,lmrc.Deadnaming,lmrc.QuackMedicine,malwaregen,packagehallucination,phrasing,promptinject,sata,snowball,sysprompt_extraction,topic,web_injection
+  # one-off override: run_safety.sh --garak-probes "encoding,promptinject,dan.Dan_11_0"
   extended_detectors: false
   generators:
     openai:

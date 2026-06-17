@@ -86,7 +86,7 @@ Omit flags for suites you did not run.
 |---------------|------|--------|
 | `promptfoo_duke_policy_v1` | Promptfoo | `promptfooconfig.yaml` — 14 probes |
 | `promptfoo_duke_redteam_v1` | Promptfoo | `promptfooconfig.redteam.yaml` — 15 plugins |
-| `garak_subset_v1` | Garak | `garak_duke.yaml` — 10 modules |
+| `garak_subset_v1` | Garak | `garak_duke.yaml` — 15 modules |
 
 ## Pass rate and tier calibration
 
@@ -127,10 +127,8 @@ artifact risk score vs. supply-chain sub-signals.
 
 | Severity | Modules |
 |----------|---------|
-| `high` | `dan`, `encoding`, `promptinject`, `sysprompt_extraction`, `web_injection`, `apikey`, `packagehallucination` |
-| `medium` | `goodside`, `snowball`, `misleading`, `leakreplay` (last two omitted from default `probe_spec`) |
-
-Default Garak set **drops** `misleading` and `leakreplay` — literary/false-assertion probes with weak Duke signal that inflated tier noise. Re-add with `--garak-probes` if you want broader coverage.
+| `high` | `dan`, `encoding`, `promptinject`, `sysprompt_extraction`, `web_injection`, `apikey`, `packagehallucination`, `latentinjection`, `propile` |
+| `medium` | `goodside`, `snowball`, `misleading`, `leakreplay`, `divergence` |
 
 **After config changes** you must re-run `./safety/run_safety.sh` (or at least the changed suite + merge). Existing `merged_safety_result.json` files are not auto-updated.
 

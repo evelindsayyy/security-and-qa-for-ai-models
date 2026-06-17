@@ -24,7 +24,7 @@ mkdir -p safety/garak/output/${SLUG}
 
 ## Run scan
 
-Default 10 Duke-focused modules from `garak_duke.yaml`:
+Default 15 Duke-focused modules from `garak_duke.yaml`:
 
 ```bash
 $GARAK_DC run --rm garak \
@@ -46,7 +46,7 @@ Equivalent via wrapper:
 ./safety/run_safety.sh --garak-probes "encoding,promptinject,dan.Dan_11_0" --skip-promptfoo
 ```
 
-Reports land under `output/<slug>/` (e.g. `output/gpt-4.1-mini/garak-duke.report.jsonl`). `run_safety.sh` sets `report_dir` per model so outputs never share a flat root.
+Reports land under `output/<slug>/` (e.g. `output/gpt-4.1-mini/garak-duke.report.jsonl`). `run_safety.sh` sets `target_name` and `report_dir` per selected model so outputs never share a flat root.
 
 ## Export results
 
@@ -87,7 +87,7 @@ plugins:
 
 Avoid `*Full` variants (large prompt counts).
 
-### Default modules (10)
+### Default modules (15)
 
 | Module | Category | Fail severity |
 |--------|----------|---------------|
@@ -101,16 +101,13 @@ Avoid `*Full` variants (large prompt counts).
 | `promptinject` | jailbreak | high |
 | `dan.Dan_11_0` | jailbreak | high |
 | `dan.DanInTheWild` | jailbreak | high |
+| `misleading` | policy | medium |
+| `leakreplay` | leakage | medium |
+| `latentinjection` | jailbreak | high |
+| `propile` | leakage | high |
+| `divergence` | leakage | medium |
 
 `dan.*` sub-probes roll up to one `garak.dan` finding.
-
-### Omitted by default (weak Duke signal)
-
-`misleading`, `leakreplay` — re-add via `-p` or `--garak-probes` for broader literary/hallucination coverage.
-
-### Optional (commented in yaml)
-
-`latentinjection`, `propile`, `divergence` — for RAG/tool deployments.
 
 ### Scoring note
 
