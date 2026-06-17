@@ -1,7 +1,7 @@
 # GitLab CI — Duke Code+ shared runners (docker+machine).
 #
 # Lint/test: uv sync core+dev deps (slim pyproject — no torch/CUDA).
-# Build: docker:27-cli talks to host daemon via DOCKER_HOST. Deploy is manual and needs .env on the runner.
+# Build: Docker-in-Docker (shared runners do not mount host /var/run/docker.sock).
 
 stages:
   - lint
@@ -12,9 +12,6 @@ stages:
 default:
   interruptible: true
   image: gitlab-registry.oit.duke.edu/codeplus/security-and-qa-for-ai-models/dev:local
-
-variables:
-  DOCKER_HOST: "unix:///var/run/docker.sock"
 
 .default_ci:
   before_script:
@@ -35,11 +32,19 @@ unit-tests:
 build-images:
   stage: build
   image: docker:27-cli
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_TLS_VERIFY: "1"
+    DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  before_script:
+    - until docker info; do sleep 1; done
   script:
-    - docker compose version
     - docker compose --project-name qa-ai-models -f docker/compose.yml build
     - docker compose --project-name qa-ai-models -f scanner/docker/compose.yml build
 
