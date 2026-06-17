@@ -1,9 +1,9 @@
 # CLI reference
 
-All commands run from the **repo root**. First-time setup:
+All commands run from the **repo root**. First-time setup (core + optional groups for local pillar work):
 
 ```bash
-uv sync
+uv sync --group dev --group scanner --group benchmarks
 cp .env.example .env   # paste DUKE_GATEWAY_KEY (and HF_TOKEN / Postgres DSNs if needed)
 ```
 

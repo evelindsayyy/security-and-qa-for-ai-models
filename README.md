@@ -56,7 +56,7 @@ Runtime outputs are gitignored (`scanner/output`, `safety/output`, `evaluator/re
 ```bash
 git clone git@gitlab.oit.duke.edu:codeplus/security-and-qa-for-ai-models.git
 cd security-and-qa-for-ai-models
-uv sync
+uv sync --group dev --group scanner --group benchmarks
 cp .env.example .env          # paste DUKE_GATEWAY_KEY from dashboard.ai.duke.edu
 uv run flask --app frontend:create_app run --debug
 # → http://127.0.0.1:5000

@@ -1,15 +1,12 @@
-# GitLab CI — Duke Code+ shared VM (VCM).
+# GitLab CI — Duke Code+ shared runners (docker+machine).
 #
-# Merged from team-lead skeleton (tag codeplus, interruptible, compose build/deploy)
-# and project jobs (uv, ruff, unit tests, real compose paths).
-#
-# VM prerequisites: git, docker + compose plugin, curl; uv auto-installed if missing.
-# Lint/test need no secrets. Deploy is manual and requires .env on the runner host.
+# Lint/test: uv sync core+dev deps (slim pyproject — no torch/CUDA).
+# Build: host Docker socket. Deploy is manual and needs .env on the runner.
 
 stages:
   - lint
   - test
-  #- build
+  - build
   #- deploy
 
 default:
@@ -17,36 +14,32 @@ default:
   image: gitlab-registry.oit.duke.edu/codeplus/security-and-qa-for-ai-models/dev:local
 
 variables:
-  UV_CACHE_DIR: "${CI_PROJECT_DIR}/.cache/uv"
-  PIP_CACHE_DIR: "${CI_PROJECT_DIR}/.cache/pip"
   DOCKER_HOST: "unix:///var/run/docker.sock"
 
-# .default_uv:
-#   before_script:
-#     - export PATH="${HOME}/.local/bin:${PATH}"
-#     - command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
-#     - uv sync --frozen --group dev
+.default_ci:
+  before_script:
+    - uv sync --frozen --group dev
 
 lint:
-  # extends: .default_uv
+  extends: .default_ci
   stage: lint
   script:
     - uv run ruff check .
 
 unit-tests:
-  # extends: .default_uv
+  extends: .default_ci
   stage: test
   script:
     - uv run python -m unittest discover -s unit_tests -v
 
-# build-images:
-#   stage: build
-#   rules:
-#     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-#     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-#   script:
-#     - docker compose --project-name qa-ai-models -f docker/compose.yml build
-#     - docker compose --project-name qa-ai-models -f scanner/docker/compose.yml build
+build-images:
+  stage: build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - docker compose --project-name qa-ai-models -f docker/compose.yml build
+    - docker compose --project-name qa-ai-models -f scanner/docker/compose.yml build
 
 # deploy-manual:
 #   stage: deploy

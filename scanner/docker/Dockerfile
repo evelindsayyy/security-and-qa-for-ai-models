@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project --group scanner
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH=/app
