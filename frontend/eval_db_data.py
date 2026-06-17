@@ -2,6 +2,12 @@
 Postgres-backed data source for /eval-run — same dict contracts as
 eval_run_data.py, used only when EFFICACY_DB_DSN is set and reachable.
 
+The SQL + connection + raw row reconstruction now live in the shared
+repository ``evaluator/db/queries.py`` (the Repository Pattern), which the
+JSON API also calls. This module is the dashboard's *presentation* layer over
+that repository: it turns the repository's plain RunRecords into the exact
+dicts the templates expect (comparison-table rows, the detail page payload).
+
 Freshness model: the database holds whatever the loader last synced; brand-new
 runs exist only as files until the next `load_results.py --apply`. So
 `get_runs_data_db()` MERGES: DB rows are preferred per slug, and any results
@@ -9,20 +15,15 @@ file on disk that isn't in the DB yet is aggregated from the file. The detail
 page falls back to files via the dispatcher when a slug isn't in the DB.
 
 Severable by design: delete this module and the dispatcher in
-eval_run_data.py reverts to pure file reads (the week-5 API will replace
-this layer entirely).
+eval_run_data.py reverts to pure file reads.
 """
 
 from __future__ import annotations
 
-import os
 import statistics
-import time
 from datetime import timezone
-from pathlib import Path
 
-from dotenv import load_dotenv
-
+from evaluator.db import queries
 from frontend.path_safety import is_safe_slug
 
 # Helpers shared with the file path — eval_run_data imports THIS module only
@@ -34,71 +35,18 @@ from frontend.eval_run_data import (
     _truncate,
 )
 
-# Repo convention: one root .env, shell-exported vars take precedence.
-# (Runs after imports; only needs to happen before _dsn() is first called.)
-load_dotenv(Path(__file__).parent.parent / ".env", override=False)
-
-_CONNECT_TIMEOUT_S = 2
-_AVAILABILITY_TTL_S = 60.0
-
-# Availability is probed at most once per TTL so an unreachable database
-# stalls one request by <=2s per minute, not every request.
-_avail_cache = {"checked_at": 0.0, "ok": False}
-
-
-def _dsn() -> str | None:
-    return os.environ.get("EFFICACY_DB_DSN") or None
-
-
-def available() -> bool:
-    """True when a DSN is configured and the database answers a connect."""
-    dsn = _dsn()
-    if not dsn:
-        return False
-    now = time.monotonic()
-    if now - _avail_cache["checked_at"] < _AVAILABILITY_TTL_S:
-        return _avail_cache["ok"]
-    try:
-        import psycopg
-
-        with psycopg.connect(dsn, connect_timeout=_CONNECT_TIMEOUT_S):
-            ok = True
-    except Exception:
-        ok = False
-    _avail_cache.update(checked_at=now, ok=ok)
-    return ok
-
-
-def _connect():
-    import psycopg
-
-    return psycopg.connect(_dsn(), connect_timeout=_CONNECT_TIMEOUT_S)
+# Connection + availability live in the repository now. Re-export them so the
+# dispatcher (eval_run_data) and the tests keep referring to them as
+# eval_db_data.available / eval_db_data._avail_cache exactly as before.
+available = queries.available
+_avail_cache = queries._avail_cache
 
 
 # ---------------------------------------------------------------------------
-# Row reconstruction — compute the SAME aggregates as the file path, from the
-# eval_results rows, so both paths render identically.
+# Presentation — turn repository RunRecords into the dicts the templates use.
+# The aggregates here must match the file path (eval_run_data._aggregate_file)
+# so DB-backed and file-backed pages render identically.
 # ---------------------------------------------------------------------------
-
-_RUNS_SQL = """
-SELECT r.id::text, r.source_file, r.gateway_model_id, r.judge_model,
-       r.started_at, r.adaptation
-FROM public.eval_runs r
-"""
-
-_RESULTS_SQL = """
-SELECT eval_run_id::text, task_id, metric, score, latency_ms, tokens_in,
-       tokens_out, cost_usd, candidate_failed, judge_failed, detail
-FROM public.eval_results
-ORDER BY task_id
-"""
-
-_DETAIL_RUN_SQL = _RUNS_SQL + " WHERE r.source_file = %(source_file)s"
-_DETAIL_RESULTS_SQL = """
-SELECT task_id, score, latency_ms, tokens_in, tokens_out, cost_usd,
-       candidate_failed, judge_failed, detail
-FROM public.eval_results WHERE eval_run_id = %(run_id)s ORDER BY task_id
-"""
 
 
 def _ts(dt) -> str:
@@ -163,42 +111,15 @@ def _aggregate_db_run(run: dict, results: list[dict]) -> dict:
     }
 
 
-def _fetch_all_runs(conn) -> list[dict]:
-    """All DB runs with their results, as comparison-table row dicts."""
-    with conn.cursor() as cur:
-        cur.execute(_RUNS_SQL)
-        runs = [
-            {"id": rid, "source_file": sf, "gateway_model_id": gm,
-             "judge_model": jm, "started_at": st, "adaptation": ad}
-            for rid, sf, gm, jm, st, ad in cur.fetchall()
-        ]
-        cur.execute(_RESULTS_SQL)
-        by_run: dict[str, list[dict]] = {}
-        for (rid, task_id, metric, score, lat, tin, tout, cost,
-             cfail, jfail, detail) in cur.fetchall():
-            if metric != "judge_score":
-                continue  # future rouge_l etc. rows don't belong in this table
-            by_run.setdefault(rid, []).append({
-                "task_id": task_id, "score": score, "latency_ms": lat,
-                "tokens_in": tin, "tokens_out": tout, "cost_usd": cost,
-                "candidate_failed": cfail, "judge_failed": jfail,
-                "detail": detail or {},
-            })
-    return [
-        _aggregate_db_run(run, by_run[run["id"]])
-        for run in runs
-        if run["id"] in by_run and run["source_file"]
-    ]
-
-
 def get_runs_data_db() -> dict:
     """DB-preferred merge of every known run (DB rows + not-yet-loaded files)."""
     # Import here, not at module top: eval_run_data imports this module lazily,
     # and these two helpers are the file-side fallbacks we merge with.
     from frontend.eval_run_data import _aggregate_file, _postprocess_runs
 
-    with _connect() as conn:
-        db_runs = _fetch_all_runs(conn)
+    with queries.connect() as conn:
+        records = queries.fetch_runs(conn)
+    db_runs = [_aggregate_db_run(rec["run"], rec["results"]) for rec in records]
 
     seen_slugs = {r["slug"] for r in db_runs}
     file_runs = []
@@ -219,23 +140,19 @@ def get_run_detail_db(slug: str) -> dict | None:
     if not is_safe_slug(slug):
         return None
 
-    with _connect() as conn, conn.cursor() as cur:
-        cur.execute(_DETAIL_RUN_SQL, {"source_file": f"{slug}.jsonl"})
-        hit = cur.fetchone()
-        if hit is None:
-            return None
-        run_id, source_file, candidate, judge, started_at, adaptation = hit
-        cur.execute(_DETAIL_RESULTS_SQL, {"run_id": run_id})
-        results = [
-            {"task_id": t, "score": s, "latency_ms": lat, "tokens_in": tin,
-             "tokens_out": tout, "cost_usd": cost, "candidate_failed": cf,
-             "judge_failed": jf, "detail": d or {}}
-            for t, s, lat, tin, tout, cost, cf, jf, d in cur.fetchall()
-        ]
-    if not results:
+    with queries.connect() as conn:
+        rec = queries.fetch_run(conn, f"{slug}.jsonl")
+    if rec is None or not rec["results"]:
         return None
 
-    adaptation = adaptation or {}
+    run, results = rec["run"], rec["results"]
+    run_id = run["id"]
+    source_file = run["source_file"]
+    candidate = run["gateway_model_id"]
+    judge = run["judge_model"]
+    started_at = run["started_at"]
+    adaptation = run["adaptation"] or {}
+
     questions_by_id = _load_suite_questions(
         adaptation.get("task_suite_version", ""))
     dims = _ordered_dims(results)
