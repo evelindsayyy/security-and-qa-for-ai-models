@@ -1,7 +1,7 @@
 # GitLab CI — Duke Code+ shared runners (docker+machine).
 #
 # Lint/test: uv sync core+dev deps (slim pyproject — no torch/CUDA).
-# Build: host Docker socket. Deploy is manual and needs .env on the runner.
+# Build: docker:27-cli talks to host daemon via DOCKER_HOST. Deploy is manual and needs .env on the runner.
 
 stages:
   - lint
@@ -34,10 +34,12 @@ unit-tests:
 
 build-images:
   stage: build
+  image: docker:27-cli
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
+    - docker compose version
     - docker compose --project-name qa-ai-models -f docker/compose.yml build
     - docker compose --project-name qa-ai-models -f scanner/docker/compose.yml build
 
