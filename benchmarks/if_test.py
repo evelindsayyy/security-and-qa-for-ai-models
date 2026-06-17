@@ -10,51 +10,32 @@ import json
 import os
 import re
 from dotenv import load_dotenv
-from litellm import completion
+import litellm
 from tqdm import tqdm
 from datetime import datetime, timezone
 import sys
 from pathlib import Path
+
+from model_client import query_chat_completion, response_content
+
 sys.path.insert(0, ".")  # so instructions_registry is importable
 import instructions_registry
 
 load_dotenv()
 
+litellm.suppress_debug_info = True
+
 BASE_URL = os.getenv("LITELLM_BASE_URL") or os.getenv("DUKE_GATEWAY_URL") or "https://litellm.oit.duke.edu/v1"
 API_KEY = os.getenv("LITELLM_API_KEY") or os.getenv("DUKE_GATEWAY_KEY") or os.getenv("OPENAI_API_KEY")
-MODEL = os.getenv("IFEVAL_MODEL", "openai/gpt-5.4")
+MODEL = os.getenv("IFEVAL_MODEL", "openai/gpt-5.1")
 OUTPUT_FILE = os.getenv("IFEVAL_OUTPUT")
 HERE = Path(__file__).resolve().parent
-OUTPUT_DIR = os.getenv("IFEVAL_OUTPUT_DIR", str(HERE / "results"))
+OUTPUT_DIR = os.getenv("IFEVAL_OUTPUT", str(HERE / "results"))
 SAMPLE_SIZE = int(os.getenv("IFEVAL_SAMPLE", "10"))
 SEED = int(os.getenv("IFEVAL_SEED", "42"))
 
 def safe_get_response(response):
-    if response is None:
-        return ""
-    try:
-        # litellm-style object
-        if hasattr(response, 'choices') and response.choices:
-            first = response.choices[0]
-            if hasattr(first, 'message'):
-                return getattr(first.message, 'content', '') or ''
-            return getattr(first, 'text', '') or ''
-
-        # dict-like fallback
-        if isinstance(response, dict):
-            choices = response.get('choices')
-            if isinstance(choices, list) and choices:
-                c = choices[0]
-                if isinstance(c, dict):
-                    msg = c.get('message')
-                    if isinstance(msg, dict):
-                        return msg.get('content', '') or ''
-                    return c.get('text', '') or ''
-            return str(response)
-    except Exception:
-        return str(response)
-
-    return str(response)
+    return response_content(response)
 
 def judge(prompt, response_text, instruction_id_list, kwargs_list):
     """Use the official IFEval instruction-following judge."""
@@ -133,11 +114,11 @@ def main():
     print(f"testing model {MODEL}")
     results = []
     for row in tqdm(sample, desc='IFEval'):
-        response = completion(
+        response = query_chat_completion(
             model=MODEL,
-            api_base=BASE_URL,
+            base_url=BASE_URL,
             api_key=API_KEY,
-            messages=[{'role':'user','content': row['prompt'] }],
+            messages=[{'role': 'user', 'content': row['prompt']}],
             temperature=1,
         )
         text = safe_get_response(response)

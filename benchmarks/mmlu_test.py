@@ -25,9 +25,10 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, List
 from datasets import load_dataset
-from litellm import completion
 import litellm
 import dotenv
+
+from model_client import query_chat_completion, response_content
 
 dotenv.load_dotenv()
 
@@ -69,15 +70,15 @@ def query_model(question: str, choices: List[str]) -> str:
     """Send a question to the model and return the chosen letter."""
     prompt = format_prompt(question, choices)
     try:
-        response = completion(
+        response = query_chat_completion(
             model=MODEL,
-            api_base=BASE_URL,
+            base_url=BASE_URL,
             api_key=API_KEY,
             messages=[{"role": "user", "content": prompt}],
             temperature=1,
             max_tokens=1000,
         )
-        content = response.choices[0].message.content.strip().upper()
+        content = response_content(response).upper()
         # Extract first valid letter from response
         for char in content:
             if char in LETTERS:
