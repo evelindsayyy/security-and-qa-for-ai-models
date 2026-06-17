@@ -14,8 +14,6 @@ stages:
 
 default:
   interruptible: true
-  tags:
-    - codeplus
 
 variables:
   UV_CACHE_DIR: "${CI_PROJECT_DIR}/.cache/uv"
