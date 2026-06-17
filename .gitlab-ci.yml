@@ -14,37 +14,30 @@ stages:
 
 default:
   interruptible: true
+  image: gitlab-registry.oit.duke.edu/codeplus/security-and-qa-for-ai-models/dev:local
 
 variables:
   UV_CACHE_DIR: "${CI_PROJECT_DIR}/.cache/uv"
   PIP_CACHE_DIR: "${CI_PROJECT_DIR}/.cache/pip"
   DOCKER_HOST: "unix:///var/run/docker.sock"
 
-.default_uv:
-  cache:
-    key:
-      files:
-        - uv.lock
-    paths:
-      - .cache/uv
-      - .venv
-  before_script:
-    - export PATH="${HOME}/.local/bin:${PATH}"
-    - command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
-    - uv sync --frozen --group dev
+# .default_uv:
+#   before_script:
+#     - export PATH="${HOME}/.local/bin:${PATH}"
+#     - command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
+#     - uv sync --frozen --group dev
 
 lint:
-  extends: .default_uv
+  # extends: .default_uv
   stage: lint
-  image: gitlab-registry.oit.duke.edu/codeplus/security-and-qa-for-ai-models/dev:local
   script:
     - uv run ruff check .
 
-# unit-tests:
-#   extends: .default_uv
-#   stage: test
-#   script:
-#     - uv run python -m unittest discover -s unit_tests -v
+unit-tests:
+  # extends: .default_uv
+  stage: test
+  script:
+    - uv run python -m unittest discover -s unit_tests -v
 
 # build-images:
 #   stage: build
