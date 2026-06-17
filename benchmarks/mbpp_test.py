@@ -30,9 +30,10 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, List
 from datasets import load_dataset
-from litellm import completion
 import litellm
 import dotenv
+
+from model_client import query_chat_completion, response_content
 
 dotenv.load_dotenv()
 
@@ -70,15 +71,15 @@ Your function must pass these tests:
 Code:"""
 
     try:
-        response = completion(
+        response = query_chat_completion(
             model=MODEL,
-            api_base=BASE_URL,
+            base_url=BASE_URL,
             api_key=API_KEY,
             messages=[{"role": "user", "content": prompt}],
             temperature=1,
             max_tokens=1000,
         )
-        return response.choices[0].message.content.strip() or ""
+        return response_content(response)
     except Exception as e:
         print(f"  [ERROR] API error: {e}")
         return ""

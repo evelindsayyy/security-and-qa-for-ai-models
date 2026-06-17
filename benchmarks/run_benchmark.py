@@ -36,14 +36,14 @@ BENCHMARKS: dict[str, dict] = {
         "script": "tqa_test.py",
         "glob": "tqa_*.json",
         "env_model": "TQA_MODEL",
-        "env_output": "TQA_OUTPUT_DIR",
+        "env_output": "TQA_OUTPUT",
     },
     "ifeval": {
         "label": "IFEval",
         "script": "if_test.py",
         "glob": "ifeval_*.jsonl",
         "env_model": "IFEVAL_MODEL",
-        "env_output": "IFEVAL_OUTPUT_DIR",
+        "env_output": "IFEVAL_OUTPUT",
     },
     "mmlu": {
         "label": "MMLU (Massive Multitask Language Understanding)",
