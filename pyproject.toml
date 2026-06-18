@@ -48,4 +48,5 @@ benchmarks = [
 
 [tool.ruff.lint.per-file-ignores]
 "scanner/db/load_scans.py" = ["E402"]
+"safety/db/load_safety.py" = ["E402"]
 "unit_tests/*" = ["E402"]
