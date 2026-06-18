@@ -47,9 +47,14 @@ scripts/dcc/.vllm-session.env
 # Ignore tqa test results
 test_results/
 
+# Scratch / local learning notes (teach-code skill output)
+tmp/
+
 # Evaluator cache — regenerable, large, contains responses
 evaluator/cache/
 evaluator/results/
+# User-generated ad-hoc "bring your own" suites (not locked/comparable)
+evaluator/tasks/custom/
 benchmarks/results/
 
 # AI-only briefings — personal notes for Claude, not project documentation

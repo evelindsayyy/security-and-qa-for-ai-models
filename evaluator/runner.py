@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -44,6 +45,42 @@ from schemas import (
 
 
 HERE = Path(__file__).parent
+
+
+# ---------------------------------------------------------------------------
+# Optional DB sync (--load-db) — best-effort, never fails the run
+# ---------------------------------------------------------------------------
+
+
+def _maybe_load_db(out_path: Path, dsn: Optional[str]) -> None:
+    """Load one just-written results file into Postgres. Best-effort.
+
+    Any problem — no DSN, psycopg missing, DB unreachable, parse miss — is
+    reported to stderr and swallowed. The run has already written its JSONL
+    (the source of truth); the DB is only an acceleration projection, so a
+    failed sync must never turn a successful run into a failure.
+    """
+    resolved = dsn or os.environ.get("EFFICACY_DB_DSN") or os.environ.get("DATABASE_URL")
+    if not resolved:
+        print("  WARN: --load-db set but no DSN (EFFICACY_DB_DSN / DATABASE_URL "
+              "/ --db-dsn); skipping DB load.", file=sys.stderr)
+        return
+    try:
+        # Imported lazily so a plain run never pulls in the db module.
+        sys.path.insert(0, str(HERE))
+        from db.load_results import apply_to_db, load_file
+
+        parsed = load_file(out_path)
+        if parsed is None:
+            print(f"  WARN: --load-db could not parse {out_path.name}; skipping.",
+                  file=sys.stderr)
+            return
+        apply_to_db(resolved, [parsed])
+        print(f"  DB: synced {out_path.name} into Postgres.")
+    except Exception as e:  # never crash the run over a projection sync
+        print(f"  WARN: --load-db failed ({type(e).__name__}: {e}); the results "
+              f"file is intact, run `python db/load_results.py --apply` later.",
+              file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -152,12 +189,44 @@ def _parse_args() -> argparse.Namespace:
                    default=HERE / "prompts" / "judge" / "reference_based_v1.txt")
     p.add_argument("--temperature", type=float, default=0.2)
     p.add_argument("--max-tokens", type=int, default=2000)
+    # Self-hosted candidates: point the CANDIDATE at any OpenAI-compatible
+    # server (vLLM on the DCC: http://localhost:8000/v1; Ollama locally:
+    # http://localhost:11434/v1). The judge always stays on the Gateway —
+    # judging is an API call regardless of where the candidate runs. Cost
+    # for unknown self-hosted models records as $0 (real cost is GPU energy).
+    p.add_argument("--candidate-endpoint", type=str, default=None,
+                   help="OpenAI-compatible base URL serving the candidate "
+                        "(default: the Duke Gateway)")
+    # Provenance for self-hosted candidates: which backend served the model and
+    # the exact weights, recorded into Adaptation so a self-hosted row is never
+    # confused with a Gateway row of the same name. For the DCC open-weight eval:
+    #   --candidate-endpoint http://<node>:8000/v1 \
+    #   --inference-backend dcc --hf-repo Qwen/Qwen2.5-7B-Instruct
+    p.add_argument("--inference-backend", type=str, default="gateway",
+                   help="where the candidate ran: gateway | dcc | ollama "
+                        "(default: gateway)")
+    p.add_argument("--hf-repo", type=str, default=None,
+                   help="canonical Hugging Face repo id of the candidate when "
+                        "self-hosted, e.g. Qwen/Qwen2.5-7B-Instruct")
     # Reasoning judges (e.g. gpt-oss-120b) spend hidden thinking tokens from
     # the same budget; 600 leaves them no room for the ~200-token JSON verdict
     # and they come back empty/truncated. Raise to ~2000 for those judges.
     p.add_argument("--judge-max-tokens", type=int, default=2000,
                    help="completion budget for judge calls (default 2000; "
                         "use 2000+ for reasoning-model judges)")
+    # After writing the results file, also sync it into Postgres (the
+    # dashboard's read projection) via evaluator/db/load_results.py. Opt-in:
+    # default off so tests, offline runs, and the no-DB contract are
+    # unaffected. Best-effort: a missing DSN or unreachable DB (off-VPN) logs
+    # a warning and the run still succeeds — the JSONL file stays the source
+    # of truth. Needs a DSN (--db-dsn or EFFICACY_DB_DSN / DATABASE_URL) and
+    # the `db` dependency group (uv sync --group db).
+    p.add_argument("--load-db", action="store_true",
+                   help="after the run, load its results into Postgres "
+                        "(best-effort; needs a DSN + the db dep group)")
+    p.add_argument("--db-dsn", type=str, default=None,
+                   help="Postgres DSN for --load-db "
+                        "(default: EFFICACY_DB_DSN / DATABASE_URL env)")
     p.add_argument("--output-dir", type=Path, default=HERE / "results")
     # Lets a caller (the frontend launch flow) dictate the results filename
     # stem so it can predict the output path before the run starts. The
@@ -243,7 +312,13 @@ def main() -> int:
 
     counts = {"ok": 0, "candidate_failed": 0, "judge_failed": 0}
     t_run_start = time.perf_counter()
-    candidate_model_version = time.strftime("Gateway %Y-%m", time.gmtime())
+    # Record WHERE the candidate ran. Result rows from a self-hosted serving
+    # of the same model name must be distinguishable from Gateway rows — the
+    # deployment (build, quantization, sampler defaults) can change answers.
+    if args.candidate_endpoint:
+        candidate_model_version = f"self-hosted {args.candidate_endpoint}"
+    else:
+        candidate_model_version = time.strftime("Gateway %Y-%m", time.gmtime())
 
     with out_path.open("w", encoding="utf-8") as out_f, \
          trace_path.open("w", encoding="utf-8") as trace_f:
@@ -259,6 +334,7 @@ def main() -> int:
                     system_prompt=system_prompt,
                     temperature=args.temperature,
                     max_tokens=args.max_tokens,
+                    endpoint=args.candidate_endpoint,
                 )
                 cand_dur = time.perf_counter() - t0
 
@@ -307,6 +383,8 @@ def main() -> int:
                     rubric_version=rubric_version,
                     judge_model=args.judge_model,
                     judge_prompt_version=judge_prompt_version,
+                    inference_backend=args.inference_backend,
+                    hf_repo=args.hf_repo,
                 )
                 operational = Operational(
                     latency_ms=cand.latency_ms,
@@ -385,6 +463,8 @@ def main() -> int:
                         rubric_version=rubric_version,
                         judge_model=args.judge_model,
                         judge_prompt_version=judge_prompt_version,
+                        inference_backend=args.inference_backend,
+                        hf_repo=args.hf_repo,
                     ),
                     candidate_response="",
                     scores={},
@@ -424,6 +504,11 @@ def main() -> int:
     )
     print(f"Results: {out_path}")
     print(f"Trace:   {trace_path}")
+
+    # Opt-in projection into Postgres for the dashboard's DB read path.
+    if args.load_db:
+        _maybe_load_db(out_path, args.db_dsn)
+
     return 0
 
 

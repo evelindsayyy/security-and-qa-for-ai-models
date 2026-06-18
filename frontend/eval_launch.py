@@ -85,6 +85,12 @@ SUITES: dict[str, dict] = {
         "rubric": EVALUATOR / "tasks" / "rubrics" / "policy_qa_v1.yaml",
         "system_prompt": EVALUATOR / "prompts" / "system" / "it_support_v1.txt",
     },
+    "summarization_v1": {
+        "label": "Document summarization (6 docs, pilot)",
+        "suite": EVALUATOR / "tasks" / "summarization_v1.jsonl",
+        "rubric": EVALUATOR / "tasks" / "rubrics" / "summarization_v1.yaml",
+        "system_prompt": EVALUATOR / "prompts" / "system" / "summarization_v1.txt",
+    },
 }
 
 # reference_based_v2 builds its output schema from the rubric, so it works
@@ -93,15 +99,57 @@ JUDGE_PROMPT = EVALUATOR / "prompts" / "judge" / "reference_based_v2.txt"
 
 MAX_TOKENS_MIN, MAX_TOKENS_MAX = 50, 4000
 
+# --- Custom ("bring your own") question sets -------------------------------
+# Users who don't like our reference suites can supply their own questions +
+# references. A custom run writes a one-off suite file under tasks/custom/ and
+# runs the normal pipeline against it. These runs are ad-hoc, NOT a locked
+# comparable suite — they're versioned `custom_<ts>` and kept out of the main
+# /eval-run comparison table so they never pollute cross-model comparability.
+CUSTOM_SUITES_DIR = EVALUATOR / "tasks" / "custom"
+CUSTOM_RUBRIC = EVALUATOR / "tasks" / "rubrics" / "it_support.yaml"  # general dims
+CUSTOM_SYSTEM_PROMPT = EVALUATOR / "prompts" / "system" / "generic_v1.txt"
+CUSTOM_MAX_QUESTIONS = 50
+CUSTOM_MAX_FIELD_CHARS = 8000  # per question / per reference
+CUSTOM_PREFIX = "custom_"
+
 # slug -> Popen for in-flight runs; param-combo key -> slug for dedupe.
 _RUNNING: dict[str, subprocess.Popen] = {}
 _INFLIGHT: dict[tuple, str] = {}
 _LOCK = threading.Lock()
 
 
+def _suite_cfg(suite_key: str) -> dict | None:
+    """Resolve a suite key to its contract files. Returns None for unknown
+    keys. Handles both the curated SUITES and on-disk custom suites
+    (`custom_<ts>` → tasks/custom/<key>.jsonl with the general rubric)."""
+    if suite_key in SUITES:
+        return SUITES[suite_key]
+    if suite_key.startswith(CUSTOM_PREFIX):
+        path = CUSTOM_SUITES_DIR / f"{suite_key}.jsonl"
+        if path.is_file():
+            return {
+                "label": "Custom questions",
+                "suite": path,
+                "rubric": CUSTOM_RUBRIC,
+                "system_prompt": CUSTOM_SYSTEM_PROMPT,
+            }
+    return None
+
+
+def _all_suite_keys() -> list[str]:
+    """Curated suite keys plus any custom suites currently on disk."""
+    custom = []
+    if CUSTOM_SUITES_DIR.is_dir():
+        custom = sorted(p.stem for p in CUSTOM_SUITES_DIR.glob(f"{CUSTOM_PREFIX}*.jsonl"))
+    return list(SUITES) + custom
+
+
 def suite_question_count(suite_key: str) -> int:
     """Number of questions in a suite (line 0 is metadata)."""
-    lines = SUITES[suite_key]["suite"].read_text(encoding="utf-8").splitlines()
+    cfg = _suite_cfg(suite_key)
+    if cfg is None:
+        return 0
+    lines = cfg["suite"].read_text(encoding="utf-8").splitlines()
     return sum(1 for line in lines[1:] if line.strip())
 
 
@@ -118,7 +166,7 @@ def validate_launch(
             f"judge {judge!r} is the same model family as candidate "
             f"{candidate!r} — cross-family judging required (MT-Bench rule)"
         )
-    if suite_key not in SUITES:
+    if _suite_cfg(suite_key) is None:
         return f"unknown suite: {suite_key!r}"
     if not (MAX_TOKENS_MIN <= max_tokens <= MAX_TOKENS_MAX):
         return f"max_tokens must be {MAX_TOKENS_MIN}-{MAX_TOKENS_MAX}"
@@ -136,53 +184,38 @@ def build_command(
     candidate: str, judge: str, suite_key: str, max_tokens: int, stem: str
 ) -> list[str]:
     """argv for the runner subprocess. List form — never a shell string."""
-    cfg = SUITES[suite_key]
-    inner = [
-        "python",
-        "runner.py",
-        "--candidate-model",
-        candidate,
-        "--judge-model",
-        judge,
-        "--suite",
-        _container_rel(cfg["suite"]),
-        "--rubric",
-        _container_rel(cfg["rubric"]),
-        "--system-prompt",
-        _container_rel(cfg["system_prompt"]),
-        "--judge-prompt",
-        _container_rel(JUDGE_PROMPT),
-        "--max-tokens",
-        str(max_tokens),
-        "--judge-max-tokens",
-        "2000",
-        "--output-name",
-        stem,
-    ]
+    cfg = _suite_cfg(suite_key)
+
+    def _flags(suite_p: str, rubric_p: str, system_p: str, judge_p: str) -> list[str]:
+        return [
+            "--candidate-model", candidate,
+            "--judge-model", judge,
+            "--suite", suite_p,
+            "--rubric", rubric_p,
+            "--system-prompt", system_p,
+            "--judge-prompt", judge_p,
+            "--max-tokens", str(max_tokens),
+            "--judge-max-tokens", "2000",
+            "--output-name", stem,
+            # Auto-sync browser-launched runs into Postgres so the dashboard's
+            # DB never drifts behind the files. Best-effort in the runner: if
+            # no DSN is reachable (off-VPN) the run still succeeds from files.
+            "--load-db",
+        ]
+
     if docker_launch.use_docker():
+        # Container-relative paths (WORKDIR /app/evaluator); only computed here.
+        inner = ["python", "runner.py", *_flags(
+            _container_rel(cfg["suite"]),
+            _container_rel(cfg["rubric"]),
+            _container_rel(cfg["system_prompt"]),
+            _container_rel(JUDGE_PROMPT),
+        )]
         return docker_launch.compose_run_argv("evaluator", inner)
-    return [
-        sys.executable,
-        str(RUNNER),
-        "--candidate-model",
-        candidate,
-        "--judge-model",
-        judge,
-        "--suite",
-        str(cfg["suite"]),
-        "--rubric",
-        str(cfg["rubric"]),
-        "--system-prompt",
-        str(cfg["system_prompt"]),
-        "--judge-prompt",
-        str(JUDGE_PROMPT),
-        "--max-tokens",
-        str(max_tokens),
-        "--judge-max-tokens",
-        "2000",
-        "--output-name",
-        stem,
-    ]
+    return [sys.executable, str(RUNNER), *_flags(
+        str(cfg["suite"]), str(cfg["rubric"]),
+        str(cfg["system_prompt"]), str(JUDGE_PROMPT),
+    )]
 
 
 def predict_stem(suite_key: str, candidate: str) -> str:
@@ -263,7 +296,7 @@ def get_status(slug: str) -> dict:
     if not is_safe_slug(slug):
         return {"status": "not_found", "progress": 0, "total": 0}
 
-    suite_key = next((k for k in SUITES if f"_{k}_" in f"_{slug}_"), None)
+    suite_key = next((k for k in _all_suite_keys() if f"_{k}_" in f"_{slug}_"), None)
     total = suite_question_count(suite_key) if suite_key else 0
 
     path = RESULTS_DIR / f"{slug}.jsonl"
@@ -286,6 +319,71 @@ def get_status(slug: str) -> dict:
     return {"status": "not_found", "progress": 0, "total": total}
 
 
+def validate_custom_questions(
+    raw_text: str,
+) -> tuple[list[dict] | None, str | None]:
+    """Parse + validate pasted custom questions. Returns (questions, None) or
+    (None, error_message).
+
+    Format: one JSON object per line, each with a non-empty ``question`` and
+    ``reference`` (the user's own gold answer); optional ``id``. This is the
+    security boundary for custom content — it's parsed as DATA, capped, and
+    only ever becomes prompt text the candidate sees; it never reaches a shell
+    or the filesystem as a path.
+    """
+    lines = [ln for ln in raw_text.splitlines() if ln.strip()]
+    if not lines:
+        return None, "no questions provided"
+    if len(lines) > CUSTOM_MAX_QUESTIONS:
+        return None, f"too many questions ({len(lines)}); max {CUSTOM_MAX_QUESTIONS}"
+
+    questions: list[dict] = []
+    for i, line in enumerate(lines, start=1):
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError as e:
+            return None, f"line {i} is not valid JSON: {e}"
+        if not isinstance(obj, dict):
+            return None, f"line {i} must be a JSON object"
+        question = str(obj.get("question", "")).strip()
+        reference = str(obj.get("reference", "")).strip()
+        if not question:
+            return None, f"line {i} is missing a non-empty 'question'"
+        if not reference:
+            return None, f"line {i} is missing a non-empty 'reference'"
+        if len(question) > CUSTOM_MAX_FIELD_CHARS or len(reference) > CUSTOM_MAX_FIELD_CHARS:
+            return None, f"line {i} exceeds {CUSTOM_MAX_FIELD_CHARS} chars per field"
+        qid = str(obj.get("id", "")).strip() or f"custom-{i:03d}"
+        questions.append({"id": qid, "question": question, "reference": reference})
+    return questions, None
+
+
+def write_custom_suite(questions: list[dict]) -> str:
+    """Write a one-off custom suite file and return its suite_key.
+
+    The key is ``custom_<ts>``; the metadata line marks it ad-hoc so the
+    comparison table can keep it out of locked-suite comparisons.
+    """
+    ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    suite_key = f"{CUSTOM_PREFIX}{ts}"
+    CUSTOM_SUITES_DIR.mkdir(parents=True, exist_ok=True)
+    path = CUSTOM_SUITES_DIR / f"{suite_key}.jsonl"
+    metadata = {
+        "_metadata": (
+            "User-provided custom suite — ad-hoc, NOT a locked comparable "
+            "suite. References are the user's own. Excluded from the main "
+            "model-comparison table."
+        ),
+        "task_suite_version": suite_key,
+        "custom": True,
+    }
+    with path.open("w", encoding="utf-8") as f:
+        f.write(json.dumps(metadata, ensure_ascii=False) + "\n")
+        for q in questions:
+            f.write(json.dumps(q, ensure_ascii=False) + "\n")
+    return suite_key
+
+
 def get_launch_options() -> dict:
     """Everything the /eval-run/new form needs to render."""
     candidates = candidate_models()
@@ -301,6 +399,7 @@ def get_launch_options() -> dict:
         "pricing_json": json.dumps({m: list(r) for m, r in _COST_PER_M_TOKENS.items()}),
         "max_tokens_min": MAX_TOKENS_MIN,
         "max_tokens_max": MAX_TOKENS_MAX,
+        "custom_max_questions": CUSTOM_MAX_QUESTIONS,
         "launch_mode": "docker" if docker_launch.use_docker() else "host",
         "docker_available": docker_launch.docker_available(),
     }

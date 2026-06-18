@@ -96,6 +96,33 @@ def _notes_for(model_id: str, category: str) -> str:
         return explicit
     return _CATEGORY_DEFAULT_NOTES.get(category, _CATEGORY_DEFAULT_NOTES["other"])
 
+
+# Pricing: single source of truth is the evaluator's cost table
+# (evaluator/runner.py:_COST_PER_M_TOKENS, USD per 1M (input, output) tokens).
+# Lazily imported + cached so the catalog page doesn't pull the evaluator
+# stack at app startup; {} if unavailable. Partial coverage — priced chat
+# models only; everything else simply shows no price.
+_pricing_cache: dict[str, tuple[float, float]] | None = None
+
+
+def _pricing_table() -> dict[str, tuple[float, float]]:
+    global _pricing_cache
+    if _pricing_cache is not None:
+        return _pricing_cache
+    try:
+        import sys
+        from pathlib import Path
+
+        evaluator = Path(__file__).resolve().parent.parent / "evaluator"
+        if str(evaluator) not in sys.path:
+            sys.path.insert(0, str(evaluator))
+        from runner import _COST_PER_M_TOKENS
+
+        _pricing_cache = dict(_COST_PER_M_TOKENS)
+    except Exception:  # noqa: BLE001 — pricing is optional decoration
+        _pricing_cache = {}
+    return _pricing_cache
+
 # Legacy aliases from week-2 spikes (not returned by /v1/models anymore).
 DEPRECATED_IDS: dict[str, str] = {
     "Mistral on-site": "deprecated — phased out; not on gateway allowlist",
@@ -174,16 +201,20 @@ def _fetch_live_models() -> tuple[list[dict[str, str]], str | None]:
     except Exception as exc:  # noqa: BLE001 — surface in UI/CLI, never crash
         return [], f"Gateway models.list failed: {type(exc).__name__}: {exc}"
 
-    rows: list[dict[str, str]] = []
+    prices = _pricing_table()
+    rows: list[dict[str, Any]] = []
     for item in response.data:
         mid = item.id
         cat = _categorize(mid)
+        rate = prices.get(mid)  # (input, output) USD per 1M tokens, or None
         rows.append(
             {
                 "id": mid,
                 "category": cat,
                 "notes": _notes_for(mid, cat),
                 "owned_by": getattr(item, "owned_by", "") or "",
+                "price_in": rate[0] if rate else None,
+                "price_out": rate[1] if rate else None,
             }
         )
 
@@ -207,7 +238,7 @@ def get_gateway_catalog(*, force_refresh: bool = False) -> dict[str, Any]:
         return _cache["payload"]
 
     models, error = _fetch_live_models()
-    by_category: dict[str, list[dict[str, str]]] = {}
+    by_category: dict[str, list[dict[str, Any]]] = {}
     for row in models:
         by_category.setdefault(row["category"], []).append(row)
 

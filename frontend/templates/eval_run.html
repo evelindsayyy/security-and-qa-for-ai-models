@@ -65,7 +65,7 @@
             data-latency="{{ r.mean_latency_ms }}"
             data-cost="{{ "%.4f"|format(r.total_cost_usd) }}">
           <td>
-            <span class="model">{{ r.candidate_model }}</span>
+            <a class="model" href="{{ url_for('model_detail', slug=r.model_slug) }}">{{ r.candidate_model }}</a>
             {% if r.is_best %}<span class="badge badge-best">best</span>{% endif %}
           </td>
           <td><span class="dim">{{ r.judge_model }}</span></td>

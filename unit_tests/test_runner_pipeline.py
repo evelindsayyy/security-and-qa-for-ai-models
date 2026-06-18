@@ -124,22 +124,25 @@ class RunnerPipelineTest(unittest.TestCase):
 
         self.cand_stub = _CandidateStub()
         self.judge_stub = _JudgeStub()
+        # Stored so a test can re-run with extra flags (e.g. the DCC provenance
+        # flags) by patching sys.argv to self.base_argv + [...] inside the test.
+        self.base_argv = [
+            "runner.py",
+            "--candidate-model", "stub-model",
+            "--judge-model", "stub-judge",
+            "--suite", str(self.dir / "suite.jsonl"),
+            "--rubric", str(self.dir / "rubric.yaml"),
+            "--system-prompt", str(self.dir / "system.txt"),
+            "--judge-prompt", str(self.dir / "judge_prompt.txt"),
+            "--output-dir", str(self.dir / "results"),
+            "--judge-max-tokens", "1234",
+        ]
         for patcher in (
             mock.patch.object(candidate, "gateway_client", return_value=self.cand_stub),
             mock.patch.object(judge, "gateway_client", return_value=self.judge_stub),
             mock.patch.object(candidate, "_CACHE_DIR", self.dir / "cache_c"),
             mock.patch.object(judge, "_CACHE_DIR", self.dir / "cache_j"),
-            mock.patch.object(sys, "argv", [
-                "runner.py",
-                "--candidate-model", "stub-model",
-                "--judge-model", "stub-judge",
-                "--suite", str(self.dir / "suite.jsonl"),
-                "--rubric", str(self.dir / "rubric.yaml"),
-                "--system-prompt", str(self.dir / "system.txt"),
-                "--judge-prompt", str(self.dir / "judge_prompt.txt"),
-                "--output-dir", str(self.dir / "results"),
-                "--judge-max-tokens", "1234",
-            ]),
+            mock.patch.object(sys, "argv", self.base_argv),
         ):
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -202,6 +205,30 @@ class RunnerPipelineTest(unittest.TestCase):
         self.assertEqual(len(cached), 1)  # only q1's healthy answer
         data = json.loads(cached[0].read_text())
         self.assertEqual(data["response"], "a perfectly good answer")
+
+    def test_default_provenance_is_gateway(self) -> None:
+        # No --inference-backend / --hf-repo: the additive 1.1.0 fields take
+        # their defaults, so a normal Gateway run is labeled as such.
+        rows = self._run()
+        adapt = rows["q1"]["adaptation"]
+        self.assertEqual(adapt["inference_backend"], "gateway")
+        self.assertIsNone(adapt["hf_repo"])
+
+    def test_provenance_flags_land_in_every_row(self) -> None:
+        # The DCC open-weight eval passes these; they must reach Adaptation on
+        # EVERY row (healthy + failure rows alike) so the whole run is tagged.
+        # (We omit --candidate-endpoint on purpose: it would bypass the stub and
+        # hit a real socket; provenance is independent of endpoint routing.)
+        dcc_argv = self.base_argv + [
+            "--inference-backend", "dcc",
+            "--hf-repo", "Qwen/Qwen2.5-7B-Instruct",
+        ]
+        with mock.patch.object(sys, "argv", dcc_argv):
+            rows = self._run()
+        for qid, r in rows.items():
+            self.assertEqual(r["adaptation"]["inference_backend"], "dcc", qid)
+            self.assertEqual(
+                r["adaptation"]["hf_repo"], "Qwen/Qwen2.5-7B-Instruct", qid)
 
 
 if __name__ == "__main__":

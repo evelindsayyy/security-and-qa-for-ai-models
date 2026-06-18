@@ -58,6 +58,44 @@
 
     <button type="submit" id="submit-btn" class="btn-primary">▶ Start run</button>
   </form>
+
+  <details class="custom-suite">
+    <summary>Or bring your own questions</summary>
+    <p class="form-hint">
+      Use your own question set when our reference suites don't fit your need.
+      One JSON object per line, each with a <code>question</code> and your own
+      <code>reference</code> answer (optional <code>id</code>). Up to
+      {{ custom_max_questions }} questions. Custom runs are ad-hoc — they're
+      scored the same way but kept out of the model-comparison table.
+    </p>
+    <form method="post" action="{{ url_for('eval_run_start_custom') }}" class="launch-form">
+      <label>Candidate model
+        <select name="candidate">
+          {% for m in candidates %}
+          <option value="{{ m }}" {% if m == 'gpt-5-chat' %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Judge model
+        <select name="judge">
+          {% for m in judges %}
+          <option value="{{ m }}">{{ m }}</option>
+          {% endfor %}
+        </select>
+        <span class="form-hint">must be a different model family than the candidate</span>
+      </label>
+      <label>Max tokens
+        <input type="number" name="max_tokens" value="2000"
+               min="{{ max_tokens_min }}" max="{{ max_tokens_max }}">
+      </label>
+      <label>Questions (JSONL)
+        <textarea name="questions" rows="8" spellcheck="false"
+          placeholder='{"question": "How do I reset my NetID password?", "reference": "Go to oit.duke.edu ..."}
+{"question": "...", "reference": "..."}'></textarea>
+      </label>
+      <button type="submit" class="btn-primary">▶ Run custom set</button>
+    </form>
+  </details>
 </div>
 
 <script>

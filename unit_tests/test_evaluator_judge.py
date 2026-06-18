@@ -112,6 +112,19 @@ class ResolveRubricTest(unittest.TestCase):
         path.write_text(text, encoding="utf-8")
         return path
 
+    def test_real_summarization_rubric_resolves_from_shared(self) -> None:
+        # Guards the shipped summarization_v1 rubric: its from:shared
+        # dimensions must inline anchors and its weights must sum to 1.0.
+        rubric_path = _EVALUATOR / "tasks" / "rubrics" / "summarization_v1.yaml"
+        rubric, _ = resolve_rubric(rubric_path)
+        dims = rubric["dimensions"]
+        self.assertEqual(
+            set(dims), {"faithfulness", "coverage", "concision", "tone"}
+        )
+        # shared definitions were inlined (anchors present on each)
+        self.assertTrue(all("anchors" in d for d in dims.values()))
+        self.assertAlmostEqual(sum(d["weight"] for d in dims.values()), 1.0)
+
     def test_inline_rubric_passes_through_unchanged(self) -> None:
         raw = (
             "rubric_version: test_v1\n"
