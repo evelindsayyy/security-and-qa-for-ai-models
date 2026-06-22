@@ -51,3 +51,4 @@ Target flow: [`docs/architecture.md`](../docs/architecture.md).
 | `scans.py` | Scanning reads |
 | `safety.py` | Safety reads |
 | `__init__.py` | `register_api(app)` |
+| `ingest.py` | CLI orchestrator — `python -m api.ingest` (not a REST route; see [`docs/cli.md`](../docs/cli.md)) |

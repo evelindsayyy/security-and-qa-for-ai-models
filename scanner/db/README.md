@@ -40,6 +40,8 @@ uv run python scanner/db/load_scans.py --apply      # write rows
 uv run python scanner/db/load_scans.py --apply      # again: counts must NOT change
 ```
 
+All pillars: `uv run python -m api.ingest` — see [`docs/cli.md`](../../docs/cli.md).
+
 ## Verify
 
 ```sql

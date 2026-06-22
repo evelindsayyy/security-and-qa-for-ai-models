@@ -1,7 +1,7 @@
 # dbutils — shared Postgres ingest helpers
 
-Reusable plumbing for **JSON → Postgres** loaders. Scanner and safety loaders use
-this package; the efficacy loader in ``evaluator/db/`` is standalone.
+Reusable plumbing for **JSON → Postgres** loaders. Scan, safety, and benchmarks use
+this package; ``evaluator/db/`` is standalone but shares the same DSN via ``api.ingest``.
 
 Each pillar keeps its own ``pillar/db/`` directory (transforms + INSERT SQL).
 

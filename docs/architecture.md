@@ -59,7 +59,7 @@ flowchart TB
 | 2 | — | `subprocess` / `docker compose run` via `frontend/*_launch.py` |
 | 3 | — | Pillar calls DGX, gateway, or DCC |
 | 4 | — | Backend returns; launcher writes JSON under `*/output/` or `*/results/` |
-| 5 | — | Optional: `scanner/db/load_scans.py`, `safety/db/load_safety.py`, `evaluator/db/load_results.py` |
+| 5 | — | Optional ingest: `python -m api.ingest` or per-pillar `*/db/load_*.py` |
 | 6 | `GET …/<slug>/status`, `GET …/<slug>` | Poll job; read results (disk or Postgres) |
 
 Eval results are also available as JSON at `GET /api/evals` and `GET /api/evals/<slug>`.
@@ -86,9 +86,9 @@ Long scans and evals take minutes to hours. Start routes return immediately; the
 | Piece | Role |
 |-------|------|
 | **`frontend/*_launch.py`** | `subprocess.Popen` + `threading`; spawns Docker or host CLI from UI start routes |
-| **Pillar ingest CLIs** | `scanner/db/`, `safety/db/`, `evaluator/db/` — JSON → Postgres (`--apply`) |
+| **Ingest** | Per-pillar `*/db/` loaders + `python -m api.ingest` — JSON → Postgres (`--apply`) |
 | **Postgres** | Optional read path when DSN is set; disk JSON remains source of truth |
-| **`api/`** | JSON read layer — see [`api/README.md`](../api/README.md) |
+| **`api/`** | JSON reads under `/api`; ingest orchestrator in `api/ingest.py` (CLI, not a route) |
 
 ### Ingest
 
@@ -98,7 +98,7 @@ Long scans and evals take minutes to hours. Start routes return immediately; the
 
 Pillars define the contract in code (`scanner/schemas.py`, `safety/schemas.py`, `evaluator/schemas.py`, etc.) — same logical shapes as the Postgres tables. Flow: **job → JSON file → optional ingest → Postgres or disk read → UI**. Detail: [`data-model.md`](data-model.md).
 
-**Persistence approach:** versioned **SQL schema files** plus **psycopg** loaders — established in [`evaluator/db/`](../evaluator/db/README.md) (eval, standalone) and [`scanner/db/`](../scanner/db/README.md) (scan, on **`dbutils`**). Shared plumbing for new pillar loaders lives in [`dbutils/`](../dbutils/README.md). Ingest modules expose testable pure transforms and apply with `--apply`; reads use parameterized SQL with disk fallback in the frontend.
+**Persistence approach:** versioned **SQL schema files** plus **psycopg** loaders in each pillar's `db/` directory. Shared helpers in [`dbutils/`](../dbutils/README.md). Unified dry-run/apply: `python -m api.ingest`. Ingest is idempotent (`ON CONFLICT DO NOTHING`); the UI reads Postgres when a DSN is set, else disk.
 
 ## Inference: two backends
 
@@ -116,9 +116,9 @@ Safety and efficacy reach a model over an OpenAI-compatible chat API. The backen
 | Scan | A | `/scans` | Hugging Face files (DGX) | `scans`, `findings` |
 | Safety | A | `/safety` | gateway | `safety_runs`, `safety_findings` |
 | Eval | B | `/eval-run` | gateway / DCC | `eval_runs`, `eval_results` |
-| Benchmark | B | `/benchmarks` | gateway | disk JSON (`benchmarks/results/`) |
+| Benchmark | B | `/benchmarks` | gateway | `benchmark_runs` |
 
-Benchmark results are read from disk in the UI. Scan, safety, and eval support optional Postgres ingest.
+All four pillars have optional Postgres ingest. The UI reads disk JSON by default; scan, safety, and eval also read Postgres when configured. Benchmark UI still reads `benchmarks/results/` on disk.
 
 ## Why JSON → Postgres
 
@@ -129,7 +129,7 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 - **`scanner/`** (A) — pulls HF files and runs artifact checks (format, pickle/fickling, ModelAudit, dependencies, secrets) into a risk score → `ScanResult`. See [`track-a-framework.md`](track-a-framework.md), [`tool-stack.md`](tool-stack.md).
 - **`safety/`** (A) — garak + promptfoo + Duke policy probes over LiteLLM → `MergedSafetyResult`. Probe subsets follow deployment context (chatbot vs agentic).
 - **`evaluator/`** (B) — Duke task suites scored by an LLM judge against YAML rubrics; records scores plus cost / latency / tokens → `eval_runs`. Postgres path: [`evaluator/db/`](../evaluator/db/README.md). See [`track-b-framework.md`](track-b-framework.md).
-- **`benchmarks/`** (B) — public benchmarks (IFEval, TruthfulQA, MMLU, ToMi, consistency); results in `benchmarks/results/`.
+- **`benchmarks/`** (B) — public benchmarks (IFEval, TruthfulQA, MMLU, ToMi, consistency); results in `benchmarks/results/`; ingest via [`benchmarks/db/`](../benchmarks/db/README.md).
 - **`api/`** — Flask REST under `/api`; see [`api/README.md`](../api/README.md).
 - **`frontend/`** — nutrition-label UI; `frontend/*_data.py` + launch helpers. See [`frontend/README.md`](../frontend/README.md).
 

@@ -44,6 +44,8 @@ uv run python evaluator/db/load_results.py --apply    # real load
 uv run python evaluator/db/load_results.py --apply    # again: counts must NOT change (idempotency)
 ```
 
+All pillars: `uv run python -m api.ingest` — see [`docs/cli.md`](../docs/cli.md).
+
 ## Verify
 
 ```sql

@@ -38,6 +38,8 @@ uv run python safety/db/load_safety.py --apply      # write rows
 uv run python safety/db/load_safety.py --apply      # again: counts must NOT change
 ```
 
+All pillars: `uv run python -m api.ingest` — see [`docs/cli.md`](../../docs/cli.md).
+
 ## Verify
 
 ```sql

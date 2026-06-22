@@ -86,8 +86,9 @@ Set `POSTGRES_DSN` / `EFFICACY_DB_DSN` in `.env`, then (`uv sync --group db`):
 uv run python -m api.ingest
 uv run python -m api.ingest --apply
 
-# Single pillar
+# Single pillar (--scan, --safety, --eval, --benchmark)
 uv run python -m api.ingest --scan --apply
+uv run python -m api.ingest bootstrap --apply   # all pillars + summary line
 
 # Per-pillar loaders
 uv run python scanner/db/load_scans.py --apply
