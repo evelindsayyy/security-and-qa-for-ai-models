@@ -23,8 +23,9 @@ Labels: `scanning` · `safety` · `gateway` · `efficacy` · `evaluator` · `fro
 | W1–W2 | **Closed** — spikes, docs |
 | **W3** | **Closed** — packages, catalog, frontend, MVP efficacy |
 | **W4** | **Closed** — E2E scan/safety/eval; CI on shared runners (Jun 17) |
-| **W5** | **Current** — Postgres, `api/`, unified ingest |
-| W6–W7 | Full UI, demo freeze |
+| **W5** | **Closed** — Postgres loaders (partial carry to W6) |
+| **W6** | **Current** — full `api/`, demo-ready UI |
+| W7+ | Demo freeze, polish |
 
 ---
 
@@ -32,11 +33,11 @@ Labels: `scanning` · `safety` · `gateway` · `efficacy` · `evaluator` · `fro
 
 GitLab jobs run on Duke **shared runners** (`docker+machine`).
 
-1. Pipeline stages: **lint** (ruff) → **unit-tests** (unittest).
-2. No Docker build in CI — verify image builds locally before merge (`docs/cli.md`).
-3. Deploy is manual and commented out (needs `.env` + runner with Docker).
+1. Pipeline: **lint** (ruff) → **unit-tests** (~300).
+2. On **`main`**: Buildah builds `docker/Dockerfile` → GitLab container registry.
+3. Deploy job not wired yet (needs VM SSH vars).
 
-Config: [`.gitlab-ci.yml`](../.gitlab-ci.yml). **MR !32 merged Jun 17** (slim deps, lint+test only).
+Config: [`.gitlab-ci.yml`](../.gitlab-ci.yml). Detail: [`docs/docker.md`](../docs/docker.md).
 
 ---
 
@@ -48,8 +49,9 @@ Spikes in `testing/` exist to **run tools and inspect output**, not to ship prod
 |------|----------------|
 | 1. Spike | Run ModelScan, garak, promptfoo, eval scripts; save **raw + normalized JSON** samples |
 | 2. Map | Align fields to [`docs/data-model.md`](../docs/data-model.md); note gaps in the issue comment |
-| 3. Package | `scanner/`, `safety/`, `evaluator/` Pydantic schemas + on-disk JSON (W3–4) |
-| 4. API | Week 5 migrations + `api/` persistence |
+| 3. Package | `scanner/`, `safety/`, `evaluator/`, `benchmarks/` schemas + artifacts |
+| 4. Postgres | `*/db/` loaders, `api.ingest`, UI `*_db_data.py` |
+| 5. API | REST GET/POST for all pillars (eval GET live) |
 
 Use label `spike` when the issue is mainly “see what the tool returns.” Parent `mvp` issues should link the spike MR or sample files.
 

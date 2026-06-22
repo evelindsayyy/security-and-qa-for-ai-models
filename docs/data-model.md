@@ -1,6 +1,6 @@
 # Data model
 
-Target **PostgreSQL** schema for [`api/`](../api/README.md). Each package writes **JSON** with the same logical shapes (Pydantic or dataclass in code); a VM-side **ingest** loads validated JSON into Postgres via **psycopg** — see [`architecture.md`](architecture.md#json--postgres-summary). Only the application VM writes to Postgres.
+Target **PostgreSQL** schema for [`api/`](../api/README.md). Each pillar writes **JSON artifacts** with shapes defined in code (Pydantic or dataclass); **ingest** loads them into Postgres via **psycopg** — see [`architecture.md`](architecture.md#json--postgres-summary) and [`docs/cli.md`](cli.md).
 
 Catalog keys: [`gateway-models.md`](gateway-models.md).
 
