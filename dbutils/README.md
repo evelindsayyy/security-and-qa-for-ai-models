@@ -16,6 +16,8 @@ Each pillar keeps its own ``pillar/db/`` directory (transforms + INSERT SQL).
 | `ingest` | `jsonb_param`, `apply_loader`, dry-run exit helpers |
 | `sql` | `apply_sql_file`, `execute_many`, `transaction` |
 | `cli` | `add_ingest_arguments` — standard `--apply` / `--dsn` |
+| `apply_schema.py` | `python -m dbutils.apply_schema` — apply pillar DDL (no `psql`) |
+| `post_run.py` | `maybe_sync_artifact` — auto-ingest after successful pillar runs |
 
 ## Pillar loader template (scanner / safety / benchmarks)
 
@@ -70,16 +72,10 @@ def main() -> int:
 
 ## Apply schema (one-time)
 
-```bash
-# Option A — psql
-psql "$POSTGRES_DSN" -f scanner/db/schema.sql
+Requires ``uv sync --group db``. Use ``python -m dbutils.apply_schema`` (no ``psql`` client needed):
 
-# Option B — dbutils (no psql on PATH)
-uv run python -c "
-from dbutils import apply_sql_file, load_repo_env, resolve_dsn
-load_repo_env()
-apply_sql_file(resolve_dsn('POSTGRES_DSN'), __import__('pathlib').Path('scanner/db/schema.sql'))
-"
+```bash
+uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql
 ```
 
 ## Dependencies

@@ -87,6 +87,20 @@ ON CONFLICT (output_slug) DO NOTHING
     conn.commit()
 
 
+def sync_file(path: Path, *, dsn: str) -> None:
+    """Load one benchmark result file into Postgres (idempotent)."""
+    parsed = load_file(path)
+    if parsed is None:
+        raise ValueError(f"could not parse {path.name}")
+    apply_loader(
+        dsn,
+        lambda conn: load_into(conn, [parsed]),
+        item_count=1,
+        item_label="benchmark run(s)",
+        quiet=True,
+    )
+
+
 def run_ingest(
     *,
     apply: bool,

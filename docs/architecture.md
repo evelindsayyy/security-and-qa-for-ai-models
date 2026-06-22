@@ -59,7 +59,7 @@ flowchart TB
 | 2 | — | `subprocess` / `docker compose run` via `frontend/*_launch.py` |
 | 3 | — | Pillar calls DGX, gateway, or DCC |
 | 4 | — | Backend returns; launcher writes JSON under `*/output/` or `*/results/` |
-| 5 | — | Optional ingest: `python -m api.ingest` or per-pillar `*/db/load_*.py` |
+| 5 | — | Auto-ingest when `POSTGRES_DSN` is set (or bulk `python -m api.ingest --apply`) |
 | 6 | `GET …/<slug>/status`, `GET …/<slug>` | Poll job; read results (disk or Postgres) |
 
 Eval results are also available as JSON at `GET /api/evals` and `GET /api/evals/<slug>`.
@@ -86,13 +86,13 @@ Long scans and evals take minutes to hours. Start routes return immediately; the
 | Piece | Role |
 |-------|------|
 | **`frontend/*_launch.py`** | `subprocess.Popen` + `threading`; spawns Docker or host CLI from UI start routes |
-| **Ingest** | Per-pillar `*/db/` loaders + `python -m api.ingest` — JSON → Postgres (`--apply`) |
+| **Ingest** | Per-pillar `*/db/` loaders + `dbutils/post_run.py` — auto-sync after each successful run when DSN set; bulk via `python -m api.ingest` |
 | **Postgres** | Optional read path when DSN is set; disk JSON remains source of truth |
 | **`api/`** | JSON reads under `/api`; ingest orchestrator in `api/ingest.py` (CLI, not a route) |
 
 ### Ingest
 
-**Ingest** loads a finished JSON file into Postgres: read file → validate with Pydantic → upsert rows per [`data-model.md`](data-model.md). Jobs write JSON first by design (audit trail, idempotent reload, decoupled from DB outages).
+**Ingest** loads a finished JSON file into Postgres: read file → validate → upsert rows per [`data-model.md`](data-model.md). When `POSTGRES_DSN` (or `EFFICACY_DB_DSN`) is set, each pillar calls `dbutils.post_run.maybe_sync_artifact` after a successful run. Set `AUTO_INGEST=0` in `.env` to disable. Bulk backfill: `python -m api.ingest --apply` or `python -m api.ingest bootstrap --apply` (all pillars, summary line). First-time VM setup: apply all four pillar schemas via `dbutils.apply_schema`, then bootstrap — see [`cli.md`](cli.md).
 
 ### JSON → Postgres (summary)
 
@@ -132,6 +132,20 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 - **`benchmarks/`** (B) — public benchmarks (IFEval, TruthfulQA, MMLU, ToMi, consistency); results in `benchmarks/results/`; ingest via [`benchmarks/db/`](../benchmarks/db/README.md).
 - **`api/`** — Flask REST under `/api`; see [`api/README.md`](../api/README.md).
 - **`frontend/`** — nutrition-label UI; `frontend/*_data.py` + launch helpers. See [`frontend/README.md`](../frontend/README.md).
+
+## Deployment and hosts
+
+| Host | Role |
+|------|------|
+| **Application VM** (`vcm@model-advisor.colab.duke.edu`) | Production service: `./docker/run.sh up` → Flask UI + `api/` in one container; spawns pillar Docker jobs via host socket; `.env` holds secrets |
+| **DGX** (e.g. gx10) | Dev / scan sandbox — local runs; Postgres may be unreachable off VPN |
+| **DCC** | Optional SLURM + vLLM for open-weight eval (`--candidate-endpoint`); see [`scripts/dcc/`](../scripts/dcc/README.md) |
+| **Duke AI Gateway** | Default chat backend for safety, eval, benchmarks |
+| **OIT Postgres** | Shared team DB (`qa_ai_models`); not on the VM |
+
+**VM layout:** git clone + `.env` + `./docker/run.sh up -d --build`. The web container bind-mounts the repo and Docker socket; pillar jobs write JSON on the VM disk. Postgres is external.
+
+**CI (GitLab):** lint → unit tests → on `main`, Buildah builds `docker/Dockerfile` and pushes to the GitLab container registry. Deploy job is not wired yet; GitLab CI/CD variables (`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_PRIVATE_KEY`, `DEPLOY_SSH_KNOWN_HOSTS`) are for a future SSH deploy to the VM.
 
 ## Open questions
 

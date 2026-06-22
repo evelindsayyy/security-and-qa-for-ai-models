@@ -87,7 +87,18 @@ before deploy.
 
 ## Postgres ingest
 
-Set `POSTGRES_DSN` / `EFFICACY_DB_DSN` in `.env`, then (`uv sync --group db`):
+Set real credentials in ``.env`` (not the ``YOUR_USER`` placeholders). Use ``?sslmode=require``. Run schema apply and bootstrap from the **application VM** (or VPN); gx10 may fail ``pg_hba`` / auth checks.
+
+**Auto-sync:** when a DSN is set, each successful pillar run syncs its artifact into Postgres (best-effort; never fails the job). Disable with ``AUTO_INGEST=0``. Bulk backfill:
+
+```bash
+uv sync --group db
+# Once per environment (all four pillar tables):
+uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql
+uv run python -m dbutils.apply_schema safety/db/safety_schema.sql
+uv run python -m dbutils.apply_schema evaluator/db/efficacy_schema.sql
+uv run python -m dbutils.apply_schema benchmarks/db/benchmark_schema.sql
+```
 
 ```bash
 # All pillars (dry-run by default)

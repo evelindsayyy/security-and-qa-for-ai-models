@@ -11,24 +11,17 @@ Disk JSON remains the source of truth until you run `--apply`. The frontend read
 
 ```bash
 uv sync --group db
-cp .env.example .env    # set POSTGRES_DSN
+cp .env.example .env    # paste real POSTGRES_DSN from team lead (not YOUR_USER placeholders)
 ```
+
+Connection errors usually mean: placeholder credentials still in ``.env``, missing ``?sslmode=require``, or your host is not on the network Postgres allows (try VPN / application VM).
 
 ## Apply schema (one-time)
 
-```bash
-psql "$POSTGRES_DSN" -f benchmarks/db/benchmark_schema.sql
-```
-
-Or without `psql`:
+Requires ``uv sync --group db`` and a real ``POSTGRES_DSN`` in ``.env`` (see ``.env.example`` — include ``?sslmode=require``).
 
 ```bash
-uv run python -c "
-from pathlib import Path
-from dbutils import apply_sql_file, load_repo_env, resolve_dsn
-load_repo_env()
-apply_sql_file(resolve_dsn('POSTGRES_DSN', 'DATABASE_URL'), Path('benchmarks/db/benchmark_schema.sql'))
-"
+uv run python -m dbutils.apply_schema benchmarks/db/benchmark_schema.sql
 ```
 
 ## Load benchmark runs

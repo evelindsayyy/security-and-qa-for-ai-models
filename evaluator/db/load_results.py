@@ -237,6 +237,25 @@ def apply_to_db(dsn: str, parsed: list[tuple[dict, dict, list[dict]]]) -> None:
     print(f"Loaded {len(parsed)} run(s). Re-running is safe (ON CONFLICT DO NOTHING).")
 
 
+def sync_file(path: Path, *, dsn: str) -> None:
+    """Load one results JSONL into Postgres (idempotent)."""
+    repo = Path(__file__).resolve().parent.parent.parent
+    if str(repo) not in sys.path:
+        sys.path.insert(0, str(repo))
+    from dbutils import apply_loader
+
+    parsed = load_file(path)
+    if parsed is None:
+        raise ValueError(f"could not parse {path.name}")
+    apply_loader(
+        dsn,
+        lambda conn: load_into(conn, [parsed]),
+        item_count=1,
+        item_label="eval run(s)",
+        quiet=True,
+    )
+
+
 def run_ingest(
     *,
     apply: bool,

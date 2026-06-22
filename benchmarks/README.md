@@ -31,7 +31,7 @@ docker compose --env-file .env \
   python run_benchmark.py --benchmark ifeval --model "gpt-5-chat"
 ```
 
-Output lands in `benchmarks/results/` as `<UTC>_<benchmark>_<model>.{json,jsonl}` (matches `benchmark_runs` ingest key). On success, intermediate `tqa_*.json` / `mmlu_*.json` copies and `.log` files are removed automatically.
+Output lands in `benchmarks/results/` as `<UTC>_<benchmark>_<model>.{json,jsonl}` (matches `benchmark_runs` ingest key). On success, intermediate copies and `.log` files are removed. When `POSTGRES_DSN` is set, each run auto-syncs into Postgres; bulk backfill: `uv run python -m api.ingest bootstrap --apply` — see [`db/README.md`](db/README.md) and [`docs/cli.md`](../docs/cli.md).
 Credentials come from the repo-root `.env`. Set `FRONTEND_LAUNCH_MODE=host` to skip Docker.
 
 Legacy outputs under `testing/basic_tests/test_results/` are still read as a fallback.

@@ -48,4 +48,4 @@ GitLab runs lint and unit tests on Duke **shared runners**. On `main`, the
 `${CI_REGISTRY_IMAGE}/web:${CI_COMMIT_SHORT_SHA}` to the GitLab container
 registry. No gateway secrets are required. See [`.gitlab-ci.yml`](../.gitlab-ci.yml).
 
-Postgres is external (`POSTGRES_DSN` on OIT host). W5 adds `api/` REST on the application VM — see [`architecture.md`](architecture.md).
+Postgres is external (`POSTGRES_DSN` on OIT host). Deploy topology: [`architecture.md`](architecture.md#deployment-and-hosts).

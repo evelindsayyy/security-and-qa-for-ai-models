@@ -32,6 +32,9 @@ unit-tests:
 # Build is like docker but has better security permissions and better licensing
 build-web-image:
   stage: build
+  needs:
+    - lint
+    - unit-tests
   tags:
     # This is a runner designed to be able to build containers
     - oit-shared-buildah
@@ -45,7 +48,7 @@ build-web-image:
     # These variables are set before the script stuff runs
     FULL_IMAGE_NAME: ${CI_REGISTRY_IMAGE}/web:${CI_COMMIT_SHORT_SHA}
   script:
-    # these setps all run in order
+    # these steps all run in order
     - set -euo pipefail
     - export STORAGE_DRIVER=vfs
     - export REGISTRY_AUTH_FILE=${HOME}/auth.json
