@@ -59,15 +59,29 @@ def candidate_models() -> tuple[str, ...]:
 
 
 # Judges the team has actually calibrated (cross-judge experiment, week 4).
-# Per docs/judge-selection.md (interim decision, week 4): Maverick is the
-# primary judge, gpt-oss-120b the strict spot-check for Llama candidates.
-# Llama 3.3 was dropped — leniency ceiling (all 5s on strong candidates).
-JUDGE_MODELS: tuple[str, ...] = ("Llama 4 Maverick", "gpt-oss-120b")
+# Maverick is the primary judge; gpt-oss-120b the strict spot-check for Llama
+# candidates. Llama 3.3 was dropped — leniency ceiling (all 5s on strong
+# candidates).
+# OpenAI judges re-enabled 2026-06-22: the gateway metadata/store bug that 400'd
+# all OpenAI models was fixed; GPT 4.1 Mini + gpt-5-chat verified to return
+# valid judge JSON (the bar gpt-oss-120b fails ~75% of the time), and both are
+# non-reasoning chat models (no hidden-thinking-token risk). TODO: formalize in
+# docs/judge-selection.md.
+JUDGE_MODELS: tuple[str, ...] = (
+    "Llama 4 Maverick", "GPT 4.1 Mini", "gpt-5-chat", "gpt-oss-120b",
+)
 
 # MT-Bench rule: judge must come from a different model family than the
-# candidate. Family is derived from the Gateway id prefix.
+# candidate. Family is derived from the Gateway id prefix. Qwen (self-hosted on
+# the DCC) is its own family so an OpenAI judge is allowed to score it; gpt-oss-*
+# stays "openai" (it's an OpenAI model, so self-preference still applies vs gpt-*).
 def model_family(model: str) -> str:
-    return "meta" if model.lower().startswith("llama") else "openai"
+    m = model.lower()
+    if m.startswith("llama"):
+        return "meta"
+    if m.startswith("qwen"):
+        return "qwen"
+    return "openai"
 
 
 # Suite key -> contract files. Rubric/prompt pairing lives here so the
