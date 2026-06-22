@@ -118,9 +118,8 @@ Safety and efficacy reach a model over an OpenAI-compatible chat API. The backen
 | Eval | B | `/eval-run` | gateway / DCC | `eval_runs`, `eval_results` |
 | Benchmark | B | `/benchmarks` | gateway | `benchmark_runs` |
 
-All four pillars have optional Postgres ingest. When a DSN is set and reachable,
-the UI reads Postgres for every pillar (merged with any on-disk artifacts not yet
-loaded); otherwise it reads JSON from disk.
+All four pillars have optional Postgres ingest. When a DSN is set and reachable, the UI reads Postgres for every pillar (merged
+with artifacts not yet loaded); otherwise it reads artifacts directly.
 
 ## Why JSON → Postgres
 
