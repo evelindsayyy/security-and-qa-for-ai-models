@@ -11,6 +11,7 @@ benchmarks/
   *_test.py             # Jack's original runners (tqa, if, mmlu, tomi, consistency)
   manifest.yaml         # reference catalog (not all implemented)
   results/              # JSON/JSONL output (gitignored)
+  db/                   # Postgres schema + loader (see db/README.md)
   docker/               # browser-launched runs
 ```
 

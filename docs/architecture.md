@@ -11,22 +11,26 @@ Two nutrition-label pillars, two tracks:
 | **Security** | `scanner/` (artifacts) + `safety/` (inference red-team) | A |
 | **Efficacy** | `evaluator/` (Duke judge suites) + `benchmarks/` (public benchmarks) | B |
 
-Every run produces structured JSON that lands in Postgres. `api/` (Flask) serves it; `frontend/` (Flask) renders the label. Teams and schedule: [`team-tracks.md`](team-tracks.md).
+Every run produces structured JSON; optional ingest loads it into Postgres. The
+`frontend/` UI renders the nutrition label; `api/` exposes eval results as JSON
+(see [`api/README.md`](../api/README.md)). Teams and schedule: [`team-tracks.md`](team-tracks.md).
 
 ## How a run flows
 
-A run is asynchronous: the browser **POST**s to start a job (immediate `job_id`), a background launcher runs the pillar, results land in Postgres via ingest, then the browser **GET**s status and results. Only step 3 differs by job type.
-
-**(Prototype Implementation):** the frontend uses HTML routes (`POST /scans/start`, `GET /scans/<slug>/status`, …), spawns jobs via `subprocess` / Docker (`frontend/*_launch.py`), and reads JSON from disk. **Target:** the same flow through `api/` REST paths and Postgres job rows.
+Jobs start from the nutrition-label UI or CLI. The UI returns immediately and
+polls status while a background launcher (`frontend/*_launch.py`) runs the pillar
+in Docker or on the host. Results land as JSON under each pillar's output dir;
+optional ingest upserts into Postgres. The UI reads via `frontend/*_data.py`
+(on-disk JSON, or Postgres when a DSN is set).
 
 ```mermaid
 flowchart TB
   A([Analyst browser])
 
   subgraph VM["Application VM"]
-    FE["frontend/ + api/ (Flask)"]
+    FE["frontend/ (Flask)"]
     LAUNCH["background launcher<br/>subprocess + Docker"]
-    ING["ingest"]
+    ING["pillar ingest CLIs"]
     DB[("Postgres")]
   end
 
@@ -36,32 +40,29 @@ flowchart TB
     DC["vLLM · DCC SLURM GPU"]
   end
 
-  A -->|"1 POST /scans · /safety · /evals · /benchmarks<br/>(returns job_id)"| FE
+  A -->|"1 POST …/start"| FE
   FE -->|"2 spawn job (non-blocking)"| LAUNCH
-  FE -.->|"job_id to browser"| A
+  FE -.->|"job id to browser"| A
   LAUNCH -->|"3a scan: HF files"| SC
   LAUNCH -->|"3b safety / eval / benchmark: chat"| GW
-  LAUNCH -->|"3c safety / eval / benchmark: chat"| DC
+  LAUNCH -->|"3c optional: chat"| DC
   SC & GW & DC -->|"4 results"| LAUNCH
-  LAUNCH -->|"5 write JSON artifact"| ING
-  ING -->|"5 upsert rows"| DB
-  A -->|"6 GET …/{id}<br/>(poll status)"| FE
-  FE -->|"6 read status"| DB
-  A -->|"7 GET /models/{id}<br/>(full label)"| FE
-  FE -->|"7 read results"| DB
+  LAUNCH -->|"5 write JSON artifact"| FE
+  ING -->|"6 upsert (optional)"| DB
+  A -->|"7 GET …/status, …/<slug>"| FE
+  FE -->|"read JSON or DB"| DB
 ```
 
-| Step | HTTP | Path (`api/`) | What happens |
-|------|------|------------------|--------------|
-| 1 | **POST** | `/scans`, `/safety`, `/evals`, `/benchmarks` | Create job row; spawn background launcher; return `job_id` |
-| 2 | — | (internal) | `subprocess` / `docker compose run` starts pillar (same as today's UI) |
-| 3 | — | (internal) | Pillar calls DGX, Gateway, or DCC |
-| 4 | — | (internal) | Backend returns; launcher writes JSON |
-| 5 | — | (internal) | Ingest validates JSON → Postgres rows |
-| 6 | **GET** | `/scans/{id}`, … | Poll until `status` is complete or failed |
-| 7 | **GET** | `/scans/{id}`, `/models`, `/models/{id}` | Read structured results / full nutrition label |
+| Step | Route | What happens |
+|------|-------|--------------|
+| 1 | `POST /scans/start`, `/safety/start`, `/eval-run/start`, `/benchmarks/start` | Spawn background launcher |
+| 2 | — | `subprocess` / `docker compose run` via `frontend/*_launch.py` |
+| 3 | — | Pillar calls DGX, gateway, or DCC |
+| 4 | — | Backend returns; launcher writes JSON under `*/output/` or `*/results/` |
+| 5 | — | Optional: `scanner/db/load_scans.py`, `safety/db/load_safety.py`, `evaluator/db/load_results.py` |
+| 6 | `GET …/<slug>/status`, `GET …/<slug>` | Poll job; read results (disk or Postgres) |
 
-Prototype equivalents: `POST /scans/start` → `GET /scans/<slug>/status` → `GET /scans/<slug>` (same pattern for `/safety`, `/eval-run`, `/benchmarks`).
+Eval results are also available as JSON at `GET /api/evals` and `GET /api/evals/<slug>`.
 
 | Host | Runs | Notes |
 |------|------|-------|
@@ -76,19 +77,18 @@ Multiple hosts: untrusted scans stay sandboxed on DGX; the gateway and DCC serve
 
 ### Application VM
 
-The **application VM** is the always-on Linux server Duke OIT provides for this project. It runs the shared UI (`frontend/`), planned `api/`, background job launchers, and ingest. Long jobs are orchestrated from here; heavy or untrusted work is delegated to DGX, the gateway, or DCC.
+The **application VM** is the always-on Linux server Duke OIT provides for this project. It runs the shared UI (`frontend/`), `api/`, background job launchers, and ingest. Long jobs are orchestrated from here; heavy or untrusted work is delegated to DGX, the gateway, or DCC.
 
-### Background jobs (no Redis for MVP)
+### Background jobs
 
-Long scans and evals take minutes to hours. HTTP must return a `job_id` immediately — the pillar runs in the background.
+Long scans and evals take minutes to hours. Start routes return immediately; the pillar runs in the background while the UI polls status.
 
 | Piece | Role |
 |-------|------|
-| **`frontend/*_launch.py`** (today) | `subprocess.Popen` + `threading`; spawns Docker or host CLI; tracks in-flight runs in memory |
-| **`api/`** (W5) | REST `POST` creates a Postgres job row (`queued` → `running` → `complete` / `failed`), calls the same launch helpers, `GET` polls the row |
-| **Postgres** | Job status and results — the queue is the `status` column, not a separate broker |
-
-**Redis and Celery are not required for the summer MVP.** They only enter the picture if you later need multiple worker machines or a dedicated task broker. The repo has zero Redis/Celery code or dependencies today.
+| **`frontend/*_launch.py`** | `subprocess.Popen` + `threading`; spawns Docker or host CLI from UI start routes |
+| **Pillar ingest CLIs** | `scanner/db/`, `safety/db/`, `evaluator/db/` — JSON → Postgres (`--apply`) |
+| **Postgres** | Optional read path when DSN is set; disk JSON remains source of truth |
+| **`api/`** | JSON read layer — see [`api/README.md`](../api/README.md) |
 
 ### Ingest
 
@@ -96,7 +96,7 @@ Long scans and evals take minutes to hours. HTTP must return a `job_id` immediat
 
 ### JSON → Postgres (summary)
 
-Pillars define the contract in code (`scanner/schemas.py`, `safety/schemas.py`, `evaluator/schemas.py`, etc.) — same logical shapes as the Postgres tables. Flow: **job → Pydantic/dataclass → JSON file → ingest (psycopg) → Postgres → GET API → UI**. Detail: [`data-model.md`](data-model.md).
+Pillars define the contract in code (`scanner/schemas.py`, `safety/schemas.py`, `evaluator/schemas.py`, etc.) — same logical shapes as the Postgres tables. Flow: **job → JSON file → optional ingest → Postgres or disk read → UI**. Detail: [`data-model.md`](data-model.md).
 
 **Persistence approach:** versioned **SQL schema files** plus **psycopg** loaders — established in [`evaluator/db/`](../evaluator/db/README.md) (eval, standalone) and [`scanner/db/`](../scanner/db/README.md) (scan, on **`dbutils`**). Shared plumbing for new pillar loaders lives in [`dbutils/`](../dbutils/README.md). Ingest modules expose testable pure transforms and apply with `--apply`; reads use parameterized SQL with disk fallback in the frontend.
 
@@ -107,37 +107,35 @@ Safety and efficacy reach a model over an OpenAI-compatible chat API. The backen
 | Backend | Models | Default? |
 |---------|--------|----------|
 | **Duke AI Gateway** (LiteLLM) | cloud / API-key | yes — gateway guardrails apply |
-| **DCC** (SLURM + vLLM) | open-source weights | optional — bypasses the gateway by design |
+| **DCC** (SLURM + vLLM) | open-source weights | optional — `--candidate-endpoint` on evaluator CLI |
 
-## Jobs and endpoints
+## Jobs and data paths
 
-`POST` starts a job and returns a `job_id`; `GET` polls it.
+| Job | Track | UI routes | Backend | Postgres tables |
+|-----|-------|-----------|---------|-----------------|
+| Scan | A | `/scans` | Hugging Face files (DGX) | `scans`, `findings` |
+| Safety | A | `/safety` | gateway | `safety_runs`, `safety_findings` |
+| Eval | B | `/eval-run` | gateway / DCC | `eval_runs`, `eval_results` |
+| Benchmark | B | `/benchmarks` | gateway | disk JSON (`benchmarks/results/`) |
 
-| Job | Track | Endpoint | Backend (step 3) | Postgres |
-|-----|-------|----------|-------------------|----------|
-| Scan | A | `/scans` | Hugging Face files | `scans`, `findings` |
-| Safety | A | `/safety` | gateway / DCC | `safety_runs`, `safety_findings` |
-| Eval | B | `/evals` | gateway / DCC | `eval_runs`, `eval_results` |
-| Benchmark | B | `/benchmarks` | gateway / DCC | `benchmark_runs` |
-
-`GET /models` and `GET /models/{id}` return the inventory and a model's full label across all pillars.
+Benchmark results are read from disk in the UI. Scan, safety, and eval support optional Postgres ingest.
 
 ## Why JSON → Postgres
 
-Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [Key concepts](#key-concepts)). Artifacts are the UI's offline source today and provide an audit trail. Ingest is idempotent (keyed on run id). Large outputs stay gitignored; only small fixtures are committed.
+Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [Key concepts](#key-concepts)). Artifacts provide an audit trail and offline fallback when the database is unreachable. Ingest is idempotent (keyed on run id). Large outputs stay gitignored; only small fixtures are committed.
 
 ## Components
 
 - **`scanner/`** (A) — pulls HF files and runs artifact checks (format, pickle/fickling, ModelAudit, dependencies, secrets) into a risk score → `ScanResult`. See [`track-a-framework.md`](track-a-framework.md), [`tool-stack.md`](tool-stack.md).
 - **`safety/`** (A) — garak + promptfoo + Duke policy probes over LiteLLM → `MergedSafetyResult`. Probe subsets follow deployment context (chatbot vs agentic).
 - **`evaluator/`** (B) — Duke task suites scored by an LLM judge against YAML rubrics; records scores plus cost / latency / tokens → `eval_runs`. Postgres path: [`evaluator/db/`](../evaluator/db/README.md). See [`track-b-framework.md`](track-b-framework.md).
-- **`benchmarks/`** (B) — public benchmarks (IFEval, TruthfulQA, MMLU, ToMi, consistency); each has its own scoring but a shared run envelope → `benchmark_runs`.
-- **`api/`** (planned W5) — Flask REST; `POST` spawns background jobs via existing launch helpers; `GET` serves Postgres-backed status and results.
-- **`frontend/`** — nutrition-label UI; reads JSON today, `api/` once persistence lands. Launch buttons run the real pillars via Docker. See [`frontend/README.md`](../frontend/README.md).
+- **`benchmarks/`** (B) — public benchmarks (IFEval, TruthfulQA, MMLU, ToMi, consistency); results in `benchmarks/results/`.
+- **`api/`** — Flask REST under `/api`; see [`api/README.md`](../api/README.md).
+- **`frontend/`** — nutrition-label UI; `frontend/*_data.py` + launch helpers. See [`frontend/README.md`](../frontend/README.md).
 
 ## Open questions
 
 - Frontend stack — Flask now; possibly Next.js + Tailwind later.
-- Auth — Duke Shibboleth preferred; the prototype may run behind the VM firewall.
+- Auth — Duke Shibboleth preferred; until then the app may run behind the VM firewall.
 - LiteLLM guardrail hooks — integration path TBD.
 - Benchmark catalog — which pilots become standing suites.

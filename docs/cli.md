@@ -82,9 +82,21 @@ Note: Not run in CI, but can be run locally to verify images are up to date.
 Set `POSTGRES_DSN` / `EFFICACY_DB_DSN` in `.env`, then (`uv sync --group db`):
 
 ```bash
+# All pillars (dry-run by default)
+uv run python -m api.ingest
+uv run python -m api.ingest --apply
+
+# Single pillar
+uv run python -m api.ingest --scan --apply
+
+# Per-pillar loaders
 uv run python scanner/db/load_scans.py --apply
+uv run python safety/db/load_safety.py --apply
 uv run python evaluator/db/load_results.py --apply
+uv run python benchmarks/db/load_benchmarks.py --apply
 ```
 
 Schema and dry-run details: [`scanner/db/README.md`](../scanner/db/README.md),
-[`evaluator/db/README.md`](../evaluator/db/README.md).
+[`safety/db/README.md`](../safety/db/README.md),
+[`evaluator/db/README.md`](../evaluator/db/README.md),
+[`benchmarks/db/README.md`](../benchmarks/db/README.md).

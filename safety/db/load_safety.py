@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,12 @@ from safety.schemas import MergedSafetyResult
 
 SAFETY = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = SAFETY / "output"
+
+
+@dataclass
+class IngestResult:
+    count: int
+    label: str = "safety run(s)"
 
 
 # ---------------------------------------------------------------------------
@@ -196,6 +203,41 @@ def load_into(conn, parsed: list[tuple[dict, list[dict]]]) -> None:
     conn.commit()
 
 
+def run_ingest(
+    *,
+    apply: bool,
+    dsn: str | None,
+    output_dir: Path | None = None,
+) -> IngestResult:
+    """Collect and optionally load safety runs. Used by CLI and api.ingest."""
+    root = output_dir or OUTPUT_DIR
+    paths = iter_files(root, "*/merged_safety_result.json")
+    parsed = [t for t in (load_file(p) for p in paths) if t is not None]
+
+    print(f"{len(parsed)} loadable safety run(s) in {root}:")
+    for run, findings in parsed:
+        print(
+            f"  {run['gateway_model_id']}:  "
+            f"composite_tier={run['composite_tier']}  "
+            f"score={run['composite_score']:.2f}  "
+            f"findings={len(findings)}  "
+            f"completed_at={run['completed_at']}"
+        )
+
+    if not apply:
+        print_dry_run_hint()
+        return IngestResult(count=len(parsed))
+
+    exit_if_apply_without_dsn(dsn)
+    apply_loader(
+        dsn,
+        lambda conn: load_into(conn, parsed),
+        item_count=len(parsed),
+        item_label="safety run(s)",
+    )
+    return IngestResult(count=len(parsed))
+
+
 def main() -> int:
     load_repo_env()
     ap = argparse.ArgumentParser(
@@ -209,30 +251,7 @@ def main() -> int:
     )
     add_ingest_arguments(ap, dsn_env_keys=("POSTGRES_DSN", "DATABASE_URL"))
     args = ap.parse_args()
-
-    paths = iter_files(args.output_dir, "*/merged_safety_result.json")
-    parsed = [t for t in (load_file(p) for p in paths) if t is not None]
-
-    print(f"{len(parsed)} loadable safety run(s) in {args.output_dir}:")
-    for run, findings in parsed:
-        print(
-            f"  {run['gateway_model_id']}:  "
-            f"composite_tier={run['composite_tier']}  "
-            f"score={run['composite_score']:.2f}  "
-            f"findings={len(findings)}  "
-            f"completed_at={run['completed_at']}"
-        )
-
-    if not args.apply:
-        print_dry_run_hint()
-        return 0
-    exit_if_apply_without_dsn(args.dsn)
-    apply_loader(
-        args.dsn,
-        lambda conn: load_into(conn, parsed),
-        item_count=len(parsed),
-        item_label="safety run(s)",
-    )
+    run_ingest(apply=args.apply, dsn=args.dsn, output_dir=args.output_dir)
     return 0
 
 
