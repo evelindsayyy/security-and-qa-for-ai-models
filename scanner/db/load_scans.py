@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,12 @@ from scanner.schemas import ScanResult
 
 SCANNER = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = SCANNER / "output"
+
+
+@dataclass
+class IngestResult:
+    count: int
+    label: str = "scan(s)"
 
 
 # ---------------------------------------------------------------------------
@@ -215,18 +222,32 @@ def load_into(conn, parsed: list[tuple[dict, list[dict]]]) -> None:
     conn.commit()
 
 
-def main() -> int:
-    load_repo_env()
-    ap = argparse.ArgumentParser(description="Load scan_result.json files into Postgres.")
-    ap.add_argument("--output-dir", type=Path, default=OUTPUT_DIR,
-                    help="scanner output root (default: scanner/output)")
-    add_ingest_arguments(ap, dsn_env_keys=("POSTGRES_DSN", "DATABASE_URL"))
-    args = ap.parse_args()
+def sync_file(path: Path, *, dsn: str) -> None:
+    """Load one scan_result.json into Postgres (idempotent)."""
+    parsed = load_file(path)
+    if parsed is None:
+        raise ValueError(f"could not parse {path.name}")
+    apply_loader(
+        dsn,
+        lambda conn: load_into(conn, [parsed]),
+        item_count=1,
+        item_label="scan(s)",
+        quiet=True,
+    )
 
-    paths = iter_files(args.output_dir, "*/scan_result.json")
+
+def run_ingest(
+    *,
+    apply: bool,
+    dsn: str | None,
+    output_dir: Path | None = None,
+) -> IngestResult:
+    """Collect and optionally load scans. Used by CLI and api.ingest."""
+    root = output_dir or OUTPUT_DIR
+    paths = iter_files(root, "*/scan_result.json")
     parsed = [t for t in (load_file(p) for p in paths) if t is not None]
 
-    print(f"{len(parsed)} loadable scan(s) in {args.output_dir}:")
+    print(f"{len(parsed)} loadable scan(s) in {root}:")
     for scan, findings in parsed:
         meta = scan["scan_metadata"]
         slug = meta.get("output_slug") or safe_dir_name(scan["hf_repo"])
@@ -236,16 +257,28 @@ def main() -> int:
             f"completed_at={scan['completed_at']}"
         )
 
-    if not args.apply:
+    if not apply:
         print_dry_run_hint()
-        return 0
-    exit_if_apply_without_dsn(args.dsn)
+        return IngestResult(count=len(parsed))
+
+    exit_if_apply_without_dsn(dsn)
     apply_loader(
-        args.dsn,
+        dsn,
         lambda conn: load_into(conn, parsed),
         item_count=len(parsed),
         item_label="scan(s)",
     )
+    return IngestResult(count=len(parsed))
+
+
+def main() -> int:
+    load_repo_env()
+    ap = argparse.ArgumentParser(description="Load scan_result.json files into Postgres.")
+    ap.add_argument("--output-dir", type=Path, default=OUTPUT_DIR,
+                    help="scanner output root (default: scanner/output)")
+    add_ingest_arguments(ap, dsn_env_keys=("POSTGRES_DSN", "DATABASE_URL"))
+    args = ap.parse_args()
+    run_ingest(apply=args.apply, dsn=args.dsn, output_dir=args.output_dir)
     return 0
 
 

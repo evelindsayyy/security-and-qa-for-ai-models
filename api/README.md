@@ -3,7 +3,7 @@
 Flask JSON REST over pipeline results. Blueprints mount under `/api` via
 `register_api(app)` in `frontend/create_app` — same process as the dashboard.
 
-Thin handlers over `frontend/*_data.py` (Postgres when configured, else on-disk
+Thin handlers over `frontend/*_data.py` (Postgres when DSN configured, else on-disk
 JSON). Same payloads as the dashboard; envelope in `api/responses.py`.
 `evals.py` is the reference blueprint.
 
@@ -51,3 +51,4 @@ Target flow: [`docs/architecture.md`](../docs/architecture.md).
 | `scans.py` | Scanning reads |
 | `safety.py` | Safety reads |
 | `__init__.py` | `register_api(app)` |
+| `ingest.py` | CLI orchestrator — `python -m api.ingest` (not a REST route; see [`docs/cli.md`](../docs/cli.md)) |

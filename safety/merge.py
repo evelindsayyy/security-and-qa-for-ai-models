@@ -67,6 +67,10 @@ def main() -> int:
         f"adversarial_tier={merged.adversarial_tier.value}  "
         f"findings={len(merged.findings)}"
     )
+
+    from dbutils.post_run import maybe_sync_artifact
+
+    maybe_sync_artifact(args.output, "safety")
     return 0
 
 

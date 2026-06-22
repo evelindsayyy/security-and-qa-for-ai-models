@@ -1,8 +1,7 @@
 # Frontend (`frontend/`)
 
-Nutrition-label UI. Reads JSON from pillar output dirs; supports **browser-launched runs** (Docker + polling).
-
-Planned: read from Postgres via `api/`. Today: `scanner/output/`, `safety/output/`, `evaluator/results/`, `benchmarks/results/`.
+Nutrition-label UI. Each pillar reads via ``*_data.py`` (Postgres when a DSN
+is configured, with artifact fallback). Browser-launched runs via Docker + polling.
 
 ## Run
 
@@ -37,7 +36,11 @@ Each pillar has `/<slug>/status` JSON for in-progress polling.
 | Module | Role |
 |--------|------|
 | [`gateway/`](../gateway/) | Live catalog for `/models` and dropdowns |
-| `*_data.py` / `*_launch.py` | Read results + spawn Docker/host subprocess |
+| `scan_data.py` / `scan_db_data.py` | `/scans` — DB when `POSTGRES_DSN` set |
+| `safety_data.py` / `safety_db_data.py` | `/safety` — DB when `POSTGRES_DSN` set |
+| `eval_run_data.py` / `eval_db_data.py` | `/eval-run` — DB when `EFFICACY_DB_DSN` set |
+| `benchmark_data.py` / `benchmark_db_data.py` | `/benchmarks` — DB when `POSTGRES_DSN` set |
+| `*_launch.py` | Spawn Docker/host subprocess for browser runs |
 | `docker_launch.py` | Shared Docker helper (`.env`, UID/GID, compose build) |
 | `routes.py`, `templates/`, `static/` | UI |
 

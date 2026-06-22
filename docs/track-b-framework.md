@@ -54,8 +54,8 @@ Other suites (creative writing, med education, coding, etc.) follow in later wee
 
 | Stage | Focus |
 |-------|--------|
-| Done | `evaluator/` + schemas; MVP suites on the gateway pilot models; public-benchmark pilots (IFEval, TruthfulQA, MMLU, ToMi, consistency) with their own tab |
-| Next | Remaining Duke suites; ingest `eval_runs`/`eval_results`/`benchmark_runs` → Postgres; charts in `frontend/` |
+| Done | `evaluator/` + schemas; MVP suites on gateway models; public-benchmark pilots; Postgres ingest (all pillars via `api.ingest`); `GET /api/evals` |
+| Next | Remaining Duke suites; GET `/api/benchmarks`; charts in `frontend/` |
 | Later | More benchmark subsets, variation overlay |
 
 Step-by-step sequencing lives in the GitLab milestones.

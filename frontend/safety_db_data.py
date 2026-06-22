@@ -2,16 +2,8 @@
 Postgres-backed data source for /safety — same dict contracts as safety_data.py,
 used only when POSTGRES_DSN is set and reachable.
 
-Freshness model: the database holds whatever the loader last synced; brand-new
-safety runs exist only as files until the next ``load_safety.py --apply``. So
-``get_safety_data_db()`` MERGES: DB rows are preferred per gateway_model_id, and
-any merged_safety_result.json on disk not yet in the DB is summarized from the
-file. Findings for list-table columns are batch-loaded from
-``public.safety_findings``. Detail falls back to disk when the slug is missing
-from Postgres.
-
-Severable by design: delete this module and the dispatcher in safety_data.py
-reverts to pure file reads.
+Merges DB rows with safety runs not yet loaded. Detail uses artifact fallback
+when the slug is missing from Postgres.
 """
 
 from __future__ import annotations

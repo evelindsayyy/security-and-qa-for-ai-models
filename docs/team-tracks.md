@@ -31,8 +31,8 @@ Dated, step-by-step milestones live in the GitLab tracker; this is the high-leve
 | Phase | Focus | Track A | Track B |
 |-------|-------|---------|---------|
 | Spikes | Scaffold, gateway smoke, data-model sketch | HF scan + tool research | Gateway smoke; TruthfulQA pilot |
-| Pipelines (now) | Docker stacks, catalog, `frontend/`, E2E on gateway models | `scanner/` 3-tool pipeline; safety merge on pilot models | `evaluator/` runner + judge; MVP suites + benchmarks |
-| Persistence (next) | Postgres + `api/` ingest + read API | `/scans`, `/safety` | `/evals` |
+| Pipelines | Docker stacks, catalog, `frontend/`, E2E on gateway models | `scanner/` pipeline; safety merge | `evaluator/` runner + judge; MVP suites + benchmarks |
+| Persistence | Postgres ingest (all pillars); read API | `/scans`, `/safety` API | `/evals` live; `/benchmarks` API next |
 | Full UI | `frontend/` reads `api/` | Scanning + safety views | Efficacy charts |
 | Demo freeze | Representative catalog; documented limits | Gateway safety + HF samples | Gateway efficacy |
 

@@ -11,12 +11,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project --group scanner
+RUN uv sync --frozen --no-dev --no-install-project --group db --group scanner
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH=/app
 ENV HF_HOME=/app/scanner/models/.cache/huggingface
 
+COPY dbutils/ /app/dbutils/
 COPY scanner/ /app/scanner/
 
 CMD ["bash"]

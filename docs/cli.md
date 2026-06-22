@@ -87,12 +87,36 @@ before deploy.
 
 ## Postgres ingest
 
-Set `POSTGRES_DSN` / `EFFICACY_DB_DSN` in `.env`, then (`uv sync --group db`):
+Set real credentials in ``.env`` (not the ``YOUR_USER`` placeholders). Use ``?sslmode=require``. Run schema apply and bootstrap from the **application VM** (or VPN); gx10 may fail ``pg_hba`` / auth checks.
+
+**Auto-sync:** when a DSN is set, each successful pillar run syncs its artifact into Postgres (best-effort; never fails the job). Disable with ``AUTO_INGEST=0``. Bulk backfill:
 
 ```bash
+uv sync --group db
+# Once per environment (all four pillar tables):
+uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql
+uv run python -m dbutils.apply_schema safety/db/safety_schema.sql
+uv run python -m dbutils.apply_schema evaluator/db/efficacy_schema.sql
+uv run python -m dbutils.apply_schema benchmarks/db/benchmark_schema.sql
+```
+
+```bash
+# All pillars (dry-run by default)
+uv run python -m api.ingest
+uv run python -m api.ingest --apply
+
+# Single pillar (--scan, --safety, --eval, --benchmark)
+uv run python -m api.ingest --scan --apply
+uv run python -m api.ingest bootstrap --apply   # all pillars + summary line
+
+# Per-pillar loaders
 uv run python scanner/db/load_scans.py --apply
+uv run python safety/db/load_safety.py --apply
 uv run python evaluator/db/load_results.py --apply
+uv run python benchmarks/db/load_benchmarks.py --apply
 ```
 
 Schema and dry-run details: [`scanner/db/README.md`](../scanner/db/README.md),
-[`evaluator/db/README.md`](../evaluator/db/README.md).
+[`safety/db/README.md`](../safety/db/README.md),
+[`evaluator/db/README.md`](../evaluator/db/README.md),
+[`benchmarks/db/README.md`](../benchmarks/db/README.md).

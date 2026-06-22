@@ -141,6 +141,9 @@ def refresh_supply_chain(hf_repo: str) -> ScanResult:
     if dependencies and dependencies.get("vuln_count"):
         dump_json(out / "dependency_report.json", dependencies)
     dump_json(out / "trufflehog_report.json", secrets or {"available": False})
+    from dbutils.post_run import maybe_sync_artifact
+
+    maybe_sync_artifact(out / "scan_result.json", "scan")
     return result
 
 
@@ -278,6 +281,10 @@ def scan_model(
     )
 
     dump_json(out / "scan_result.json", result.model_dump(mode="json"))
+
+    from dbutils.post_run import maybe_sync_artifact
+
+    maybe_sync_artifact(out / "scan_result.json", "scan")
 
     if not weights_retained():
         delete_model_weights(hf_repo)

@@ -1,0 +1,2 @@
+{"model": "GPT 4.1 Mini", "ts": "20260618T120000Z", "instruction_id_list": ["punctuation:no_comma"], "judge": {"passed": true}}
+{"model": "GPT 4.1 Mini", "ts": "20260618T120000Z", "instruction_id_list": ["length_constraints:number_sentences"], "judge": {"passed": false}}

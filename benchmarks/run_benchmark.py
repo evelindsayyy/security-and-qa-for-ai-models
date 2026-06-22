@@ -24,6 +24,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 RESULTS_DIR = HERE / "results"
+_REPO = HERE.parent
+if str(_REPO) not in sys.path:
+    sys.path.insert(0, str(_REPO))
 
 
 def _safe_slug(model: str) -> str:
@@ -176,6 +179,9 @@ def main() -> int:
     args = p.parse_args()
     dest = run(args.benchmark, args.model, args.output_stem)
     print(f"Results: {dest}")
+    from dbutils.post_run import maybe_sync_artifact
+
+    maybe_sync_artifact(dest, "benchmark")
     return 0
 
 

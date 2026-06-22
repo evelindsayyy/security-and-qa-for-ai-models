@@ -51,6 +51,11 @@ class BenchmarkLaunchCommandTest(unittest.TestCase):
 
 
 class BenchmarkDataTest(unittest.TestCase):
+    def setUp(self) -> None:
+        patcher = mock.patch("frontend.benchmark_db_data.available", return_value=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_detect_truthfulqa_from_metrics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "sample.json"

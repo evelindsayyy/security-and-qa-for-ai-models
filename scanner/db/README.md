@@ -17,19 +17,10 @@ cp .env.example .env    # set POSTGRES_DSN (same login as EFFICACY_DB_DSN)
 
 ## Apply schema (one-time)
 
-```bash
-psql "$POSTGRES_DSN" -f scanner/db/scan_schema.sql
-```
-
-Or without `psql`:
+Requires ``uv sync --group db`` and a real ``POSTGRES_DSN`` in ``.env`` (include ``?sslmode=require``).
 
 ```bash
-uv run python -c "
-from pathlib import Path
-from dbutils import apply_sql_file, load_repo_env, resolve_dsn
-load_repo_env()
-apply_sql_file(resolve_dsn('POSTGRES_DSN', 'DATABASE_URL'), Path('scanner/db/scan_schema.sql'))
-"
+uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql
 ```
 
 ## Load scans
@@ -39,6 +30,8 @@ uv run python scanner/db/load_scans.py              # dry run (no DB)
 uv run python scanner/db/load_scans.py --apply      # write rows
 uv run python scanner/db/load_scans.py --apply      # again: counts must NOT change
 ```
+
+All pillars: `uv run python -m api.ingest` — see [`docs/cli.md`](../../docs/cli.md).
 
 ## Verify
 

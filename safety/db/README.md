@@ -15,19 +15,10 @@ cp .env.example .env    # set POSTGRES_DSN
 
 ## Apply schema (one-time)
 
-```bash
-psql "$POSTGRES_DSN" -f safety/db/safety_schema.sql
-```
-
-Or without `psql`:
+Requires ``uv sync --group db`` and a real ``POSTGRES_DSN`` in ``.env`` (include ``?sslmode=require``).
 
 ```bash
-uv run python -c "
-from pathlib import Path
-from dbutils import apply_sql_file, load_repo_env, resolve_dsn
-load_repo_env()
-apply_sql_file(resolve_dsn('POSTGRES_DSN', 'DATABASE_URL'), Path('safety/db/safety_schema.sql'))
-"
+uv run python -m dbutils.apply_schema safety/db/safety_schema.sql
 ```
 
 ## Load safety runs
@@ -37,6 +28,8 @@ uv run python safety/db/load_safety.py              # dry run (no DB)
 uv run python safety/db/load_safety.py --apply      # write rows
 uv run python safety/db/load_safety.py --apply      # again: counts must NOT change
 ```
+
+All pillars: `uv run python -m api.ingest` — see [`docs/cli.md`](../../docs/cli.md).
 
 ## Verify
 

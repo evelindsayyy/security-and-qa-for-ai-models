@@ -2,16 +2,8 @@
 Postgres-backed data source for /scans — same dict contracts as scan_data.py,
 used only when POSTGRES_DSN is set and reachable.
 
-Freshness model: the database holds whatever the loader last synced; brand-new
-scans exist only as files until the next ``load_scans.py --apply``. So
-``get_scans_data_db()`` MERGES: DB rows are preferred per slug (latest
-``completed_at`` per hf_repo), and any scan_result.json on disk not yet in the
-DB is summarized from the file. Findings for list-table columns (count +
-severity breakdown) are batch-loaded from ``public.findings``. Detail falls
-back to disk when the slug is missing from Postgres.
-
-Severable by design: delete this module and the dispatcher in scan_data.py
-reverts to pure file reads.
+Merges DB rows with scans not yet loaded. Detail uses artifact fallback when
+the slug is missing from Postgres.
 """
 
 from __future__ import annotations
