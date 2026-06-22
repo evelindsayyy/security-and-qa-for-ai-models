@@ -70,12 +70,20 @@ uv run python -m unittest discover -s unit_tests -v
 ```
 
 ## Build images
+
 ```bash
 docker compose --project-name qa-ai-models -f docker/compose.yml build
 docker compose --project-name qa-ai-models -f scanner/docker/compose.yml build
 ```
 
-Note: Not run in CI, but can be run locally to verify images are up to date.
+The web image can also be smoke-tested locally with Buildah:
+
+```bash
+STORAGE_DRIVER=vfs buildah bud --isolation=chroot -f docker/Dockerfile -t localhost/qa-ai-web:buildah-smoke .
+```
+
+Local Docker Compose builds remain useful for verifying the full runtime stack
+before deploy.
 
 ## Postgres ingest
 
