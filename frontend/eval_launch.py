@@ -120,7 +120,7 @@ _LOCK = threading.Lock()
 
 def _suite_cfg(suite_key: str) -> dict | None:
     """Resolve a suite key to its contract files. Returns None for unknown
-    keys. Handles both the curated SUITES and on-disk custom suites
+    keys. Handles both curated SUITES and saved custom suites
     (`custom_<ts>` → tasks/custom/<key>.jsonl with the general rubric)."""
     if suite_key in SUITES:
         return SUITES[suite_key]
@@ -137,7 +137,7 @@ def _suite_cfg(suite_key: str) -> dict | None:
 
 
 def _all_suite_keys() -> list[str]:
-    """Curated suite keys plus any custom suites currently on disk."""
+    """Curated suite keys plus any saved custom suites."""
     custom = []
     if CUSTOM_SUITES_DIR.is_dir():
         custom = sorted(p.stem for p in CUSTOM_SUITES_DIR.glob(f"{CUSTOM_PREFIX}*.jsonl"))
@@ -225,7 +225,7 @@ def _wipe_prior_runs(suite_key: str, candidate: str) -> None:
 
     Runner output is timestamped, so old runs would otherwise pile up in the
     comparison table (e.g. a stale "12/12 empty" row next to a fixed one).
-    Wiping on launch keeps exactly one run per model+suite on disk.
+    Wiping on launch keeps exactly one run per model+suite in the results dir.
     """
     suffix = f"_{suite_key}_{_safe_slug(candidate)}"
     for path in RESULTS_DIR.glob(f"*{suffix}*"):
@@ -283,7 +283,7 @@ def start_run(
 
 
 def get_status(slug: str) -> dict:
-    """Run status from the JSONL on disk + the process registry.
+    """Run status from the results artifact + the process registry.
 
     complete: file has one row per suite question
     running:  process alive (or file growing)

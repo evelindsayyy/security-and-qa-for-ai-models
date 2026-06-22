@@ -8,14 +8,8 @@ JSON API also calls. This module is the dashboard's *presentation* layer over
 that repository: it turns the repository's plain RunRecords into the exact
 dicts the templates expect (comparison-table rows, the detail page payload).
 
-Freshness model: the database holds whatever the loader last synced; brand-new
-runs exist only as files until the next `load_results.py --apply`. So
-`get_runs_data_db()` MERGES: DB rows are preferred per slug, and any results
-file on disk that isn't in the DB yet is aggregated from the file. The detail
-page falls back to files via the dispatcher when a slug isn't in the DB.
-
-Severable by design: delete this module and the dispatcher in
-eval_run_data.py reverts to pure file reads.
+Merges DB rows with eval runs not yet loaded. Detail uses artifact fallback
+when a slug is missing from Postgres.
 """
 
 from __future__ import annotations

@@ -1,12 +1,8 @@
 """
-data source for /safety and /safety/<slug>.
+Data source for /safety and /safety/<slug>.
 
-reads safety/output/<slug>/merged_safety_result.json (gitignored; produced by
-`safety.merge` after promptfoo + garak exports). read-only — no subprocess here.
-
-mirrors scan_data.py: get_*_data() + structured detail rows instead of raw json.
-
-week 5: replace file glob with GET /api/safety and GET /api/safety/{id}.
+Read-only — no subprocess here. Postgres when POSTGRES_DSN is set; artifact
+fallback otherwise.
 """
 
 from __future__ import annotations
@@ -258,7 +254,7 @@ def _get_safety_data_files() -> dict:
 
 
 def _get_safety_detail_files(slug: str) -> dict | None:
-    """Structured safety payload for one gateway model slug, read from disk."""
+    """Structured safety payload for one gateway model slug."""
     path = OUTPUT_DIR / slug / "merged_safety_result.json"
     if not path.is_file():
         return None
@@ -269,11 +265,7 @@ def _get_safety_detail_files(slug: str) -> dict | None:
     return _build_safety_detail(slug, data)
 
 
-# ---------------------------------------------------------------------------
-# Public entry points — dispatch to Postgres when configured and reachable,
-# silently fall back to files otherwise. Files remain the source of truth;
-# the DB is a read projection (see safety/db/README.md).
-# ---------------------------------------------------------------------------
+# Public entry points — Postgres when configured, artifact fallback otherwise.
 
 
 def get_safety_data() -> dict:

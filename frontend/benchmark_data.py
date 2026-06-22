@@ -1,8 +1,7 @@
 """
 Data source for /benchmarks and /benchmarks/<slug>.
 
-Reads public benchmark outputs from benchmarks/results/
-(legacy fallbacks: testing/basic_tests/test_results/, test_results/).
+Postgres when POSTGRES_DSN is set; artifact fallback otherwise.
 Schema detection is content-based so renames do not break the viewer.
 """
 
@@ -398,7 +397,7 @@ def _attach_meta(summary: dict) -> dict:
     return summary
 
 
-def get_benchmarks_data() -> dict:
+def _get_benchmarks_data_files() -> dict:
     dirs = _candidate_dirs()
     if not dirs:
         return {
@@ -430,7 +429,7 @@ def get_benchmarks_data() -> dict:
     }
 
 
-def get_benchmark_detail(slug: str) -> dict | None:
+def _get_benchmark_detail_files(slug: str) -> dict | None:
     if not is_safe_slug(slug):
         return None
     for d in _candidate_dirs():
@@ -489,3 +488,30 @@ def get_benchmark_detail(slug: str) -> dict | None:
                     summary["raw_row_count"] = len(data.get("results") or [])
                     return _attach_meta(summary)
     return None
+
+
+# Public entry points — Postgres when configured, artifact fallback otherwise.
+
+
+def get_benchmarks_data() -> dict:
+    try:
+        from frontend import benchmark_db_data
+
+        if benchmark_db_data.available():
+            return benchmark_db_data.get_benchmarks_data_db()
+    except Exception:
+        pass
+    return _get_benchmarks_data_files()
+
+
+def get_benchmark_detail(slug: str) -> dict | None:
+    try:
+        from frontend import benchmark_db_data
+
+        if benchmark_db_data.available():
+            detail = benchmark_db_data.get_benchmark_detail_db(slug)
+            if detail is not None:
+                return detail
+    except Exception:
+        pass
+    return _get_benchmark_detail_files(slug)

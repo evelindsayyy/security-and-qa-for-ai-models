@@ -1,8 +1,8 @@
 """
-flask routes for the draft nutrition-label frontend.
+Flask routes for the nutrition-label frontend.
 
-Most pages load json/jsonl from pipeline output on disk. Eval, scan, and
-safety pillars also support browser-launched runs (subprocess + polling).
+List and detail pages read pillar results via ``*_data.py`` modules.
+Browser-launched runs use subprocess + polling.
 """
 
 from __future__ import annotations

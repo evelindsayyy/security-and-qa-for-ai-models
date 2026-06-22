@@ -21,7 +21,7 @@ Jobs start from the nutrition-label UI or CLI. The UI returns immediately and
 polls status while a background launcher (`frontend/*_launch.py`) runs the pillar
 in Docker or on the host. Results land as JSON under each pillar's output dir;
 optional ingest upserts into Postgres. The UI reads via `frontend/*_data.py`
-(on-disk JSON, or Postgres when a DSN is set).
+(Postgres when a DSN is set and reachable, else on-disk JSON).
 
 ```mermaid
 flowchart TB
@@ -118,7 +118,9 @@ Safety and efficacy reach a model over an OpenAI-compatible chat API. The backen
 | Eval | B | `/eval-run` | gateway / DCC | `eval_runs`, `eval_results` |
 | Benchmark | B | `/benchmarks` | gateway | `benchmark_runs` |
 
-All four pillars have optional Postgres ingest. The UI reads disk JSON by default; scan, safety, and eval also read Postgres when configured. Benchmark UI still reads `benchmarks/results/` on disk.
+All four pillars have optional Postgres ingest. When a DSN is set and reachable,
+the UI reads Postgres for every pillar (merged with any on-disk artifacts not yet
+loaded); otherwise it reads JSON from disk.
 
 ## Why JSON → Postgres
 
@@ -129,7 +131,7 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 - **`scanner/`** (A) — pulls HF files and runs artifact checks (format, pickle/fickling, ModelAudit, dependencies, secrets) into a risk score → `ScanResult`. See [`track-a-framework.md`](track-a-framework.md), [`tool-stack.md`](tool-stack.md).
 - **`safety/`** (A) — garak + promptfoo + Duke policy probes over LiteLLM → `MergedSafetyResult`. Probe subsets follow deployment context (chatbot vs agentic).
 - **`evaluator/`** (B) — Duke task suites scored by an LLM judge against YAML rubrics; records scores plus cost / latency / tokens → `eval_runs`. Postgres path: [`evaluator/db/`](../evaluator/db/README.md). See [`track-b-framework.md`](track-b-framework.md).
-- **`benchmarks/`** (B) — public benchmarks (IFEval, TruthfulQA, MMLU, ToMi, consistency); results in `benchmarks/results/`; ingest via [`benchmarks/db/`](../benchmarks/db/README.md).
+- **`benchmarks/`** (B) — public benchmarks (IFEval, TruthfulQA, MMLU, ToMi, consistency); ingest + UI read via [`benchmarks/db/`](../benchmarks/db/README.md) and `frontend/benchmark_db_data.py`.
 - **`api/`** — Flask REST under `/api`; see [`api/README.md`](../api/README.md).
 - **`frontend/`** — nutrition-label UI; `frontend/*_data.py` + launch helpers. See [`frontend/README.md`](../frontend/README.md).
 

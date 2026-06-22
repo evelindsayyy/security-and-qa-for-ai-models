@@ -4,8 +4,9 @@ Load `benchmarks/results/<slug>.{json,jsonl}` into `public.benchmark_runs` on th
 shared Duke Postgres (`qa_ai_models`). Built on **`dbutils/`** — dry-run by default,
 idempotent upserts.
 
-Disk JSON remains the source of truth until you run `--apply`. The frontend reads
-`benchmarks/results/` on disk today.
+Disk JSON remains the source of truth; successful runs auto-sync when `POSTGRES_DSN`
+is set. The frontend reads Postgres when the DSN is reachable, else files (see
+`frontend/benchmark_db_data.py`).
 
 ## One-time setup
 
