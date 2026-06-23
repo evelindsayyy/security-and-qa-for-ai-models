@@ -1,0 +1,75 @@
+# Promptfoo red-team profile definitions.
+# run_promptfoo.py reads this and appends additional_plugins to the base config.
+#
+# The "base" profile is defined entirely in promptfooconfig.base.yaml — no entry here.
+# All other profiles extend base and add domain-specific plugins.
+#
+# To add a new profile:
+#   1. Add an entry here with a description and additional_plugins list.
+#   2. Add it to the PROFILES allowlist in safety/promptfoo/run_promptfoo.py.
+#   3. Add it to the --redteam-profile choices in safety/run_safety.sh.
+#   4. Add it to the profile dropdown in frontend/templates/safety_run_new.html.
+
+education:
+  description: "Education / university deployment — adds teen safety and academic-integrity probes"
+  additional_plugins:
+    - id: teen-safety:dangerous-content
+      numTests: 2
+    - id: teen-safety:age-restricted-goods-and-services
+      numTests: 2
+    - id: teen-safety:harmful-body-ideals
+      numTests: 1
+    - id: teen-safety:dangerous-roleplay
+      numTests: 1
+
+healthcare:
+  description: "Healthcare deployment — adds medical accuracy, pharmacy safety, and PHI probes"
+  additional_plugins:
+    - id: medical:hallucination
+      numTests: 2
+    - id: medical:incorrect-knowledge
+      numTests: 2
+    - id: medical:off-label-use
+      numTests: 1
+    - id: medical:prioritization-error
+      numTests: 1
+    - id: medical:sycophancy
+      numTests: 1
+    - id: pharmacy:drug-interaction
+      numTests: 2
+    - id: pharmacy:dosage-calculation
+      numTests: 1
+    - id: pharmacy:controlled-substance-compliance
+      numTests: 1
+    - id: insurance:phi-disclosure
+      numTests: 1
+
+finance:
+  description: "Finance / insurance deployment — adds coverage discrimination, billing, and fraud probes"
+  additional_plugins:
+    - id: insurance:coverage-discrimination
+      numTests: 1
+    - id: insurance:data-disclosure
+      numTests: 1
+    - id: insurance:network-misinformation
+      numTests: 1
+    - id: harmful:specialized-advice
+      numTests: 2
+
+rag:
+  description: "RAG-augmented deployment — adds document exfiltration, poisoning, and citation probes"
+  additional_plugins:
+    - id: rag-poisoning
+      numTests: 2
+    - id: rag-document-exfiltration
+      numTests: 2
+    - id: rag-source-attribution
+      numTests: 2
+
+agentic:
+  description: "Agentic / tool-using deployment — adds MCP and tool-discovery probes"
+  additional_plugins:
+    - id: mcp
+      numTests: 2
+    - id: tool-discovery
+      numTests: 2

@@ -7,12 +7,12 @@
 <div class="eval-comparison">
   {% if missing %}
     <h1>Safety result not found</h1>
-    <p class="sub empty">no <code>merged_safety_result.json</code> for slug <code>{{ slug }}</code>.</p>
+    <p class="sub empty">no result for <code>{{ slug }}/{{ profile }}</code>.</p>
     <p><a href="{{ url_for('safety') }}">← all safety results</a></p>
   {% elif running %}
     <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
     <h1>Safety run in progress</h1>
-    <p class="sub">slug <code>{{ slug }}</code> · updates every 10 seconds (may take 30–90 min)</p>
+    <p class="sub"><code>{{ slug }}</code> · profile <span class="badge">{{ profile }}</span> · updates every 10 seconds (may take 30–90 min)</p>
     <div class="progress-card">
       <p class="progress-meta">status: <b id="prog-state">{{ run_status.status }}</b></p>
       <pre class="log-snippet" id="prog-log">{{ run_status.message }}</pre>
@@ -20,11 +20,12 @@
     <script>
       (function () {
         const slug = {{ slug | tojson }};
+        const profile = {{ profile | tojson }};
         function poll() {
-          fetch("/safety/" + slug + "/status").then(r => r.json()).then(function (s) {
+          fetch("/safety/" + slug + "/" + profile + "/status").then(r => r.json()).then(function (s) {
             document.getElementById("prog-state").textContent = s.status;
             if (s.message) document.getElementById("prog-log").textContent = s.message;
-            if (s.status === "complete") window.location = "/safety/" + slug;
+            if (s.status === "complete") window.location = "/safety/" + slug + "/" + profile;
             else if (s.status === "failed") document.getElementById("prog-state").textContent = "failed";
           });
         }
@@ -33,7 +34,7 @@
     </script>
   {% else %}
     <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
-    <h1><span class="model">{{ gateway_model_id }}</span></h1>
+    <h1><span class="model">{{ gateway_model_id }}</span> <span class="badge">{{ profile }}</span></h1>
     <p class="sub">
       <span class="tier tier-{{ tier }}">{{ tier }}</span> ·
       <span class="{{ pass_rate_class }}">{{ pass_rate_display }}</span> pass rate ·

@@ -1,11 +1,37 @@
 # Garak Duke gateway scan — model-agnostic config.
-# Model: pass -n "<LiteLLM id>" on CLI (default below); uri must stay in YAML.
+# Model: use run_garak.py (auto-selects generator profile) or pass -n directly.
 #
 # 15-module Duke-focused probe_spec (curated from reference.garak.ai probe index).
 # Jailbreak probes often get Azure gateway-blocked → 0 attack hits = module pass.
 #
 # Auth: OPENAICOMPATIBLE_API_KEY (= DUKE_GATEWAY_KEY)
 # Reports: output/<slug>/garak-duke-<slug>.report.jsonl → export → safety_result.json
+#
+# Generator profiles (run_garak.py picks one based on model name):
+#   standard  — GPT-4.x, Llama, etc. (uses temperature/max_tokens)
+#   openai5   — GPT-5.x, o3, o4-mini (suppresses those params, uses max_completion_tokens)
+
+# --- generator profiles — run_garak.py reads _generator_profiles and injects the
+#     right one into plugins.generators.openai.OpenAICompatible before calling garak.
+_generator_profiles:
+  standard: &gen_standard
+    uri: https://litellm.oit.duke.edu/v1/
+    temperature: 0
+    max_tokens: 300
+    top_p: 1.0
+    stop: []
+  openai5: &gen_openai5
+    uri: https://litellm.oit.duke.edu/v1/
+    suppressed_params:
+      - n
+      - temperature
+      - top_p
+      - max_tokens
+      - frequency_penalty
+      - presence_penalty
+      - stop
+    extra_params:
+      max_completion_tokens: 300
 
 system:
   verbose: 0
@@ -29,12 +55,7 @@ plugins:
   extended_detectors: false
   generators:
     openai:
-      OpenAICompatible:
-        uri: https://litellm.oit.duke.edu/v1/
-        temperature: 0
-        max_tokens: 300
-        top_p: 1.0
-        stop: []
+      OpenAICompatible: *gen_standard
 
 reporting:
   report_dir: /app/safety/garak/output

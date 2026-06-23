@@ -3,9 +3,14 @@
 #   docker compose --env-file .env \
 #     -f safety/garak/docker/compose.yml build
 #
+# Use run_garak.py — it auto-selects the generator profile (standard vs openai5):
 #   docker compose --env-file .env \
 #     -f safety/garak/docker/compose.yml run --rm garak \
-#     python -m garak --config garak_duke.yaml -n "GPT 4.1 Mini"
+#     python run_garak.py "GPT 4.1 Mini"
+#
+#   docker compose --env-file .env \
+#     -f safety/garak/docker/compose.yml run --rm garak \
+#     python run_garak.py "gpt-5.5"
 
 name: garak
 

@@ -202,11 +202,12 @@ def get_safety_data_db() -> dict:
     seen_slugs = {r["slug"] for r in db_rows}
     file_rows: list[dict] = []
     if OUTPUT_DIR.exists():
-        for path in sorted(OUTPUT_DIR.glob("*/merged_safety_result.json")):
-            slug = path.parent.name
+        for path in sorted(OUTPUT_DIR.glob("*/*/merged_safety_result.json")):
+            profile = path.parent.name
+            slug = path.parent.parent.name
             if slug in seen_slugs:
                 continue
-            row = _summarize_merged(path, slug)
+            row = _summarize_merged(path, slug, profile)
             if row is not None:
                 file_rows.append(row)
 
@@ -221,7 +222,7 @@ def get_safety_data_db() -> dict:
     }
 
 
-def get_safety_detail_db(slug: str) -> dict | None:
+def get_safety_detail_db(slug: str, profile: str = "base") -> dict | None:
     """Detail-page payload from Postgres; None if slug isn't loaded."""
     with _connect() as conn:
         with conn.cursor() as cur:
@@ -234,4 +235,4 @@ def get_safety_detail_db(slug: str) -> dict | None:
             findings_json = _findings_to_json(cur.fetchall())
 
     data = _run_tuple_to_data(run_row, findings_json)
-    return _build_safety_detail(slug, data)
+    return _build_safety_detail(slug, data, profile)

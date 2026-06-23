@@ -53,7 +53,7 @@ def _rate_class(rate: float | None) -> str:
     return "rate-weak"
 
 
-def _summarize_merged_data(data: dict, slug: str) -> dict:
+def _summarize_merged_data(data: dict, slug: str, profile: str = "base") -> dict:
     """Build a list-table row from an in-memory MergedSafetyResult-shaped dict."""
     findings = data.get("findings") or []
     runs = data.get("runs") or []
@@ -67,9 +67,12 @@ def _summarize_merged_data(data: dict, slug: str) -> dict:
         if isinstance(r, dict)
     }
     tier = (data.get("composite_tier") or "low").lower()
+    profile = data.get("redteam_profile") or profile
 
     return {
         "slug": slug,
+        "profile": profile,
+        "run_key": f"{slug}/{profile}",
         "gateway_model_id": data.get("gateway_model_id") or slug,
         "display_name": data.get("display_name") or data.get("gateway_model_id") or slug,
         "tier": tier,
@@ -93,12 +96,12 @@ def _summarize_merged_data(data: dict, slug: str) -> dict:
     }
 
 
-def _summarize_merged(path: Path, slug: str) -> dict | None:
+def _summarize_merged(path: Path, slug: str, profile: str = "base") -> dict | None:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return None
-    return _summarize_merged_data(data, slug)
+    return _summarize_merged_data(data, slug, profile)
 
 
 def _parse_findings(findings_raw: list) -> list[dict]:
@@ -193,14 +196,17 @@ def _suite_panels(runs: list, tool_results: dict, findings: list[dict]) -> list[
     return panels
 
 
-def _build_safety_detail(slug: str, data: dict) -> dict:
+def _build_safety_detail(slug: str, data: dict, profile: str = "base") -> dict:
     """Structured safety payload from a MergedSafetyResult-shaped dict."""
     findings = _parse_findings(data.get("findings") or [])
     runs = data.get("runs") or []
     n_failed = sum(1 for f in findings if not f["passed"])
+    profile = data.get("redteam_profile") or profile
 
     return {
         "slug": slug,
+        "profile": profile,
+        "run_key": f"{slug}/{profile}",
         "gateway_model_id": data.get("gateway_model_id") or slug,
         "display_name": data.get("display_name") or data.get("gateway_model_id") or slug,
         "tier": (data.get("composite_tier") or "low").lower(),
@@ -220,6 +226,7 @@ def _build_safety_detail(slug: str, data: dict) -> dict:
         "raw_summary": {
             "gateway_model_id": data.get("gateway_model_id"),
             "display_name": data.get("display_name"),
+            "redteam_profile": profile,
             "summary_pass_rate": data.get("summary_pass_rate"),
             "runs": runs,
             "deployment_context": data.get("deployment_context"),
@@ -228,7 +235,7 @@ def _build_safety_detail(slug: str, data: dict) -> dict:
 
 
 def _get_safety_data_files() -> dict:
-    """List every merged_safety_result.json under safety/output/."""
+    """List every merged_safety_result.json under safety/output/<slug>/<profile>/."""
     if not OUTPUT_DIR.exists():
         return {
             "has_safety": False,
@@ -237,9 +244,10 @@ def _get_safety_data_files() -> dict:
         }
 
     rows: list[dict] = []
-    for path in sorted(OUTPUT_DIR.glob("*/merged_safety_result.json")):
-        slug = path.parent.name
-        row = _summarize_merged(path, slug)
+    for path in sorted(OUTPUT_DIR.glob("*/*/merged_safety_result.json")):
+        profile = path.parent.name
+        slug = path.parent.parent.name
+        row = _summarize_merged(path, slug, profile)
         if row:
             rows.append(row)
 
@@ -253,16 +261,16 @@ def _get_safety_data_files() -> dict:
     }
 
 
-def _get_safety_detail_files(slug: str) -> dict | None:
-    """Structured safety payload for one gateway model slug."""
-    path = OUTPUT_DIR / slug / "merged_safety_result.json"
+def _get_safety_detail_files(slug: str, profile: str = "base") -> dict | None:
+    """Structured safety payload for one (slug, profile) pair, read from disk."""
+    path = OUTPUT_DIR / slug / profile / "merged_safety_result.json"
     if not path.is_file():
         return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return None
-    return _build_safety_detail(slug, data)
+    return _build_safety_detail(slug, data, profile)
 
 
 # Public entry points — Postgres when configured, artifact fallback otherwise.
@@ -279,14 +287,14 @@ def get_safety_data() -> dict:
     return _get_safety_data_files()
 
 
-def get_safety_detail(slug: str) -> dict | None:
+def get_safety_detail(slug: str, profile: str = "base") -> dict | None:
     try:
         from frontend import safety_db_data
 
         if safety_db_data.available():
-            detail = safety_db_data.get_safety_detail_db(slug)
+            detail = safety_db_data.get_safety_detail_db(slug, profile)
             if detail is not None:
                 return detail
     except Exception:
         pass
-    return _get_safety_detail_files(slug)
+    return _get_safety_detail_files(slug, profile)

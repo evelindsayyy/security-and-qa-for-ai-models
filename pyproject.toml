@@ -31,7 +31,7 @@ scanner = [
     "pip-audit>=2.9.0",
 ]
 # Safety orchestrator (run_safety.sh / safety/docker): uv sync --group safety
-safety = ["garak>=0.9.0"]
+safety = ["garak>=0.14.0,<0.15"]
 # Public benchmark runners (benchmarks/docker): uv sync --group benchmarks
 benchmarks = [
     "absl-py>=2.4.0",
@@ -49,6 +49,14 @@ benchmarks = [
 # CUDA/Linux-only, multi-GB install — do NOT install on a laptop. On the
 # cluster:  uv sync --group dcc
 dcc = ["vllm>=0.8; sys_platform == 'linux'"]
+
+[tool.uv]
+# garak (safety) caps datasets<4 and transitively fsspec<=2025.3.
+# benchmarks needs datasets>=5; scanner needs fsspec>=2025.5.
+# All three groups are mutually exclusive — never co-installed.
+conflicts = [
+  [{ group = "safety" }, { group = "benchmarks" }, { group = "scanner" }],
+]
 
 [tool.ruff.lint.per-file-ignores]
 "scanner/db/load_scans.py" = ["E402"]

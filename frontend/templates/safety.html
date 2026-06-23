@@ -22,6 +22,7 @@
       <thead>
         <tr>
           <th>Model</th>
+          <th class="col-nowrap">Profile</th>
           <th class="col-nowrap">Tier</th>
           <th class="num">Pass rate</th>
           {% for label in suite_labels %}
@@ -34,11 +35,12 @@
       <tbody>
         {% for m in models %}
         <tr class="row-link {% if m.tier in ('critical', 'high') %}row-warn{% endif %}"
-            data-href="{{ url_for('safety_detail', slug=m.slug) }}"
+            data-href="{{ url_for('safety_detail', slug=m.slug, profile=m.profile) }}"
             tabindex="0"
             role="link"
-            aria-label="Open safety results for {{ m.gateway_model_id }}">
+            aria-label="Open safety results for {{ m.gateway_model_id }} ({{ m.profile }})">
           <td><span class="model">{{ m.gateway_model_id }}</span></td>
+          <td class="col-nowrap"><span class="badge">{{ m.profile }}</span></td>
           <td class="col-nowrap"><span class="tier tier-{{ m.tier }}">{{ m.tier }}</span></td>
           <td class="num overall {{ m.pass_rate_class }}">{{ m.pass_rate_display }}</td>
           {% for col in m.suite_columns %}
