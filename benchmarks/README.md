@@ -38,6 +38,52 @@ Credentials come from the repo-root `.env`. Set `FRONTEND_LAUNCH_MODE=host` to s
 
 Legacy outputs under `testing/basic_tests/test_results/` are still read as a fallback.
 
+## Custom Hugging Face / vLLM models
+
+The default models are the Duke gateway catalog, but you can also benchmark any
+Hugging Face model served by your own **OpenAI-compatible** endpoint (a local
+vLLM server, or one launched on the DCC via [`scripts/dcc/`](../scripts/dcc/README.md)).
+
+The model id is the HF repo (e.g. `Qwen/Qwen3-0.6B`); `model_client` auto-routes
+it to the right provider based on the base URL (a remote vLLM host becomes
+`openai/<repo-id>`).
+
+### CLI
+
+Point the base URL at your server and pass the repo id as `--model`:
+
+```bash
+export LITELLM_BASE_URL="http://<node>:8000/v1"   # e.g. from scripts/dcc/wait_vllm.sh
+export OPENAI_API_KEY="local-vllm"                 # any non-empty value for unauthenticated vLLM
+uv run python benchmarks/run_benchmark.py --benchmark truthfulqa --model "Qwen/Qwen3-0.6B"
+```
+
+Quick connectivity check before a long run: `curl -s "$LITELLM_BASE_URL/models"`.
+
+> TruthfulQA reads `TQA_BASE_URL` before `LITELLM_BASE_URL`. `run_benchmark.py`
+> otherwise defaults it to the Duke gateway, so set `TQA_BASE_URL` too (or use
+> the browser flow below, which sets every alias for you).
+
+### Browser
+
+On the **Start a benchmark run** page (`/benchmarks/new`), choose
+**Custom model (Hugging Face / vLLM)** and fill in:
+
+- **Hugging Face model** — the repo id, e.g. `Qwen/Qwen3-0.6B`
+- **Base URL** — your endpoint, e.g. `http://dcc-plusds-gpu-02:8000/v1`
+- **API key** — optional; defaults to `local-vllm`
+
+The base URL is restricted to internal/private hosts (localhost, private IPs,
+or `*.duke.edu` / bare DCC node names) — public addresses are rejected.
+
+Notes:
+
+- **Host mode** (`FRONTEND_LAUNCH_MODE=host`) is the simplest path for DCC vLLM,
+  since the run inherits the endpoint directly.
+- **Docker mode** also works, but the benchmarks container must be able to reach
+  the endpoint — prefer a private **IP** (NAT-routable) over a cluster hostname,
+  which may not resolve inside the container.
+
 ## LIST OF BENCHMARKS AND WHAT THEY DO
 
 1. MMLU - mmlu_test.py

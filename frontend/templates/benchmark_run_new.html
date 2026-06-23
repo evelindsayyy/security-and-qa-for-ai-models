@@ -21,16 +21,66 @@
       </select>
     </label>
 
-    <label>Model
-      <select name="model" id="model">
-        {% for m in models %}
-        <option value="{{ m }}" {% if m == 'GPT 4.1 Mini' %}selected{% endif %}>{{ m }}</option>
-        {% endfor %}
-      </select>
-      <span class="form-hint">exact gateway id — see <a href="{{ url_for('models_catalog') }}">model catalog</a></span>
-    </label>
+    <fieldset class="model-source">
+      <legend>Model source</legend>
+      <label class="radio">
+        <input type="radio" name="model_source" value="gateway" checked
+               onchange="toggleModelSource()">
+        Gateway model
+      </label>
+      <label class="radio">
+        <input type="radio" name="model_source" value="custom"
+               onchange="toggleModelSource()">
+        Custom model (Hugging Face / vLLM)
+      </label>
+    </fieldset>
+
+    <div id="gateway-fields">
+      <label>Model
+        <select name="model" id="model">
+          {% for m in models %}
+          <option value="{{ m }}" {% if m == 'GPT 4.1 Mini' %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+        <span class="form-hint">exact gateway id — see <a href="{{ url_for('models_catalog') }}">model catalog</a></span>
+      </label>
+    </div>
+
+    <div id="custom-fields" style="display: none;">
+      <label>Hugging Face model
+        <input type="text" name="custom_model" id="custom_model"
+               placeholder="Qwen/Qwen3-0.6B" autocomplete="off">
+        <span class="form-hint">repo id of a model served by your OpenAI-compatible endpoint</span>
+      </label>
+
+      <label>Base URL
+        <input type="text" name="base_url" id="base_url"
+               placeholder="http://dcc-plusds-gpu-02:8000/v1" autocomplete="off">
+        <span class="form-hint">internal/private host only (localhost, a private IP, or a *.duke.edu / DCC node)</span>
+      </label>
+
+      <label>API key <span class="form-hint">(optional)</span>
+        <input type="text" name="api_key" id="api_key"
+               placeholder="local-vllm" autocomplete="off">
+        <span class="form-hint">defaults to <code>local-vllm</code> for unauthenticated vLLM servers</span>
+      </label>
+    </div>
 
     <button type="submit" class="btn-primary">▶ Start run</button>
   </form>
 </div>
+
+<script>
+  function toggleModelSource() {
+    const custom = document.querySelector('input[name="model_source"]:checked').value === 'custom';
+    document.getElementById('gateway-fields').style.display = custom ? 'none' : '';
+    document.getElementById('custom-fields').style.display = custom ? '' : 'none';
+    // Disable hidden inputs so they aren't submitted / required by the wrong path.
+    document.getElementById('model').disabled = custom;
+    document.getElementById('custom_model').disabled = !custom;
+    document.getElementById('base_url').disabled = !custom;
+    document.getElementById('api_key').disabled = !custom;
+  }
+  toggleModelSource();
+</script>
 {% endblock %}

@@ -299,11 +299,21 @@ def register_routes(app):
         from frontend.benchmark_launch import start_run, validate_launch
 
         benchmark_key = request.form.get("benchmark", "")
-        model = request.form.get("model", "")
-        error = validate_launch(benchmark_key, model)
+        model_source = request.form.get("model_source", "gateway")
+        if model_source == "custom":
+            model = request.form.get("custom_model", "").strip()
+            base_url = request.form.get("base_url", "").strip()
+            api_key = request.form.get("api_key", "").strip() or None
+        else:
+            model = request.form.get("model", "")
+            base_url = None
+            api_key = None
+        error = validate_launch(benchmark_key, model, base_url=base_url)
         if error:
             return error, 400
-        slug, _already = start_run(benchmark_key, model)
+        slug, _already = start_run(
+            benchmark_key, model, base_url=base_url, api_key=api_key
+        )
         return redirect(url_for("benchmark_detail", slug=slug, status="running"))
 
     @app.route("/benchmarks/<slug>/status")

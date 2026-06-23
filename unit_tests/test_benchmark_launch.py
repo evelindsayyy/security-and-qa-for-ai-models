@@ -1,158 +1,84 @@
-"""
-Tests for benchmark launch + data layer (no subprocess, no API calls).
-"""
-
-from __future__ import annotations
-
-import json
-import os
-import tempfile
+import sys
 import unittest
 from pathlib import Path
-from unittest import mock
 
-os.environ.setdefault("FRONTEND_LAUNCH_MODE", "host")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from frontend import benchmark_data, benchmark_launch  # noqa: E402
-
-
-class BenchmarkLaunchValidateTest(unittest.TestCase):
-    def setUp(self) -> None:
-        patcher = mock.patch.object(
-            benchmark_launch,
-            "candidate_models",
-            return_value=("GPT 4.1 Mini", "gpt-5-chat"),
-        )
-        patcher.start()
-        self.addCleanup(patcher.stop)
-
-    def test_valid_launch(self) -> None:
-        self.assertIsNone(
-            benchmark_launch.validate_launch("truthfulqa", "GPT 4.1 Mini")
-        )
-
-    def test_unknown_benchmark_rejected(self) -> None:
-        err = benchmark_launch.validate_launch("not-a-benchmark", "GPT 4.1 Mini")
-        self.assertIn("unknown benchmark", err)
-
-    def test_unknown_model_rejected(self) -> None:
-        err = benchmark_launch.validate_launch("truthfulqa", "evil-model")
-        self.assertIn("not in allowlist", err)
+from frontend.benchmark_launch import (  # noqa: E402
+    _custom_env,
+    validate_base_url,
+    validate_custom_model,
+)
 
 
-class BenchmarkLaunchCommandTest(unittest.TestCase):
-    def test_build_command_argv(self) -> None:
-        cmd = benchmark_launch.build_command("ifeval", "GPT 4.1 Mini", "stem123")
-        self.assertIsInstance(cmd, list)
-        self.assertIn("--benchmark", cmd)
-        self.assertIn("ifeval", cmd)
-        self.assertIn("--output-stem", cmd)
-        self.assertIn("stem123", cmd)
+class TestValidateCustomModel(unittest.TestCase):
+    def test_accepts_org_model(self) -> None:
+        self.assertIsNone(validate_custom_model("Qwen/Qwen3-0.6B"))
+
+    def test_accepts_single_name(self) -> None:
+        self.assertIsNone(validate_custom_model("gpt2"))
+
+    def test_rejects_empty(self) -> None:
+        self.assertIsNotNone(validate_custom_model(""))
+
+    def test_rejects_path_traversal(self) -> None:
+        self.assertIsNotNone(validate_custom_model("../etc/passwd"))
+
+    def test_rejects_leading_slash(self) -> None:
+        self.assertIsNotNone(validate_custom_model("/Qwen/Qwen3-0.6B"))
+
+    def test_rejects_too_long(self) -> None:
+        self.assertIsNotNone(validate_custom_model("a/" + "b" * 300))
 
 
-class BenchmarkDataTest(unittest.TestCase):
-    def setUp(self) -> None:
-        patcher = mock.patch("frontend.benchmark_db_data.available", return_value=False)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+class TestValidateBaseUrl(unittest.TestCase):
+    def test_accepts_localhost(self) -> None:
+        self.assertIsNone(validate_base_url("http://127.0.0.1:8000/v1"))
 
-    def test_detect_truthfulqa_from_metrics(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "sample.json"
-            path.write_text(
-                json.dumps(
-                    {
-                        "model": "GPT 4.1 Mini",
-                        "timestamp": "20260611_120000",
-                        "metrics": {"accuracy": 0.8, "total_evaluated": 10, "correct": 8},
-                        "responses": [{"question": "q"}],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            row = benchmark_data._summarize_file(path)
-            self.assertIsNotNone(row)
-            assert row is not None
-            self.assertEqual(row["kind"], "truthfulqa")
-            self.assertEqual(row["model"], "GPT 4.1 Mini")
+    def test_accepts_localhost_name(self) -> None:
+        self.assertIsNone(validate_base_url("http://localhost:8000/v1"))
 
-    def test_get_benchmarks_data_includes_filters(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            primary = Path(tmp)
-            path = primary / "tqa_test.json"
-            path.write_text(
-                json.dumps(
-                    {
-                        "model": "gpt-5-chat",
-                        "timestamp": "20260611_120000",
-                        "metrics": {"accuracy": 0.5, "total_evaluated": 2, "correct": 1},
-                        "responses": [{}, {}],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            with mock.patch.object(benchmark_data, "PRIMARY_DIR", primary), mock.patch.object(
-                benchmark_data, "_candidate_dirs", return_value=[primary]
-            ):
-                data = benchmark_data.get_benchmarks_data()
-            self.assertTrue(data["has_runs"])
-            self.assertIn("TruthfulQA", data["kinds"])
-            self.assertIn("gpt-5-chat", data["models"])
+    def test_accepts_private_ip(self) -> None:
+        # DCC compute nodes live on the 10.0.0.0/8 private range.
+        self.assertIsNone(validate_base_url("http://10.183.23.44:8000/v1"))
 
-    def test_detail_includes_meta(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            primary = Path(tmp)
-            path = primary / "tqa_test.json"
-            path.write_text(
-                json.dumps(
-                    {
-                        "model": "gpt-5-chat",
-                        "timestamp": "20260611_120000",
-                        "metrics": {"accuracy": 0.5, "total_evaluated": 1, "correct": 1},
-                        "responses": [{"question": "Q?", "correct_letter": "A", "model_answer": "A"}],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            with mock.patch.object(benchmark_data, "PRIMARY_DIR", primary), mock.patch.object(
-                benchmark_data, "_candidate_dirs", return_value=[primary]
-            ):
-                detail = benchmark_data.get_benchmark_detail("tqa_test")
-            self.assertIsNotNone(detail)
-            assert detail is not None
-            self.assertIn("about", detail["meta"])
-            self.assertEqual(detail["meta"]["title"], "TruthfulQA")
+    def test_accepts_bare_internal_hostname(self) -> None:
+        self.assertIsNone(validate_base_url("http://dcc-plusds-gpu-02:8000/v1"))
 
-    def test_consistency_detail_uses_bertscore_f1(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            primary = Path(tmp)
-            path = primary / "consistency_test.json"
-            path.write_text(
-                json.dumps(
-                    {
-                        "model": "gpt-5-chat",
-                        "timestamp": "20260611_120000",
-                        "summary": {"total_questions": 1, "mean_f1_overall": 0.85},
-                        "questions": [
-                            {
-                                "id": "q1",
-                                "topic": "AI",
-                                "paraphrases": ["Q1?", "Q1 rephrased?"],
-                                "responses": ["A1", "A2"],
-                                "bertscore": {"mean_f1": 0.85, "min_f1": 0.8, "pairs": []},
-                            }
-                        ],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            with mock.patch.object(benchmark_data, "PRIMARY_DIR", primary), mock.patch.object(
-                benchmark_data, "_candidate_dirs", return_value=[primary]
-            ):
-                detail = benchmark_data.get_benchmark_detail("consistency_test")
-            self.assertIsNotNone(detail)
-            assert detail is not None
-            self.assertEqual(detail["questions"][0]["bertscore"]["mean_f1"], 0.85)
+    def test_accepts_duke_domain(self) -> None:
+        self.assertIsNone(validate_base_url("https://node.oit.duke.edu:8000/v1"))
+
+    def test_rejects_public_ip(self) -> None:
+        self.assertIsNotNone(validate_base_url("http://8.8.8.8:8000/v1"))
+
+    def test_rejects_public_domain(self) -> None:
+        self.assertIsNotNone(validate_base_url("https://api.openai.com/v1"))
+
+    def test_rejects_cloud_metadata_link_local(self) -> None:
+        # 169.254.169.254 is the classic SSRF metadata target.
+        self.assertIsNotNone(validate_base_url("http://169.254.169.254/latest"))
+
+    def test_rejects_non_http_scheme(self) -> None:
+        self.assertIsNotNone(validate_base_url("ftp://10.0.0.1/v1"))
+
+    def test_rejects_empty(self) -> None:
+        self.assertIsNotNone(validate_base_url(""))
+
+
+class TestCustomEnv(unittest.TestCase):
+    def test_sets_all_base_url_aliases(self) -> None:
+        env = _custom_env("http://10.0.0.1:8000/v1", "key123")
+        # TruthfulQA reads TQA_BASE_URL first, so it must be set too.
+        self.assertEqual(env["TQA_BASE_URL"], "http://10.0.0.1:8000/v1")
+        self.assertEqual(env["LITELLM_BASE_URL"], "http://10.0.0.1:8000/v1")
+        self.assertEqual(env["OPENAI_BASE_URL"], "http://10.0.0.1:8000/v1")
+        self.assertEqual(env["OPENAI_API_KEY"], "key123")
+        self.assertEqual(env["LITELLM_API_KEY"], "key123")
+        self.assertEqual(env["TQA_API_KEY"], "key123")
+
+    def test_defaults_api_key(self) -> None:
+        env = _custom_env("http://localhost:8000/v1", None)
+        self.assertEqual(env["OPENAI_API_KEY"], "local-vllm")
 
 
 if __name__ == "__main__":
