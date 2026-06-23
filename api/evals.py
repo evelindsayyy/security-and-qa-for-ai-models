@@ -19,16 +19,37 @@ from __future__ import annotations
 
 from flask import Blueprint, request
 
-from api.responses import err, ok
+from api.responses import err, json_errors, ok
 from frontend import eval_run_data
 from frontend.path_safety import is_safe_slug
 
 bp = Blueprint("evals_api", __name__)
 
+# Pagination: a default page size keeps a large catalog from being returned in
+# one payload; the cap bounds what a single request can ask for. ``meta.total``
+# still reports the full filtered count so a client knows how many pages exist.
+DEFAULT_LIMIT = 50
+MAX_LIMIT = 200
+
+
+def _paging():
+    """Parse ?limit / ?offset into a clamped (limit, offset), or an error
+    response on bad input. Returns ((limit, offset), None) or (None, err)."""
+    raw_limit = request.args.get("limit", DEFAULT_LIMIT)
+    raw_offset = request.args.get("offset", 0)
+    try:
+        limit, offset = int(raw_limit), int(raw_offset)
+    except (TypeError, ValueError):
+        return None, err("limit and offset must be integers", 400)
+    if limit < 0 or offset < 0:
+        return None, err("limit and offset must be non-negative", 400)
+    return (min(limit, MAX_LIMIT), offset), None
+
 
 @bp.get("/evals")
+@json_errors
 def list_evals():
-    """All eval runs (same rows as the comparison table), optionally filtered."""
+    """Eval runs (same rows as the comparison table), filtered then paged."""
     runs = eval_run_data.get_runs_data()["runs"]
     suite = request.args.get("suite")
     model = request.args.get("model")
@@ -38,10 +59,18 @@ def list_evals():
         runs = [r for r in runs
                 if r["candidate_model"] == model
                 or eval_run_data.model_slug(r["candidate_model"]) == model]
-    return ok(runs, meta={"total": len(runs)})
+
+    paging, error = _paging()
+    if error is not None:
+        return error
+    limit, offset = paging
+    total = len(runs)
+    page = runs[offset:offset + limit]
+    return ok(page, meta={"total": total, "limit": limit, "offset": offset})
 
 
 @bp.get("/evals/<slug>")
+@json_errors
 def get_eval(slug: str):
     """One run's full detail payload, or 404 if the slug is unknown."""
     if not is_safe_slug(slug):
@@ -53,6 +82,7 @@ def get_eval(slug: str):
 
 
 @bp.get("/models/<slug>")
+@json_errors
 def get_model(slug: str):
     """One model's rollup across every suite it was evaluated on."""
     if not is_safe_slug(slug):
