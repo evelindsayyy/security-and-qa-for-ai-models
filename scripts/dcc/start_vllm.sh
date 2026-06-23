@@ -64,7 +64,11 @@ load_cuda() {
 mkdir -p "${HF_HOME}" "${LOG_DIR}"
 load_cuda
 
-uv sync --frozen
+# vLLM is in the optional 'dcc' dependency group, so request it explicitly —
+# a plain `uv sync` installs core + dev only and the job dies with exit 127
+# ("vllm: command not found"). Linux/CUDA-only; the .venv on /work persists,
+# so this is a one-time install then a fast no-op on later runs.
+uv sync --frozen --group dcc
 source "${REPO_ROOT}/.venv/bin/activate"
 
 echo "Starting vLLM for ${MODEL} on $(hostname):${PORT}"
