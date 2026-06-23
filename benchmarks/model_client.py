@@ -2,32 +2,126 @@ from __future__ import annotations
 
 import os
 import time
+import subprocess
+import requests
 
 from litellm import completion
+from urllib.parse import urlparse
 
 DEFAULT_MAX_RETRIES = max(1, int(os.getenv("BENCHMARK_MAX_RETRIES", "3")))
 DEFAULT_RETRY_DELAY_SEC = float(os.getenv("BENCHMARK_RETRY_DELAY_SEC", "1.0"))
+
+# LiteLLM routes by the first path segment of the model id (e.g. huggingface/…).
+_KNOWN_LITELLM_PREFIXES = frozenset({
+    "openai",
+    "anthropic",
+    "huggingface",
+    "groq",
+    "together",
+    "fireworks",
+    "gemini",
+    "openrouter",
+    "azure",
+    "bedrock",
+    "cohere",
+    "mistral",
+    "ollama",
+    "hosted_vllm",
+})
 
 
 class EmptyModelResponseError(RuntimeError):
     """All retries exhausted and the model returned no usable text."""
 
 
+def detect_provider(base_url: str) -> str:
+    """
+    Infer the backend/provider from an API base URL.
+
+    Returns one of:
+        duke
+        openai
+        openrouter
+        anthropic
+        google
+        groq
+        together
+        fireworks
+        huggingface
+        vllm
+        openai_compatible
+    """
+
+    if not base_url:
+        return "openai_compatible"
+
+    host = urlparse(base_url).netloc.lower()
+
+    if "litellm.oit.duke.edu" in host:
+        return "duke"
+
+    if "api.openai.com" in host:
+        return "openai"
+
+    if "openrouter.ai" in host:
+        return "openrouter"
+
+    if "api.anthropic.com" in host:
+        return "anthropic"
+
+    if "generativelanguage.googleapis.com" in host:
+        return "google"
+
+    if "api.groq.com" in host:
+        return "groq"
+
+    if "api.together.xyz" in host:
+        return "together"
+
+    if "api.fireworks.ai" in host:
+        return "fireworks"
+
+    if (
+        "huggingface.co" in host
+        or "hf.space" in host
+        or host.startswith("api-inference.")
+    ):
+        return "huggingface"
+
+    if host.startswith("localhost") or host.startswith("127.0.0.1"):
+        return "vllm"
+
+    return "openai_compatible"
+
+def _has_litellm_provider_prefix(model: str) -> bool:
+    if "/" not in model:
+        return False
+    prefix = model.split("/", 1)[0].lower()
+    return prefix in _KNOWN_LITELLM_PREFIXES or prefix.startswith("azure")
+
+
 def normalize_model(model: str, base_url: str) -> str:
     """
     Normalize model names for LiteLLM.
 
-    Duke AI Gateway requires openai/ prefixes for some models
-    when using the LiteLLM Python package.
+    LiteLLM needs an explicit provider prefix for many backends (Hugging Face
+    repo ids, local vLLM, Duke gateway display names, etc.).
     """
-
-    if "/" in model:
+    if _has_litellm_provider_prefix(model):
         return model
 
-    if "litellm.oit.duke.edu" in base_url:
-        return f"openai/{model}"
+    provider = detect_provider(base_url)
 
-    # Add more conditions for other base URLs later
+    if provider == "duke":
+        if "/" not in model:
+            return f"openai/{model}"
+        return model
+
+    if provider == "huggingface":
+        return f"huggingface/{model}"
+
+    if provider in {"vllm", "openai_compatible"}:
+        return f"openai/{model}"
 
     return model
 
@@ -109,3 +203,61 @@ def query_chat_completion(
     if last_exc is not None and require_non_empty:
         raise last_exc
     return response
+
+
+def launch_local_model(
+    model_id: str,
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    timeout: int = 300,
+):
+    """
+    Launch a local vLLM server and wait for it to become ready.
+
+    Returns:
+        {
+            "process": proc,
+            "base_url": "...",
+            "model": model_id,
+            "api_key": "dummy",
+        }
+    """
+
+    cmd = [
+        "vllm",
+        "serve",
+        model_id,
+        "--host",
+        host,
+        "--port",
+        str(port),
+    ]
+
+    proc = subprocess.Popen(cmd)
+
+    base_url = f"http://{host}:{port}/v1"
+
+    deadline = time.time() + timeout
+
+    while time.time() < deadline:
+        try:
+            r = requests.get(f"{base_url}/models", timeout=5)
+
+            if r.status_code == 200:
+                return {
+                    "process": proc,
+                    "base_url": base_url,
+                    "model": model_id,
+                    "api_key": "dummy",
+                }
+
+        except requests.RequestException:
+            pass
+
+        time.sleep(2)
+
+    proc.kill()
+
+    raise RuntimeError(
+        f"Timed out waiting for vLLM to start for {model_id}"
+    )

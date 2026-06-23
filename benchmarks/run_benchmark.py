@@ -123,6 +123,8 @@ def run(benchmark_key: str, model: str, output_stem: str | None = None) -> Path:
         env.get("DUKE_GATEWAY_KEY")
         or env.get("OPENAI_API_KEY")
         or env.get("LITELLM_API_KEY")
+        or env.get("HF_TOKEN")
+        or env.get("HUGGINGFACE_TOKEN")
     )
     if key:
         for k in ("TQA_API_KEY", "LITELLM_API_KEY", "OPENAI_API_KEY"):

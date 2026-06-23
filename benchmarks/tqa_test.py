@@ -79,6 +79,8 @@ API_KEY = (
     or os.getenv("LITELLM_API_KEY")
     or os.getenv("DUKE_GATEWAY_KEY")
     or os.getenv("OPENAI_API_KEY")
+    or os.getenv("HF_TOKEN")
+    or os.getenv("HUGGINGFACE_TOKEN")
 )
 MODEL = os.getenv("TQA_MODEL", "gpt-5.1")
 OUTPUT_DIR = os.getenv("TQA_OUTPUT", str(HERE / "results"))
