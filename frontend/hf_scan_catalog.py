@@ -27,7 +27,7 @@ HF_ANNOTATIONS: dict[str, str] = {
 
 def get_hf_scan_catalog() -> dict[str, Any]:
     """
-    Catalog rows for /models — one row per scan_result.json on disk.
+    Catalog rows for /models — one row per completed scan.
 
     Sorted highest risk first (same order as /scans). Never raises.
     """

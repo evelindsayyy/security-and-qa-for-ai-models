@@ -22,6 +22,9 @@ services:
       - DUKE_GATEWAY_KEY=${DUKE_GATEWAY_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://litellm.oit.duke.edu/v1}
+      - POSTGRES_DSN=${POSTGRES_DSN:-}
+      - EFFICACY_DB_DSN=${EFFICACY_DB_DSN:-}
+      - DATABASE_URL=${DATABASE_URL:-}
 
     working_dir: /app/evaluator
 

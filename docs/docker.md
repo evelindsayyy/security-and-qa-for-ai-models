@@ -42,8 +42,10 @@ host or in CI is reused when the UI launches a job.
 
 ## CI
 
-GitLab runs on Duke **shared runners** (`docker+machine`): lint → unit tests only.
-No Docker builds in CI (runners lack socket/DinD). No gateway secrets. See
-[`.gitlab-ci.yml`](../.gitlab-ci.yml).
+GitLab runs lint and unit tests on Duke **shared runners**. On `main`, the
+`build-web-image` job uses the dedicated `oit-shared-buildah` runner to build
+`docker/Dockerfile` without a Docker socket or DinD, then pushes
+`${CI_REGISTRY_IMAGE}/web:${CI_COMMIT_SHORT_SHA}` to the GitLab container
+registry. No gateway secrets are required. See [`.gitlab-ci.yml`](../.gitlab-ci.yml).
 
-Postgres is external (`POSTGRES_DSN` on OIT host). W5 adds `api/` REST on the application VM — see [`architecture.md`](architecture.md).
+Postgres is external (`POSTGRES_DSN` on OIT host). Deploy topology: [`architecture.md`](architecture.md#deployment-and-hosts).

@@ -20,6 +20,8 @@ services:
     environment:
       - HF_TOKEN=${HF_TOKEN:-}
       - MODEL_ID=${MODEL_ID:-distilbert-base-uncased}
+      - POSTGRES_DSN=${POSTGRES_DSN:-}
+      - DATABASE_URL=${DATABASE_URL:-}
       # Weights under models/<slug>/ are removed after scan unless SCAN_KEEP_WEIGHTS=1
       - SCAN_KEEP_WEIGHTS=${SCAN_KEEP_WEIGHTS:-}
       # OSV API queries require outbound HTTPS from the container.

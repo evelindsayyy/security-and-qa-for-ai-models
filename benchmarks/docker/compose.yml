@@ -23,6 +23,8 @@ services:
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://litellm.oit.duke.edu/v1}
       - LITELLM_BASE_URL=${OPENAI_BASE_URL:-https://litellm.oit.duke.edu/v1}
       - LITELLM_API_KEY=${OPENAI_API_KEY:-}
+      - POSTGRES_DSN=${POSTGRES_DSN:-}
+      - DATABASE_URL=${DATABASE_URL:-}
 
     working_dir: /app/benchmarks
 

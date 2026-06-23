@@ -29,7 +29,7 @@
       <h2>Efficacy</h2>
       <p class="pillar-meta">Gateway task evaluation</p>
       {% if eval_has %}
-        <p class="pillar-stat"><b>{{ eval_count }}</b> run{{ "s" if eval_count != 1 else "" }} on disk</p>
+        <p class="pillar-stat"><b>{{ eval_count }}</b> run{{ "s" if eval_count != 1 else "" }} recorded</p>
         {% if eval_best_overall is not none %}
           <p class="pillar-stat">best overall (mean): <b>{{ "%.2f"|format(eval_best_overall) }}</b></p>
         {% endif %}
@@ -59,7 +59,7 @@
       <h2>Benchmarks</h2>
       <p class="pillar-meta">TruthfulQA · IFEval · Consistency · MMLU · ToMi · MBPP · QuALITY</p>
       {% if benchmark_has %}
-        <p class="pillar-stat"><b>{{ benchmark_count }}</b> run{{ "s" if benchmark_count != 1 else "" }} on disk</p>
+        <p class="pillar-stat"><b>{{ benchmark_count }}</b> run{{ "s" if benchmark_count != 1 else "" }} recorded</p>
       {% else %}
         <p class="empty">no benchmark results yet</p>
       {% endif %}

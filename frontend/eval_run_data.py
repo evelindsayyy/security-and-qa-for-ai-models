@@ -1,12 +1,8 @@
 """
-Data source for the /eval-run comparison page. Scans evaluator/results/
-for all results JSONL files (skipping _trace files), aggregates each,
-and returns a list of per-run rows sorted by overall mean (best first).
+Data source for the /eval-run comparison page.
 
-Detects the "empty candidate response" artifact (e.g. reasoning models
-hitting max_tokens on hidden tokens) and annotates the row with a note
-so the table makes the gotcha visible instead of hiding it under a
-plausible-looking score.
+Aggregates eval runs into comparison-table rows sorted by overall mean (best
+first). Postgres when EFFICACY_DB_DSN is set; artifact fallback otherwise.
 """
 
 from __future__ import annotations
@@ -282,7 +278,7 @@ def _postprocess_runs(runs: list[dict]) -> dict:
 
 
 def _get_runs_data_files() -> dict:
-    """File-based comparison data: aggregate every results JSONL on disk."""
+    """Comparison data: aggregate every results JSONL in the evaluator output dir."""
     if not RESULTS_DIR.exists():
         return {"has_runs": False, "results_dir": str(RESULTS_DIR), "runs": []}
     files = [p for p in RESULTS_DIR.glob("*.jsonl") if "_trace" not in p.name]
@@ -325,11 +321,7 @@ def get_model_detail(slug: str) -> dict | None:
     }
 
 
-# ---------------------------------------------------------------------------
-# Public entry points — dispatch to Postgres when configured and reachable,
-# silently fall back to files otherwise. Files remain the source of truth;
-# the DB is a read projection (see evaluator/db/README.md).
-# ---------------------------------------------------------------------------
+# Public entry points — Postgres when configured, artifact fallback otherwise.
 
 
 def get_runs_data() -> dict:

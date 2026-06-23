@@ -19,16 +19,18 @@ def apply_loader(
     *,
     item_count: int,
     item_label: str = "item(s)",
+    quiet: bool = False,
 ) -> None:
     """Connect, call ``load_fn(conn)``, print success. ``load_fn`` must commit."""
     from dbutils.connection import connect
 
     with connect(dsn) as conn:
         load_fn(conn)
-    print(
-        f"Loaded {item_count} {item_label}. "
-        "Re-running is safe when INSERTs use ON CONFLICT DO NOTHING."
-    )
+    if not quiet:
+        print(
+            f"Loaded {item_count} {item_label}. "
+            "Re-running is safe when INSERTs use ON CONFLICT DO NOTHING."
+        )
 
 
 def exit_if_apply_without_dsn(dsn: str | None) -> None:

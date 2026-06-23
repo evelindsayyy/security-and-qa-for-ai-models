@@ -24,16 +24,10 @@ Set `EFFICACY_DB_DSN` in `.env` (credentials from team lead; never commit them).
 
 ## Apply the schema (one-time)
 
-```bash
-psql "$EFFICACY_DB_DSN" -f evaluator/db/efficacy_schema.sql
-```
-
-No `psql`? The psycopg fallback:
+Requires ``uv sync --group db`` and ``EFFICACY_DB_DSN`` (or ``POSTGRES_DSN``) in ``.env`` with ``?sslmode=require``:
 
 ```bash
-uv run python -c "import os,psycopg,pathlib; \
-  c=psycopg.connect(os.environ['EFFICACY_DB_DSN']); \
-  c.execute(pathlib.Path('evaluator/db/efficacy_schema.sql').read_text()); c.commit()"
+uv run python -m dbutils.apply_schema evaluator/db/efficacy_schema.sql
 ```
 
 ## Load results
@@ -43,6 +37,8 @@ uv run python evaluator/db/load_results.py            # dry run — prints what 
 uv run python evaluator/db/load_results.py --apply    # real load
 uv run python evaluator/db/load_results.py --apply    # again: counts must NOT change (idempotency)
 ```
+
+All pillars: `uv run python -m api.ingest` — see [`docs/cli.md`](../docs/cli.md).
 
 ## Verify
 

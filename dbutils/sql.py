@@ -11,8 +11,8 @@ def apply_sql_file(dsn: str, sql_path: Path) -> None:
     """Execute a ``.sql`` file (DDL or migrations) against Postgres.
 
     Use for one-time ``CREATE TABLE IF NOT EXISTS`` scripts in ``pillar/db/``.
-    Prefer ``psql -f`` when available; this is the psycopg fallback (same as
-    documented in pillar READMEs).
+    Prefer ``psql -f`` when available; this is the psycopg fallback used by
+    ``python -m dbutils.apply_schema``.
     """
     sql = sql_path.read_text(encoding="utf-8")
     with connect(dsn) as conn:

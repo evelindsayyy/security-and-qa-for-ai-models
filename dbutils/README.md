@@ -1,13 +1,9 @@
 # dbutils — shared Postgres ingest helpers
 
-Reusable plumbing for **JSON → Postgres** loaders. Each pillar keeps its own
-``pillar/db/`` directory (transforms + INSERT SQL). **Do not** put
-pillar-specific table logic here.
+Reusable plumbing for **JSON → Postgres** loaders. Scan, safety, and benchmarks use
+this package; ``evaluator/db/`` is standalone but shares the same DSN via ``api.ingest``.
 
-**Status:** Track A/B loaders for scanner, safety, and benchmarks should use
-this package (W5). The efficacy loader in ``evaluator/db/`` is **standalone**
-(Grace) until it is migrated — use it as a behavioral reference, not an import
-dependency.
+Each pillar keeps its own ``pillar/db/`` directory (transforms + INSERT SQL).
 
 ## Modules
 
@@ -20,6 +16,8 @@ dependency.
 | `ingest` | `jsonb_param`, `apply_loader`, dry-run exit helpers |
 | `sql` | `apply_sql_file`, `execute_many`, `transaction` |
 | `cli` | `add_ingest_arguments` — standard `--apply` / `--dsn` |
+| `apply_schema.py` | `python -m dbutils.apply_schema` — apply pillar DDL (no `psql`) |
+| `post_run.py` | `maybe_sync_artifact` — auto-ingest after successful pillar runs |
 
 ## Pillar loader template (scanner / safety / benchmarks)
 
@@ -74,16 +72,10 @@ def main() -> int:
 
 ## Apply schema (one-time)
 
-```bash
-# Option A — psql
-psql "$POSTGRES_DSN" -f scanner/db/schema.sql
+Requires ``uv sync --group db``. Use ``python -m dbutils.apply_schema`` (no ``psql`` client needed):
 
-# Option B — dbutils (no psql on PATH)
-uv run python -c "
-from dbutils import apply_sql_file, load_repo_env, resolve_dsn
-load_repo_env()
-apply_sql_file(resolve_dsn('POSTGRES_DSN'), __import__('pathlib').Path('scanner/db/schema.sql'))
-"
+```bash
+uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql
 ```
 
 ## Dependencies
@@ -92,16 +84,16 @@ apply_sql_file(resolve_dsn('POSTGRES_DSN'), __import__('pathlib').Path('scanner/
 uv sync --group db   # psycopg — optional; plain uv sync skips it
 ```
 
-## Planned pillar loaders (W5)
+## Pillar loaders
 
-| Pillar | Directory | Input | Uses `dbutils`? |
-|--------|-----------|-------|-----------------|
-| Scanner | `scanner/db/` | `scanner/output/<slug>/scan_result.json` | Yes (`load_scans.py`) |
-| Safety | `safety/db/` | `safety/output/<model>/merged_safety_result.json` | Planned |
-| Benchmarks | `benchmarks/db/` | `benchmarks/results/*.{json,jsonl}` | Planned |
-| Evaluator | `evaluator/db/` | `evaluator/results/*.jsonl` | No (standalone; migrate later) |
+| Pillar | Directory | Input |
+|--------|-----------|-------|
+| Scanner | `scanner/db/` | `scanner/output/<slug>/scan_result.json` |
+| Safety | `safety/db/` | `safety/output/<model>/merged_safety_result.json` |
+| Evaluator | `evaluator/db/` | `evaluator/results/*.jsonl` (standalone CLI; shares DSN via `api.ingest`) |
+| Benchmarks | `benchmarks/db/` | `benchmarks/results/*.{json,jsonl}` |
 
-Unified orchestrator ``api/ingest`` (W5-15) should call each pillar's ``load_into``.
+Unified orchestrator: `uv run python -m api.ingest` (dry-run all pillars) or `--apply` to load.
 
 ## Tests
 

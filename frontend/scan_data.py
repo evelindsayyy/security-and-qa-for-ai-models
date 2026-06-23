@@ -1,13 +1,8 @@
 """
-data source for /scans and /scans/<slug>.
+Data source for /scans and /scans/<slug>.
 
-reads scanner/output/<slug>/scan_result.json (gitignored; produced by
-`python -m scanner scan <hf_repo>` on dgx). read-only — no subprocess here.
-
-mirrors eval_run_data.py / benchmark_data.py: get_*_data() + structured detail
-rows instead of dumping raw json on the page.
-
-week 5: replace file glob with GET /api/scans and GET /api/scans/{id}.
+Read-only — no subprocess here. Postgres when POSTGRES_DSN is set; artifact
+fallback otherwise.
 """
 
 from __future__ import annotations
@@ -428,11 +423,7 @@ def _get_scan_detail_files(slug: str) -> dict | None:
     return _build_scan_detail(slug, data)
 
 
-# ---------------------------------------------------------------------------
-# Public entry points — dispatch to Postgres when configured and reachable,
-# silently fall back to files otherwise. Files remain the source of truth;
-# the DB is a read projection (see scanner/db/README.md).
-# ---------------------------------------------------------------------------
+# Public entry points — Postgres when configured, artifact fallback otherwise.
 
 
 def get_scans_data() -> dict:

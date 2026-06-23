@@ -11,6 +11,7 @@ benchmarks/
   *_test.py             # Jack's original runners (tqa, if, mmlu, tomi, consistency)
   manifest.yaml         # reference catalog (not all implemented)
   results/              # JSON/JSONL output (gitignored)
+  db/                   # Postgres schema + loader (see db/README.md)
   docker/               # browser-launched runs
 ```
 
@@ -30,7 +31,9 @@ docker compose --env-file .env \
   python run_benchmark.py --benchmark ifeval --model "gpt-5-chat"
 ```
 
-Output lands in `benchmarks/results/` as `<UTC>_<benchmark>_<model>.{json,jsonl}` (matches `benchmark_runs` ingest key). On success, intermediate `tqa_*.json` / `mmlu_*.json` copies and `.log` files are removed automatically.
+Output lands in `benchmarks/results/` as `<UTC>_<benchmark>_<model>.{json,jsonl}`. When
+`POSTGRES_DSN` is set, each run auto-syncs and `/benchmarks` reads from Postgres
+(merged with any files not yet loaded). Bulk backfill: `uv run python -m api.ingest bootstrap --apply`.
 Credentials come from the repo-root `.env`. Set `FRONTEND_LAUNCH_MODE=host` to skip Docker.
 
 Legacy outputs under `testing/basic_tests/test_results/` are still read as a fallback.

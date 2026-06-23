@@ -27,6 +27,7 @@ import json
 import os
 import statistics
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -36,6 +37,12 @@ RESULTS_DIR = EVALUATOR / "results"
 
 # Repo convention: one root .env, shell-exported vars take precedence.
 load_dotenv(EVALUATOR.parent / ".env", override=False)
+
+
+@dataclass
+class IngestResult:
+    count: int
+    label: str = "eval run(s)"
 
 
 # ---------------------------------------------------------------------------
@@ -230,6 +237,55 @@ def apply_to_db(dsn: str, parsed: list[tuple[dict, dict, list[dict]]]) -> None:
     print(f"Loaded {len(parsed)} run(s). Re-running is safe (ON CONFLICT DO NOTHING).")
 
 
+def sync_file(path: Path, *, dsn: str) -> None:
+    """Load one results JSONL into Postgres (idempotent)."""
+    repo = Path(__file__).resolve().parent.parent.parent
+    if str(repo) not in sys.path:
+        sys.path.insert(0, str(repo))
+    from dbutils import apply_loader
+
+    parsed = load_file(path)
+    if parsed is None:
+        raise ValueError(f"could not parse {path.name}")
+    apply_loader(
+        dsn,
+        lambda conn: load_into(conn, [parsed]),
+        item_count=1,
+        item_label="eval run(s)",
+        quiet=True,
+    )
+
+
+def run_ingest(
+    *,
+    apply: bool,
+    dsn: str | None,
+    results_dir: Path | None = None,
+) -> IngestResult:
+    """Collect and optionally load eval runs. Used by CLI and api.ingest."""
+    root = results_dir or RESULTS_DIR
+    files = sorted(p for p in root.glob("*.jsonl") if "_trace" not in p.name)
+    parsed = [t for t in (load_file(p) for p in files) if t is not None]
+
+    print(f"{len(parsed)} loadable eval run file(s) in {root}:")
+    for suite, run, results in parsed:
+        print(
+            f"  {run['source_file']}: suite={suite['suite_key']} {suite['version']}  "
+            f"model={run['gateway_model_id']}  judge={run['judge_model']}  "
+            f"score={run['aggregate_score'] and round(run['aggregate_score'], 2)}  "
+            f"questions={len(results)}"
+        )
+
+    if not apply:
+        print("\nDry run (no database touched). Pass --apply with a DSN to load.")
+        return IngestResult(count=len(parsed))
+
+    if not dsn:
+        sys.exit("--apply needs a DSN: pass --dsn or set EFFICACY_DB_DSN / DATABASE_URL")
+    apply_to_db(dsn, parsed)
+    return IngestResult(count=len(parsed))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Load results JSONLs into Postgres.")
     ap.add_argument("--results-dir", type=Path, default=RESULTS_DIR)
@@ -239,24 +295,7 @@ def main() -> int:
                     or os.environ.get("DATABASE_URL"),
                     help="Postgres DSN (or set EFFICACY_DB_DSN / DATABASE_URL)")
     args = ap.parse_args()
-
-    files = sorted(p for p in args.results_dir.glob("*.jsonl")
-                   if "_trace" not in p.name)
-    parsed = [t for t in (load_file(p) for p in files) if t is not None]
-
-    print(f"{len(parsed)} loadable run file(s) in {args.results_dir}:")
-    for suite, run, results in parsed:
-        print(f"  {run['source_file']}: suite={suite['suite_key']} {suite['version']}  "
-              f"model={run['gateway_model_id']}  judge={run['judge_model']}  "
-              f"score={run['aggregate_score'] and round(run['aggregate_score'], 2)}  "
-              f"questions={len(results)}")
-
-    if not args.apply:
-        print("\nDry run (no database touched). Pass --apply with a DSN to load.")
-        return 0
-    if not args.dsn:
-        sys.exit("--apply needs a DSN: pass --dsn or set EFFICACY_DB_DSN / DATABASE_URL")
-    apply_to_db(args.dsn, parsed)
+    run_ingest(apply=args.apply, dsn=args.dsn, results_dir=args.results_dir)
     return 0
 
 

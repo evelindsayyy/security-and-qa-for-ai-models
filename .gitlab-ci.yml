@@ -1,13 +1,12 @@
 # GitLab CI — Duke Code+ shared runners (docker+machine).
 #
-# Lint + unit tests only. Shared runners have no host Docker socket and DinD is
-# not configured (TLS certs missing), so image builds are not run in CI — verify
-# locally before merge (see docs/cli.md).
+# Lint + unit tests run by default. Docker daemon builds are not available on
+# shared runners; the main-branch web image build uses the Buildah runner instead.
 
 stages:
   - lint
   - test
-  #- build
+  - build
   #- deploy
 
 default:
@@ -30,10 +29,34 @@ unit-tests:
   script:
     - uv run python -m unittest discover -s unit_tests -v
 
-# build-images: requires a runner with Docker (host socket or working DinD).
-# Duke shared runners not seeming to provide either. 
-#   docker compose --project-name qa-ai-models -f docker/compose.yml build
-#   docker compose --project-name qa-ai-models -f scanner/docker/compose.yml build
+# Build is like docker but has better security permissions and better licensing
+build-web-image:
+  stage: build
+  needs:
+    - lint
+    - unit-tests
+  tags:
+    # This is a runner designed to be able to build containers
+    - oit-shared-buildah
+  rules:
+    # We do not want the container to build for any branch except main
+    - if: $CI_COMMIT_BRANCH == "main"
+    - when: never
+  # This is our base image that already has buildah installed
+  image: quay.io/buildah/stable:v1.39.3
+  variables:
+    # These variables are set before the script stuff runs
+    FULL_IMAGE_NAME: ${CI_REGISTRY_IMAGE}/web:${CI_COMMIT_SHORT_SHA}
+  script:
+    # these steps all run in order
+    - set -euo pipefail
+    - export STORAGE_DRIVER=vfs
+    - export REGISTRY_AUTH_FILE=${HOME}/auth.json
+    - printf '%s' "${CI_REGISTRY_PASSWORD}" | buildah login -u "${CI_REGISTRY_USER}" --password-stdin "${CI_REGISTRY}"
+    # build the container
+    - buildah bud --isolation=chroot -f docker/Dockerfile -t "${FULL_IMAGE_NAME}" .
+    # push it to the project registry
+    - buildah push "${FULL_IMAGE_NAME}"
 
 # deploy-manual:
 #   stage: deploy

@@ -12,7 +12,7 @@ Project guides & info. **GitLab:** [`.gitlab/README.md`](../.gitlab/README.md).
 | [`cli.md`](cli.md) | All CLI commands (UI, pillar jobs, tests, ingest) |
 | [`docker.md`](docker.md) | Docker model — layers, sibling launches, CI |
 | [`../frontend/README.md`](../frontend/README.md) | Nutrition label UI |
-| [`data-model.md`](data-model.md) | Postgres plan — tables, example fields, JSON → DB path |
+| [`data-model.md`](data-model.md) | Postgres schema — tables, columns, JSON → DB mapping |
 | [`../dbutils/README.md`](../dbutils/README.md) | Shared Postgres ingest helpers |
 | [`tool-stack.md`](tool-stack.md) | Tools and rationale |
 | [`../scripts/README.md`](../scripts/README.md) | Non-gateway inference helpers (DCC/vLLM, Azure Foundry) |
