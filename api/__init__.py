@@ -11,8 +11,10 @@ from __future__ import annotations
 from flask import Flask
 
 from api.evals import bp as evals_bp
+from api.health import bp as health_bp
 
 
 def register_api(app: Flask) -> None:
     """Mount every api/ blueprint on the given Flask app (prefix /api)."""
     app.register_blueprint(evals_bp, url_prefix="/api")
+    app.register_blueprint(health_bp, url_prefix="/api")

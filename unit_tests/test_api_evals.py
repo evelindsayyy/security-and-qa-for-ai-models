@@ -93,5 +93,77 @@ class GetModelTest(unittest.TestCase):
         self.assertEqual(resp.status_code, 404)
 
 
+# --- Pagination on the list endpoint --------------------------------------
+_RUNS5 = [{"slug": f"r{i}", "suite": "it_support", "candidate_model": "m",
+           "overall": 4.0} for i in range(5)]
+
+
+class PaginationTest(unittest.TestCase):
+    def _get(self, query: str):
+        with mock.patch.object(api_evals.eval_run_data, "get_runs_data",
+                               return_value={"runs": list(_RUNS5)}):
+            return _client().get("/api/evals" + query)
+
+    def test_limit_slices_and_reports_meta(self) -> None:
+        body = self._get("?limit=2").get_json()
+        self.assertEqual([r["slug"] for r in body["data"]], ["r0", "r1"])
+        self.assertEqual(body["meta"], {"total": 5, "limit": 2, "offset": 0})
+
+    def test_offset(self) -> None:
+        body = self._get("?limit=2&offset=2").get_json()
+        self.assertEqual([r["slug"] for r in body["data"]], ["r2", "r3"])
+        self.assertEqual(body["meta"]["total"], 5)
+
+    def test_limit_capped_at_max(self) -> None:
+        body = self._get("?limit=100000").get_json()
+        self.assertEqual(body["meta"]["limit"], api_evals.MAX_LIMIT)
+
+    def test_default_meta_has_paging(self) -> None:
+        body = self._get("").get_json()
+        self.assertEqual(body["meta"]["total"], 5)
+        self.assertEqual(body["meta"]["offset"], 0)
+        self.assertEqual(body["meta"]["limit"], api_evals.DEFAULT_LIMIT)
+
+    def test_non_integer_limit_400(self) -> None:
+        self.assertEqual(self._get("?limit=abc").status_code, 400)
+
+    def test_negative_offset_400(self) -> None:
+        self.assertEqual(self._get("?offset=-1").status_code, 400)
+
+    def test_paging_applies_after_filter(self) -> None:
+        # filter to a subset, then page within it
+        body = self._get("?suite=it_support&limit=3").get_json()
+        self.assertEqual(body["meta"]["total"], 5)
+        self.assertEqual(len(body["data"]), 3)
+
+
+# --- Internal errors must stay JSON envelopes (never a raw HTML 500) -------
+class ErrorEnvelopeTest(unittest.TestCase):
+    def test_internal_error_returns_json_500(self) -> None:
+        with mock.patch.object(api_evals.eval_run_data, "get_runs_data",
+                               side_effect=RuntimeError("boom")):
+            resp = _client().get("/api/evals")
+        self.assertEqual(resp.status_code, 500)
+        body = resp.get_json()
+        self.assertIsNotNone(body)            # JSON, not Flask's HTML error page
+        self.assertFalse(body["ok"])
+        self.assertIsNone(body["data"])
+        self.assertTrue(body["error"])
+
+
+# --- Health endpoint -------------------------------------------------------
+class HealthTest(unittest.TestCase):
+    def test_health_reports_db_flag(self) -> None:
+        from api import health as api_health
+        with mock.patch.object(api_health.eval_db_data, "available",
+                               return_value=False):
+            resp = _client().get("/api/health")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.get_json()
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["data"]["status"], "ok")
+        self.assertFalse(body["data"]["db_available"])
+
+
 if __name__ == "__main__":
     unittest.main()
