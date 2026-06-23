@@ -20,7 +20,7 @@ services:
     user: "${UID:-1000}:${GID:-1000}"
 
     volumes:
-      - ../:/app/safety/promptfoo
+      - ${PROMPTFOO_HOST_DIR:-../}:/app/safety/promptfoo
 
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
@@ -29,6 +29,8 @@ services:
       - PROMPTFOO_CONFIG_DIR=/app/safety/promptfoo/output/.promptfoo
       - PROMPTFOO_LOG_DIR=/app/safety/promptfoo/output/logs
       - PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=${PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION:-true}
+      - PROMPTFOO_DISABLE_TELEMETRY=${PROMPTFOO_DISABLE_TELEMETRY:-1}
+      - PROMPTFOO_DISABLE_UPDATE=${PROMPTFOO_DISABLE_UPDATE:-1}
 
     ports:
       - "${PROMPTFOO_REPORT_PORT:-15500}:15500"

@@ -25,12 +25,20 @@ _OUTPUT_DIRS = (
 )
 
 
-def _wipe_outputs(slug: str) -> None:
-    """Delete prior safety outputs for one model slug (merged + per-tool)."""
-    for base in _OUTPUT_DIRS:
-        target = base / slug
+_VALID_PROFILES = frozenset({"base", "education", "healthcare", "finance", "rag", "agentic"})
+
+
+def _wipe_outputs(slug: str, profile: str) -> None:
+    """Delete prior safety outputs for one (slug, profile) run."""
+    # Profile-specific dirs (promptfoo outputs + merged result)
+    for base in (ROOT / "safety" / "output", ROOT / "safety" / "promptfoo" / "output"):
+        target = base / slug / profile
         if target.is_dir():
             shutil.rmtree(target, ignore_errors=True)
+    # Garak is profile-agnostic; wipe so a fresh garak run is always clean
+    garak_dir = ROOT / "safety" / "garak" / "output" / slug
+    if garak_dir.is_dir():
+        shutil.rmtree(garak_dir, ignore_errors=True)
 
 # Fallback when the live gateway catalog is unreachable (offline dev).
 _GATEWAY_FALLBACK: tuple[str, ...] = (
@@ -62,13 +70,13 @@ def _eligible_gateway_models() -> tuple[str, ...]:
 
 
 def _existing_safety_slugs() -> set[str]:
+    """Return the set of model slugs that have at least one completed profile."""
     base = ROOT / "safety" / "output"
     if not base.is_dir():
         return set()
     return {
-        p.name
-        for p in base.iterdir()
-        if p.is_dir() and (p / "merged_safety_result.json").is_file()
+        p.parent.parent.name
+        for p in base.glob("*/*/merged_safety_result.json")
     }
 
 _RUNNING: dict[str, subprocess.Popen] = {}
@@ -79,6 +87,8 @@ _LOCK = threading.Lock()
 def validate_launch(
     model: str,
     *,
+    redteam_profile: str = "base",
+    skip_policy: bool = False,
     skip_redteam: bool = False,
     skip_garak: bool = False,
     skip_promptfoo: bool = False,
@@ -86,6 +96,10 @@ def validate_launch(
 ) -> str | None:
     if model not in _eligible_gateway_models():
         return f"gateway model not eligible for safety: {model!r}"
+    if redteam_profile not in _VALID_PROFILES:
+        return f"unknown profile {redteam_profile!r}; valid: {sorted(_VALID_PROFILES)}"
+    if (skip_policy and skip_redteam) and skip_garak:
+        return "must run at least one suite"
     if skip_promptfoo and skip_garak:
         return "cannot skip both promptfoo and garak"
     if garak_probes and not _PROBE_RE.match(garak_probes):
@@ -98,12 +112,17 @@ def validate_launch(
 def build_command(
     model: str,
     *,
+    redteam_profile: str = "base",
+    skip_policy: bool = False,
     skip_redteam: bool = False,
     skip_garak: bool = False,
     skip_promptfoo: bool = False,
     garak_probes: str | None = None,
 ) -> list[str]:
     inner: list[str] = ["bash", str(RUN_SCRIPT.relative_to(ROOT))]
+    inner.extend(["--redteam-profile", redteam_profile])
+    if skip_policy:
+        inner.append("--skip-policy")
     if skip_redteam:
         inner.append("--skip-redteam")
     if skip_garak:
@@ -130,28 +149,33 @@ def build_command(
 def start_run(
     model: str,
     *,
+    redteam_profile: str = "base",
+    skip_policy: bool = False,
     skip_redteam: bool = False,
     skip_garak: bool = False,
     skip_promptfoo: bool = False,
     garak_probes: str | None = None,
 ) -> tuple[str, bool]:
     slug = normalize_gateway_model_id(model)
-    combo = (model, skip_redteam, skip_garak, skip_promptfoo, garak_probes or "")
+    run_key = f"{slug}/{redteam_profile}"
+    combo = (model, redteam_profile, skip_policy, skip_redteam, skip_garak, skip_promptfoo, garak_probes or "")
     with _LOCK:
         existing = _INFLIGHT.get(combo)
         if existing and _RUNNING.get(existing) is not None and _RUNNING[existing].poll() is None:
             return existing, True
 
-        # Fresh run — clear stale outputs so the merge/UI start from a clean slate.
-        _wipe_outputs(slug)
+        # Fresh run — clear stale outputs for this (slug, profile) pair.
+        _wipe_outputs(slug, redteam_profile)
 
         if docker_launch.use_docker():
             docker_launch.ensure_stack("safety")
 
-        log_path = ROOT / "safety" / "output" / slug / "run.log"
+        log_path = ROOT / "safety" / "output" / slug / redteam_profile / "run.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         cmd = build_command(
             model,
+            redteam_profile=redteam_profile,
+            skip_policy=skip_policy,
             skip_redteam=skip_redteam,
             skip_garak=skip_garak,
             skip_promptfoo=skip_promptfoo,
@@ -166,19 +190,20 @@ def start_run(
                 stderr=subprocess.STDOUT,
                 env=os.environ.copy(),
             )
-        _RUNNING[slug] = proc
-        _INFLIGHT[combo] = slug
-        return slug, False
+        _RUNNING[run_key] = proc
+        _INFLIGHT[combo] = run_key
+        return run_key, False
 
 
-def get_status(slug: str) -> dict:
-    if not is_safe_slug(slug):
+def get_status(slug: str, profile: str = "base") -> dict:
+    if not is_safe_slug(slug) or not is_safe_slug(profile):
         return {"status": "not_found", "message": ""}
 
-    merged = ROOT / "safety" / "output" / slug / "merged_safety_result.json"
-    log_path = ROOT / "safety" / "output" / slug / "run.log"
+    run_key = f"{slug}/{profile}"
+    merged = ROOT / "safety" / "output" / slug / profile / "merged_safety_result.json"
+    log_path = ROOT / "safety" / "output" / slug / profile / "run.log"
 
-    proc = _RUNNING.get(slug)
+    proc = _RUNNING.get(run_key)
     if proc is not None and proc.poll() is None:
         msg = log_path.read_text(encoding="utf-8", errors="replace")[-600:] if log_path.is_file() else ""
         return {"status": "running", "message": msg}
@@ -226,4 +251,12 @@ def get_launch_options() -> dict:
         "model_has_results": model_has_results,
         "launch_mode": "docker" if docker_launch.use_docker() else "host",
         "docker_available": docker_launch.docker_available(),
+        "profiles": [
+            {"value": "base", "label": "Base (general-purpose baseline)"},
+            {"value": "education", "label": "Education (+ teen safety, FERPA probes)"},
+            {"value": "healthcare", "label": "Healthcare (+ medical, pharmacy, PHI probes)"},
+            {"value": "finance", "label": "Finance (+ insurance, billing, fraud probes)"},
+            {"value": "rag", "label": "RAG (+ document exfiltration, poisoning probes)"},
+            {"value": "agentic", "label": "Agentic (+ MCP, tool-discovery probes)"},
+        ],
     }

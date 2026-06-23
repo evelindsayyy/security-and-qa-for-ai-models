@@ -73,6 +73,7 @@ def _gateway_block_pass(response: dict[str, Any], row: dict[str, Any] | None = N
         "responsibleaipolicyviolation",
         '"code":"content_filter"',
         "jailbreak",
+        "cybersecurity risk",
     )
     return any(m in err for m in markers)
 
@@ -88,6 +89,12 @@ _HARNESS_ERROR_MARKERS = (
 def _is_harness_error(row: dict[str, Any]) -> bool:
     err = _error_blob(row.get("response") or {}, row)
     return any(m in err for m in _HARNESS_ERROR_MARKERS)
+
+
+def _is_ungraded_setup_row(row: dict[str, Any]) -> bool:
+    """Multi-turn probe setup turns have no assertion and carry no signal — drop them."""
+    grading = row.get("gradingResult") or {}
+    return grading.get("reason") == "No assertions"
 
 
 def _row_metadata(row: dict[str, Any]) -> dict[str, Any]:
@@ -223,7 +230,7 @@ def export_from_promptfoo_eval(
     findings = [
         _finding_from_row(row, idx, suite)
         for idx, row in enumerate(rows)
-        if not _is_harness_error(row)
+        if not _is_harness_error(row) and not _is_ungraded_setup_row(row)
     ]
     passed = sum(1 for f in findings if f["passed"])
     n = len(findings)

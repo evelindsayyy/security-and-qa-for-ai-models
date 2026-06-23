@@ -5,6 +5,7 @@
 #   ./safety/run_safety.sh
 #   ./safety/run_safety.sh "gpt-5-chat"
 #   ./safety/run_safety.sh --skip-redteam
+#   ./safety/run_safety.sh --redteam-profile healthcare
 #   ./safety/run_safety.sh --garak-probes "encoding,promptinject,dan.Dan_11_0"
 #   ./safety/run_safety.sh --skip-garak
 #   ./safety/run_safety.sh --skip-promptfoo
@@ -20,15 +21,23 @@ End-to-end safety for one gateway model: Promptfoo policy, red-team, Garak, merg
 MODEL defaults to the GATEWAY_MODEL environment variable (or "GPT 4.1 Mini").
 
 Options:
-  --skip-redteam         Skip Promptfoo red-team eval + export
-  --skip-promptfoo       Skip Promptfoo (Garak + merge only)
-  --skip-garak           Skip Garak (Promptfoo + merge only)
-  --garak-probes LIST    Comma-separated Garak modules (overrides garak_duke.yaml)
-  --help                 Show this help
+  --redteam-profile PROF  Red-team plugin profile: base (default), education,
+                          healthcare, finance, rag, agentic
+  --skip-redteam          Skip Promptfoo red-team eval + export
+  --skip-promptfoo        Skip Promptfoo (Garak + merge only)
+  --skip-garak            Skip Garak (Promptfoo + merge only)
+  --garak-probes LIST     Comma-separated Garak modules (overrides garak_duke.yaml)
+  --help                  Show this help
+
+Output layout (Option A — one directory per model+profile):
+  safety/promptfoo/output/<slug>/<profile>/redteam_eval.json
+  safety/garak/output/<slug>/                   (profile-agnostic)
+  safety/output/<slug>/<profile>/merged_safety_result.json
 
 Examples:
   ./safety/run_safety.sh
   ./safety/run_safety.sh "gpt-5-chat"
+  ./safety/run_safety.sh "gpt-5-chat" --redteam-profile healthcare
   ./safety/run_safety.sh --skip-redteam
   ./safety/run_safety.sh --garak-probes "encoding,promptinject"
 
@@ -51,10 +60,14 @@ run_py() {
 DEFAULT_MODEL="${GATEWAY_MODEL:-GPT 4.1 Mini}"
 
 MODEL="$DEFAULT_MODEL"
+SKIP_POLICY=false
 REDTEAM=true
 SKIP_PROMPTFOO=false
 SKIP_GARAK=false
 GARAK_PROBES=""
+REDTEAM_PROFILE="base"
+
+_VALID_PROFILES="base education healthcare finance rag agentic"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -68,6 +81,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --redteam)
       REDTEAM=true
+      shift
+      ;;
+    --skip-policy)
+      SKIP_POLICY=true
       shift
       ;;
     --skip-promptfoo)
@@ -86,6 +103,18 @@ while [[ $# -gt 0 ]]; do
       GARAK_PROBES="$2"
       shift 2
       ;;
+    --redteam-profile)
+      if [[ -z "${2:-}" ]]; then
+        echo "ERROR: --redteam-profile requires a profile name" >&2
+        exit 1
+      fi
+      REDTEAM_PROFILE="$2"
+      if ! echo "$_VALID_PROFILES" | grep -qw "$REDTEAM_PROFILE"; then
+        echo "ERROR: unknown profile '${REDTEAM_PROFILE}'; valid: ${_VALID_PROFILES}" >&2
+        exit 1
+      fi
+      shift 2
+      ;;
     -*)
       echo "ERROR: unknown option: $1" >&2
       usage >&2
@@ -102,6 +131,10 @@ if $SKIP_PROMPTFOO && $SKIP_GARAK; then
   echo "ERROR: cannot use --skip-promptfoo and --skip-garak together" >&2
   exit 1
 fi
+# --skip-policy + --skip-redteam is equivalent to --skip-promptfoo
+if $SKIP_POLICY && ! $REDTEAM; then
+  SKIP_PROMPTFOO=true
+fi
 
 export GATEWAY_MODEL="$MODEL"
 export REDTEAM_GRADER_MODEL="${REDTEAM_GRADER_MODEL:-GPT 4.1 Mini}"
@@ -111,11 +144,22 @@ import os
 print(normalize_gateway_model_id(os.environ['GATEWAY_MODEL']))
 ")"
 
-mkdir -p "safety/promptfoo/output/${SLUG}" "safety/garak/output/${SLUG}" "safety/output/${SLUG}"
+mkdir -p "safety/promptfoo/output/${SLUG}/${REDTEAM_PROFILE}" \
+         "safety/garak/output/${SLUG}" \
+         "safety/output/${SLUG}/${REDTEAM_PROFILE}"
 
 # Sub-stacks read the single repo-root .env (mounted at /app/.env in the orchestrator).
 # The safety container uses `docker-compose` when available so nested runs work even
 # when the image does not expose the Docker v2 plugin.
+#
+# When called from inside the safety Docker container the repo is mounted at /app,
+# but the Docker daemon resolves volume paths from the HOST. HOST_REPO (passed in
+# by the frontend launcher) is the real host path, so we set PROMPTFOO_HOST_DIR so
+# the promptfoo compose uses an absolute host path for its volume mount.
+if [[ -n "${HOST_REPO:-}" ]]; then
+  export PROMPTFOO_HOST_DIR="${HOST_REPO}/safety/promptfoo"
+fi
+
 if command -v docker-compose >/dev/null 2>&1; then
   PF_DC="docker-compose --env-file .env -f safety/promptfoo/docker/compose.yml"
   GARAK_DC="docker-compose --env-file .env -f safety/garak/docker/compose.yml"
@@ -124,42 +168,50 @@ else
   GARAK_DC="docker compose --env-file .env -f safety/garak/docker/compose.yml"
 fi
 
-echo "Safety run: model=${MODEL} slug=${SLUG} redteam=${REDTEAM}"
+echo "Safety run: model=${MODEL} slug=${SLUG} profile=${REDTEAM_PROFILE} redteam=${REDTEAM}"
 
 MERGE_ARGS=()
 
 if ! $SKIP_PROMPTFOO; then
-  echo "--- Promptfoo policy ---"
-  set +e
-  $PF_DC run --rm -e GATEWAY_MODEL="$MODEL" -e REDTEAM_GRADER_MODEL="$REDTEAM_GRADER_MODEL" promptfoo \
-    promptfoo eval -c promptfooconfig.yaml -o "output/${SLUG}/eval.json"
-  PF_RC=$?
-  set -e
-  if [[ $PF_RC -ne 0 && ! -f "safety/promptfoo/output/${SLUG}/eval.json" ]]; then
-    echo "ERROR: policy eval failed (exit ${PF_RC}); no eval.json written" >&2
-    exit $PF_RC
-  fi
-
-  run_py safety/promptfoo/export_safety_result.py \
-    "safety/promptfoo/output/${SLUG}/eval.json"
-  MERGE_ARGS+=(--promptfoo "safety/promptfoo/output/${SLUG}/safety_result.json")
-
-  if $REDTEAM; then
-    echo "--- Promptfoo red-team ---"
+  if ! $SKIP_POLICY; then
+    echo "--- Promptfoo policy ---"
     set +e
     $PF_DC run --rm -e GATEWAY_MODEL="$MODEL" -e REDTEAM_GRADER_MODEL="$REDTEAM_GRADER_MODEL" promptfoo \
-      promptfoo redteam run -c promptfooconfig.redteam.yaml \
-      -o "output/${SLUG}/redteam_eval.json" --delay 500 --max-concurrency 1 --force
+      promptfoo eval -c promptfooconfig.yaml -o "output/${SLUG}/${REDTEAM_PROFILE}/eval.json"
+    PF_RC=$?
+    set -e
+    if [[ $PF_RC -ne 0 && ! -f "safety/promptfoo/output/${SLUG}/${REDTEAM_PROFILE}/eval.json" ]]; then
+      echo "ERROR: policy eval failed (exit ${PF_RC}); no eval.json written" >&2
+      exit $PF_RC
+    fi
+
+    run_py safety/promptfoo/export_safety_result.py \
+      "safety/promptfoo/output/${SLUG}/${REDTEAM_PROFILE}/eval.json"
+    MERGE_ARGS+=(--promptfoo "safety/promptfoo/output/${SLUG}/${REDTEAM_PROFILE}/safety_result.json")
+  else
+    echo "--- Promptfoo policy skipped (--skip-policy) ---"
+  fi
+
+  if $REDTEAM; then
+    echo "--- Promptfoo red-team (profile=${REDTEAM_PROFILE}) ---"
+    set +e
+    $PF_DC run --rm \
+      -e GATEWAY_MODEL="$MODEL" \
+      -e REDTEAM_GRADER_MODEL="$REDTEAM_GRADER_MODEL" \
+      promptfoo \
+      python3 run_promptfoo.py "$MODEL" \
+        --profile "$REDTEAM_PROFILE" \
+        --output-dir "output/${SLUG}/${REDTEAM_PROFILE}"
     RT_RC=$?
     set -e
-    if [[ $RT_RC -ne 0 && ! -f "safety/promptfoo/output/${SLUG}/redteam_eval.json" ]]; then
+    if [[ $RT_RC -ne 0 && ! -f "safety/promptfoo/output/${SLUG}/${REDTEAM_PROFILE}/redteam_eval.json" ]]; then
       echo "ERROR: red-team failed (exit ${RT_RC})" >&2
       exit $RT_RC
     fi
 
     run_py safety/promptfoo/export_safety_result.py \
-      "safety/promptfoo/output/${SLUG}/redteam_eval.json"
-    MERGE_ARGS+=(--promptfoo "safety/promptfoo/output/${SLUG}/redteam_safety_result.json")
+      "safety/promptfoo/output/${SLUG}/${REDTEAM_PROFILE}/redteam_eval.json"
+    MERGE_ARGS+=(--promptfoo "safety/promptfoo/output/${SLUG}/${REDTEAM_PROFILE}/redteam_safety_result.json")
   else
     echo "--- Promptfoo red-team skipped (--skip-redteam) ---"
   fi
@@ -178,30 +230,7 @@ if ! $SKIP_GARAK; then
   export XDG_CONFIG_HOME="${GARAK_XDG_BASE}/.garak-config"
   mkdir -p "${HOME}" "${XDG_DATA_HOME}/garak" "${XDG_CACHE_HOME}" "${XDG_CONFIG_HOME}"
 
-  GARAK_REPORT_DIR="/app/safety/garak/output/${SLUG}"
-  GARAK_RUN_CFG="${GARAK_REPORT_DIR}/garak_run.yaml"
-  GATEWAY_MODEL="$MODEL" GARAK_REPORT_DIR="$GARAK_REPORT_DIR" python - <<'PY'
-import json
-import os
-from pathlib import Path
-
-src = Path("safety/garak/garak_duke.yaml")
-dst = Path(os.environ["GARAK_REPORT_DIR"]) / "garak_run.yaml"
-model = os.environ["GATEWAY_MODEL"]
-report_dir = os.environ["GARAK_REPORT_DIR"]
-
-lines = []
-for line in src.read_text(encoding="utf-8").splitlines():
-    stripped = line.lstrip()
-    indent = line[: len(line) - len(stripped)]
-    if stripped.startswith("target_name:"):
-        line = f"{indent}target_name: {json.dumps(model)}"
-    elif stripped.startswith("report_dir:"):
-        line = f"{indent}report_dir: {report_dir}"
-    lines.append(line)
-dst.write_text("\n".join(lines) + "\n", encoding="utf-8")
-PY
-  GARAK_CMD=(python -m garak --config "${GARAK_RUN_CFG}" -n "${MODEL}")
+  GARAK_CMD=(python safety/garak/run_garak.py "${MODEL}" --report-dir "/app/safety/garak/output/${SLUG}")
   if [[ -n "$GARAK_PROBES" ]]; then
     GARAK_CMD+=(-p "$GARAK_PROBES")
   fi
@@ -231,6 +260,9 @@ PY
     -o "safety/garak/output/${SLUG}/safety_result.json" \
     --gateway-model-id "$MODEL"
   MERGE_ARGS+=(--garak "safety/garak/output/${SLUG}/safety_result.json")
+  # Copy garak result into the profile dir so it's accessible alongside promptfoo outputs.
+  cp "safety/garak/output/${SLUG}/safety_result.json" \
+     "safety/output/${SLUG}/${REDTEAM_PROFILE}/garak_safety_result.json" 2>/dev/null || true
 else
   echo "--- Garak skipped (--skip-garak) ---"
 fi
@@ -243,7 +275,8 @@ fi
 echo "--- Merge ---"
 run_py -m safety.merge \
   "${MERGE_ARGS[@]}" \
-  -o "safety/output/${SLUG}/merged_safety_result.json"
+  --profile "$REDTEAM_PROFILE" \
+  -o "safety/output/${SLUG}/${REDTEAM_PROFILE}/merged_safety_result.json"
 
-echo "Complete: safety/output/${SLUG}/merged_safety_result.json"
-echo "Frontend: /safety/${SLUG}"
+echo "Complete: safety/output/${SLUG}/${REDTEAM_PROFILE}/merged_safety_result.json"
+echo "Frontend: /safety/${SLUG}/${REDTEAM_PROFILE}"

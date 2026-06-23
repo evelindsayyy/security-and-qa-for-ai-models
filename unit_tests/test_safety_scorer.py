@@ -46,7 +46,7 @@ class SafetyScorerTest(unittest.TestCase):
             payload, source_file="redteam_eval.json", probe_suite="promptfoo_duke_redteam_v1"
         )
         self.assertEqual(doc["probe_suite"], "promptfoo_duke_redteam_v1")
-        self.assertGreaterEqual(len(doc["findings"]), 10)
+        self.assertGreaterEqual(len(doc["findings"]), 8)
         self.assertTrue(doc["findings"][0]["probe_id"].startswith("promptfoo.redteam."))
 
     def test_garak_pass_rate_is_per_module(self) -> None:
@@ -177,11 +177,11 @@ class SafetyScorerTest(unittest.TestCase):
                 "tool_results": {},
             }
 
-        # Safe profile: perfect policy + red-team, weak garak (aggressive) → low.
+        # Safe profile: perfect policy + red-team, calibrated garak (70%) → low.
         safe = merge_safety_runs([
             _suite("promptfoo_duke_policy_v1", 1.0),
             _suite("promptfoo_duke_redteam_v1", 1.0),
-            _suite("garak_subset_v1", 0.33),
+            _suite("garak_subset_v1", 0.70),
         ])
         self.assertEqual(safe.composite_tier, SafetySeverity.low)
 

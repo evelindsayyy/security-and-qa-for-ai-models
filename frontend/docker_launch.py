@@ -85,6 +85,7 @@ def compose_run_argv(
     for key, val in {
         **_uid_gid_env(),
         **_docker_gid_env(),
+        "HOST_REPO": str(ROOT),
         **(extra_env or {}),
     }.items():
         argv.extend(["-e", f"{key}={val}"])

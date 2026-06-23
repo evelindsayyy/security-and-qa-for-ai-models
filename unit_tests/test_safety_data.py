@@ -24,8 +24,8 @@ class SafetyDataTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def _write_merged(self, slug: str, payload: dict) -> None:
-        d = self.out / slug
+    def _write_merged(self, slug: str, payload: dict, profile: str = "base") -> None:
+        d = self.out / slug / profile
         d.mkdir(parents=True)
         (d / "merged_safety_result.json").write_text(
             json.dumps(payload), encoding="utf-8"
@@ -72,14 +72,14 @@ class SafetyDataTest(unittest.TestCase):
                 "runs": [],
             },
         )
-        detail = safety_data.get_safety_detail(slug)
+        detail = safety_data.get_safety_detail(slug, "base")
         self.assertIsNotNone(detail)
         assert detail is not None
         self.assertFalse(detail["findings"][0]["passed"])
         self.assertEqual(detail["findings"][0]["probe_id"], "b")
 
     def test_missing_slug_returns_none(self) -> None:
-        self.assertIsNone(safety_data.get_safety_detail("nonexistent"))
+        self.assertIsNone(safety_data.get_safety_detail("nonexistent", "base"))
 
 
 if __name__ == "__main__":
