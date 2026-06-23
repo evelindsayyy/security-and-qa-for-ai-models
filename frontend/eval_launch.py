@@ -65,8 +65,8 @@ def candidate_models() -> tuple[str, ...]:
 # OpenAI judges re-enabled 2026-06-22: the gateway metadata/store bug that 400'd
 # all OpenAI models was fixed; GPT 4.1 Mini + gpt-5-chat verified to return
 # valid judge JSON (the bar gpt-oss-120b fails ~75% of the time), and both are
-# non-reasoning chat models (no hidden-thinking-token risk). TODO: formalize in
-# docs/judge-selection.md.
+# non-reasoning chat models (no hidden-thinking-token risk). Mentor approved
+# 2026-06-22 for gateway-hosted OpenAI only; recorded in docs/judge-selection.md.
 JUDGE_MODELS: tuple[str, ...] = (
     "Llama 4 Maverick", "GPT 4.1 Mini", "gpt-5-chat", "gpt-oss-120b",
 )
