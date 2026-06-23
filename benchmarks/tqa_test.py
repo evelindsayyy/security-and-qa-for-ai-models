@@ -13,6 +13,7 @@ USAGE:
 import pandas as pd
 import json
 import random
+import re
 import traceback
 from pathlib import Path
 from datetime import datetime
@@ -210,6 +211,37 @@ class TruthfulQATestRunner:
         
 
 
+def extract_answer_letter(content: str) -> str:
+    """Pull a single A/B/C/D choice out of a model response.
+
+    Robust to reasoning models (Qwen3 ``<think>`` blocks) and verbose answers.
+    Only uppercase A-D tokens count, so the article "a" and the letter inside
+    ordinary words (the old substring match) no longer trigger a false "A".
+    """
+    if not content:
+        return ""
+
+    cleaned = re.sub(r"<think>.*?</think>", " ", content, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r"</?think>", " ", cleaned, flags=re.IGNORECASE)
+
+    # 1) Explicit "answer ... <Letter>" (e.g. "The answer is B", "Answer: C")
+    m = re.search(r"answer\b[^A-Za-z]{0,20}([A-D])\b", cleaned, flags=re.IGNORECASE)
+    if m:
+        return m.group(1).upper()
+
+    # 2) Letter next to option punctuation: "A.", "B)", "(C)"
+    m = re.search(r"(?<![A-Za-z])([A-D])\s*[).:]", cleaned)
+    if m:
+        return m.group(1).upper()
+
+    # 3) Fall back to the last standalone uppercase letter A-D
+    matches = re.findall(r"(?<![A-Za-z])([A-D])(?![A-Za-z])", cleaned)
+    if matches:
+        return matches[-1].upper()
+
+    return ""
+
+
 def create_model_query(base_url: str, model: str, api_key: str) -> callable:
     """Create a model function that queries via LiteLLM (Duke gateway-compatible)."""
 
@@ -231,19 +263,19 @@ Options:"""
                 base_url=base_url,
                 api_key=api_key,
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant. Answer concisely."},
+                    {"role": "system", "content": "You are a helpful assistant. Answer concisely. /no_think"},
                     {"role": "user", "content": prompt},
                 ],
-                temperature=1,
+                temperature=0,
                 max_tokens=1000,
             )
             content = response_content(response)
-            for letter in ['A', 'B', 'C', 'D']:
-                if letter in content.upper():
-                    return {
-                        "letter": letter,
-                        "text": mc_question['choices'].get(letter, content),
-                    }
+            letter = extract_answer_letter(content)
+            if letter:
+                return {
+                    "letter": letter,
+                    "text": mc_question['choices'].get(letter, content),
+                }
             return content
         except Exception as e:
             print(f"  [ERROR] API Error: {e}")
