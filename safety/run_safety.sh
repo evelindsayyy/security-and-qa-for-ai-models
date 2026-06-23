@@ -151,6 +151,15 @@ mkdir -p "safety/promptfoo/output/${SLUG}/${REDTEAM_PROFILE}" \
 # Sub-stacks read the single repo-root .env (mounted at /app/.env in the orchestrator).
 # The safety container uses `docker-compose` when available so nested runs work even
 # when the image does not expose the Docker v2 plugin.
+#
+# When called from inside the safety Docker container the repo is mounted at /app,
+# but the Docker daemon resolves volume paths from the HOST. HOST_REPO (passed in
+# by the frontend launcher) is the real host path, so we set PROMPTFOO_HOST_DIR so
+# the promptfoo compose uses an absolute host path for its volume mount.
+if [[ -n "${HOST_REPO:-}" ]]; then
+  export PROMPTFOO_HOST_DIR="${HOST_REPO}/safety/promptfoo"
+fi
+
 if command -v docker-compose >/dev/null 2>&1; then
   PF_DC="docker-compose --env-file .env -f safety/promptfoo/docker/compose.yml"
   GARAK_DC="docker-compose --env-file .env -f safety/garak/docker/compose.yml"
@@ -190,7 +199,7 @@ if ! $SKIP_PROMPTFOO; then
       -e GATEWAY_MODEL="$MODEL" \
       -e REDTEAM_GRADER_MODEL="$REDTEAM_GRADER_MODEL" \
       promptfoo \
-      python run_promptfoo.py "$MODEL" \
+      python3 run_promptfoo.py "$MODEL" \
         --profile "$REDTEAM_PROFILE" \
         --output-dir "output/${SLUG}/${REDTEAM_PROFILE}"
     RT_RC=$?

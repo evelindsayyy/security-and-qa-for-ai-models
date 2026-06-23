@@ -23,26 +23,51 @@ from safety.schemas import SafetyRunResult
 
 # garak module name → safety_findings.category (extend when probe_spec grows)
 PROBE_CATEGORY: dict[str, str] = {
+    # policy violations
     "misleading": "policy",
     "packagehallucination": "policy",
     "snowball": "policy",
     "goodside": "policy",
+    "continuation": "policy",
+    "malwaregen": "policy",
+    "realtoxicityprompts": "policy",
+    "lmrc": "policy",
+    "donotanswer": "policy",
+    "av_spam_scanning": "policy",
+    "topic": "policy",
+    # jailbreak / prompt manipulation
     "encoding": "jailbreak",
     "promptinject": "jailbreak",
     "dan": "jailbreak",
+    "latentinjection": "jailbreak",
+    "ansiescape": "jailbreak",
+    "badchars": "jailbreak",
+    "phrasing": "jailbreak",
+    "grandma": "jailbreak",
+    "atkgen": "jailbreak",
+    "sata": "jailbreak",
+    "tap": "jailbreak",
+    "smuggling": "jailbreak",
+    "exploitation": "jailbreak",
+    "doctor": "jailbreak",
+    "glitch": "jailbreak",
+    "suffix": "jailbreak",
+    "dra": "jailbreak",
+    # leakage / exfiltration
     "leakreplay": "leakage",
     "web_injection": "leakage",
     "sysprompt_extraction": "leakage",
     "apikey": "leakage",
     "propile": "leakage",
-    "latentinjection": "jailbreak",
     "divergence": "leakage",
 }
 
 # Duke-calibrated severity when a module fails (passed rows stay low/medium upstream).
-# high = credential leak, jailbreak, exfil, insecure packages.
-# medium = edge-case tricks or weak Duke signal (literary replay, false assertions).
+# high = credential leak, jailbreak, exfil, insecure packages, direct harm.
+# medium = edge-case tricks or weak Duke signal.
+# low  = informational / off-topic nudges.
 PROBE_SEVERITY: dict[str, str] = {
+    # high
     "dan": "high",
     "encoding": "high",
     "promptinject": "high",
@@ -50,13 +75,35 @@ PROBE_SEVERITY: dict[str, str] = {
     "web_injection": "high",
     "apikey": "high",
     "packagehallucination": "high",
+    "propile": "high",
+    "latentinjection": "high",
+    "atkgen": "high",
+    "sata": "high",
+    "tap": "high",
+    "smuggling": "high",
+    "exploitation": "high",
+    "suffix": "high",
+    "malwaregen": "high",
+    "donotanswer": "high",
+    "dra": "high",
+    # medium
     "goodside": "medium",
     "snowball": "medium",
     "misleading": "medium",
     "leakreplay": "medium",
-    "propile": "high",
-    "latentinjection": "high",
     "divergence": "medium",
+    "lmrc": "medium",
+    "av_spam_scanning": "medium",
+    "glitch": "medium",
+    "ansiescape": "medium",
+    "badchars": "medium",
+    "continuation": "medium",
+    "grandma": "medium",
+    "phrasing": "medium",
+    "realtoxicityprompts": "medium",
+    "doctor": "medium",
+    # low
+    "topic": "low",
 }
 
 

@@ -58,6 +58,9 @@ finance:
 
 rag:
   description: "RAG-augmented deployment — adds document exfiltration, poisoning, and citation probes"
+  # REQUIRES a retrieval-augmented target (not a plain chat endpoint).
+  # Probes assume the pipeline is: prompt → document retrieval → LLM → response.
+  # Results are meaningless against a plain chat model — hold until a RAG target is configured.
   additional_plugins:
     - id: rag-poisoning
       numTests: 2
@@ -68,6 +71,9 @@ rag:
 
 agentic:
   description: "Agentic / tool-using deployment — adds MCP and tool-discovery probes"
+  # REQUIRES a tool-using or MCP-enabled target (not a plain chat endpoint).
+  # Probes test tool misuse and schema leakage — they have no effect against a model with no tools.
+  # Hold until an agentic or MCP-server target is configured.
   additional_plugins:
     - id: mcp
       numTests: 2

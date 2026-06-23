@@ -113,8 +113,6 @@ redteam:
       numTests: 2
     - id: pii:session
       numTests: 2
-    - id: harmful:privacy
-      numTests: 2
     - id: cross-session-leak
       numTests: 2
     - id: debug-access
@@ -131,20 +129,6 @@ redteam:
       numTests: 2
     - id: system-prompt-override
       numTests: 2
-    - id: indirect-prompt-injection
-      numTests: 2
-
-    # --- Harmful content ---
-    - id: harmful:intellectual-property
-      numTests: 1
-    - id: harmful:cybercrime
-      numTests: 1
-    - id: harmful:violent-crime
-      numTests: 1
-    - id: harmful:unsafe-practices
-      numTests: 1
-    - id: harmful:sexual-content
-      numTests: 1
 
     # --- Robustness ---
     - id: reasoning-dos

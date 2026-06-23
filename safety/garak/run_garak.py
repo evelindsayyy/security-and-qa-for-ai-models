@@ -31,6 +31,36 @@ CONFIG_FILE = Path(__file__).parent / "garak_duke.yaml"
 # Matches GPT-5 series and o3/o4-family model names (case-insensitive).
 _OPENAI5 = re.compile(r"(?i)^(gpt-5|o[34][-\s]|o[34]$)")
 
+# HuggingFace models used by garak detectors. Downloaded once, cached to disk.
+# Eager prefetch prevents mid-run crashes when a probe first triggers a lazy load.
+_HF_DETECTOR_MODELS = [
+    "garak-llm/roberta_toxicity_classifier",        # latentinjection + unsafe_content detectors
+    "garak-llm/refutation_detector_distilbert",     # misleading detector
+    "garak-llm/attackgeneration-toxicity_gpt2",     # atkgen attack generator
+]
+
+
+def _prefetch_hf_models() -> None:
+    """Download required detector models before the run starts."""
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError:
+        print("[run_garak] huggingface_hub not available — skipping prefetch", flush=True)
+        return
+
+    for repo_id in _HF_DETECTOR_MODELS:
+        print(f"[run_garak] prefetch {repo_id} ...", end=" ", flush=True)
+        try:
+            snapshot_download(repo_id, local_files_only=False)
+            print("ok", flush=True)
+        except Exception as exc:
+            print(f"FAILED ({exc})", flush=True)
+            print(
+                f"[run_garak] WARNING: could not download {repo_id}. "
+                "Probes that rely on this detector will fail.",
+                flush=True,
+            )
+
 
 def _pick_profile(model_name: str) -> str:
     return "openai5" if _OPENAI5.match(model_name.strip()) else "standard"
@@ -45,6 +75,8 @@ def main() -> int:
     args, extra_args = parser.parse_known_args()
 
     model_name = args.model_name
+
+    _prefetch_hf_models()
 
     with CONFIG_FILE.open() as f:
         cfg = yaml.safe_load(f)

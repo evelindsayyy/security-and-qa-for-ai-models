@@ -23,6 +23,7 @@ services:
     environment:
       - GATEWAY_MODEL=${GATEWAY_MODEL:-GPT 4.1 Mini}
       - REDTEAM_GRADER_MODEL=${REDTEAM_GRADER_MODEL:-GPT 4.1 Mini}
+      - HOST_REPO=${HOST_REPO:-}
       - OPENAICOMPATIBLE_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - PYTHONPATH=/app
