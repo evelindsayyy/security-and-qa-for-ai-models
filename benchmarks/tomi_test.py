@@ -29,7 +29,7 @@ from typing import Dict, List
 import litellm
 import dotenv
 
-from model_client import query_chat_completion, response_content
+from model_client import query_chat_completion, response_content, strip_reasoning
 
 dotenv.load_dotenv()
 
@@ -145,10 +145,15 @@ Answer with ONLY the location (one word). Do not explain."""
             base_url=BASE_URL,
             api_key=API_KEY,
             messages=[{"role": "user", "content": prompt}],
-            temperature=1,
+            temperature=0,
             max_tokens=1000,
         )
-        return response_content(response).lower()
+        content = strip_reasoning(response_content(response))
+        # The model is asked for a single-word location; if a reasoning/verbose
+        # model returns extra prose, keep the last non-empty line so the
+        # downstream exact-match isn't defeated by leading explanation.
+        lines = [ln.strip() for ln in content.splitlines() if ln.strip()]
+        return (lines[-1] if lines else content).lower()
     except Exception as e:
         print(f"  [ERROR] API error: {e}")
         return ""

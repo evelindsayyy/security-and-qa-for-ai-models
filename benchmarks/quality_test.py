@@ -1,6 +1,5 @@
 import json
 import os
-import re
 import traceback
 from pathlib import Path
 from datetime import datetime, timezone
@@ -10,7 +9,7 @@ from datasets import load_dataset
 import litellm
 import dotenv
 
-from model_client import query_chat_completion, response_content
+from model_client import query_chat_completion, response_content, extract_choice_letter
 
 dotenv.load_dotenv()
 litellm.suppress_debug_info = True
@@ -32,20 +31,8 @@ LETTERS = ["A", "B", "C", "D"]
 
 
 def parse_answer(text: str) -> str:
-    """Extract a standalone A/B/C/D answer."""
-    if not text:
-        return ""
-
-    text = text.strip().upper()
-
-    match = re.search(r"\b([ABCD])\b", text)
-    if match:
-        return match.group(1)
-
-    if text[0] in LETTERS:
-        return text[0]
-
-    return ""
+    """Extract a standalone A/B/C/D answer (shared, model-agnostic extractor)."""
+    return extract_choice_letter(text, "".join(LETTERS))
 
 
 def query_model(article: str, question: str, options: List[str]) -> str:
@@ -69,7 +56,7 @@ def query_model(article: str, question: str, options: List[str]) -> str:
             api_key=API_KEY,
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
-            max_tokens=64,
+            max_tokens=1000,
         )
 
         content = response_content(response)

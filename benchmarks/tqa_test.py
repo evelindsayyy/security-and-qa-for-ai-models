@@ -13,7 +13,6 @@ USAGE:
 import pandas as pd
 import json
 import random
-import re
 import traceback
 from pathlib import Path
 from datetime import datetime
@@ -22,7 +21,7 @@ import os
 import dotenv
 import litellm
 
-from model_client import query_chat_completion, response_content
+from model_client import query_chat_completion, response_content, extract_choice_letter
 
 dotenv.load_dotenv()
 
@@ -211,37 +210,6 @@ class TruthfulQATestRunner:
         
 
 
-def extract_answer_letter(content: str) -> str:
-    """Pull a single A/B/C/D choice out of a model response.
-
-    Robust to reasoning models (Qwen3 ``<think>`` blocks) and verbose answers.
-    Only uppercase A-D tokens count, so the article "a" and the letter inside
-    ordinary words (the old substring match) no longer trigger a false "A".
-    """
-    if not content:
-        return ""
-
-    cleaned = re.sub(r"<think>.*?</think>", " ", content, flags=re.DOTALL | re.IGNORECASE)
-    cleaned = re.sub(r"</?think>", " ", cleaned, flags=re.IGNORECASE)
-
-    # 1) Explicit "answer ... <Letter>" (e.g. "The answer is B", "Answer: C")
-    m = re.search(r"answer\b[^A-Za-z]{0,20}([A-D])\b", cleaned, flags=re.IGNORECASE)
-    if m:
-        return m.group(1).upper()
-
-    # 2) Letter next to option punctuation: "A.", "B)", "(C)"
-    m = re.search(r"(?<![A-Za-z])([A-D])\s*[).:]", cleaned)
-    if m:
-        return m.group(1).upper()
-
-    # 3) Fall back to the last standalone uppercase letter A-D
-    matches = re.findall(r"(?<![A-Za-z])([A-D])(?![A-Za-z])", cleaned)
-    if matches:
-        return matches[-1].upper()
-
-    return ""
-
-
 def create_model_query(base_url: str, model: str, api_key: str) -> callable:
     """Create a model function that queries via LiteLLM (Duke gateway-compatible)."""
 
@@ -270,7 +238,7 @@ Options:"""
                 max_tokens=1000,
             )
             content = response_content(response)
-            letter = extract_answer_letter(content)
+            letter = extract_choice_letter(content)
             if letter:
                 return {
                     "letter": letter,

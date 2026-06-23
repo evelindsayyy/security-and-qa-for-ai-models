@@ -28,7 +28,7 @@ from datasets import load_dataset
 import litellm
 import dotenv
 
-from model_client import query_chat_completion, response_content
+from model_client import query_chat_completion, response_content, extract_choice_letter
 
 dotenv.load_dotenv()
 
@@ -75,15 +75,11 @@ def query_model(question: str, choices: List[str]) -> str:
             base_url=BASE_URL,
             api_key=API_KEY,
             messages=[{"role": "user", "content": prompt}],
-            temperature=1,
+            temperature=0,
             max_tokens=1000,
         )
-        content = response_content(response).upper()
-        # Extract first valid letter from response
-        for char in content:
-            if char in LETTERS:
-                return char
-        return ""
+        content = response_content(response)
+        return extract_choice_letter(content, "".join(LETTERS))
     except Exception as e:
         print(f"  [ERROR] API error: {e}")
         return ""

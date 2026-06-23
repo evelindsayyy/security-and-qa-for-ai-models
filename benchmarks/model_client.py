@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import time
 import subprocess
 import requests
@@ -145,6 +146,72 @@ def response_content(response) -> str:
             return str(text).strip()
     except (AttributeError, IndexError, TypeError):
         pass
+    return ""
+
+
+_REASONING_BLOCK = re.compile(
+    r"<(think|thinking|reason|reasoning|scratchpad)>.*?</\1>",
+    re.DOTALL | re.IGNORECASE,
+)
+_REASONING_TAG = re.compile(
+    r"</?(think|thinking|reason|reasoning|scratchpad)>",
+    re.IGNORECASE,
+)
+
+
+def strip_reasoning(text: str) -> str:
+    """Remove chain-of-thought blocks emitted by reasoning models.
+
+    Provider-agnostic: handles Qwen3 / DeepSeek-R1 ``<think>`` tags and the
+    other common reasoning tag names. An unterminated opening tag (model ran
+    out of tokens mid-thought) is also dropped so the trailing answer survives.
+    """
+    if not text:
+        return ""
+    cleaned = _REASONING_BLOCK.sub(" ", text)
+    cleaned = _REASONING_TAG.sub(" ", cleaned)
+    return cleaned.strip()
+
+
+def extract_choice_letter(text: str, letters: str = "ABCD") -> str:
+    """Extract a single multiple-choice letter from a model response.
+
+    Works across models (not just Qwen) and fixes the historical parsing bugs:
+      - returning the letter found *inside* an ordinary word ("A" in "watermelon")
+      - matching the English article "a"/"A" after uppercasing the whole reply
+      - reasoning traces leaking into the parsed answer
+    Only standalone letters in the valid set count; matching prefers an
+    explicit answer phrase, then option punctuation, then the last bare letter.
+    """
+    if not text:
+        return ""
+    cleaned = strip_reasoning(text)
+    if not cleaned:
+        return ""
+
+    upper = letters.upper()
+
+    # 0) The whole reply is just the letter (any case), maybe with punctuation.
+    bare = cleaned.strip().strip(".):(*# \t\r\n").strip()
+    if len(bare) == 1 and bare.upper() in upper:
+        return bare.upper()
+
+    # 1) Explicit answer phrase: "The answer is C", "Answer: B".
+    m = re.search(rf"answer\b[^A-Za-z]{{0,20}}([{upper}])\b", cleaned, re.IGNORECASE)
+    if m:
+        return m.group(1).upper()
+
+    # 2) A letter next to option punctuation: "C.", "B)", "(D)".
+    m = re.search(rf"(?<![A-Za-z])([{upper}])\s*[).:]", cleaned)
+    if m:
+        return m.group(1).upper()
+
+    # 3) Fall back to the last standalone UPPERCASE letter in the valid set.
+    #    Uppercase-only, so the article "a" / letters inside words never match.
+    matches = re.findall(rf"(?<![A-Za-z])([{upper}])(?![A-Za-z])", cleaned)
+    if matches:
+        return matches[-1].upper()
+
     return ""
 
 

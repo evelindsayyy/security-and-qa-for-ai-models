@@ -38,7 +38,7 @@ Credentials come from the repo-root `.env`. Set `FRONTEND_LAUNCH_MODE=host` to s
 
 Legacy outputs under `testing/basic_tests/test_results/` are still read as a fallback.
 
-LIST OF BENCHMARKS AND WHAT THEY DO
+## LIST OF BENCHMARKS AND WHAT THEY DO
 
 1. MMLU - mmlu_test.py
 
