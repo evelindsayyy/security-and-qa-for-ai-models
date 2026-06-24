@@ -7,9 +7,10 @@
   <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmark results</a></p>
   <h1>Start a benchmark run</h1>
   <p class="sub">
-    Launches <code>benchmarks/run_benchmark.py</code> via Docker (default).
+    Launches <code>benchmarks/run_benchmark.py</code> via Docker Compose (default).
     Models are the live gateway catalog; benchmarks are the public pilots in
     <code>benchmarks/</code>.
+    See <code>docs/cli.md</code> for manual compose commands.
   </p>
 
   <form method="post" action="{{ url_for('benchmark_run_start') }}" class="launch-form">

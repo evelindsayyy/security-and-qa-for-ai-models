@@ -7,10 +7,11 @@
   <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
   <h1>Start a safety run</h1>
   <p class="sub">
-    Launches <code>python -m safety.run</code> on the server.
+    Launches <code>safety.run</code> via Docker Compose (default) — Promptfoo, Garak, and merge.
     Full runs can take 30–90 minutes per model.
+    Host fallback: <code>uv run python -m safety.run "&lt;model&gt;"</code>.
     {% if not docker_available %}
-    <span class="form-warning">Docker Compose is not available — build the safety image first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>
+    <span class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>
     {% endif %}
   </p>
 

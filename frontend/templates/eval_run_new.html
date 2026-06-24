@@ -7,8 +7,8 @@
   <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
   <h1>Start an evaluation run</h1>
   <p class="sub">
-    Launches <code>evaluator/runner.py</code> on the server. One run at a time;
-    an identical in-flight request returns the existing run.
+    Launches <code>evaluator/runner.py</code> via Docker Compose (default).
+    One run at a time; an identical in-flight request returns the existing run.
   </p>
 
   <form method="post" action="{{ url_for('eval_run_start') }}" class="launch-form">

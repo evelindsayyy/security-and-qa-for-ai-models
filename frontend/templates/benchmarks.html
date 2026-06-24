@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable %}
+{% from '_macros.html' import expandable, cli_benchmark_docker %}
 
 {% block title %}Benchmark results{% endblock %}
 
@@ -10,8 +10,8 @@
 
   {% if not has_runs %}
     <p class="sub empty">
-      No benchmark output yet. Use <b>Start a new run</b> above, or run from CLI:
-      <code>python benchmarks/run_benchmark.py --benchmark truthfulqa --model "GPT 4.1 Mini"</code>
+      No benchmark output yet. Use <b>Start a new run</b> above, or from repo root:
+      <code>{{ cli_benchmark_docker() }}</code>
     </p>
   {% else %}
     <p class="sub">

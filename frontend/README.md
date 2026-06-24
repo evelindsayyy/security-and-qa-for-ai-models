@@ -49,6 +49,7 @@ python3 main.py --host
 
 ## Troubleshooting
 
+- **Host has no `python` command** — use `python3 main.py` or `./docker/run.sh` (see [`docs/cli.md`](../docs/cli.md)).
 - **Promptfoo “config not found”** — missing `HOST_REPO`. `./docker/run.sh` sets it; manual compose needs `export HOST_REPO="$(pwd)"`.
 - **`POST /api/scans` → 503** (cannot write) — root-owned output from an old run. On DGX without sudo:
 

@@ -16,3 +16,28 @@
 {% macro source_badge(source) %}
 <span class="badge badge-{{ source }}">{{ source }}</span>
 {% endmacro %}
+
+{# Manual pillar runs when the UI has no data yet — matches docs/cli.md (Docker default). #}
+{% macro cli_scan_docker() -%}
+docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner python -m scanner scan &lt;hf_repo&gt;
+{%- endmacro %}
+
+{% macro cli_eval_docker() -%}
+docker compose --env-file .env -f evaluator/docker/compose.yml run --rm evaluator python runner.py --candidate-model "&lt;model&gt;" --judge-model "&lt;model&gt;"
+{%- endmacro %}
+
+{% macro cli_safety_docker() -%}
+docker compose --env-file .env -f safety/docker/compose.yml run --rm safety python -m safety.run "&lt;model&gt;"
+{%- endmacro %}
+
+{% macro cli_safety_host() -%}
+uv run python -m safety.run "&lt;model&gt;"
+{%- endmacro %}
+
+{% macro cli_benchmark_docker() -%}
+docker compose --env-file .env -f benchmarks/docker/compose.yml run --rm benchmarks python run_benchmark.py --benchmark truthfulqa --model "&lt;model&gt;"
+{%- endmacro %}
+
+{% macro cli_gateway_host() -%}
+uv run python -m gateway
+{%- endmacro %}
