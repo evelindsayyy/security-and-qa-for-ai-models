@@ -6,7 +6,7 @@ How the images fit together. For commands, see [`cli.md`](cli.md).
 
 ```bash
 ./docker/build-pillars.sh    # one-time pillar images
-python main.py               # containerized UI (default); same as ./docker/run.sh up --build
+python3 main.py               # containerized UI (default); same as ./docker/run.sh up --build
 ```
 
 Production on the application VM uses the same scripts. Host Flask (`uv run flask …`) is a development alternative only.

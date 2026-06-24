@@ -2,6 +2,8 @@
 
 All commands run from the **repo root**.
 
+On the host shell (DGX, application VM), use **`python3`** — many Ubuntu images do not provide a `python` shim. Inside pillar containers, `python` is fine.
+
 ## First-time setup
 
 ### Containerized UI (default)
@@ -12,7 +14,7 @@ Recommended for local dev and the application VM. Pillar jobs run in Docker; hos
 uv sync --group dev
 cp .env.example .env   # DUKE_GATEWAY_KEY required; POSTGRES_DSN when DB is configured
 ./docker/build-pillars.sh
-python main.py         # same as ./docker/run.sh up --build
+python3 main.py         # same as ./docker/run.sh up --build
 ```
 
 Open `http://127.0.0.1:5000`. See [`../README.md`](../README.md#quick-start) for the full step list.
@@ -56,14 +58,14 @@ For the Docker model, see [`docker.md`](docker.md).
 
 ```bash
 # Default — containerized (auto-detects user, Docker group, repo path)
-python main.py                   # foreground (up --build)
-python main.py up -d --build     # background
-python main.py down              # stop
-python main.py logs -f web       # logs
+python3 main.py                   # foreground (up --build)
+python3 main.py up -d --build     # background
+python3 main.py down              # stop
+python3 main.py logs -f web       # logs
 # Equivalent: ./docker/run.sh …
 
 # Development — host Flask only (port 5001 avoids clash with container on 5000)
-python main.py --host
+python3 main.py --host
 # Or: uv run flask --app frontend:create_app run --debug --port 5001
 ```
 
@@ -204,8 +206,8 @@ uv sync --group dev
 ./docker/build-pillars.sh
 ./scripts/apply-schemas.sh --bootstrap
 
-python main.py up -d --build
-curl -s http://127.0.0.1:5000/api/health | python -m json.tool
+python3 main.py up -d --build
+curl -s http://127.0.0.1:5000/api/health | python3 -m json.tool
 ```
 
 After deploy: `GET /api/health` → `db_available: true`, then POST a job and poll `status_url`. See [`api/README.md`](../api/README.md).

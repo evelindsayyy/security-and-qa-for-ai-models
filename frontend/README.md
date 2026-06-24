@@ -17,8 +17,8 @@ Postgres schema and backfill (optional): see [root README — Optional Postgres]
 ### Run (containerized — default)
 
 ```bash
-python main.py                   # or: ./docker/run.sh up --build
-python main.py up -d --build     # background
+python3 main.py                   # or: ./docker/run.sh up --build
+python3 main.py up -d --build     # background
 ```
 
 Open http://127.0.0.1:5000 · launch pages: `/scans/new` · `/safety/new` · `/eval-run/new` · `/benchmarks/new`
@@ -43,7 +43,7 @@ POST returns **202** with `job_id` and `status_url`; poll status, then GET detai
 UI without containerizing the app; pillar jobs still use Docker unless `FRONTEND_LAUNCH_MODE=host`:
 
 ```bash
-python main.py --host
+python3 main.py --host
 # Or: uv run flask --app frontend:create_app run --debug --port 5001
 ```
 

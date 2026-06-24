@@ -12,10 +12,10 @@ auto-detect your user, the Docker socket group, and the repo path.
 **Run the UI** — builds the web image on first `up --build`:
 
 ```bash
-python main.py up --build      # foreground (same as ./docker/run.sh)
-python main.py up -d --build   # background
-python main.py down            # stop
-python main.py logs -f web     # logs
+python3 main.py up --build      # foreground (same as ./docker/run.sh)
+python3 main.py up -d --build   # background
+python3 main.py down            # stop
+python3 main.py logs -f web     # logs
 ```
 
 The repo is bind-mounted at the **same absolute path** inside the container as on

@@ -1,10 +1,10 @@
 """
 Default entry: containerized UI (same as ./docker/run.sh).
 
-    python main.py                  # foreground: up --build
-    python main.py up -d --build    # pass through any docker compose args
-    python main.py down
-    python main.py --host           # dev Flask only (PORT env, default 5000)
+    python3 main.py                  # foreground: up --build
+    python3 main.py up -d --build    # pass through any docker compose args
+    python3 main.py down
+    python3 main.py --host           # dev Flask only (PORT env, default 5000)
 
 See docs/cli.md.
 """

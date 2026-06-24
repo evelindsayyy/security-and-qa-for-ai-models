@@ -53,7 +53,7 @@ Runtime outputs are gitignored (`scanner/output`, `safety/output`, `evaluator/re
 
 ## Quick start
 
-Default path: **containerized UI** (`python main.py` or `./docker/run.sh`) with pillar jobs in Docker. Host needs `uv` for setup commands only; Flask runs in the web container.
+Default path: **containerized UI** (`python3 main.py` or `./docker/run.sh`) with pillar jobs in Docker. Host needs `uv` for setup commands only; Flask runs in the web container.
 
 ### One-time setup
 
@@ -79,7 +79,7 @@ When `POSTGRES_DSN` is set; Set `EFFICACY_DB_DSN` to the same value. Runs auto-s
 ### Run 
 
 ```bash
-python main.py                   # foreground; same as ./docker/run.sh up --build
+python3 main.py                   # foreground; same as ./docker/run.sh up --build
 # Or: ./docker/run.sh up -d --build for background
 # → http://127.0.0.1:5000
 curl -s http://127.0.0.1:5000/api/health | python3 -m json.tool
@@ -94,7 +94,7 @@ For UI-only iteration without containerizing the app (pillar jobs still use Dock
 ```bash
 uv sync --group dev
 cp .env.example .env
-python main.py --host           # or: uv run flask --app frontend:create_app run --debug --port 5001
+python3 main.py --host           # or: uv run flask --app frontend:create_app run --debug --port 5001
 ```
 
 See [`frontend/README.md`](frontend/README.md) for API curl examples.
