@@ -186,6 +186,22 @@ def register_routes(app):
 
         return render_template("eval_run_new.html", **get_launch_options())
 
+    @app.route("/eval-run/add-model", methods=["GET", "POST"])
+    def eval_add_model():
+        # Self-serve intake: validate a user-submitted Hugging Face model (by
+        # link / repo id for now) before any cluster job. File upload of weights
+        # is a later, heavier piece.
+        from flask import request
+
+        from frontend.eval_intake import validate_model
+
+        result = None
+        repo_id = ""
+        if request.method == "POST":
+            repo_id = request.form.get("repo_id", "").strip()
+            result = validate_model(repo_id)
+        return render_template("eval_add_model.html", repo_id=repo_id, result=result)
+
     @app.route("/eval-run/start", methods=["POST"])
     def eval_run_start():
         from flask import redirect, request, url_for

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Add a model{% endblock %}
+
+{% block content %}
+<div class="eval-comparison">
+  <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
+  <h1>Add a Hugging Face model</h1>
+  <p class="sub">
+    Paste a Hugging Face repo id to check whether we can evaluate it. We verify
+    the model exists, is openly available, has a vLLM-servable architecture, and
+    fits the GPU — <em>before</em> any cluster job is started.
+    <span class="form-hint">(Uploading model files is coming later; for now use the Hub link.)</span>
+  </p>
+
+  <form method="post" action="{{ url_for('eval_add_model') }}" class="launch-form">
+    <label>Hugging Face repo id
+      <input type="text" name="repo_id" value="{{ repo_id }}"
+             placeholder="Qwen/Qwen2.5-7B-Instruct" autocomplete="off" spellcheck="false">
+      <span class="form-hint">e.g. <code>Qwen/Qwen2.5-7B-Instruct</code> or <code>gpt2</code></span>
+    </label>
+    <button type="submit" class="btn-primary">Check model</button>
+  </form>
+
+  {% if result is not none %}
+    {% if result.ok %}
+    <div class="intake-result intake-ok">
+      <h2>✅ Ready to evaluate</h2>
+      <table>
+        <tr><th>Repo</th><td>{{ result.repo_id }}</td></tr>
+        <tr><th>Architecture</th><td>{{ result.architectures | join(', ') }}</td></tr>
+        <tr><th>Parameters</th>
+          <td>{% if result.num_params %}{{ '%.1f'|format(result.num_params / 1e9) }}B{% else %}unknown{% endif %}</td></tr>
+      </table>
+      <p class="form-hint">Next (coming soon): serve it on the DCC and run an evaluation suite.</p>
+    </div>
+    {% else %}
+    <div class="intake-result intake-error">
+      <h2>❌ Can't evaluate this model</h2>
+      <p>{{ result.error }}</p>
+    </div>
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}
