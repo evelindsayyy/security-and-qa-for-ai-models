@@ -82,6 +82,13 @@ def detect_provider(base_url: str) -> str:
     if "api.fireworks.ai" in host:
         return "fireworks"
 
+    # The HF Inference Providers router is OpenAI-compatible (base_url + model
+    # id, like the OpenAI SDK), unlike the retired api-inference.* path. Since
+    # callers always pass api_base, route it through the openai path so we POST
+    # to <router>/v1/chat/completions instead of LiteLLM's HF TGI transform.
+    if "router.huggingface.co" in host:
+        return "openai_compatible"
+
     if (
         "huggingface.co" in host
         or "hf.space" in host

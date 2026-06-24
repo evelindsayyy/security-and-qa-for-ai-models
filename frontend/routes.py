@@ -296,7 +296,11 @@ def register_routes(app):
     def benchmark_run_start():
         from flask import redirect, request, url_for
 
-        from frontend.benchmark_launch import start_run, validate_launch
+        from frontend.benchmark_launch import (
+            HF_INFERENCE_BASE_URL,
+            start_run,
+            validate_launch,
+        )
 
         benchmark_key = request.form.get("benchmark", "")
         model_source = request.form.get("model_source", "gateway")
@@ -304,6 +308,12 @@ def register_routes(app):
             model = request.form.get("custom_model", "").strip()
             base_url = request.form.get("base_url", "").strip()
             api_key = request.form.get("api_key", "").strip() or None
+        elif model_source == "hosted":
+            model = request.form.get("hosted_model", "").strip()
+            base_url = HF_INFERENCE_BASE_URL
+            api_key = request.form.get("hf_token", "").strip() or None
+            if not api_key:
+                return "enter your Hugging Face token", 400
         else:
             model = request.form.get("model", "")
             base_url = None

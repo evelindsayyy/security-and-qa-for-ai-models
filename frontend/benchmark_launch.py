@@ -40,6 +40,14 @@ _HF_REPO_RE = re.compile(r"^(?:[a-zA-Z0-9][a-zA-Z0-9._-]*/)?[a-zA-Z0-9][a-zA-Z0-
 _INTERNAL_HOST_SUFFIXES = (".duke.edu", ".local", ".internal")
 _DEFAULT_CUSTOM_API_KEY = "local-vllm"
 
+# Hosted "no-setup" path: Hugging Face Inference Providers exposes an
+# OpenAI-compatible router, so users can benchmark a repo with just a token (no
+# vLLM/DCC). The base URL is a fixed, server-controlled constant; the matching
+# host is allowlisted past the internal-only SSRF guard. Only https is allowed,
+# and only this exact host — arbitrary public addresses stay blocked.
+HF_INFERENCE_BASE_URL = "https://router.huggingface.co/v1"
+_PUBLIC_HOST_ALLOWLIST = ("router.huggingface.co",)
+
 _RUNNING: dict[str, subprocess.Popen] = {}
 _INFLIGHT: dict[tuple[str, str, str], str] = {}
 _LOCK = threading.Lock()
@@ -90,6 +98,12 @@ def validate_base_url(base_url: str) -> str | None:
         return "base URL must start with http:// or https://"
     if not parsed.hostname:
         return "base URL is missing a host"
+    if parsed.hostname.lower() in _PUBLIC_HOST_ALLOWLIST:
+        # Trusted hosted provider (e.g. HF Inference Providers): allow it past
+        # the internal-only guard, but require https.
+        if parsed.scheme != "https":
+            return "hosted provider URL must use https://"
+        return None
     if not _is_internal_host(parsed.hostname):
         return (
             "base URL must point at an internal/private host "

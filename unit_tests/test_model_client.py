@@ -28,6 +28,22 @@ class TestModelClient(unittest.TestCase):
             "huggingface/meta-llama/Llama-3.2-1B",
         )
 
+    def test_detect_hf_router_is_openai_compatible(self) -> None:
+        # The Inference Providers router is OpenAI-compatible, not the HF TGI path.
+        self.assertEqual(
+            detect_provider("https://router.huggingface.co/v1"),
+            "openai_compatible",
+        )
+
+    def test_normalize_hf_router_repo_id(self) -> None:
+        self.assertEqual(
+            normalize_model(
+                "microsoft/Phi-4-mini-instruct",
+                "https://router.huggingface.co/v1",
+            ),
+            "openai/microsoft/Phi-4-mini-instruct",
+        )
+
     def test_normalize_local_vllm_repo_id(self) -> None:
         self.assertEqual(
             normalize_model(

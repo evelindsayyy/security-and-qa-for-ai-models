@@ -29,9 +29,14 @@
         Gateway model
       </label>
       <label class="radio">
+        <input type="radio" name="model_source" value="hosted"
+               onchange="toggleModelSource()">
+        Hosted (Hugging Face Inference API)
+      </label>
+      <label class="radio">
         <input type="radio" name="model_source" value="custom"
                onchange="toggleModelSource()">
-        Custom model (Hugging Face / vLLM)
+        Custom model (self-hosted vLLM)
       </label>
     </fieldset>
 
@@ -43,6 +48,20 @@
           {% endfor %}
         </select>
         <span class="form-hint">exact gateway id — see <a href="{{ url_for('models_catalog') }}">model catalog</a></span>
+      </label>
+    </div>
+
+    <div id="hosted-fields" style="display: none;">
+      <label>Hugging Face model
+        <input type="text" name="hosted_model" id="hosted_model"
+               placeholder="microsoft/Phi-4-mini-instruct" autocomplete="off">
+        <span class="form-hint">repo id served by Hugging Face Inference Providers — no vLLM/DCC needed</span>
+      </label>
+
+      <label>Hugging Face token
+        <input type="password" name="hf_token" id="hosted_token"
+               placeholder="hf_..." autocomplete="off">
+        <span class="form-hint">from <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">huggingface.co/settings/tokens</a>; sent once for this run, not stored</span>
       </label>
     </div>
 
@@ -72,14 +91,20 @@
 
 <script>
   function toggleModelSource() {
-    const custom = document.querySelector('input[name="model_source"]:checked').value === 'custom';
-    document.getElementById('gateway-fields').style.display = custom ? 'none' : '';
-    document.getElementById('custom-fields').style.display = custom ? '' : 'none';
+    const src = document.querySelector('input[name="model_source"]:checked').value;
+    const isGateway = src === 'gateway';
+    const isHosted = src === 'hosted';
+    const isCustom = src === 'custom';
+    document.getElementById('gateway-fields').style.display = isGateway ? '' : 'none';
+    document.getElementById('hosted-fields').style.display = isHosted ? '' : 'none';
+    document.getElementById('custom-fields').style.display = isCustom ? '' : 'none';
     // Disable hidden inputs so they aren't submitted / required by the wrong path.
-    document.getElementById('model').disabled = custom;
-    document.getElementById('custom_model').disabled = !custom;
-    document.getElementById('base_url').disabled = !custom;
-    document.getElementById('api_key').disabled = !custom;
+    document.getElementById('model').disabled = !isGateway;
+    document.getElementById('hosted_model').disabled = !isHosted;
+    document.getElementById('hosted_token').disabled = !isHosted;
+    document.getElementById('custom_model').disabled = !isCustom;
+    document.getElementById('base_url').disabled = !isCustom;
+    document.getElementById('api_key').disabled = !isCustom;
   }
   toggleModelSource();
 </script>

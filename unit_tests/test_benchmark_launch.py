@@ -5,6 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from frontend.benchmark_launch import (  # noqa: E402
+    HF_INFERENCE_BASE_URL,
     _custom_env,
     validate_base_url,
     validate_custom_model,
@@ -63,6 +64,23 @@ class TestValidateBaseUrl(unittest.TestCase):
 
     def test_rejects_empty(self) -> None:
         self.assertIsNotNone(validate_base_url(""))
+
+
+class TestHostedProvider(unittest.TestCase):
+    def test_accepts_hf_router(self) -> None:
+        # The hosted "no-setup" path forces this exact URL.
+        self.assertIsNone(validate_base_url(HF_INFERENCE_BASE_URL))
+
+    def test_accepts_hf_router_host(self) -> None:
+        self.assertIsNone(validate_base_url("https://router.huggingface.co/v1"))
+
+    def test_rejects_hf_router_over_http(self) -> None:
+        # Allowlisted host must still use https.
+        self.assertIsNotNone(validate_base_url("http://router.huggingface.co/v1"))
+
+    def test_still_rejects_other_huggingface_hosts(self) -> None:
+        # Only the exact router host is allowlisted, not the whole domain.
+        self.assertIsNotNone(validate_base_url("https://huggingface.co/v1"))
 
 
 class TestCustomEnv(unittest.TestCase):

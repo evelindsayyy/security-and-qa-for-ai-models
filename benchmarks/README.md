@@ -48,6 +48,29 @@ The model id is the HF repo (e.g. `Qwen/Qwen3-0.6B`); `model_client` auto-routes
 it to the right provider based on the base URL (a remote vLLM host becomes
 `openai/<repo-id>`).
 
+### Hosted (no vLLM / DCC setup)
+
+The fastest path — no GPU, no cluster — is **Hugging Face Inference Providers**,
+an OpenAI-compatible router. You only need an HF token with the *Inference
+Providers* permission ([create one here](https://huggingface.co/settings/tokens)).
+
+CLI:
+
+```bash
+export LITELLM_BASE_URL="https://router.huggingface.co/v1"
+export TQA_BASE_URL="https://router.huggingface.co/v1"
+export OPENAI_API_KEY="hf_your_token"
+uv run python benchmarks/run_benchmark.py --benchmark mmlu --model "microsoft/Phi-4-mini-instruct"
+```
+
+Browser: pick **Hosted (Hugging Face Inference API)** on `/benchmarks/new`, enter
+the repo id and your token. The base URL is fixed to the router server-side.
+
+Caveats: the model must be **provider-backed for chat completion** (check the
+"Inference Providers" widget on its HF model page); there's a metered cost /
+limited free tier; and only the bare `org/model` id is supported here (not the
+`org/model:provider` pin).
+
 ### CLI
 
 Point the base URL at your server and pass the repo id as `--model`:
@@ -67,7 +90,7 @@ Quick connectivity check before a long run: `curl -s "$LITELLM_BASE_URL/models"`
 ### Browser
 
 On the **Start a benchmark run** page (`/benchmarks/new`), choose
-**Custom model (Hugging Face / vLLM)** and fill in:
+**Custom model (self-hosted vLLM)** and fill in:
 
 - **Hugging Face model** — the repo id, e.g. `Qwen/Qwen3-0.6B`
 - **Base URL** — your endpoint, e.g. `http://dcc-plusds-gpu-02:8000/v1`
