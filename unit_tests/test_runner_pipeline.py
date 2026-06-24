@@ -18,6 +18,7 @@ Run from repo root:
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -143,6 +144,9 @@ class RunnerPipelineTest(unittest.TestCase):
             mock.patch.object(candidate, "_CACHE_DIR", self.dir / "cache_c"),
             mock.patch.object(judge, "_CACHE_DIR", self.dir / "cache_j"),
             mock.patch.object(sys, "argv", self.base_argv),
+            # Isolate from the real DB: the merged post-run auto-ingest fires
+            # when a DSN is set in .env; unit tests must not touch Postgres.
+            mock.patch.dict(os.environ, {"AUTO_INGEST": "0"}),
         ):
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -229,6 +233,76 @@ class RunnerPipelineTest(unittest.TestCase):
             self.assertEqual(r["adaptation"]["inference_backend"], "dcc", qid)
             self.assertEqual(
                 r["adaptation"]["hf_repo"], "Qwen/Qwen2.5-7B-Instruct", qid)
+
+
+class RunnerSkipJudgeTest(unittest.TestCase):
+    """--skip-judge: candidate-only run for execution-scored suites.
+
+    No judge model, no rubric, no 'reference' field on the questions — the
+    judge is never called and the rows carry empty scores (functional scoring
+    happens out-of-band in execution_eval).
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.dir = Path(self._tmp.name)
+        # Execution-style suite: {id, question, setup, expected} — NO reference.
+        (self.dir / "sql.jsonl").write_text(
+            json.dumps({"task_suite_version": "sql_smoke_v1"}) + "\n"
+            + json.dumps({"id": "s1", "question": "count the rows",
+                          "setup": "CREATE TABLE t(n INTEGER)", "expected": [[0]]}) + "\n"
+            + json.dumps({"id": "s2", "question": "count again",
+                          "setup": "CREATE TABLE t(n INTEGER)", "expected": [[0]]}) + "\n",
+            encoding="utf-8",
+        )
+        (self.dir / "system.txt").write_text("write SQL", encoding="utf-8")
+
+        self.cand_stub = _CandidateStub()
+        self.judge_stub = _JudgeStub()
+        self.argv = [
+            "runner.py",
+            "--candidate-model", "stub-model",
+            "--suite", str(self.dir / "sql.jsonl"),
+            "--system-prompt", str(self.dir / "system.txt"),
+            "--output-dir", str(self.dir / "results"),
+            "--skip-judge",                       # no --judge-model on purpose
+        ]
+        for patcher in (
+            mock.patch.object(candidate, "gateway_client", return_value=self.cand_stub),
+            mock.patch.object(judge, "gateway_client", return_value=self.judge_stub),
+            mock.patch.object(candidate, "_CACHE_DIR", self.dir / "cache_c"),
+            mock.patch.object(sys, "argv", self.argv),
+            mock.patch.dict(os.environ, {"AUTO_INGEST": "0"}),  # don't touch the real DB
+        ):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def _rows(self) -> dict[str, dict]:
+        self.assertEqual(runner.main(), 0)
+        out = [p for p in (self.dir / "results").glob("*.jsonl")
+               if "_trace" not in p.name]
+        self.assertEqual(len(out), 1)
+        return {r["question_id"]: r for r in
+                (json.loads(line) for line in out[0].read_text().splitlines())}
+
+    def test_judge_is_never_called(self) -> None:
+        self._rows()
+        self.assertEqual(self.judge_stub.calls, 0)
+
+    def test_candidate_rows_written_without_scores(self) -> None:
+        rows = self._rows()
+        self.assertEqual(set(rows), {"s1", "s2"})
+        for r in rows.values():
+            self.assertFalse(r["candidate_failed"])
+            self.assertFalse(r["judge_failed"])
+            self.assertEqual(r["scores"], {})
+            self.assertIsNone(r["overall"])
+            self.assertEqual(r["candidate_response"], "a perfectly good answer")
+
+    def test_no_judge_model_needed(self) -> None:
+        rows = self._rows()
+        self.assertEqual(rows["s1"]["adaptation"]["judge_model"], "(none)")
 
 
 if __name__ == "__main__":
