@@ -17,6 +17,8 @@ Run from repo root:
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import sys
 import tempfile
@@ -143,12 +145,15 @@ class RunnerPipelineTest(unittest.TestCase):
             mock.patch.object(candidate, "_CACHE_DIR", self.dir / "cache_c"),
             mock.patch.object(judge, "_CACHE_DIR", self.dir / "cache_j"),
             mock.patch.object(sys, "argv", self.base_argv),
+            mock.patch("dbutils.post_run.maybe_sync_artifact"),
         ):
             patcher.start()
             self.addCleanup(patcher.stop)
 
     def _run(self) -> dict[str, dict]:
-        exit_code = runner.main()
+        sink = io.StringIO()
+        with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+            exit_code = runner.main()
         self.assertEqual(exit_code, 0)
         results = [p for p in (self.dir / "results").glob("*.jsonl")
                    if "_trace" not in p.name]

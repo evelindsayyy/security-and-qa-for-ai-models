@@ -26,8 +26,13 @@ lint:
 unit-tests:
   extends: .default_ci
   stage: test
+  variables:
+    AUTO_INGEST: "0"
+    POSTGRES_DSN: ""
+    EFFICACY_DB_DSN: ""
+    DATABASE_URL: ""
   script:
-    - uv run python -m unittest discover -s unit_tests -v
+    - uv run python -m unittest discover -s unit_tests -q
 
 # Build is like docker but has better security permissions and better licensing
 build-web-image:
@@ -58,15 +63,20 @@ build-web-image:
     # push it to the project registry
     - buildah push "${FULL_IMAGE_NAME}"
 
-# Manual deploy to the application VM after lint, tests, and image build on main.
+# Deploy to the application VM after lint, tests, and image build on main.
+#
+# Default: manual (team lead safety — click Play in GitLab). Set CI/CD variable
+# DEPLOY_AUTO=true to deploy automatically on every main pipeline.
+#
 # GitLab CI/CD variables (Settings → CI/CD → Variables):
 #   DEPLOY_SSH_PRIVATE_KEY (file, masked) — CI → VM SSH key
 #   DEPLOY_SSH_KNOWN_HOSTS (file) — ssh-keyscan output for DEPLOY_HOST
 #   DEPLOY_USER — e.g. vcm
 #   DEPLOY_HOST — e.g. model-advisor.colab.duke.edu
 #   DEPLOY_PATH — e.g. /home/vcm/security-and-qa-for-ai-models
-# Optional: BUILD_PILLARS=1 to run ./docker/build-pillars.sh on the VM after git pull
-deploy-manual:
+# Optional: BUILD_PILLARS=1 to rebuild pillar images on the VM after git pull
+# Optional: DEPLOY_AUTO=true — automatic deploy after build-web-image (else manual)
+deploy:
   stage: deploy
   image: alpine:3.21
   needs:
@@ -75,6 +85,8 @@ deploy-manual:
     name: production
     url: https://model-advisor.colab.duke.edu
   rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $DEPLOY_AUTO == "true"
+      when: on_success
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: manual
     - when: never
