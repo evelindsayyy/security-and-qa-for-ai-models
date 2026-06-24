@@ -60,7 +60,7 @@ def maybe_sync_artifact(path: Path, pillar: Pillar) -> None:
     if not psycopg_available():
         print(
             "  WARN: auto-ingest skipped — psycopg not installed "
-            "(uv sync --group db). File kept on disk.",
+            "(re-run uv sync). File kept on disk.",
             file=sys.stderr,
         )
         return

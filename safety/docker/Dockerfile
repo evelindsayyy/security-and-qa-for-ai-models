@@ -24,14 +24,15 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential \
     && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
     && . "$HOME/.cargo/env" \
-    && uv sync --frozen --no-dev --no-install-project --group db --group safety \
+    && uv sync --frozen --no-dev --no-install-project --group safety \
     && apt-get purge -y build-essential && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* "$HOME/.cargo" "$HOME/.rustup"
 
 ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONPATH=/app
 
+COPY dbutils/ /app/dbutils/
 COPY safety/ /app/safety/
 COPY gateway/ /app/gateway/
 
-CMD ["bash", "safety/run_safety.sh", "--help"]
+CMD ["python", "-m", "safety.run", "--help"]

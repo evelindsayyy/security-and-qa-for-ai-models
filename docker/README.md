@@ -1,12 +1,21 @@
 # Application Docker stack
 
-Containerized Flask UI for the application VM. Start it with the launcher, which
-auto-detects your user, the Docker socket group, and the repo path:
+Containerized Flask UI (default for local dev and the application VM). Scripts
+auto-detect your user, the Docker socket group, and the repo path.
+
+**One-time** — build pillar job images (required before browser **Start** buttons work):
 
 ```bash
-./docker/run.sh up --build      # foreground
-./docker/run.sh up -d --build   # background
-./docker/run.sh down            # stop
+./docker/build-pillars.sh
+```
+
+**Run the UI** — builds the web image on first `up --build`:
+
+```bash
+python main.py up --build      # foreground (same as ./docker/run.sh)
+python main.py up -d --build   # background
+python main.py down            # stop
+python main.py logs -f web     # logs
 ```
 
 The repo is bind-mounted at the **same absolute path** inside the container as on

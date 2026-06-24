@@ -9,7 +9,7 @@ Usage (repo root):
       --garak safety/garak/output/gpt-4.1-mini/safety_result.json \
       -o safety/output/gpt-4.1-mini/merged_safety_result.json
 
-Or use ``safety/run_safety.sh`` for the full pipeline (Promptfoo + Garak + merge).
+Or use ``python -m safety.run`` for the full pipeline (Promptfoo + Garak + merge).
 """
 
 from __future__ import annotations

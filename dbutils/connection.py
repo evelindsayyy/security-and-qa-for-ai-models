@@ -22,7 +22,7 @@ def require_psycopg() -> Any:
     try:
         import psycopg  # type: ignore[import-untyped]
     except ImportError:
-        sys.exit("psycopg is required:  uv sync --group db")
+        sys.exit("psycopg is required:  re-run uv sync")
     return psycopg
 
 

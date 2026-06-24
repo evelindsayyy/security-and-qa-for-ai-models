@@ -17,9 +17,9 @@ Automated **nutrition labels** for Duke AI Gateway models: **security** (artifac
 
 | I want to… | Start here |
 |------------|------------|
-| **Run the UI** on my machine | [Quick start](#quick-start) |
+| **Run the UI** | [Quick start](#quick-start) |
 | **CLI and JSON API** — scans, safety, eval, benchmarks, tests | [`docs/cli.md`](docs/cli.md) · [`api/README.md`](api/README.md) |
-| **Docker model** (containerized UI, sibling jobs) | [`docs/docker.md`](docs/docker.md) |
+| **Docker model** (UI + pillar jobs) | [`docs/docker.md`](docs/docker.md) · [`docker/`](docker/) |
 | **Understand the system** (VM, DGX, ingest, background jobs) | [`docs/architecture.md`](docs/architecture.md) |
 | **Postgres schema and ingest** | [`docs/data-model.md`](docs/data-model.md) · [`dbutils/README.md`](dbutils/README.md) |
 | **Track A** (scanning + safety) | [`docs/track-a-framework.md`](docs/track-a-framework.md) |
@@ -53,19 +53,61 @@ Runtime outputs are gitignored (`scanner/output`, `safety/output`, `evaluator/re
 
 ## Quick start
 
+Default path: **containerized UI** (`python main.py` or `./docker/run.sh`) with pillar jobs in Docker. Host needs `uv` for setup commands only; Flask runs in the web container.
+
+### One-time setup
+
 ```bash
 git clone git@gitlab.oit.duke.edu:codeplus/security-and-qa-for-ai-models.git
 cd security-and-qa-for-ai-models
-uv sync --group dev --group scanner --group benchmarks
-cp .env.example .env          # paste DUKE_GATEWAY_KEY from dashboard.ai.duke.edu
-uv run flask --app frontend:create_app run --debug
+uv sync --group dev              # core + psycopg + pytest/ruff (schema apply, ingest, tests)
+cp .env.example .env             # paste DUKE_GATEWAY_KEY from dashboard.ai.duke.edu
+./docker/build-pillars.sh        # build scanner, safety, evaluator, benchmark images
+```
+
+Requires Docker and Docker Compose. Pillar dependency groups (`scanner`, `safety`, `benchmarks`) aren't installed on the host.
+
+### Optional — Postgres
+
+When `POSTGRES_DSN` is set; Set `EFFICACY_DB_DSN` to the same value. Runs auto-sync to Postgres by default; set `AUTO_INGEST=0` to disable.
+
+```bash
+./scripts/apply-schemas.sh --bootstrap
+# Or one file: uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql
+```
+
+### Run 
+
+```bash
+python main.py                   # foreground; same as ./docker/run.sh up --build
+# Or: ./docker/run.sh up -d --build for background
 # → http://127.0.0.1:5000
+curl -s http://127.0.0.1:5000/api/health | python3 -m json.tool
+```
+
+Use **Start** on `/scans/new`, `/safety/new`, `/eval-run/new`, or `/benchmarks/new`. Full CLI and API: [`docs/cli.md`](docs/cli.md) · [`api/README.md`](api/README.md).
+
+### Alternative — host Flask (development)
+
+For UI-only iteration without containerizing the app (pillar jobs still use Docker by default):
+
+```bash
+uv sync --group dev
+cp .env.example .env
+python main.py --host           # or: uv run flask --app frontend:create_app run --debug --port 5001
+```
+
+See [`frontend/README.md`](frontend/README.md) for API curl examples.
+
+### Optional — pillar CLI on the host
+
+Only if you run a pillar **without** Docker. Groups `scanner`, `safety`, and `benchmarks` **conflict** — install **at most one** with dev:
+
+```bash
+uv sync --group dev --group scanner      # OR --group safety OR --group benchmarks
 ```
 
 Dependencies: [`pyproject.toml`](pyproject.toml) + [`uv.lock`](uv.lock).
-
-**Containerized UI** (application VM): `./docker/run.sh up --build`.
-**All CLI commands:** [`docs/cli.md`](docs/cli.md).
 
 ---
 
@@ -75,10 +117,11 @@ One repo-root [`.env.example`](.env.example) → `.env` (never commit). Key vari
 
 - `DUKE_GATEWAY_URL`, `DUKE_GATEWAY_KEY` — gateway chat and catalog (aliases: `OPENAI_*`)
 - `HF_TOKEN` — gated Hugging Face downloads (scanning)
-- `POSTGRES_DSN`, `EFFICACY_DB_DSN` — optional Postgres ingest and UI DB read paths
-- `APP_PORT`, `FRONTEND_LAUNCH_MODE` — optional app UI tweaks
+- `POSTGRES_DSN`, `EFFICACY_DB_DSN` — Postgres (set both to the same DSN); UI/API read DB when reachable
+- `APP_PORT` — containerized UI port (default 5000 via `./docker/run.sh`)
+- `FRONTEND_LAUNCH_MODE` — defaults to `docker` for Start buttons; set `host` for legacy dev
 
-Host-specific values (user id, Docker socket group, repo path) are auto-detected by `./docker/run.sh`.
+Host-specific values (user id, Docker socket group, repo path) are auto-detected by `./docker/run.sh` and `./docker/build-pillars.sh`.
 
 ---
 

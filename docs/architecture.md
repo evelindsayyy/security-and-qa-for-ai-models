@@ -12,8 +12,9 @@ Two nutrition-label pillars, two tracks:
 | **Efficacy** | `evaluator/` (Duke judge suites) + `benchmarks/` (public benchmarks) | B |
 
 Every run produces structured JSON; optional ingest loads it into Postgres. The
-`frontend/` UI renders the nutrition label; `api/` exposes eval results as JSON
-(see [`api/README.md`](../api/README.md)). Teams and schedule: [`team-tracks.md`](team-tracks.md).
+`frontend/` UI renders the nutrition label; `api/` exposes JSON REST for all four
+pillars (list, detail, status, POST jobs) — see [`api/README.md`](../api/README.md).
+Teams and schedule: [`team-tracks.md`](team-tracks.md).
 
 ## How a run flows
 
@@ -102,7 +103,7 @@ Long scans and evals take minutes to hours. Start routes return immediately; the
 
 ### Ingest
 
-**Ingest** loads a finished JSON file into Postgres: read file → validate → upsert rows per [`data-model.md`](data-model.md). When `POSTGRES_DSN` (or `EFFICACY_DB_DSN`) is set, each pillar calls `dbutils.post_run.maybe_sync_artifact` after a successful run. Set `AUTO_INGEST=0` in `.env` to disable. Bulk backfill: `python -m api.ingest --apply` or `python -m api.ingest bootstrap --apply` (all pillars, summary line). First-time VM setup: apply all four pillar schemas via `dbutils.apply_schema`, then bootstrap — see [`cli.md`](cli.md).
+**Ingest** loads a finished JSON file into Postgres: read file → validate → upsert rows per [`data-model.md`](data-model.md). When `POSTGRES_DSN` (or `EFFICACY_DB_DSN`) is set, each pillar calls `dbutils.post_run.maybe_sync_artifact` after a successful run. Set `AUTO_INGEST=0` in `.env` to disable. Bulk backfill: `python -m api.ingest --apply` or `python -m api.ingest bootstrap --apply` (all pillars, summary line). First-time VM setup: `./scripts/apply-schemas.sh --bootstrap` — see [`cli.md`](cli.md).
 
 ### JSON → Postgres (summary)
 
@@ -149,7 +150,7 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 | Host | Role |
 |------|------|
 | **Application VM** (`vcm@model-advisor.colab.duke.edu`) | Production service: `./docker/run.sh up` → Flask UI + `api/` in one container; spawns pillar Docker jobs via host socket; `.env` holds secrets |
-| **DGX** (e.g. gx10) | Dev / scan sandbox — local runs; Postgres may be unreachable off VPN |
+| **DGX** (e.g. gx10) | Dev / scan sandbox — local runs; Postgres when DSN is reachable (disk JSON fallback) |
 | **DCC** | Optional SLURM + vLLM for open-weight eval (`--candidate-endpoint`); see [`scripts/dcc/`](../scripts/dcc/README.md) |
 | **Duke AI Gateway** | Default chat backend for safety, eval, benchmarks |
 | **OIT Postgres** | Shared team DB (`qa_ai_models`); not on the VM |

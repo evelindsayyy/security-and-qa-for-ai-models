@@ -9,16 +9,17 @@ Disk JSON remains the source of truth until you run `--apply`.
 ## One-time setup
 
 ```bash
-uv sync --group db
+uv sync
 cp .env.example .env    # set POSTGRES_DSN
 ```
 
 ## Apply schema (one-time)
 
-Requires ``uv sync --group db`` and a real ``POSTGRES_DSN`` in ``.env`` (include ``?sslmode=require``).
+Requires ``uv sync --group dev`` and a real ``POSTGRES_DSN`` in ``.env`` (include ``?sslmode=require``).
 
 ```bash
-uv run python -m dbutils.apply_schema safety/db/safety_schema.sql
+./scripts/apply-schemas.sh              # all four pillars
+uv run python -m dbutils.apply_schema safety/db/safety_schema.sql   # this pillar only
 ```
 
 ## Load safety runs

@@ -7,7 +7,7 @@
   <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
   <h1>Start a safety run</h1>
   <p class="sub">
-    Launches <code>safety/run_safety.sh</code> on the server.
+    Launches <code>python -m safety.run</code> on the server.
     Full runs can take 30–90 minutes per model.
     {% if not docker_available %}
     <span class="form-warning">Docker Compose is not available — build the safety image first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>

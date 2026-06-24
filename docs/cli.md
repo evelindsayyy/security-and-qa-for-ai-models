@@ -1,48 +1,93 @@
 # CLI reference
 
-All commands run from the **repo root**. First-time setup (core + optional groups for local pillar work):
+All commands run from the **repo root**.
+
+## First-time setup
+
+### Containerized UI (default)
+
+Recommended for local dev and the application VM. Pillar jobs run in Docker; host only needs `uv` for setup commands.
 
 ```bash
-uv sync --group dev --group scanner --group benchmarks
-cp .env.example .env   # paste DUKE_GATEWAY_KEY (and HF_TOKEN / Postgres DSNs if needed)
+uv sync --group dev
+cp .env.example .env   # DUKE_GATEWAY_KEY required; POSTGRES_DSN when DB is configured
+./docker/build-pillars.sh
+python main.py         # same as ./docker/run.sh up --build
 ```
 
-For the Docker model behind these commands, see [`docker.md`](docker.md).
+Open `http://127.0.0.1:5000`. See [`../README.md`](../README.md#quick-start) for the full step list.
+
+### Development alternative — host Flask
+
+UI without containerizing the app (pillar jobs still use Docker unless `FRONTEND_LAUNCH_MODE=host`):
+
+```bash
+uv sync --group dev
+cp .env.example .env
+uv run flask --app frontend:create_app run --debug --port 5001
+```
+
+### Optional — Postgres (one-time)
+
+When `POSTGRES_DSN` is reachable (DGX, VM, or VPN). Set `EFFICACY_DB_DSN` to the same DSN.
+
+```bash
+./scripts/apply-schemas.sh --bootstrap
+# Or one file: uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql
+```
+
+Verify: `curl -s localhost:5000/api/health | python3 -m json.tool` → `db_available: true`.
+
+**Data flow:** runs write JSON → auto-sync to Postgres (default) → UI/API read Postgres first. Set `AUTO_INGEST=0` to disable.
+
+### Optional — pillar deps on the host
+
+Only for running a pillar CLI **without** Docker. Groups **`scanner`**, **`safety`**, and **`benchmarks` are mutually exclusive** — pick **one**:
+
+```bash
+uv sync --group dev --group scanner      # artifact scanning on host
+uv sync --group dev --group safety       # garak on host
+uv sync --group dev --group benchmarks   # benchmark runners on host
+```
+
+For the Docker model, see [`docker.md`](docker.md).
 
 ## Web UI
 
 ```bash
-# Local dev (no Docker)
-uv run flask --app frontend:create_app run --debug          # add --port 5001 if 5000 is busy
+# Default — containerized (auto-detects user, Docker group, repo path)
+python main.py                   # foreground (up --build)
+python main.py up -d --build     # background
+python main.py down              # stop
+python main.py logs -f web       # logs
+# Equivalent: ./docker/run.sh …
 
-# Containerized (application VM); auto-detects user, Docker group, and repo path
-./docker/run.sh up --build       # foreground
-./docker/run.sh up -d --build    # background
-./docker/run.sh down             # stop
-./docker/run.sh logs -f web      # logs
+# Development — host Flask only (port 5001 avoids clash with container on 5000)
+python main.py --host
+# Or: uv run flask --app frontend:create_app run --debug --port 5001
 ```
 
-Set `APP_PORT` in `.env` to change the port. Open `http://127.0.0.1:5000`.
+Set `APP_PORT` in `.env` to change the container port. One-time pillar builds: `./docker/build-pillars.sh`.
 
 ## JSON API
 
 Same Flask app as the UI. See [`api/README.md`](../api/README.md).
 
 ```bash
-# Health (db_available false on DGX without Postgres is normal)
-curl -s localhost:5001/api/health | python3 -m json.tool
+# Health — expect db_available: true when DSN + schemas are configured
+curl -s localhost:5000/api/health | python3 -m json.tool
 
 # List + start a scan (202 + status_url)
-curl -s localhost:5001/api/scans | python3 -m json.tool
-curl -s -X POST localhost:5001/api/scans \
+curl -s localhost:5000/api/scans | python3 -m json.tool
+curl -s -X POST localhost:5000/api/scans \
   -H 'Content-Type: application/json' \
   -d '{"hf_repo":"distilbert-base-uncased"}' | python3 -m json.tool
-curl -s localhost:5001/api/scans/distilbert-base-uncased/status | python3 -m json.tool
+curl -s localhost:5000/api/scans/distilbert-base-uncased/status | python3 -m json.tool
 
 # Safety, eval, benchmark — POST bodies in api/README.md
-curl -s localhost:5001/api/safety | python3 -m json.tool
-curl -s localhost:5001/api/evals | python3 -m json.tool
-curl -s localhost:5001/api/benchmarks | python3 -m json.tool
+curl -s localhost:5000/api/safety | python3 -m json.tool
+curl -s localhost:5000/api/evals | python3 -m json.tool
+curl -s localhost:5000/api/benchmarks | python3 -m json.tool
 ```
 
 If `POST /api/scans` returns **503** with “cannot write”, output is often root-owned. On DGX (no sudo):
@@ -62,12 +107,13 @@ export UID=$(id -u) GID=$(id -g)
 ```
 
 ```bash
-# Scan an HF repo -> scanner/output/<slug>/scan_result.json
+# Scan an HF repo -> scanner/output/<slug>/scan_result.json (+ auto-ingest)
 docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner \
   python -m scanner scan gpt2
 
-# Safety red-team -> safety/output/<slug>/merged_safety_result.json
-./safety/run_safety.sh "GPT 4.1 Mini"
+# Safety red-team -> safety/output/<slug>/<profile>/merged_safety_result.json
+uv run python -m safety.run "GPT 4.1 Mini"
+# Thin wrapper (same): ./safety/run_safety.sh "GPT 4.1 Mini"
 
 # Efficacy (LLM-as-judge) -> evaluator/results/*.jsonl
 docker compose --env-file .env -f evaluator/docker/compose.yml run --rm evaluator \
@@ -110,71 +156,56 @@ The web image can also be smoke-tested locally with Buildah:
 STORAGE_DRIVER=vfs buildah bud --isolation=chroot -f docker/Dockerfile -t localhost/qa-ai-web:buildah-smoke .
 ```
 
-Local Docker Compose builds remain useful for verifying the full runtime stack
-before deploy.
-
 ## Postgres ingest
 
-Set real credentials in ``.env`` (not the ``YOUR_USER`` placeholders). Use ``?sslmode=require``. Run schema apply and bootstrap from the **application VM** (or VPN); gx10 may fail ``pg_hba`` / auth checks.
+Set real credentials in ``.env`` (not the ``YOUR_USER`` placeholders). Use ``?sslmode=require``.
 
-**Auto-sync:** when a DSN is set, each successful pillar run syncs its artifact into Postgres (best-effort; never fails the job). Disable with ``AUTO_INGEST=0``. Bulk backfill:
-
-```bash
-uv sync --group db
-# Once per environment (all four pillar tables):
-uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql
-uv run python -m dbutils.apply_schema safety/db/safety_schema.sql
-uv run python -m dbutils.apply_schema evaluator/db/efficacy_schema.sql
-uv run python -m dbutils.apply_schema benchmarks/db/benchmark_schema.sql
-```
+**Auto-sync:** each successful pillar run syncs into Postgres (best-effort; never fails the job). Disable with ``AUTO_INGEST=0``.
 
 ```bash
-# All pillars (dry-run by default)
+# Verify connectivity and per-pillar DB read paths (container default port 5000)
+curl -s localhost:5000/api/health | python3 -m json.tool
+
+# Bulk backfill / dry-run
 uv run python -m api.ingest
 uv run python -m api.ingest --apply
-
-# Single pillar (--scan, --safety, --eval, --benchmark)
-uv run python -m api.ingest --scan --apply
 uv run python -m api.ingest bootstrap --apply   # all pillars + summary line
-
-# Per-pillar loaders
-uv run python scanner/db/load_scans.py --apply
-uv run python safety/db/load_safety.py --apply
-uv run python evaluator/db/load_results.py --apply
-uv run python benchmarks/db/load_benchmarks.py --apply
 ```
 
-Schema and dry-run details: [`scanner/db/README.md`](../scanner/db/README.md),
+Schema and per-pillar loaders: [`scanner/db/README.md`](../scanner/db/README.md),
 [`safety/db/README.md`](../safety/db/README.md),
 [`evaluator/db/README.md`](../evaluator/db/README.md),
 [`benchmarks/db/README.md`](../benchmarks/db/README.md).
 
+## DCC vLLM (optional GPU backend)
+
+```bash
+uv run python -m scripts.dcc.vllm start --model Qwen/Qwen2.5-7B-Instruct
+uv run python -m scripts.dcc.vllm wait
+uv run python -m scripts.dcc.vllm status
+uv run python -m scripts.dcc.vllm stop
+```
+
+Thin wrappers: `./scripts/dcc/start_vllm.sh`, etc. See [`scripts/dcc/README.md`](../scripts/dcc/README.md).
+
 ## Application VM setup
 
 Production runs on the **application VM** (`model-advisor.colab.duke.edu`). DGX
-(gx10) is fine for local dev and scans; Postgres ingest usually requires the VM
-or VPN.
+(gx10) works for dev when Postgres is reachable from your network.
 
 ```bash
 git clone <repo-url> && cd security-and-qa-for-ai-models
 cp .env.example .env
-# Edit .env: DUKE_GATEWAY_KEY, HF_TOKEN (if needed), POSTGRES_DSN with ?sslmode=require
+# Edit .env: DUKE_GATEWAY_KEY, HF_TOKEN (if needed), POSTGRES_DSN + EFFICACY_DB_DSN
 
-uv sync --group db
-uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql
-uv run python -m dbutils.apply_schema safety/db/safety_schema.sql
-uv run python -m dbutils.apply_schema evaluator/db/efficacy_schema.sql
-uv run python -m dbutils.apply_schema benchmarks/db/benchmark_schema.sql
-uv run python -m api.ingest bootstrap --apply   # backfill artifacts already on disk
+uv sync --group dev
+./docker/build-pillars.sh
+./scripts/apply-schemas.sh --bootstrap
 
-./docker/run.sh up -d --build
+python main.py up -d --build
 curl -s http://127.0.0.1:5000/api/health | python -m json.tool
 ```
 
-After deploy, verify the JSON API: `GET /api/health` (`db_available: true` when
-Postgres is reachable), then `POST /api/scans` or `POST /api/benchmarks` with a
-JSON body, poll the returned `status_url`, and `GET` the detail route. See
-[`api/README.md`](../api/README.md).
+After deploy: `GET /api/health` → `db_available: true`, then POST a job and poll `status_url`. See [`api/README.md`](../api/README.md).
 
-Ongoing: `git pull && ./docker/run.sh up -d --build` to deploy; `uv run python -m
-api.ingest --apply` to bulk re-ingest artifacts copied from DGX.
+Ongoing: `git pull && ./docker/run.sh up -d --build`; `uv run python -m api.ingest --apply` to bulk re-ingest artifacts from DGX.

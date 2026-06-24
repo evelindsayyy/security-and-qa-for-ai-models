@@ -10,17 +10,16 @@ dependencies = [
     "flask>=3.1.3",
     "litellm>=1.87.1",
     "openai>=2.38.0",
+    "psycopg[binary]>=3.2",
     "pydantic>=2.0.0",
     "python-dotenv>=1.2.2",
     "pyyaml>=6.0.3",
 ]
 
 [dependency-groups]
-# Postgres driver for dbutils + pillar ingest (--apply) and optional UI read paths.
-# Optional on purpose: plain `uv sync` skips it; install with
-#   uv sync --group db
-db = ["psycopg[binary]>=3.2"]
-# CI and local lint/test: uv sync --group dev
+# CI and local lint/test: uv sync --group dev  (enough for UI + API + tests)
+# Pillar groups (scanner / safety / benchmarks) conflict — install at most ONE on
+# the host; browser "Start" jobs use Docker images that bake the right group.
 dev = ["pytest>=8.0", "ruff>=0.15.15"]
 # Scanner pillar (scanner/docker): uv sync --group scanner
 scanner = [
@@ -30,7 +29,7 @@ scanner = [
     "modelscan>=0.3.0",
     "pip-audit>=2.9.0",
 ]
-# Safety orchestrator (run_safety.sh / safety/docker): uv sync --group safety
+# Safety orchestrator (python -m safety.run / safety/docker): uv sync --group safety
 safety = ["garak>=0.14.0,<0.15"]
 # Public benchmark runners (benchmarks/docker): uv sync --group benchmarks
 benchmarks = [
@@ -45,7 +44,7 @@ benchmarks = [
     "requests>=2.32.0",
     "tqdm>=4.67.0",
 ]
-# vLLM for self-hosting open models on the DCC (scripts/dcc/start_vllm.sh).
+# vLLM for self-hosting open models on the DCC (python -m scripts.dcc.vllm).
 # CUDA/Linux-only, multi-GB install — do NOT install on a laptop. On the
 # cluster:  uv sync --group dcc
 dcc = ["vllm>=0.8; sys_platform == 'linux'"]

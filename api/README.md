@@ -90,7 +90,7 @@ Poll `status_url` until `status` is `complete` or `failed`, then GET the detail 
 ### Troubleshooting
 
 - **503 on POST** — output directory not writable (often root-owned from an old Docker run). **DGX (no sudo):** `docker run --rm -v "$PWD/scanner/output:/out" -u root busybox chown -R "$(id -u):$(id -g)" /out`. **With sudo:** `chown -R "$USER" scanner/output`. Export `UID`/`GID` before compose so new runs write as your user.
-- **`db_available: false`** — reads still work from disk; Postgres ingest needs VM/VPN + `POSTGRES_DSN`.
+- **`db_available: false`** — DSN missing, Postgres unreachable, or schemas not applied. Reads fall back to disk JSON. Run `GET /api/health` after setting `POSTGRES_DSN` and applying schemas.
 
 ### Pagination (list endpoints)
 
@@ -115,7 +115,7 @@ filtered count; `data` is the current page.
 }
 ```
 
-`db_available: false` means reads are served from on-disk JSON (documented fallback, not an error).
+`db_available: false` means reads use on-disk JSON until Postgres is configured and reachable.
 
 ## Response envelope
 

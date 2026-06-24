@@ -51,9 +51,10 @@ class SafetyDataTest(unittest.TestCase):
                 ],
             },
         )
-        data = safety_data.get_safety_data()
+        with mock.patch("frontend.safety_db_data.available", return_value=False):
+            data = safety_data.get_safety_data()
         self.assertTrue(data["has_safety"])
-        row = data["models"][0]
+        row = next(r for r in data["models"] if r["slug"] == slug)
         self.assertEqual(row["slug"], slug)
         self.assertEqual(row["n_failed"], 1)
         self.assertEqual(row["n_passed"], 1)

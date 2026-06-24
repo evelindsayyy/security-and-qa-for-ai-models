@@ -2,25 +2,34 @@
 
 How the images fit together. For commands, see [`cli.md`](cli.md).
 
+## Recommended local path
+
+```bash
+./docker/build-pillars.sh    # one-time pillar images
+python main.py               # containerized UI (default); same as ./docker/run.sh up --build
+```
+
+Production on the application VM uses the same scripts. Host Flask (`uv run flask …`) is a development alternative only.
+
 ## Two layers
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| App | `docker/` | Long-lived Flask UI for the application VM |
+| App | `docker/` | Long-lived Flask UI |
 | Job sandboxes | `*/docker/` | One-shot scan / safety / eval / benchmark runs |
 | Safety sub-tools | `safety/promptfoo/docker/`, `safety/garak/docker/` | Nested from the safety orchestrator |
 
-Dependencies live in [`pyproject.toml`](../pyproject.toml) + [`uv.lock`](../uv.lock). Optional groups: `dev` (pytest, ruff), `db` (psycopg), `scanner`, `safety`, `benchmarks`.
+Dependencies live in [`pyproject.toml`](../pyproject.toml) + [`uv.lock`](../uv.lock). Core deps include **psycopg**; optional groups: `dev` (pytest, ruff), and **one of** `scanner`, `safety`, or `benchmarks` (mutually exclusive — baked into pillar images instead).
 
 ## When Docker is used
 
 | Task | Docker? |
 |------|---------|
-| Unit tests, local UI dev | No (`uv run …`) |
+| Unit tests | No (`uv run …`) |
+| **UI (default)** | Yes — `./docker/run.sh` |
 | Browser "Start" buttons | Yes (default) |
 | HF scanning (untrusted files) | Yes |
 | Safety / eval / benchmark jobs from the UI | Yes |
-| Production UI on the VM | Yes — `docker/run.sh` |
 
 Set `FRONTEND_LAUNCH_MODE=host` to run pillar jobs as host Python instead of Docker.
 

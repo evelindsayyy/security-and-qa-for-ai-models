@@ -15,7 +15,7 @@ from safety.gateway_ids import normalize_gateway_model_id
 from safety.merged_paths import iter_merged_result_paths, merged_result_path
 
 ROOT = Path(__file__).parent.parent
-RUN_SCRIPT = ROOT / "safety" / "run_safety.sh"
+RUN_MODULE = "safety.run"
 
 # Per-slug output dirs wiped before a fresh run so the UI never blends stale
 # JSON from a previous run with new results.
@@ -120,7 +120,7 @@ def build_command(
     skip_promptfoo: bool = False,
     garak_probes: str | None = None,
 ) -> list[str]:
-    inner: list[str] = ["bash", str(RUN_SCRIPT.relative_to(ROOT))]
+    inner: list[str] = ["python", "-m", RUN_MODULE]
     inner.extend(["--redteam-profile", redteam_profile])
     if skip_policy:
         inner.append("--skip-policy")
@@ -135,7 +135,7 @@ def build_command(
     inner.append(model)
 
     if not docker_launch.use_docker():
-        return ["bash", str(RUN_SCRIPT), *inner[2:]]
+        return ["uv", "run", "python", "-m", RUN_MODULE, *inner[3:]]
 
     return docker_launch.compose_run_argv(
         "safety",

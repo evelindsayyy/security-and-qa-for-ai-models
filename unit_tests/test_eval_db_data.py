@@ -110,10 +110,8 @@ class DbRowMatchesFileRowTest(unittest.TestCase):
 
 
 class AvailabilityTest(unittest.TestCase):
-    def test_no_dsn_means_unavailable_without_importing_psycopg(self) -> None:
-        with mock.patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("EFFICACY_DB_DSN", None)
-            # reset the TTL cache so this test is deterministic
+    def test_no_dsn_means_unavailable(self) -> None:
+        with mock.patch.dict(os.environ, {}, clear=True):
             eval_db_data._avail_cache.update(checked_at=0.0, ok=False)
             self.assertFalse(eval_db_data.available())
 

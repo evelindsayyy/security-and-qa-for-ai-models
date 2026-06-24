@@ -60,7 +60,7 @@ class BuildCommandTest(unittest.TestCase):
     def test_command_is_argv_list(self) -> None:
         cmd = safety_launch.build_command("gpt-5.5")
         self.assertIsInstance(cmd, list)
-        self.assertIn("run_safety.sh", " ".join(cmd))
+        self.assertIn("safety.run", " ".join(cmd))
         self.assertIn("gpt-5.5", cmd)
 
     def test_garak_probes_forwarded(self) -> None:
