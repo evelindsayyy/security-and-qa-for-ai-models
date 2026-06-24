@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from safety.merged_paths import iter_merged_result_paths, merged_result_path
+
 ROOT = Path(__file__).parent.parent
 OUTPUT_DIR = ROOT / "safety" / "output"
 
@@ -244,9 +246,7 @@ def _get_safety_data_files() -> dict:
         }
 
     rows: list[dict] = []
-    for path in sorted(OUTPUT_DIR.glob("*/*/merged_safety_result.json")):
-        profile = path.parent.name
-        slug = path.parent.parent.name
+    for path, slug, profile in iter_merged_result_paths(OUTPUT_DIR):
         row = _summarize_merged(path, slug, profile)
         if row:
             rows.append(row)
@@ -263,7 +263,7 @@ def _get_safety_data_files() -> dict:
 
 def _get_safety_detail_files(slug: str, profile: str = "base") -> dict | None:
     """Structured safety payload for one (slug, profile) pair, read from disk."""
-    path = OUTPUT_DIR / slug / profile / "merged_safety_result.json"
+    path = merged_result_path(OUTPUT_DIR, slug, profile)
     if not path.is_file():
         return None
     try:

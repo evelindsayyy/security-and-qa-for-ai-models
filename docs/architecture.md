@@ -62,7 +62,17 @@ flowchart TB
 | 5 | — | Auto-ingest when `POSTGRES_DSN` is set (or bulk `python -m api.ingest --apply`) |
 | 6 | `GET …/<slug>/status`, `GET …/<slug>` | Poll job; read results (disk or Postgres) |
 
-Eval results are also available as JSON at `GET /api/evals` and `GET /api/evals/<slug>`.
+JSON API routes under `/api` for all four pillars (list, detail, status, POST start). See [`api/README.md`](../api/README.md). Example:
+
+```bash
+curl -s localhost:5000/api/health | python3 -m json.tool
+curl -s localhost:5000/api/scans | python3 -m json.tool
+curl -s -X POST localhost:5000/api/scans \
+  -H 'Content-Type: application/json' \
+  -d '{"hf_repo":"distilbert-base-uncased"}' | python3 -m json.tool
+```
+
+Eval results: `GET /api/evals`, `GET /api/evals/<slug>`, `POST /api/evals`.
 
 | Host | Runs | Notes |
 |------|------|-------|

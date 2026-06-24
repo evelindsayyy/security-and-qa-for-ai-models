@@ -18,6 +18,7 @@ from frontend.safety_data import (
     _summarize_merged,
     _summarize_merged_data,
 )
+from safety.merged_paths import iter_merged_result_paths
 
 load_repo_env()
 
@@ -199,13 +200,11 @@ def get_safety_data_db() -> dict:
         ]
     db_rows = [r for r in db_rows if r is not None]
 
-    seen_slugs = {r["slug"] for r in db_rows}
+    seen_keys = {(r["slug"], r["profile"]) for r in db_rows}
     file_rows: list[dict] = []
     if OUTPUT_DIR.exists():
-        for path in sorted(OUTPUT_DIR.glob("*/*/merged_safety_result.json")):
-            profile = path.parent.name
-            slug = path.parent.parent.name
-            if slug in seen_slugs:
+        for path, slug, profile in iter_merged_result_paths(OUTPUT_DIR):
+            if (slug, profile) in seen_keys:
                 continue
             row = _summarize_merged(path, slug, profile)
             if row is not None:

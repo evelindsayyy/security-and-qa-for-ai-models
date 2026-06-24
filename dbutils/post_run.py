@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Literal
 
+from dbutils.connection import psycopg_available
 from dbutils.env import load_repo_env, resolve_dsn
 
 Pillar = Literal["scan", "safety", "eval", "benchmark"]
@@ -53,6 +54,13 @@ def maybe_sync_artifact(path: Path, pillar: Pillar) -> None:
         print(
             "  WARN: auto-ingest enabled but no DSN "
             "(POSTGRES_DSN / DATABASE_URL / EFFICACY_DB_DSN); skipping.",
+            file=sys.stderr,
+        )
+        return
+    if not psycopg_available():
+        print(
+            "  WARN: auto-ingest skipped — psycopg not installed "
+            "(uv sync --group db). File kept on disk.",
             file=sys.stderr,
         )
         return

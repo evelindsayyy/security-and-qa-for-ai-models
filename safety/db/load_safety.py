@@ -29,9 +29,10 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from dbutils import apply_loader, iter_files, jsonb_param, load_repo_env, read_json
+from dbutils import apply_loader, jsonb_param, load_repo_env, read_json
 from dbutils.cli import add_ingest_arguments
 from dbutils.ingest import exit_if_apply_without_dsn, print_dry_run_hint
+from safety.merged_paths import iter_merged_result_paths
 from safety.schemas import MergedSafetyResult
 
 SAFETY = Path(__file__).resolve().parent.parent
@@ -225,8 +226,11 @@ def run_ingest(
 ) -> IngestResult:
     """Collect and optionally load safety runs. Used by CLI and api.ingest."""
     root = output_dir or OUTPUT_DIR
-    paths = iter_files(root, "*/merged_safety_result.json")
-    parsed = [t for t in (load_file(p) for p in paths) if t is not None]
+    parsed: list[tuple[dict, list[dict]]] = []
+    for path, _slug, _profile in iter_merged_result_paths(root):
+        loaded = load_file(path)
+        if loaded is not None:
+            parsed.append(loaded)
 
     print(f"{len(parsed)} loadable safety run(s) in {root}:")
     for run, findings in parsed:

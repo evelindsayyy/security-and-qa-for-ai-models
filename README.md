@@ -18,7 +18,7 @@ Automated **nutrition labels** for Duke AI Gateway models: **security** (artifac
 | I want to… | Start here |
 |------------|------------|
 | **Run the UI** on my machine | [Quick start](#quick-start) |
-| **CLI** — scans, safety, eval, benchmarks, tests | [`docs/cli.md`](docs/cli.md) |
+| **CLI and JSON API** — scans, safety, eval, benchmarks, tests | [`docs/cli.md`](docs/cli.md) · [`api/README.md`](api/README.md) |
 | **Docker model** (containerized UI, sibling jobs) | [`docs/docker.md`](docs/docker.md) |
 | **Understand the system** (VM, DGX, ingest, background jobs) | [`docs/architecture.md`](docs/architecture.md) |
 | **Postgres schema and ingest** | [`docs/data-model.md`](docs/data-model.md) · [`dbutils/README.md`](dbutils/README.md) |
@@ -43,7 +43,7 @@ frontend/      Nutrition-label UI
 docker/        Containerized UI for the application VM
 dbutils/       Shared Postgres ingest helpers
 docs/          Architecture, data model, frameworks
-api/           Flask REST + workers (planned)
+api/           Flask REST under /api (reads + job POST); see api/README.md
 unit_tests/    Automated tests
 ```
 

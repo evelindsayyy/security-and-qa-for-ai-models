@@ -24,7 +24,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential \
     && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
     && . "$HOME/.cargo/env" \
-    && uv sync --frozen --no-dev --no-install-project --group safety \
+    && uv sync --frozen --no-dev --no-install-project --group db --group safety \
     && apt-get purge -y build-essential && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* "$HOME/.cargo" "$HOME/.rustup"
 

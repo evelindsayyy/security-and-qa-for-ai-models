@@ -101,7 +101,8 @@ Do not block deploy on Fickling alone when ModelScan and ModelAudit are clean. S
 | Stage | `scanner/` | `safety/` |
 |-------|------------|-----------|
 | Done | package + CLI; deps, secrets, E2E `scan_model()`; Postgres ingest | `garak` + `promptfoo` + Duke probes; merge → `MergedSafetyResult`; Postgres ingest |
-| Next | GET `/api/scans`, `/api/safety`; full label UI in `frontend/` | same |
+| Done | `/api/scans` + label UI; output-dir writability checks | `/api/safety` + profile UI |
+| Next | LiteLLM guardrail hooks | agentic deployment probes |
 
 Target layout: [`scanner/README.md`](../scanner/README.md), [`docs/architecture.md`](architecture.md).
 

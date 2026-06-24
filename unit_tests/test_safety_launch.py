@@ -92,6 +92,17 @@ class GetStatusTest(unittest.TestCase):
         (self.out / slug / "base" / "merged_safety_result.json").write_text("{}", encoding="utf-8")
         self.assertEqual(safety_launch.get_status(slug, "base")["status"], "complete")
 
+    def test_complete_when_merged_exists_despite_failed_proc(self) -> None:
+        slug = "gpt-4.1-mini"
+        (self.out / slug / "base").mkdir(parents=True)
+        (self.out / slug / "base" / "merged_safety_result.json").write_text("{}", encoding="utf-8")
+        fake_proc = mock.Mock()
+        fake_proc.poll.return_value = 1
+        fake_proc.returncode = 1
+        safety_launch._RUNNING[f"{slug}/base"] = fake_proc
+        self.addCleanup(lambda: safety_launch._RUNNING.pop(f"{slug}/base", None))
+        self.assertEqual(safety_launch.get_status(slug, "base")["status"], "complete")
+
 
 class LaunchRoutesTest(unittest.TestCase):
     def setUp(self) -> None:

@@ -1,20 +1,22 @@
 """
 api/ — the JSON REST layer (Flask blueprints) over the pipeline's data.
 
-Today: Track B's efficacy read endpoints (``api/evals.py``). Track A will add
-scans/safety blueprints alongside; ``register_api()`` is the single place the
-app mounts them, all under the ``/api`` prefix. See docs/architecture.md.
+Blueprints mount under ``/api`` via ``register_api()`` in ``frontend/create_app``.
+See docs/architecture.md and api/README.md.
 """
 
 from __future__ import annotations
 
 from flask import Flask
 
+from api.benchmarks import bp as benchmarks_bp
 from api.evals import bp as evals_bp
 from api.health import bp as health_bp
+from api.safety import bp as safety_bp
+from api.scans import bp as scans_bp
 
 
 def register_api(app: Flask) -> None:
     """Mount every api/ blueprint on the given Flask app (prefix /api)."""
-    app.register_blueprint(evals_bp, url_prefix="/api")
-    app.register_blueprint(health_bp, url_prefix="/api")
+    for bp in (health_bp, evals_bp, scans_bp, safety_bp, benchmarks_bp):
+        app.register_blueprint(bp, url_prefix="/api")

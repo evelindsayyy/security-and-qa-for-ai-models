@@ -24,6 +24,34 @@ uv run flask --app frontend:create_app run --debug          # add --port 5001 if
 
 Set `APP_PORT` in `.env` to change the port. Open `http://127.0.0.1:5000`.
 
+## JSON API
+
+Same Flask app as the UI. See [`api/README.md`](../api/README.md).
+
+```bash
+# Health (db_available false on DGX without Postgres is normal)
+curl -s localhost:5001/api/health | python3 -m json.tool
+
+# List + start a scan (202 + status_url)
+curl -s localhost:5001/api/scans | python3 -m json.tool
+curl -s -X POST localhost:5001/api/scans \
+  -H 'Content-Type: application/json' \
+  -d '{"hf_repo":"distilbert-base-uncased"}' | python3 -m json.tool
+curl -s localhost:5001/api/scans/distilbert-base-uncased/status | python3 -m json.tool
+
+# Safety, eval, benchmark — POST bodies in api/README.md
+curl -s localhost:5001/api/safety | python3 -m json.tool
+curl -s localhost:5001/api/evals | python3 -m json.tool
+curl -s localhost:5001/api/benchmarks | python3 -m json.tool
+```
+
+If `POST /api/scans` returns **503** with “cannot write”, output is often root-owned. On DGX (no sudo):
+
+```bash
+docker run --rm -v "$PWD/scanner/output:/out" -u root busybox \
+  chown -R "$(id -u):$(id -g)" /out
+```
+
 ## Pillar jobs
 
 Browser "Start" buttons run these for you. To run them directly, set the file
@@ -120,3 +148,33 @@ Schema and dry-run details: [`scanner/db/README.md`](../scanner/db/README.md),
 [`safety/db/README.md`](../safety/db/README.md),
 [`evaluator/db/README.md`](../evaluator/db/README.md),
 [`benchmarks/db/README.md`](../benchmarks/db/README.md).
+
+## Application VM setup
+
+Production runs on the **application VM** (`model-advisor.colab.duke.edu`). DGX
+(gx10) is fine for local dev and scans; Postgres ingest usually requires the VM
+or VPN.
+
+```bash
+git clone <repo-url> && cd security-and-qa-for-ai-models
+cp .env.example .env
+# Edit .env: DUKE_GATEWAY_KEY, HF_TOKEN (if needed), POSTGRES_DSN with ?sslmode=require
+
+uv sync --group db
+uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql
+uv run python -m dbutils.apply_schema safety/db/safety_schema.sql
+uv run python -m dbutils.apply_schema evaluator/db/efficacy_schema.sql
+uv run python -m dbutils.apply_schema benchmarks/db/benchmark_schema.sql
+uv run python -m api.ingest bootstrap --apply   # backfill artifacts already on disk
+
+./docker/run.sh up -d --build
+curl -s http://127.0.0.1:5000/api/health | python -m json.tool
+```
+
+After deploy, verify the JSON API: `GET /api/health` (`db_available: true` when
+Postgres is reachable), then `POST /api/scans` or `POST /api/benchmarks` with a
+JSON body, poll the returned `status_url`, and `GET` the detail route. See
+[`api/README.md`](../api/README.md).
+
+Ongoing: `git pull && ./docker/run.sh up -d --build` to deploy; `uv run python -m
+api.ingest --apply` to bulk re-ingest artifacts copied from DGX.

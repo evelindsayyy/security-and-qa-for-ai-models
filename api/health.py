@@ -1,15 +1,7 @@
 """
 api/health.py — liveness endpoint.
 
-    GET /api/health   -> {"status": "ok", "db_available": <bool>}
-
-A zero-dependency way for a client (or a load balancer / uptime check) to
-confirm the API is up *without* hitting the data endpoints, and to see whether
-the Postgres read-path is currently active (``db_available=false`` means reads
-are being served from result files — the documented fallback, not an error).
-
-Its own blueprint so ``register_api`` mounts two — the multi-blueprint seam the
-package was built around.
+    GET /api/health   -> status, db_available, per-pillar db flags
 """
 
 from __future__ import annotations
@@ -17,12 +9,36 @@ from __future__ import annotations
 from flask import Blueprint
 
 from api.responses import ok
-from frontend import eval_db_data
 
 bp = Blueprint("health_api", __name__)
 
 
+def _pillar_db_flags() -> dict[str, bool]:
+    flags: dict[str, bool] = {}
+    for name, mod_path in (
+        ("scan", "frontend.scan_db_data"),
+        ("safety", "frontend.safety_db_data"),
+        ("eval", "frontend.eval_db_data"),
+        ("benchmark", "frontend.benchmark_db_data"),
+    ):
+        try:
+            import importlib
+
+            mod = importlib.import_module(mod_path)
+            flags[name] = bool(mod.available())
+        except Exception:
+            flags[name] = False
+    return flags
+
+
 @bp.get("/health")
 def health():
-    """Liveness + whether the DB read-path is currently reachable."""
-    return ok({"status": "ok", "db_available": eval_db_data.available()})
+    """Liveness + whether the Postgres read-path is currently reachable."""
+    pillars = _pillar_db_flags()
+    return ok(
+        {
+            "status": "ok",
+            "db_available": any(pillars.values()),
+            "pillars": pillars,
+        }
+    )

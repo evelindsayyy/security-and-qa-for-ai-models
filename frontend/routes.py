@@ -395,6 +395,18 @@ def register_routes(app):
         slug, profile = run_key.split("/", 1)
         return redirect(url_for("safety_detail", slug=slug, profile=profile, status="running"))
 
+    @app.route("/safety/<slug>/status")
+    def safety_run_status_legacy(slug: str):
+        from flask import redirect, url_for
+
+        return redirect(url_for("safety_run_status", slug=slug, profile="base"))
+
+    @app.route("/safety/<slug>")
+    def safety_detail_legacy(slug: str):
+        from flask import redirect, url_for
+
+        return redirect(url_for("safety_detail", slug=slug, profile="base"))
+
     @app.route("/safety/<slug>/<profile>/status")
     def safety_run_status(slug: str, profile: str):
         from flask import jsonify
