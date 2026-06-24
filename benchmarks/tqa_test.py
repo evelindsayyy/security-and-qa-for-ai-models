@@ -91,7 +91,7 @@ TEST_LIMIT = int(TQA_LIMIT) if TQA_LIMIT.isdigit() and int(TQA_LIMIT) > 0 else N
 class TruthfulQATestRunner:
     """Runs multiple-choice TruthfulQA tests on different models."""
     
-    def __init__(self, output_dir: str = "./test_results"):
+    def __init__(self, output_dir: str = str(HERE / "results")):
         """Initialize the test runner."""
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)

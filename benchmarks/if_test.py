@@ -2,7 +2,7 @@
 IFEval quick runner — single-file self-contained script.
 
 Run: open the file in your editor and press Run (uses LITELLM_API_KEY env).
-Outputs: auto-named JSONL files under test_results, e.g. ifeval_<model>_<timestamp>.jsonl.
+Outputs: auto-named JSONL files under results, e.g. ifeval_<model>_<timestamp>.jsonl.
 """
 
 from datasets import load_dataset
@@ -28,8 +28,10 @@ litellm.suppress_debug_info = True
 BASE_URL = os.getenv("LITELLM_BASE_URL") or os.getenv("DUKE_GATEWAY_URL") or "https://litellm.oit.duke.edu/v1"
 API_KEY = os.getenv("LITELLM_API_KEY") or os.getenv("DUKE_GATEWAY_KEY") or os.getenv("OPENAI_API_KEY")
 MODEL = os.getenv("IFEVAL_MODEL", "openai/gpt-5.1")
-OUTPUT_FILE = os.getenv("IFEVAL_OUTPUT")
 HERE = Path(__file__).resolve().parent
+# IFEVAL_OUTPUT is the output *directory* (matches run_benchmark.py and the
+# other runners). IFEVAL_OUTPUT_FILE optionally pins a full file path.
+OUTPUT_FILE = os.getenv("IFEVAL_OUTPUT_FILE")
 OUTPUT_DIR = os.getenv("IFEVAL_OUTPUT", str(HERE / "results"))
 SAMPLE_SIZE = int(os.getenv("IFEVAL_SAMPLE", "10"))
 SEED = int(os.getenv("IFEVAL_SEED", "42"))

@@ -20,8 +20,9 @@ API_KEY = (
     or os.getenv("DUKE_GATEWAY_KEY")
     or os.getenv("OPENAI_API_KEY")
 )
+HERE = Path(__file__).resolve().parent
 MODEL = os.getenv("QUALITY_MODEL", "openai/gpt-5.1")
-OUTPUT_DIR = os.getenv("QUALITY_OUTPUT", "test_results")
+OUTPUT_DIR = os.getenv("QUALITY_OUTPUT", str(HERE / "results"))
 SAMPLE_SIZE = int(os.getenv("QUALITY_SAMPLE", "3"))   # number of articles
 MAX_ROWS = int(os.getenv("QUALITY_MAX_ROWS", "0"))      # 0 = no limit
 SEED = int(os.getenv("QUALITY_SEED", "42"))

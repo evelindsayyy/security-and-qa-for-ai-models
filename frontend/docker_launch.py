@@ -39,9 +39,14 @@ _lock = threading.Lock()
 def use_docker() -> bool:
     mode = os.environ.get(
         "FRONTEND_LAUNCH_MODE",
-        os.environ.get("SCAN_LAUNCH_MODE", "docker"),
+        os.environ.get("SCAN_LAUNCH_MODE"),
     )
-    return mode.strip().lower() != "host"
+    if mode is not None:
+        return mode.strip().lower() != "host"
+    # No explicit override. Docker bind-mount UID/GID mapping needs POSIX, so
+    # default to host mode on platforms without os.getuid (e.g. Windows) where
+    # the Docker launch path can't run anyway.
+    return hasattr(os, "getuid")
 
 
 def docker_available() -> bool:
@@ -116,6 +121,8 @@ def _stack_paths(stack: str) -> tuple[Path, str]:
 
 
 def _uid_gid_env() -> dict[str, str]:
+    if not hasattr(os, "getuid"):
+        return {}
     return {"UID": str(os.getuid()), "GID": str(os.getgid())}
 
 

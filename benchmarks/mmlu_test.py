@@ -12,7 +12,7 @@ ENV VARIABLES:
     LITELLM_API_KEY     - required
     LITELLM_BASE_URL    - default: https://litellm.oit.duke.edu/v1
     MMLU_MODEL          - default: openai/gpt-5.1
-    MMLU_OUTPUT         - default: test_results
+    MMLU_OUTPUT         - default: results
     MMLU_SAMPLE         - number of questions to sample (default: 100, 0 = full dataset)
     MMLU_SEED           - random seed for sampling (default: 42)
 """

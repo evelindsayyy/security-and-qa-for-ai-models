@@ -14,7 +14,7 @@ ENV VARIABLES:
     LITELLM_API_KEY     - required
     LITELLM_BASE_URL    - default: https://litellm.oit.duke.edu/v1
     MBPP_MODEL          - default: openai/gpt-5.1-chat
-    MBPP_OUTPUT         - default: test_results
+    MBPP_OUTPUT         - default: results
     MBPP_SAMPLE         - number of problems to sample (default: 50, 0 = full dataset)
     MBPP_SEED           - random seed for sampling (default: 42)
     MBPP_TIMEOUT        - seconds before killing code execution (default: 5)
@@ -43,10 +43,11 @@ litellm.suppress_debug_info = True
 # CONFIGURATION
 # ============================================================================
 
+HERE = Path(__file__).resolve().parent
 BASE_URL = os.getenv("LITELLM_BASE_URL") or os.getenv("DUKE_GATEWAY_URL") or "https://litellm.oit.duke.edu/v1"
 API_KEY = os.getenv("LITELLM_API_KEY") or os.getenv("DUKE_GATEWAY_KEY") or os.getenv("OPENAI_API_KEY")
 MODEL = os.getenv("MBPP_MODEL", "openai/gpt-5.1")
-OUTPUT_DIR = os.getenv("MBPP_OUTPUT", "test_results")
+OUTPUT_DIR = os.getenv("MBPP_OUTPUT", str(HERE / "results"))
 SAMPLE_SIZE = int(os.getenv("MBPP_SAMPLE", "50"))
 SEED = int(os.getenv("MBPP_SEED", "42"))
 TIMEOUT = int(os.getenv("MBPP_TIMEOUT", "5"))
