@@ -32,4 +32,4 @@ Tests mock gateway calls and default to `FRONTEND_LAUNCH_MODE=host` — no Docke
 | `test_scanner_*` | ModelAudit filters, dependency merge, secret parse, paths |
 | `test_run_benchmark` | Benchmark slug/stem validation |
 
-Fixtures: `unit_tests/fixtures/`. Live scans: `scanner/output/` (DGX, gitignored).
+Fixtures: `unit_tests/fixtures/`. Live scan output: `scanner/output/` (gitignored on host).

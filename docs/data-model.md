@@ -85,21 +85,21 @@ Shapes: `scanner/schemas.py` (`ScanResult`, `Finding`).
 
 ## `safety_runs` / `safety_findings` (Track A — safety)
 
-One red-team job against one or more gateway models.
+One red-team job against one or more gateway models (or, when DCC is wired, an open-weight endpoint).
 
 **`safety_runs`:**
 
-| Column | Example |
-|--------|---------|
-| `id` | UUID |
-| `gateway_model_id` | `gpt-4.1-mini` |
-| `inference_backend` | string | `gateway` (LiteLLM) \| `dcc` (open weights served on the cluster) |
-| `hf_repo` | string, nullable | set when an open-weight model was served on DCC instead of the gateway |
-| `status` | `complete` |
-| `deployment_context` | JSONB (required for ITSO-aligned probes) |
+| Column | Example | Notes |
+|--------|---------|-------|
+| `id` | UUID | |
+| `gateway_model_id` | `gpt-4.1-mini` | Gateway id, or display id when using DCC |
+| `inference_backend` | `gateway` \| `dcc` | Schema ready; UI jobs use `gateway` today; DCC planned |
+| `hf_repo` | nullable | Set when an open-weight model was served on DCC |
+| `status` | `complete` | |
+| `deployment_context` | JSONB | Required for ITSO-aligned probes |
 | `probe_suite` | string | `garak_subset_v1` or `promptfoo_duke_policy_v1` |
 | `summary_pass_rate` | float | `0.85` |
-| `tool_results` | JSONB | `{"garak": {...}, "promptfoo": {...}}` raw blobs (shapes in `safety/schemas.py`) |
+| `tool_results` | JSONB | `{"garak": {...}, "promptfoo": {...}}` |
 | `started_at` / `completed_at` | timestamptz | |
 
 **`safety_findings`** (normalized for UI):
@@ -144,10 +144,10 @@ Pydantic types in `safety/schemas.py` match this table.
 |--------|---------|
 | `id` | UUID (= `evaluation_run_id` from the JSONL) |
 | `suite_id` | FK → `task_suites` |
-| `gateway_model_id` | `gpt-4.1-mini` |
-| `judge_model` | `Llama 4 Maverick` (LLM-as-judge — postdates the original sketch) |
-| `inference_backend` | *planned* — `gateway` \| `dcc` (open weights on the cluster) |
-| `hf_repo` | *planned*, nullable — open-weight model served on DCC |
+| `gateway_model_id` | `gpt-4.1-mini` | |
+| `judge_model` | `Llama 4 Maverick` | LLM-as-judge |
+| `inference_backend` | `gateway` \| `dcc` | In JSONL `adaptation` today (CLI sets `dcc`); Postgres column *planned* |
+| `hf_repo` | nullable | Open-weight HF id when `inference_backend=dcc` |
 | `status` | `complete` |
 | `aggregate_score` | float — mean of per-question `overall` |
 | `latency_p50_ms` / `latency_p95_ms` | int |
@@ -196,7 +196,7 @@ One shared table — each benchmark produces the same run envelope (`frontend/be
 | `model_id` | FK → `models` | |
 | `gateway_model_id` | string | `gpt-4.1-mini` |
 | `benchmark_key` | string | `ifeval` \| `truthfulqa` \| `mmlu` \| `tomi` \| `consistency` |
-| `inference_backend` | string | `gateway` \| `dcc` |
+| `inference_backend` | string | `gateway` (default) \| `dcc` — column in DDL; DCC pillar wiring planned |
 | `status` | string | `complete` |
 | `headline_metric` | string | `pass_rate` \| `accuracy` \| `mean_f1` |
 | `headline_value` | float | `0.83` |

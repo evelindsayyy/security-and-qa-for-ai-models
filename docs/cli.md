@@ -2,7 +2,7 @@
 
 All commands run from the **repo root**.
 
-On the host shell (DGX, application VM), use **`python3`** — many Ubuntu images do not provide a `python` shim. Inside pillar containers, `python` is fine.
+On the host shell (application VM or dev workstation), use **`python3`** — many Ubuntu images do not provide a `python` shim. Inside pillar containers, `python` is fine.
 
 ## First-time setup
 
@@ -31,7 +31,7 @@ uv run flask --app frontend:create_app run --debug --port 5001
 
 ### Optional — Postgres (one-time)
 
-When `POSTGRES_DSN` is reachable (DGX, VM, or VPN). Set `EFFICACY_DB_DSN` to the same DSN.
+When `POSTGRES_DSN` is reachable from the application VM (or VPN). Set `EFFICACY_DB_DSN` to the same DSN.
 
 ```bash
 ./scripts/apply-schemas.sh --bootstrap
@@ -92,7 +92,7 @@ curl -s localhost:5000/api/evals | python3 -m json.tool
 curl -s localhost:5000/api/benchmarks | python3 -m json.tool
 ```
 
-If `POST /api/scans` returns **503** with “cannot write”, output is often root-owned. On DGX (no sudo):
+If `POST /api/scans` returns **503** with “cannot write”, output is often root-owned from an old Docker run. On the application VM (or any host without sudo):
 
 ```bash
 docker run --rm -v "$PWD/scanner/output:/out" -u root busybox \
@@ -181,7 +181,11 @@ Schema and per-pillar loaders: [`scanner/db/README.md`](../scanner/db/README.md)
 [`evaluator/db/README.md`](../evaluator/db/README.md),
 [`benchmarks/db/README.md`](../benchmarks/db/README.md).
 
-## DCC vLLM (optional GPU backend)
+## DCC vLLM (open-weight inference)
+
+For **open-source models** served on the Duke Compute Cluster instead of the gateway.
+**Today:** evaluator CLI only (`--candidate-endpoint`, `--inference-backend dcc`).
+**Planned:** safety and benchmarks via the same endpoint override pattern.
 
 ```bash
 uv run python -m scripts.dcc.vllm start --model Qwen/Qwen2.5-7B-Instruct
@@ -194,8 +198,9 @@ Thin wrappers: `./scripts/dcc/start_vllm.sh`, etc. See [`scripts/dcc/README.md`]
 
 ## Application VM setup
 
-Production runs on the **application VM** (`model-advisor.colab.duke.edu`). DGX
-(gx10) works for dev when Postgres is reachable from your network.
+Production runs on the **application VM** (`model-advisor.colab.duke.edu`). All UI
+jobs and pillar Docker containers run on this host. A DGX or laptop can be used for
+optional CLI dev when Postgres is reachable from your network.
 
 ```bash
 git clone <repo-url> && cd security-and-qa-for-ai-models
@@ -212,4 +217,4 @@ curl -s http://127.0.0.1:5000/api/health | python3 -m json.tool
 
 After deploy: `GET /api/health` → `db_available: true`, then POST a job and poll `status_url`. See [`api/README.md`](../api/README.md).
 
-Ongoing: `git pull && ./docker/run.sh up -d --build`; `uv run python -m api.ingest --apply` to bulk re-ingest artifacts from DGX.
+Ongoing: `git pull && ./docker/run.sh up -d --build`; `uv run python -m api.ingest --apply` to bulk re-ingest artifacts from VM disk.

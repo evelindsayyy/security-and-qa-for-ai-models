@@ -20,7 +20,7 @@ Track B: [`track-b-framework.md`](track-b-framework.md). Tools: [`tool-stack.md`
 ## Scanning (artifacts)
 
 When: before on-prem or HF weights are deployed.  
-Where: **`scanner/`** only (code, `models/`, `output/` on DGX; spikes in `scanner/experiments/`).
+Where: **`scanner/`** only (code, `models/`, `output/` on the application VM in production; optional dev host; spikes in `scanner/experiments/`).
 
 ```text
 model_id → metadata (optional) → download → ModelScan + Fickling + ModelAudit

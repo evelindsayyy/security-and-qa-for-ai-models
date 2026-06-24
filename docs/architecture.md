@@ -18,50 +18,99 @@ Teams and schedule: [`team-tracks.md`](team-tracks.md).
 
 ## How a run flows
 
-Jobs start from the nutrition-label UI or CLI. The UI returns immediately and
-polls status while a background launcher (`frontend/*_launch.py`) runs the pillar
-in Docker or on the host. Results land as JSON under each pillar's output dir;
+Jobs start from the nutrition-label UI or CLI. The UI returns immediately with a
+job id; a background launcher (`frontend/*_launch.py`) runs the pillar in Docker on
+the **application VM**. Results land as JSON under each pillar's output dir;
 optional ingest upserts into Postgres. The UI reads via `frontend/*_data.py`
 (Postgres when a DSN is set and reachable, else on-disk JSON).
 
 ```mermaid
-flowchart TB
-  A([Analyst browser])
+flowchart LR
+  Browser["1 Browser"]
+  UI["2 UI frontend + api"]
+  Launcher["3 Launcher docker compose"]
 
   subgraph VM["Application VM"]
-    FE["frontend/ (Flask)"]
-    LAUNCH["background launcher<br/>subprocess + Docker"]
-    ING["pillar ingest CLIs"]
-    DB[("Postgres")]
+    direction TB
+    SC["4a scanner"]
+    SF["4b safety"]
+    EV["4c evaluator"]
+    BM["4d benchmarks"]
   end
 
-  subgraph BK["Backends"]
-    SC["scanner/<br/>Docker sandbox · DGX"]
-    GW["Duke AI Gateway · LiteLLM"]
-    DC["vLLM · DCC SLURM GPU"]
+  JSON["5 JSON artifacts"]
+  Ingest["6 Ingest"]
+  PG[("7 Postgres")]
+
+  subgraph External["External services"]
+    direction TB
+    HF[("Hugging Face")]
+    GW["Duke AI Gateway"]
+    DCC["DCC vLLM SLURM"]
   end
 
-  A -->|"1 POST …/start"| FE
-  FE -->|"2 spawn job (non-blocking)"| LAUNCH
-  FE -.->|"job id to browser"| A
-  LAUNCH -->|"3a scan: HF files"| SC
-  LAUNCH -->|"3b safety / eval / benchmark: chat"| GW
-  LAUNCH -->|"3c optional: chat"| DC
-  SC & GW & DC -->|"4 results"| LAUNCH
-  LAUNCH -->|"5 write JSON artifact"| FE
-  ING -->|"6 upsert (optional)"| DB
-  A -->|"7 GET …/status, …/<slug>"| FE
-  FE -->|"read JSON or DB"| DB
+  Browser -->|"POST start"| UI
+  UI -.->|"job id"| Browser
+  Browser -->|"GET status"| UI
+
+  UI --> Launcher --> SC
+  Launcher --> SF
+  Launcher --> EV
+  Launcher --> BM
+
+  SC --> JSON
+  SF --> JSON
+  EV --> JSON
+  BM --> JSON
+  JSON --> Ingest --> PG
+
+  UI -->|"read DSN"| PG
+  UI -->|"fallback"| JSON
+
+  SC -->|"HF download"| HF
+  SF --> GW
+  EV --> GW
+  BM --> GW
+  EV -.->|"open-weight CLI today"| DCC
+  SF -.->|"open-weight planned"| DCC
+  BM -.->|"open-weight planned"| DCC
 ```
 
-| Step | Route | What happens |
-|------|-------|--------------|
-| 1 | `POST /scans/start`, `/safety/start`, `/eval-run/start`, `/benchmarks/start` | Spawn background launcher |
-| 2 | — | `subprocess` / `docker compose run` via `frontend/*_launch.py` |
-| 3 | — | Pillar calls DGX, gateway, or DCC |
-| 4 | — | Backend returns; launcher writes JSON under `*/output/` or `*/results/` |
-| 5 | — | Auto-ingest when `POSTGRES_DSN` is set (or bulk `python -m api.ingest --apply`) |
-| 6 | `GET …/<slug>/status`, `GET …/<slug>` | Poll job; read results (disk or Postgres) |
+**Reading the diagram:** follow the main spine **left to right** (steps 1–7).
+Steps 1–3 are the browser request and job spawn. Step 4 is where work happens —
+**all four pillars run in Docker on the application VM**. External services sit on
+the right: Hugging Face for scans; Duke Gateway for chat (default); DCC (dashed)
+for open-weight models on safety, eval, and benchmarks — eval CLI today, others
+on the roadmap. Steps 5–7 persist and serve results.
+
+| Step | What | Detail |
+|------|------|--------|
+| **1** | Analyst uses browser | Start a job or open a nutrition-label page |
+| **2** | `frontend/` + `api/` | `POST /scans/start`, `/safety/start`, `/eval-run/start`, `/benchmarks/start` (or `/api/…`) — returns immediately |
+| **3** | `frontend/*_launch.py` | Non-blocking `subprocess` → `docker compose run` on the VM Docker socket |
+| **4** | Pillar containers | `scanner/`, `safety/`, `evaluator/`, `benchmarks/` — see tables below |
+| **5** | JSON on disk | Artifacts under each pillar's output dir (source of truth) |
+| **6** | Ingest | Auto-sync when `POSTGRES_DSN` is set (`AUTO_INGEST=0` to disable); bulk: `python -m api.ingest --apply` |
+| **7** | Postgres + UI read | UI polls status, then reads Postgres (preferred) or disk JSON |
+
+| Pillar | Today (VM UI + Docker) | Open-weight on DCC |
+|--------|------------------------|--------------------|
+| **scanner/** | Hugging Face download + security tools in sandbox | N/A (artifact scan, not chat) |
+| **safety/** | garak + promptfoo + policy probes via Duke Gateway | Planned — same endpoint override as eval |
+| **evaluator/** | LLM-judge suites via Duke Gateway (UI) | CLI today: `--candidate-endpoint`, `--inference-backend dcc`; UI wiring future |
+| **benchmarks/** | Public benchmark harness via Duke Gateway | Planned — `inference_backend` in schema |
+
+| Host | Runs | Notes |
+|------|------|-------|
+| **Application VM** | Flask UI, all pillar Docker jobs, ingest | Production — one host, Docker socket |
+| **Duke AI Gateway** | Cloud / API chat inference (LiteLLM) | Default for safety, eval, benchmark |
+| **DCC** | vLLM on SLURM for open-weight models | Eval CLI today; safety + benchmarks planned |
+| **DGX** | Optional manual CLI dev | Not in production flow |
+
+The application VM runs the UI and every browser-started job via `docker compose run`
+on the host Docker socket. Scans download Hugging Face artifacts into a Docker
+sandbox on the VM (no GPU). Safety, eval, and benchmark call the Duke gateway
+over HTTPS by default. **Docker layout:** [`docker.md`](docker.md).
 
 JSON API routes under `/api` for all four pillars (list, detail, status, POST start). See [`api/README.md`](../api/README.md). Example:
 
@@ -75,20 +124,15 @@ curl -s -X POST localhost:5000/api/scans \
 
 Eval results: `GET /api/evals`, `GET /api/evals/<slug>`, `POST /api/evals`.
 
-| Host | Runs | Notes |
-|------|------|-------|
-| **Application VM** | Flask app ([`docker/`](../docker/)), background launchers, ingest | Shared UI and job orchestration |
-| **DGX** | `scanner/` in a Docker sandbox | Isolates untrusted model files |
-| **Duke AI Gateway** | cloud / API inference (LiteLLM) | Default chat backend |
-| **DCC** | open-weight inference (vLLM on SLURM) | Optional GPU backend |
-
-Multiple hosts: untrusted scans stay sandboxed on DGX; the gateway and DCC serve inference; the application VM runs the shared UI and launchers. **Docker layout:** [`docker.md`](docker.md).
-
 ## Key concepts
 
 ### Application VM
 
-The **application VM** is the always-on Linux server Duke OIT provides for this project. It runs the shared UI (`frontend/`), `api/`, background job launchers, and ingest. Long jobs are orchestrated from here; heavy or untrusted work is delegated to DGX, the gateway, or DCC.
+The **application VM** is the always-on Linux server Duke OIT provides for this
+project. It runs the UI (`frontend/`), `api/`, all four pillar jobs in Docker,
+background launchers, and ingest. Chat inference goes to the Duke gateway by
+default; open-weight models can target DCC (eval CLI today; safety and benchmarks
+planned).
 
 ### Background jobs
 
@@ -113,21 +157,23 @@ Pillars define the contract in code (`scanner/schemas.py`, `safety/schemas.py`, 
 
 ## Inference: two backends
 
-Safety and efficacy reach a model over an OpenAI-compatible chat API. The backend is a flag; everything after the chat call is identical.
+Safety, eval, and benchmarks reach a model over an OpenAI-compatible chat API.
+The backend is recorded in `inference_backend` on each run; everything after the
+chat call is identical.
 
-| Backend | Models | Default? |
-|---------|--------|----------|
-| **Duke AI Gateway** (LiteLLM) | cloud / API-key | yes — gateway guardrails apply |
-| **DCC** (SLURM + vLLM) | open-source weights | optional — `--candidate-endpoint` on evaluator CLI |
+| Backend | Models | Status |
+|---------|--------|--------|
+| **Duke AI Gateway** (LiteLLM) | Cloud / API-key gateway models | Default for all UI jobs |
+| **DCC** (SLURM + vLLM) | Open-source HF weights | Eval CLI today (`--candidate-endpoint`, `--inference-backend dcc`, `--hf-repo` in [`evaluator/runner.py`](../evaluator/runner.py)); safety + benchmarks planned |
 
 ## Jobs and data paths
 
-| Job | Track | UI routes | Backend | Postgres tables |
-|-----|-------|-----------|---------|-----------------|
-| Scan | A | `/scans` | Hugging Face files (DGX) | `scans`, `findings` |
-| Safety | A | `/safety` | gateway | `safety_runs`, `safety_findings` |
-| Eval | B | `/eval-run` | gateway / DCC | `eval_runs`, `eval_results` |
-| Benchmark | B | `/benchmarks` | gateway | `benchmark_runs` |
+| Job | Track | UI routes | Inference (default) | DCC (open-weight) | Postgres tables |
+|-----|-------|-----------|----------------------|-------------------|-----------------|
+| Scan | A | `/scans` | Hugging Face (VM Docker sandbox) | — | `scans`, `findings` |
+| Safety | A | `/safety` | Duke Gateway | Planned | `safety_runs`, `safety_findings` |
+| Eval | B | `/eval-run` | Duke Gateway | CLI today; UI future | `eval_runs`, `eval_results` |
+| Benchmark | B | `/benchmarks` | Duke Gateway | Planned | `benchmark_runs` |
 
 All four pillars have optional Postgres ingest. When a DSN is set and reachable, the UI reads Postgres for every pillar (merged
 with artifacts not yet loaded); otherwise it reads artifacts directly.
@@ -149,13 +195,13 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 
 | Host | Role |
 |------|------|
-| **Application VM** (`vcm@model-advisor.colab.duke.edu`) | Production service: `./docker/run.sh up` → Flask UI + `api/` in one container; spawns pillar Docker jobs via host socket; `.env` holds secrets |
-| **DGX** (e.g. gx10) | Dev / scan sandbox — local runs; Postgres when DSN is reachable (disk JSON fallback) |
-| **DCC** | Optional SLURM + vLLM for open-weight eval (`--candidate-endpoint`); see [`scripts/dcc/`](../scripts/dcc/README.md) |
-| **Duke AI Gateway** | Default chat backend for safety, eval, benchmarks |
-| **OIT Postgres** | Shared team DB (`qa_ai_models`); not on the VM |
+| **Application VM** (`vcm@model-advisor.colab.duke.edu`) | Production: `./docker/run.sh up` → Flask UI + `api/`; all pillar jobs via host Docker socket; `.env` holds secrets |
+| **DCC** | SLURM + vLLM for open-weight chat (eval CLI today; safety + benchmarks planned); see [`scripts/dcc/`](../scripts/dcc/README.md) |
+| **Duke AI Gateway** | Default chat backend for safety, eval, benchmarks (HTTPS, no local GPU) |
+| **OIT Postgres** | Shared team DB (`qa_ai_models`); external to the VM |
+| **DGX** (e.g. gx10) | Optional dev workstation — not required for production |
 
-**VM layout:** git clone + `.env` + `./docker/run.sh up -d --build`. The web container bind-mounts the repo and Docker socket; pillar jobs write JSON on the VM disk. Postgres is external.
+**VM layout:** git clone + `.env` + `./docker/build-pillars.sh` + `./docker/run.sh up -d --build`. The web container bind-mounts the repo and Docker socket; pillar jobs write JSON on the VM disk. Postgres is external.
 
 **CI (GitLab):** lint → unit tests → on `main`, Buildah builds `docker/Dockerfile` and pushes to the GitLab container registry. Deploy job is not wired yet; GitLab CI/CD variables (`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_PRIVATE_KEY`, `DEPLOY_SSH_KNOWN_HOSTS`) are for a future SSH deploy to the VM.
 

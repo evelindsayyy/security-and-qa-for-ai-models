@@ -89,7 +89,7 @@ Poll `status_url` until `status` is `complete` or `failed`, then GET the detail 
 
 ### Troubleshooting
 
-- **503 on POST** — output directory not writable (often root-owned from an old Docker run). **DGX (no sudo):** `docker run --rm -v "$PWD/scanner/output:/out" -u root busybox chown -R "$(id -u):$(id -g)" /out`. **With sudo:** `chown -R "$USER" scanner/output`. Export `UID`/`GID` before compose so new runs write as your user.
+- **503 on POST** — output directory not writable (often root-owned from an old Docker run). **Application VM (no sudo):** `docker run --rm -v "$PWD/scanner/output:/out" -u root busybox chown -R "$(id -u):$(id -g)" /out`. **With sudo:** `chown -R "$USER" scanner/output`. Export `UID`/`GID` before compose so new runs write as your user.
 - **`db_available: false`** — DSN missing, Postgres unreachable, or schemas not applied. Reads fall back to disk JSON. Run `GET /api/health` after setting `POSTGRES_DSN` and applying schemas.
 
 ### Pagination (list endpoints)

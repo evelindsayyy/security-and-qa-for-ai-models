@@ -63,4 +63,4 @@ registry, pulls the tagged web image, and restarts the stack. Click **Play** in
 GitLab, or set CI/CD variable **`DEPLOY_AUTO=true`** for automatic deploy. See
 [`.gitlab/README.md`](../.gitlab/README.md) for CI/CD variables.
 
-Postgres is external (`POSTGRES_DSN` on OIT host). Deploy topology: [`architecture.md`](architecture.md#deployment-and-hosts).
+Postgres is external (`POSTGRES_DSN` on OIT host). End-to-end flow diagram: [`architecture.md`](architecture.md#how-a-run-flows).
