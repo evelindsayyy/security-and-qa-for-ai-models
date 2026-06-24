@@ -30,7 +30,9 @@ class ShouldAutoSyncTest(unittest.TestCase):
             self.assertFalse(post_run.should_auto_sync())
 
     def test_enabled_when_dsn_set(self) -> None:
-        with mock.patch.dict(os.environ, {"POSTGRES_DSN": "postgresql://u:p@h/db"}):
+        env = {k: v for k, v in os.environ.items() if k != "AUTO_INGEST"}
+        env["POSTGRES_DSN"] = "postgresql://u:p@h/db"
+        with mock.patch.dict(os.environ, env, clear=True):
             self.assertTrue(post_run.should_auto_sync())
 
 

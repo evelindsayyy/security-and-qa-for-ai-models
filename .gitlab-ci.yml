@@ -71,9 +71,9 @@ build-web-image:
 # GitLab CI/CD variables (Settings → CI/CD → Variables):
 #   DEPLOY_SSH_PRIVATE_KEY (file, masked) — CI → VM SSH key
 #   DEPLOY_SSH_KNOWN_HOSTS (file) — ssh-keyscan output for DEPLOY_HOST
-#   DEPLOY_USER — e.g. vcm
+#   DEPLOY_USER — e.g. security-qa-deploy (SSH user; may differ from repo owner on VM)
 #   DEPLOY_HOST — e.g. model-advisor.colab.duke.edu
-#   DEPLOY_PATH — e.g. /home/vcm/security-and-qa-for-ai-models
+#   DEPLOY_PATH — e.g. /home/vcm/security-and-qa-for-ai-models (clone path; required)
 # Optional: BUILD_PILLARS=1 to rebuild pillar images on the VM after git pull
 # Optional: DEPLOY_AUTO=true — automatic deploy after build-web-image (else manual)
 deploy:

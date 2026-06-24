@@ -45,11 +45,11 @@ Set in **Settings → CI/CD → Variables** (maintainers):
 
 | Variable | Type | Example |
 |----------|------|---------|
-| `DEPLOY_SSH_PRIVATE_KEY` | File, masked | Private key whose public half is in `vcm`’s `~/.ssh/authorized_keys` on the VM |
+| `DEPLOY_SSH_PRIVATE_KEY` | File, masked | Private key whose public half is in `security-qa-deploy`’s `~/.ssh/authorized_keys` on the VM |
 | `DEPLOY_SSH_KNOWN_HOSTS` | File | Output of `ssh-keyscan model-advisor.colab.duke.edu` |
-| `DEPLOY_USER` | Variable | `vcm` |
+| `DEPLOY_USER` | Variable | `security-qa-deploy` |
 | `DEPLOY_HOST` | Variable | `model-advisor.colab.duke.edu` |
-| `DEPLOY_PATH` | Variable | `/home/vcm/security-and-qa-for-ai-models` |
+| `DEPLOY_PATH` | Variable | `/home/vcm/security-and-qa-for-ai-models` (repo clone path; deploy user must be able to `git pull` there) |
 | `DEPLOY_AUTO` | Variable (optional) | `true` — deploy automatically on every `main` pipeline (default: manual) |
 | `BUILD_PILLARS` | Variable (optional) | `1` to rebuild pillar images on deploy |
 
