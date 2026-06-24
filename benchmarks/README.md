@@ -41,12 +41,24 @@ Legacy outputs under `testing/basic_tests/test_results/` are still read as a fal
 ## Custom Hugging Face / vLLM models
 
 The default models are the Duke gateway catalog, but you can also benchmark any
-Hugging Face model served by your own **OpenAI-compatible** endpoint (a local
-vLLM server, or one launched on the DCC via [`scripts/dcc/`](../scripts/dcc/README.md)).
+Hugging Face model via **Hosted** (HF Inference Providers) or **Custom** (your own
+vLLM / DCC server). The browser form is at `/benchmarks/new`.
 
-The model id is the HF repo (e.g. `Qwen/Qwen3-0.6B`); `model_client` auto-routes
-it to the right provider based on the base URL (a remote vLLM host becomes
-`openai/<repo-id>`).
+### Model input cheat sheet
+
+| Source | When to use | **Model field** | Other fields |
+|--------|-------------|-----------------|--------------|
+| **Gateway** | Duke catalog models (easiest) | pick from dropdown, e.g. `GPT 4.1 Mini` | — |
+| **Hosted** | No GPU / no cluster; HF serves the model | HF repo id: `org/model` or `org/model:provider` | HF token (`hf_…`) with *Inference Providers* permission |
+| **Custom** | Any HF repo you self-host (vLLM on DCC, tunnel, etc.) | HF repo id: `org/model` | Base URL (`http://…:8000/v1`), API key (optional) |
+
+**Format rules (all sources):** use the id from the model’s Hugging Face page
+(e.g. `Qwen/Qwen3-0.6B`, `meta-llama/Llama-3.1-8B-Instruct`). Letters, digits,
+`/`, `.`, `_`, `-` only. For hosted only, you may append `:provider` to pin a
+provider (e.g. `TinyLlama/TinyLlama-1.1B-Chat-v1.0:featherless-ai`).
+
+The model id is passed to `model_client`, which auto-routes based on the base URL
+(Duke gateway, HF router, or local vLLM → `openai/<repo-id>`).
 
 ### Hosted (no vLLM / DCC setup)
 
@@ -66,12 +78,35 @@ uv run python benchmarks/run_benchmark.py --benchmark mmlu --model "microsoft/Ph
 Browser: pick **Hosted (Hugging Face Inference API)** on `/benchmarks/new`, enter
 the repo id and your token. The base URL is fixed to the router server-side.
 
-Caveats: the model must be **provider-backed for chat completion** (check the
-"Inference Providers" widget on its HF model page); there's a metered cost /
-limited free tier; and only the bare `org/model` id is supported here (not the
-`org/model:provider` pin).
+To force a specific serving provider, pin it on the model id with
+`org/model:provider` (e.g. `WeiboAI/VibeThinker-3B:novita`) — both the CLI
+`--model` flag and the browser field accept it. Without a pin, the router uses
+the providers enabled in your
+[account settings](https://huggingface.co/settings/inference-providers) (set to
+**auto** to let it pick any available one).
 
-### CLI
+Caveats: the model must be **provider-backed for chat completion** (check the
+"Inference Providers" widget on its HF model page; the model has to be served by
+a provider you've enabled); there's a metered cost / limited free tier.
+
+**Hosted setup checklist**
+
+1. Pick a model on [HF with Inference Available](https://huggingface.co/models?inference_provider=all&other=conversational) (spark icon on the card).
+2. On the model page, open **Inference Providers** — confirm **Chat Completion** is listed (not just Text Generation).
+3. If the model is **gated**, accept the license on the model page first.
+4. Create a [fine-grained token](https://huggingface.co/settings/tokens) with **Make calls to Inference Providers** (and **Read access to public gated repos** if gated).
+5. At [Inference Providers settings](https://huggingface.co/settings/inference-providers), set routing to **Automatic** or enable the specific provider shown on the model page.
+6. If auto-routing fails, pin the provider: `org/model:provider` (provider name is on the model page URL/widget, e.g. `:featherless-ai`, `:novita`).
+
+**Example hosted inputs**
+
+| Model field | Notes |
+|-------------|--------|
+| `meta-llama/Llama-3.1-8B-Instruct` | widely served; accept Meta license first |
+| `Qwen/Qwen2.5-7B-Instruct` | ungated, good smoke test |
+| `TinyLlama/TinyLlama-1.1B-Chat-v1.0:featherless-ai` | pin Featherless if auto-routing fails |
+
+### Self-hosted vLLM (CLI)
 
 Point the base URL at your server and pass the repo id as `--model`:
 
@@ -106,6 +141,21 @@ Notes:
 - **Docker mode** also works, but the benchmarks container must be able to reach
   the endpoint — prefer a private **IP** (NAT-routable) over a cluster hostname,
   which may not resolve inside the container.
+
+**Custom (vLLM) setup checklist**
+
+1. Start vLLM on DCC: `MODEL="org/model" scripts/dcc/start_vllm.sh` then `scripts/dcc/wait_vllm.sh` (see [`scripts/dcc/README.md`](../scripts/dcc/README.md)).
+2. Note the node hostname and port (usually `:8000/v1`) from the session file or logs.
+3. **From your laptop:** the compute node is not reachable directly — use an SSH tunnel, e.g. `ssh -N -L 8000:<node>:8000 user@dcc-login`, then Base URL `http://localhost:8000/v1`.
+4. **Model field:** same HF repo id you passed to vLLM (e.g. `Qwen/Qwen3-0.6B`).
+5. **API key:** `local-vllm` or leave blank (vLLM does not authenticate by default).
+
+**Example custom inputs**
+
+| Model | Base URL | API key |
+|-------|----------|---------|
+| `Qwen/Qwen3-0.6B` | `http://localhost:8000/v1` (tunneled) | `local-vllm` |
+| `WeiboAI/VibeThinker-3B` | `http://dcc-plusds-gpu-02:8000/v1` (from login node / host-mode frontend) | `local-vllm` |
 
 ## LIST OF BENCHMARKS AND WHAT THEY DO
 

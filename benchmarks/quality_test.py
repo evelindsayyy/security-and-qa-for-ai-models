@@ -10,6 +10,14 @@ import litellm
 import dotenv
 
 from model_client import query_chat_completion, response_content, extract_choice_letter
+from benchmark_metrics import (
+    accuracy_bar,
+    compute_coverage,
+    has_usable_text,
+    print_binary_summary,
+    slugify_model,
+    summarize_binary_accuracy,
+)
 
 dotenv.load_dotenv()
 litellm.suppress_debug_info = True
@@ -63,8 +71,7 @@ def query_model(article: str, question: str, options: List[str]) -> str:
         content = response_content(response)
         return parse_answer(content)
 
-    except Exception as e:
-        print(f"  [ERROR] API error: {e}")
+    except Exception:
         return ""
 
 
@@ -94,7 +101,7 @@ def run_quality_test(dataset) -> Dict:
 
     all_results = []
     correct = 0
-    total = 0
+    scored = 0
 
     for row_num, row in enumerate(dataset, start=1):
         if MAX_ROWS > 0 and row_num > MAX_ROWS:
@@ -117,17 +124,19 @@ def run_quality_test(dataset) -> Dict:
         )
 
         model_answer = query_model(article, question, options)
-        passed = model_answer == correct_letter
+        answered = has_usable_text(model_answer)
+        passed = answered and model_answer == correct_letter
 
+        if answered:
+            scored += 1
         if passed:
             correct += 1
-        total += 1
 
-        status = "OK" if passed else "FAIL"
+        status = "OK" if passed else ("SKIP" if not answered else "FAIL")
         hard_tag = " [HARD]" if difficult else ""
 
         print(
-            f"    [{status}] Question {total}{hard_tag}: "
+            f"    [{status}] Question {len(all_results) + 1}{hard_tag}: "
             f"expected={correct_letter} got={model_answer or '?'}"
         )
 
@@ -141,27 +150,36 @@ def run_quality_test(dataset) -> Dict:
             "correct_answer": correct_letter,
             "model_answer": model_answer,
             "passed": passed,
+            "answered": answered,
             "hard": difficult,
         })
 
-    accuracy = round(correct / total, 4) if total else 0
+    attempted = len(all_results)
+    summary = summarize_binary_accuracy(attempted=attempted, correct=correct, scored=scored)
+    # Keep quality-specific field names for downstream readers.
+    summary["total_questions"] = summary["scored"]
+    summary["total_evaluated"] = summary["scored"]
 
     hard_results = [r for r in all_results if r["hard"]]
-    hard_correct = sum(1 for r in hard_results if r["passed"])
-    hard_accuracy = round(hard_correct / len(hard_results), 4) if hard_results else None
+    hard_scored = [r for r in hard_results if r["answered"]]
+    hard_correct = sum(1 for r in hard_scored if r["passed"])
+    summary["hard_questions"] = len(hard_results)
+    summary["hard_scored"] = len(hard_scored)
+    summary["hard_correct"] = hard_correct
+    summary["hard_accuracy"] = (
+        round(hard_correct / len(hard_scored), 4) if hard_scored else None
+    )
+    if hard_results:
+        hard_cov = compute_coverage(attempted=len(hard_results), scored=len(hard_scored))
+        summary["hard_attempted"] = hard_cov["attempted"]
+        summary["hard_failed"] = hard_cov["failed"]
+        summary["hard_coverage"] = hard_cov["coverage"]
 
     return {
         "model": MODEL,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "hard_only": HARD_ONLY,
-        "summary": {
-            "total_questions": total,
-            "correct": correct,
-            "accuracy": accuracy,
-            "hard_questions": len(hard_results),
-            "hard_correct": hard_correct,
-            "hard_accuracy": hard_accuracy,
-        },
+        "summary": summary,
         "results": all_results,
     }
 
@@ -171,7 +189,7 @@ def save_results(data: Dict, output_dir: str):
     out.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_slug = data["model"].replace(" ", "_").replace("/", "_")
+    model_slug = slugify_model(data["model"])
     path = out / f"quality_{model_slug}_{timestamp}.json"
 
     with open(path, "w", encoding="utf-8") as f:
@@ -182,24 +200,19 @@ def save_results(data: Dict, output_dir: str):
 
 def print_summary(data: Dict):
     s = data["summary"]
-    bar_len = int(s["accuracy"] * 40)
-    bar = "[" + "=" * bar_len + "-" * (40 - bar_len) + "]"
+    print_binary_summary("Overall", s)
 
-    print(f"\n{'=' * 70}")
-    print("SUMMARY")
-    print(f"{'=' * 70}")
-    print(
-        f"{'Overall':40s} {bar} {s['accuracy']:.1%} "
-        f"({s['correct']}/{s['total_questions']})"
-    )
-
-    if s["hard_accuracy"] is not None and not HARD_ONLY:
-        hard_bar_len = int(s["hard_accuracy"] * 40)
-        hard_bar = "[" + "=" * hard_bar_len + "-" * (40 - hard_bar_len) + "]"
+    if s.get("hard_accuracy") is not None and not HARD_ONLY:
+        hard_bar = accuracy_bar(s["hard_accuracy"])
         print(
             f"{'Hard questions only':40s} {hard_bar} {s['hard_accuracy']:.1%} "
-            f"({s['hard_correct']}/{s['hard_questions']})"
+            f"({s['hard_correct']}/{s.get('hard_scored', s['hard_questions'])})"
         )
+        if s.get("hard_failed"):
+            print(
+                f"  [WARN] hard subset: {s.get('hard_scored', 0)}/{s.get('hard_attempted', 0)} "
+                f"answered ({s.get('hard_coverage', 0):.0%} coverage)"
+            )
 
 
 def main():

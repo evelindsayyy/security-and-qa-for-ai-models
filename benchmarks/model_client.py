@@ -35,6 +35,33 @@ class EmptyModelResponseError(RuntimeError):
     """All retries exhausted and the model returned no usable text."""
 
 
+def _fatal_error_hint(exc: Exception) -> str | None:
+    """Short, actionable hint for known *non-retryable* errors (else None).
+
+    These come back from hosted endpoints (e.g. HF Inference Providers) and
+    won't change across retries, so we surface a friendly one-liner instead of
+    spamming the raw LiteLLM stack trace three times per question.
+    """
+    msg = str(exc).lower()
+    if "not supported by any provider" in msg:
+        return (
+            "model isn't routed — enable the provider on your HF account "
+            "(huggingface.co/settings/inference-providers, or set to auto), "
+            "or pin one from the model page with org/model:provider "
+            "(e.g. TinyLlama/TinyLlama-1.1B-Chat-v1.0:featherless-ai)"
+        )
+    if (
+        "depleted your monthly included credits" in msg
+        or "purchase pre-paid credits" in msg
+        or "error code: 402" in msg
+    ):
+        return (
+            "Hugging Face Inference Providers credits exhausted — wait for the "
+            "monthly reset, upgrade to PRO, or run against your own vLLM endpoint"
+        )
+    return None
+
+
 def detect_provider(base_url: str) -> str:
     """
     Infer the backend/provider from an API base URL.
@@ -269,6 +296,12 @@ def query_chat_completion(
                 tokens = min(tokens * 2, 2048)
         except Exception as exc:
             last_exc = exc
+            hint = _fatal_error_hint(exc)
+            if hint is not None:
+                # Non-retryable (provider availability / billing): surface a
+                # friendly message and stop hammering the endpoint.
+                print(f"  [ERROR] {hint}")
+                break
             print(f"  [WARN] completion failed ({attempt}/{retries}): {exc}")
 
         if attempt < retries:

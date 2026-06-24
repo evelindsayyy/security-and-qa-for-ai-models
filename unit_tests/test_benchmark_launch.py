@@ -31,6 +31,19 @@ class TestValidateCustomModel(unittest.TestCase):
     def test_rejects_too_long(self) -> None:
         self.assertIsNotNone(validate_custom_model("a/" + "b" * 300))
 
+    def test_accepts_provider_pin(self) -> None:
+        # org/model:provider forces a specific HF Inference provider.
+        self.assertIsNone(validate_custom_model("WeiboAI/VibeThinker-3B:novita"))
+
+    def test_accepts_single_name_provider_pin(self) -> None:
+        self.assertIsNone(validate_custom_model("gpt2:hf-inference"))
+
+    def test_rejects_double_provider_pin(self) -> None:
+        self.assertIsNotNone(validate_custom_model("org/model:a:b"))
+
+    def test_rejects_trailing_colon(self) -> None:
+        self.assertIsNotNone(validate_custom_model("org/model:"))
+
 
 class TestValidateBaseUrl(unittest.TestCase):
     def test_accepts_localhost(self) -> None:

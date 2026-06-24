@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 from model_client import query_chat_completion, response_content
+from benchmark_metrics import compute_coverage, coverage_warning, has_usable_text, slugify_model
 
 sys.path.insert(0, ".")  # so instructions_registry is importable
 import instructions_registry
@@ -102,7 +103,7 @@ def get_output_path(model: str) -> str:
         return OUTPUT_FILE
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_slug = model.replace(" ", "_").replace("/", "_")
+    model_slug = slugify_model(model)
     return os.path.join(OUTPUT_DIR, f"ifeval_{model_slug}_{timestamp}.jsonl")
 
 
@@ -116,14 +117,17 @@ def main():
     print(f"testing model {MODEL}")
     results = []
     for row in tqdm(sample, desc='IFEval'):
-        response = query_chat_completion(
-            model=MODEL,
-            base_url=BASE_URL,
-            api_key=API_KEY,
-            messages=[{'role': 'user', 'content': row['prompt']}],
-            temperature=1,
-        )
-        text = safe_get_response(response)
+        try:
+            response = query_chat_completion(
+                model=MODEL,
+                base_url=BASE_URL,
+                api_key=API_KEY,
+                messages=[{'role': 'user', 'content': row['prompt']}],
+                temperature=1,
+            )
+            text = safe_get_response(response)
+        except Exception:
+            text = ""
         judge_res = judge(row['prompt'], text, row.get('instruction_id_list', []), row.get('kwargs', []))
 
         results.append({
@@ -131,6 +135,7 @@ def main():
             'key': row.get('key'),
             'prompt': row['prompt'],
             'response': text,
+            'answered': has_usable_text(text),
             'instruction_id_list': row.get('instruction_id_list', []),
             'kwargs': row.get('kwargs', []),
             'judge': judge_res,
@@ -140,15 +145,24 @@ def main():
     output_path = get_output_path(MODEL)
     save_jsonl(results, output_path)
 
-    passed = sum(1 for r in results if r['judge']['passed'])
-    total = len(results)
+    attempted = len(results)
+    scored = sum(1 for r in results if r['answered'])
+    passed = sum(1 for r in results if r['answered'] and r['judge']['passed'])
+    cov = compute_coverage(attempted=attempted, scored=scored)
+    pass_rate = passed / scored if scored else 0
+
     print(f"Saved {len(results)} rows to {output_path}")
-    print(f"Passed: {passed}/{total} ({(passed/total*100) if total else 0:.1f}%)")
+    print(f"Passed: {passed}/{scored} ({pass_rate * 100:.1f}%) over answered prompts")
+    warn = coverage_warning(cov)
+    if warn:
+        print(warn.replace("accuracy is over answered items only",
+                           "pass rate is over answered prompts only"))
     
-    # Instruction-level accuracy
+    # Instruction-level accuracy (answered prompts only)
     all_instructions = [
         inst
         for r in results
+        if r['answered']
         for inst in r['judge']['per_instruction']
         if inst.get('passed') is not None
     ]

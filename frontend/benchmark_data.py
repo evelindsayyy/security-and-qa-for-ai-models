@@ -8,12 +8,17 @@ Schema detection is content-based so renames do not break the viewer.
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
 from frontend.path_safety import is_safe_slug
 
 ROOT = Path(__file__).parent.parent
+_BENCHMARKS_DIR = ROOT / "benchmarks"
+if str(_BENCHMARKS_DIR) not in sys.path:
+    sys.path.insert(0, str(_BENCHMARKS_DIR))
+from benchmark_metrics import coverage_extras  # noqa: E402
 PRIMARY_DIR = ROOT / "benchmarks" / "results"
 LEGACY_DIRS = (
     ROOT / "testing" / "basic_tests" / "test_results",
@@ -212,6 +217,7 @@ def _summarize_truthfulqa(path: Path, data: dict) -> dict:
         "extras": {
             "correct": metrics.get("correct"),
             "total_evaluated": metrics.get("total_evaluated"),
+            **coverage_extras(metrics),
         },
     }
 
@@ -230,8 +236,11 @@ def _summarize_mmlu(path: Path, data: dict) -> dict:
         "headline_metric": "accuracy",
         "headline_value": acc,
         "headline_display": f"{acc:.1%}" if acc is not None else "—",
-        "n": summary.get("total") or len(data.get("results") or []),
-        "extras": {"subjects": len(data.get("per_subject") or {})},
+        "n": summary.get("scored") or summary.get("total") or len(data.get("results") or []),
+        "extras": {
+            "subjects": len(data.get("per_subject") or {}),
+            **coverage_extras(summary),
+        },
     }
 
 
@@ -249,8 +258,8 @@ def _summarize_tomi(path: Path, data: dict) -> dict:
         "headline_metric": "accuracy",
         "headline_value": acc,
         "headline_display": f"{acc:.1%}" if acc is not None else "—",
-        "n": summary.get("total") or len(data.get("results") or []),
-        "extras": {},
+        "n": summary.get("scored") or summary.get("total") or len(data.get("results") or []),
+        "extras": coverage_extras(summary),
     }
 
 
@@ -268,8 +277,8 @@ def _summarize_consistency(path: Path, data: dict) -> dict:
         "headline_metric": "mean F1",
         "headline_value": mean_f1,
         "headline_display": f"{mean_f1:.3f}" if mean_f1 is not None else "—",
-        "n": summary.get("total_questions") or len(data.get("questions") or []),
-        "extras": {},
+        "n": summary.get("scored") or summary.get("total_questions") or len(data.get("questions") or []),
+        "extras": coverage_extras(summary),
     }
 
 
@@ -299,11 +308,24 @@ def _summarize_ifeval(path: Path) -> dict:
             "n": 0,
             "extras": {},
         }
-    passed = sum(1 for r in rows if (r.get("judge") or {}).get("passed"))
-    n = len(rows)
-    rate = passed / n if n else None
+    has_answered = any("answered" in r for r in rows)
+    if has_answered:
+        answered_rows = [r for r in rows if r.get("answered")]
+        attempted = len(rows)
+        scored = len(answered_rows)
+        passed = sum(1 for r in answered_rows if (r.get("judge") or {}).get("passed"))
+    else:
+        attempted = scored = len(rows)
+        passed = sum(1 for r in rows if (r.get("judge") or {}).get("passed"))
+    rate = passed / scored if scored else None
     model = rows[0].get("model") or "—"
     ts_raw = rows[0].get("ts") or ""
+    summary = {
+        "attempted": attempted,
+        "scored": scored,
+        "failed": max(0, attempted - scored),
+        "coverage": round(scored / attempted, 4) if attempted else 0.0,
+    }
     return {
         "slug": path.stem,
         "filename": path.name,
@@ -315,8 +337,8 @@ def _summarize_ifeval(path: Path) -> dict:
         "headline_metric": "pass rate",
         "headline_value": rate,
         "headline_display": f"{rate:.1%}" if rate is not None else "—",
-        "n": n,
-        "extras": {"passed": passed, "total": n},
+        "n": scored,
+        "extras": {"passed": passed, "total": scored, **coverage_extras(summary)},
     }
     
 def _summarize_mbpp(path: Path, data: dict) -> dict:
@@ -333,8 +355,11 @@ def _summarize_mbpp(path: Path, data: dict) -> dict:
         "headline_metric": "accuracy",
         "headline_value": acc,
         "headline_display": f"{acc:.3f}" if acc is not None else "—",
-        "n": summary.get("total") or len(data.get("results") or []),
-        "extras": {"correct": summary.get("correct")},
+        "n": summary.get("scored") or summary.get("total") or len(data.get("results") or []),
+        "extras": {
+            "correct": summary.get("correct"),
+            **coverage_extras(summary),
+        },
     }
     
 def _summarize_quality(path: Path, data: dict) -> dict:
@@ -351,10 +376,11 @@ def _summarize_quality(path: Path, data: dict) -> dict:
         "headline_metric": "accuracy",
         "headline_value": acc,
         "headline_display": f"{acc:.1%}" if acc is not None else "—",
-        "n": summary.get("total_questions") or len(data.get("results") or []),
+        "n": summary.get("scored") or summary.get("total_questions") or len(data.get("results") or []),
         "extras": {
             "hard_accuracy": summary.get("hard_accuracy"),
             "hard_questions": summary.get("hard_questions"),
+            **coverage_extras(summary),
         },
     }
 

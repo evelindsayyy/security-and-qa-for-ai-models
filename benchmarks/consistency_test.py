@@ -50,6 +50,7 @@ from bert_score import score as bert_score
 import dotenv
 
 from model_client import query_chat_completion, response_content
+from benchmark_metrics import compute_coverage, coverage_warning, has_usable_text, slugify_model
 
 dotenv.load_dotenv()
 
@@ -94,8 +95,7 @@ def query_model(model: str, prompt: str) -> str:
             temperature=1,
         )
         return response_content(response)
-    except Exception as e:
-        print(f"  [ERROR] API error: {e}")
+    except Exception:
         return ""
 
 
@@ -142,6 +142,8 @@ def run_consistency_test(model_name: str, questions: List[Dict]) -> Dict:
     print(f"{'='*60}")
 
     question_results = []
+    response_attempted = 0
+    response_scored = 0
 
     for q in questions:
         q_id = q.get("id", "?")
@@ -154,13 +156,24 @@ def run_consistency_test(model_name: str, questions: List[Dict]) -> Dict:
         for idx, prompt in enumerate(paraphrases):
             print(f"    Paraphrase {idx+1}: {prompt[:80]}...")
             response = query_model(model_name, prompt)
-            print(f"    Response:    {response[:80]}...")
+            response_attempted += 1
+            if has_usable_text(response):
+                response_scored += 1
+            print(f"    Response:    {(response or '')[:80]}...")
             responses.append(response)
 
         # Filter out empty responses before scoring
-        valid = [(p, r) for p, r in zip(paraphrases, responses) if r.strip()]
+        valid = [(p, r) for p, r in zip(paraphrases, responses) if has_usable_text(r)]
         if len(valid) < 2:
             print(f"  [WARN] Not enough valid responses for question {q_id}, skipping.")
+            question_results.append({
+                "id": q_id,
+                "topic": topic,
+                "paraphrases": paraphrases,
+                "responses": responses,
+                "scored": False,
+                "bertscore": {"mean_f1": None, "min_f1": None, "pairs": []},
+            })
             continue
 
         valid_paraphrases, valid_responses = zip(*valid)
@@ -174,22 +187,33 @@ def run_consistency_test(model_name: str, questions: List[Dict]) -> Dict:
             "topic": topic,
             "paraphrases": list(valid_paraphrases),
             "responses": list(valid_responses),
+            "scored": True,
             "bertscore": scores,
         })
 
     # Aggregate
-    scored = [r for r in question_results if r["bertscore"]["mean_f1"] is not None]
+    scored_questions = [r for r in question_results if r["scored"]]
     mean_f1_overall = (
-        round(sum(r["bertscore"]["mean_f1"] for r in scored) / len(scored), 4)
-        if scored else None
+        round(sum(r["bertscore"]["mean_f1"] for r in scored_questions) / len(scored_questions), 4)
+        if scored_questions else None
     )
+
+    attempted = len(questions)
+    scored = len(scored_questions)
+    cov = compute_coverage(attempted=attempted, scored=scored)
+    resp_cov = compute_coverage(attempted=response_attempted, scored=response_scored)
 
     return {
         "model": model_name,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "summary": {
-            "total_questions": len(question_results),
             "mean_f1_overall": mean_f1_overall,
+            "total_questions": scored,
+            **cov,
+            "responses_attempted": resp_cov["attempted"],
+            "responses_scored": resp_cov["scored"],
+            "responses_failed": resp_cov["failed"],
+            "response_coverage": resp_cov["coverage"],
         },
         "questions": question_results,
     }
@@ -200,7 +224,7 @@ def save_results(results: Dict, output_dir: str):
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_slug = results["model"].replace(" ", "_").replace("/", "_")
+    model_slug = slugify_model(results["model"])
     path = out / f"consistency_{model_slug}_{timestamp}.json"
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
@@ -236,7 +260,17 @@ def main():
     print("SUMMARY")
     print("=" * 70)
     for name, s in summary_rows:
-        print(f"{name:35s} mean F1: {s['mean_f1_overall']} ({s['total_questions']} questions)")
+        print(f"{name:35s} mean F1: {s['mean_f1_overall']} "
+              f"({s['scored']}/{s['attempted']} questions scored)")
+        warn = coverage_warning(s)
+        if warn:
+            print(warn.replace("items", "questions"))
+        if s.get("responses_failed"):
+            print(
+                f"  [WARN] paraphrase responses: {s['responses_scored']}/"
+                f"{s['responses_attempted']} answered "
+                f"({s['response_coverage']:.0%} coverage)"
+            )
 
 
 if __name__ == "__main__":

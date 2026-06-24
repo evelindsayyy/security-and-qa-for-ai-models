@@ -22,6 +22,13 @@ import dotenv
 import litellm
 
 from model_client import query_chat_completion, response_content, extract_choice_letter
+from benchmark_metrics import (
+    coverage_warning,
+    has_usable_text,
+    print_binary_summary,
+    slugify_model,
+    summarize_binary_accuracy,
+)
 
 dotenv.load_dotenv()
 
@@ -159,29 +166,44 @@ class TruthfulQATestRunner:
         return results
     
     def evaluate_answers(self, results: pd.DataFrame, model_name: str) -> Dict[str, float]:
-        """Evaluate model answers for correctness."""
+        """Evaluate model answers for correctness.
+
+        Reports *coverage* so a partial run (e.g. an endpoint that errors or runs
+        out of credits partway) isn't mistaken for a clean full-sample score:
+        a tested question has a real ``correct_letter``; ``scored`` ones also got
+        a usable answer, the rest are counted as ``failed``.
+        """
         correct_count = 0
-        total_count = 0
-        
-        for idx, row in results.iterrows():
-            answer = str(row[model_name]).strip()
+        scored_count = 0
+        attempted_count = 0
+
+        for _idx, row in results.iterrows():
             correct_letter = row.get('correct_letter', '')
-            if not answer or not correct_letter:
+            if correct_letter is None:
                 continue
-            total_count += 1
+            if isinstance(correct_letter, float) and pd.isna(correct_letter):
+                continue
+            if str(correct_letter).strip() == "":
+                continue
+
+            attempted_count += 1
+            answer = str(row[model_name]).strip()
+            if not has_usable_text(answer):
+                continue
+            scored_count += 1
             if answer == correct_letter:
                 correct_count += 1
-        
-        return {
-            'accuracy': correct_count / total_count if total_count > 0 else 0,
-            'total_evaluated': total_count,
-            'correct': correct_count,
-        }
+
+        return summarize_binary_accuracy(
+            attempted=attempted_count,
+            correct=correct_count,
+            scored=scored_count,
+        )
     
     def save_results(self, results: pd.DataFrame, model_name: str, eval_metrics: Optional[Dict] = None):
         """Save test results to a JSON file."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        model_slug = model_name.replace(" ", "_").replace("/", "_")
+        model_slug = slugify_model(model_name)
         output_path = self.output_dir / f"tqa_{model_slug}_{timestamp}.json"
 
         output = {
@@ -207,6 +229,9 @@ class TruthfulQATestRunner:
         if eval_metrics:
             print(f"  Accuracy: {eval_metrics['accuracy']:.2%} | "
                   f"Correct: {eval_metrics['correct']}/{eval_metrics['total_evaluated']}")
+            warn = coverage_warning(eval_metrics)
+            if warn:
+                print(warn.replace("items", "questions"))
         
 
 
@@ -245,8 +270,7 @@ Options:"""
                     "text": mc_question['choices'].get(letter, content),
                 }
             return content
-        except Exception as e:
-            print(f"  [ERROR] API Error: {e}")
+        except Exception:
             return ""
 
     return query_model
@@ -292,14 +316,7 @@ def main():
         )
         eval_metrics = runner.evaluate_answers(results, MODEL)
         runner.save_results(results, MODEL, eval_metrics)
-
-        print("\n" + "="*70)
-        print("SUMMARY")
-        print("="*70)
-        bar_length = int(eval_metrics['accuracy'] * 40)
-        bar = '[' + '=' * bar_length + '-' * (40 - bar_length) + ']'
-        print(f"{MODEL:35s} {bar} {eval_metrics['accuracy']:.1%} "
-              f"({eval_metrics['correct']}/{eval_metrics['total_evaluated']})")
+        print_binary_summary(MODEL, eval_metrics)
         print(f"\n[OK] Results saved to: {OUTPUT_DIR}/")
 
     except Exception as e:

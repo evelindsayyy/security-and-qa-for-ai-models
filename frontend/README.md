@@ -16,6 +16,17 @@ Launch pages: `/scans/new` · `/safety/new` · `/eval-run/new` · `/benchmarks/n
 
 Set `FRONTEND_LAUNCH_MODE=host` to skip Docker for launches (debugging, unit tests).
 
+### Benchmark model sources (`/benchmarks/new`)
+
+Three ways to pick a model — the form shows a setup guide that changes with your
+selection. Full reference: [`benchmarks/README.md`](../benchmarks/README.md#model-input-cheat-sheet).
+
+| Source | Model input example |
+|--------|---------------------|
+| Gateway | `GPT 4.1 Mini` (dropdown) |
+| Hosted (HF Inference) | `meta-llama/Llama-3.1-8B-Instruct` + `hf_…` token |
+| Custom (vLLM) | `Qwen/Qwen3-0.6B` + `http://localhost:8000/v1` |
+
 **Containerized (application VM):** [`docs/docker.md`](../docs/docker.md).
 
 ## Routes

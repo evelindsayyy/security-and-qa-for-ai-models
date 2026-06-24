@@ -5,6 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "benchmarks"))
 
 from model_client import (  # noqa: E402
+    _fatal_error_hint,
     detect_provider,
     extract_choice_letter,
     normalize_model,
@@ -120,6 +121,30 @@ class TestExtractChoiceLetter(unittest.TestCase):
 
     def test_empty_returns_empty(self) -> None:
         self.assertEqual(extract_choice_letter(""), "")
+
+
+class TestFatalErrorHint(unittest.TestCase):
+    def test_provider_unavailable(self) -> None:
+        exc = Exception(
+            "OpenAIException - The requested model 'x' is not supported by "
+            "any provider you have enabled."
+        )
+        hint = _fatal_error_hint(exc)
+        self.assertIsNotNone(hint)
+        self.assertIn("org/model:provider", hint)
+
+    def test_credits_depleted(self) -> None:
+        exc = Exception(
+            "Error code: 402 - {'error': 'You have depleted your monthly "
+            "included credits.'}"
+        )
+        hint = _fatal_error_hint(exc)
+        self.assertIsNotNone(hint)
+        self.assertIn("credits", hint.lower())
+
+    def test_transient_error_is_not_fatal(self) -> None:
+        # A normal timeout should still go through the retry path.
+        self.assertIsNone(_fatal_error_hint(Exception("Connection timed out")))
 
 
 if __name__ == "__main__":

@@ -36,7 +36,12 @@ _CANDIDATE_CATEGORIES = frozenset({"general_chat", "codex", "research"})
 # validated like the scanner's, and the base URL is restricted to internal /
 # private hosts so the form can't be used to make the server reach arbitrary
 # public addresses (SSRF guard).
-_HF_REPO_RE = re.compile(r"^(?:[a-zA-Z0-9][a-zA-Z0-9._-]*/)?[a-zA-Z0-9][a-zA-Z0-9._-]+$")
+# org/model, with an optional `:provider` pin (e.g. Qwen/Qwen3-0.6B:novita) used
+# by the HF Inference Providers router to force a specific serving provider.
+_HF_REPO_RE = re.compile(
+    r"^(?:[a-zA-Z0-9][a-zA-Z0-9._-]*/)?[a-zA-Z0-9][a-zA-Z0-9._-]+"
+    r"(?::[a-zA-Z0-9][a-zA-Z0-9._-]*)?$"
+)
 _INTERNAL_HOST_SUFFIXES = (".duke.edu", ".local", ".internal")
 _DEFAULT_CUSTOM_API_KEY = "local-vllm"
 
@@ -61,7 +66,9 @@ def validate_custom_model(model: str) -> str | None:
     if ".." in model or model.startswith(("/", "\\")):
         return "invalid repo id"
     if not _HF_REPO_RE.match(model):
-        return "use org/model or a single repo name (letters, digits, . _ -)"
+        return (
+            "use org/model (optionally org/model:provider), letters, digits, . _ -"
+        )
     return None
 
 

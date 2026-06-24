@@ -34,6 +34,12 @@ import litellm
 import dotenv
 
 from model_client import query_chat_completion, response_content
+from benchmark_metrics import (
+    has_usable_text,
+    print_binary_summary,
+    slugify_model,
+    summarize_binary_accuracy,
+)
 
 dotenv.load_dotenv()
 
@@ -81,8 +87,7 @@ Code:"""
             max_tokens=1000,
         )
         return response_content(response)
-    except Exception as e:
-        print(f"  [ERROR] API error: {e}")
+    except Exception:
         return ""
 
 
@@ -169,15 +174,20 @@ def run_mbpp_test(dataset) -> Dict:
         test_setup_code = row.get("test_setup_code", "")
 
         raw_response = query_model(problem, test_list)
-        code = extract_code(raw_response)
+        answered = has_usable_text(raw_response)
+        code = extract_code(raw_response) if answered else ""
+        has_code = bool(code)
 
-        if not code:
-            print(f"  [FAIL] Q{idx+1} (task {task_id}): no code generated")
+        if not has_code:
+            status = "SKIP" if not answered else "FAIL"
+            print(f"  [{status}] Q{idx+1} (task {task_id}): no code generated")
             results.append({
                 "task_id": task_id,
                 "problem": problem,
                 "generated_code": "",
                 "passed": False,
+                "answered": has_code,
+                "api_answered": answered,
                 "tests_passed": 0,
                 "tests_total": len(test_list),
                 "test_results": [],
@@ -204,22 +214,21 @@ def run_mbpp_test(dataset) -> Dict:
             "problem": problem,
             "generated_code": code,
             "passed": exec_result["passed"],
+            "answered": True,
+            "api_answered": answered,
             "tests_passed": exec_result["tests_passed"],
             "tests_total": exec_result["tests_total"],
             "test_results": exec_result["test_results"],
         })
 
-    total = len(results)
-    accuracy = round(correct / total, 4) if total > 0 else 0
+    attempted = len(results)
+    scored = sum(1 for r in results if r["answered"])
+    summary = summarize_binary_accuracy(attempted=attempted, correct=correct, scored=scored)
 
     return {
         "model": MODEL,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "summary": {
-            "total": total,
-            "correct": correct,
-            "accuracy": accuracy,
-        },
+        "summary": summary,
         "results": results,
     }
 
@@ -233,7 +242,7 @@ def save_results(data: Dict, output_dir: str):
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_slug = data["model"].replace(" ", "_").replace("/", "_")
+    model_slug = slugify_model(data["model"])
     path = out / f"mbpp_{model_slug}_{timestamp}.json"
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
@@ -260,15 +269,7 @@ def main():
     try:
         data = run_mbpp_test(ds)
         save_results(data, OUTPUT_DIR)
-
-        s = data["summary"]
-        bar_len = int(s["accuracy"] * 40)
-        bar = "[" + "=" * bar_len + "-" * (40 - bar_len) + "]"
-        print(f"\n{'='*70}")
-        print("SUMMARY")
-        print(f"{'='*70}")
-        print(f"{MODEL:35s} {bar} {s['accuracy']:.1%} "
-              f"({s['correct']}/{s['total']})")
+        print_binary_summary(MODEL, data["summary"])
 
     except Exception as e:
         print(f"[ERROR] {e}")
