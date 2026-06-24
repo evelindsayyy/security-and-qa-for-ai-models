@@ -103,7 +103,9 @@ Browser "Start" buttons run these for you. To run them directly, set the file
 owner once so outputs are not root-owned:
 
 ```bash
-export UID=$(id -u) GID=$(id -g)
+export HOST_UID=$(id -u) HOST_GID=$(id -g)   # web stack (docker/run.sh sets these automatically)
+# Pillar stacks use UID/GID — do not `export UID` in bash (readonly); use ./docker/build-pillars.sh
+# or: env UID=$(id -u) GID=$(id -g) docker compose …
 ```
 
 ```bash

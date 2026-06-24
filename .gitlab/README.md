@@ -33,11 +33,26 @@ Labels: `scanning` · `safety` · `gateway` · `efficacy` · `evaluator` · `fro
 
 GitLab jobs run on Duke **shared runners** (`docker+machine`).
 
-1. Pipeline: **lint** (ruff) → **unit-tests** (~300).
-2. On **`main`**: Buildah builds `docker/Dockerfile` → GitLab container registry.
-3. Deploy job not wired yet (needs VM SSH vars).
+1. Pipeline: **lint** (ruff) → **unit-tests** (~380).
+2. On **`main`**: Buildah builds `docker/Dockerfile` → GitLab container registry (`web:${CI_COMMIT_SHORT_SHA}`).
+3. **`deploy-manual`** (manual, main only): SSH to application VM → `git pull` → pull registry web image → `docker compose up`.
 
 Config: [`.gitlab-ci.yml`](../.gitlab-ci.yml). Detail: [`docs/docker.md`](../docs/docker.md).
+
+### Deploy CI/CD variables
+
+Set in **Settings → CI/CD → Variables** (maintainers):
+
+| Variable | Type | Example |
+|----------|------|---------|
+| `DEPLOY_SSH_PRIVATE_KEY` | File, masked | Private key whose public half is in `vcm`’s `~/.ssh/authorized_keys` on the VM |
+| `DEPLOY_SSH_KNOWN_HOSTS` | File | Output of `ssh-keyscan model-advisor.colab.duke.edu` |
+| `DEPLOY_USER` | Variable | `vcm` |
+| `DEPLOY_HOST` | Variable | `model-advisor.colab.duke.edu` |
+| `DEPLOY_PATH` | Variable | `/home/vcm/security-and-qa-for-ai-models` |
+| `BUILD_PILLARS` | Variable (optional) | `1` to rebuild pillar images on deploy |
+
+**VM prerequisites:** git clone + deploy key, `.env`, Docker, one-time `./docker/build-pillars.sh`. The web container bind-mounts the repo; deploy pulls the CI-built image for Python deps and runs `git pull` for app code.
 
 ---
 

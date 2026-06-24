@@ -3,10 +3,8 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-
-export HOST_REPO="$(pwd)"
-export UID="$(id -u)"
-export GID="$(id -g)"
+# shellcheck source=docker/host-env.sh
+source docker/host-env.sh
 
 if [ ! -f .env ]; then
   echo "Missing .env — cp .env.example .env first" >&2
@@ -19,7 +17,7 @@ for compose in \
   evaluator/docker/compose.yml \
   benchmarks/docker/compose.yml; do
   echo "Building ${compose}..."
-  docker compose --env-file .env -f "$compose" build
+  compose_with_pillar_ids docker compose --env-file .env -f "$compose" build
 done
 
 echo "Done. Pillar images ready for browser/API Start buttons."

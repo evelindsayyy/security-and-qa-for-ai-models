@@ -55,6 +55,12 @@ GitLab runs lint and unit tests on Duke **shared runners**. On `main`, the
 `build-web-image` job uses the dedicated `oit-shared-buildah` runner to build
 `docker/Dockerfile` without a Docker socket or DinD, then pushes
 `${CI_REGISTRY_IMAGE}/web:${CI_COMMIT_SHORT_SHA}` to the GitLab container
-registry. No gateway secrets are required. See [`.gitlab-ci.yml`](../.gitlab-ci.yml).
+registry. No gateway secrets are required.
+
+**Deploy (manual, `main` only):** after lint, tests, and `build-web-image`,
+`deploy-manual` SSHs to the application VM, runs `git pull`, logs into the
+registry with `CI_JOB_TOKEN`, pulls the tagged web image, and restarts the stack
+via [`docker/compose.deploy.yml`](../docker/compose.deploy.yml). See
+[`.gitlab/README.md`](../.gitlab/README.md) for CI/CD variables.
 
 Postgres is external (`POSTGRES_DSN` on OIT host). Deploy topology: [`architecture.md`](architecture.md#deployment-and-hosts).

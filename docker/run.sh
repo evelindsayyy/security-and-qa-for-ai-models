@@ -15,13 +15,8 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-
-export HOST_REPO="$(pwd)"
-export HOST_UID="$(id -u)"
-export HOST_GID="$(id -g)"
-if [ -S /var/run/docker.sock ]; then
-  export DOCKER_GID="$(stat -c '%g' /var/run/docker.sock)"
-fi
+# shellcheck source=docker/host-env.sh
+source docker/host-env.sh
 
 ENV_ARGS=()
 [ -f .env ] && ENV_ARGS=(--env-file .env)

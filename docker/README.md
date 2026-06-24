@@ -24,3 +24,10 @@ through the mounted Docker socket. See [`docs/docker.md`](../docs/docker.md) for
 the model and [`docs/cli.md`](../docs/cli.md) for all commands.
 
 Postgres is external (`POSTGRES_DSN` on OIT host).
+
+| Script | Role |
+|--------|------|
+| `host-env.sh` | Shared `HOST_*` and pillar `UID`/`GID` (bash `UID` is readonly) |
+| `build-pillars.sh` | One-time pillar image builds |
+| `deploy-remote.sh` | VM deploy (git pull + registry pull + compose up) |
+| `compose.deploy.yml` | Use `WEB_IMAGE` from CI instead of local build |
