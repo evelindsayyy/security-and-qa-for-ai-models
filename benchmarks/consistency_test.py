@@ -40,7 +40,6 @@ Below 0.75 - significantly inconsistent responses
 
 import json
 import os
-import sys
 import itertools
 import traceback
 from pathlib import Path
