@@ -213,11 +213,6 @@ def _safe_slug(s: str) -> str:
 def main() -> int:
     args = _parse_args()
 
-    if not args.skip_judge and not args.judge_model:
-        print("ERROR: --judge-model is required unless --skip-judge is set.",
-              file=sys.stderr)
-        return 2
-
     # ---- load contracts ----
     suite_lines = args.suite.read_text(encoding="utf-8").splitlines()
     metadata = json.loads(suite_lines[0])
@@ -227,12 +222,24 @@ def main() -> int:
     suite_family = suite_id.rsplit("_v", 1)[0]
     questions = [json.loads(line) for line in suite_lines[1:] if line.strip()]
 
+    # Routing: a suite declares its scoring method in its metadata line.
+    # "execution" suites are scored by RUNNING the answer (execution_eval), so
+    # the LLM judge is skipped automatically; --skip-judge stays as a manual
+    # override for any suite. Default "judge" — every existing suite.
+    scoring = metadata.get("scoring", "judge")
+    skip_judge = args.skip_judge or scoring == "execution"
+
+    if not skip_judge and not args.judge_model:
+        print("ERROR: --judge-model is required unless the suite declares "
+              "scoring=execution (or --skip-judge is set).", file=sys.stderr)
+        return 2
+
     # resolve_rubric inlines any {from: shared} references against
     # _shared_dimensions.yaml so rubric["dimensions"][dim] always has the
     # full scale/weight/anchors block _weighted_overall expects. For inline
     # rubrics (like the locked it_support_v1.yaml) this is a no-op.
-    # --skip-judge suites have no rubric — the answer is scored by execution.
-    if args.skip_judge:
+    # Execution-scored (judge-skipped) suites have no rubric.
+    if skip_judge:
         rubric: dict = {}
         rubric_version = "(none)"
     else:
@@ -241,7 +248,7 @@ def main() -> int:
 
     system_prompt = args.system_prompt.read_text(encoding="utf-8")
     system_prompt_version = args.system_prompt.stem
-    judge_prompt_version = "(none)" if args.skip_judge else args.judge_prompt.stem
+    judge_prompt_version = "(none)" if skip_judge else args.judge_prompt.stem
     # The judge model recorded into every row; "(none)" when there's no judge.
     judge_model = args.judge_model or "(none)"
 
@@ -252,7 +259,7 @@ def main() -> int:
     # judge call twice (the parse retry) before producing an all-failed
     # run. Catch the pairing here, before any API call. (Skipped when there
     # is no judge.)
-    if not args.skip_judge:
+    if not skip_judge:
         judge_template = args.judge_prompt.read_text(encoding="utf-8")
         if "{output_schema}" not in judge_template:
             rubric_dims = tuple((rubric.get("dimensions") or {}).keys())
@@ -319,7 +326,7 @@ def main() -> int:
                 # ---- judge (only if candidate succeeded AND not skipped) ----
                 judge_verdict = None
                 judge_dur = 0.0
-                if not cand.failed and not args.skip_judge:
+                if not cand.failed and not skip_judge:
                     t1 = time.perf_counter()
                     judge_verdict = judge_response(
                         question=q["question"],

@@ -236,20 +236,21 @@ class RunnerPipelineTest(unittest.TestCase):
 
 
 class RunnerSkipJudgeTest(unittest.TestCase):
-    """--skip-judge: candidate-only run for execution-scored suites.
+    """Execution-scored suites: candidate-only run, judge auto-skipped.
 
-    No judge model, no rubric, no 'reference' field on the questions — the
-    judge is never called and the rows carry empty scores (functional scoring
-    happens out-of-band in execution_eval).
+    The suite's metadata declares ``scoring: execution`` — so the runner skips
+    the judge WITHOUT a --skip-judge flag and WITHOUT a --judge-model. No rubric,
+    no 'reference' field; rows carry empty scores (functional scoring happens
+    out-of-band in execution_eval).
     """
 
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.dir = Path(self._tmp.name)
-        # Execution-style suite: {id, question, setup, expected} — NO reference.
+        # scoring=execution in the metadata is what routes the runner here.
         (self.dir / "sql.jsonl").write_text(
-            json.dumps({"task_suite_version": "sql_smoke_v1"}) + "\n"
+            json.dumps({"task_suite_version": "sql_smoke_v1", "scoring": "execution"}) + "\n"
             + json.dumps({"id": "s1", "question": "count the rows",
                           "setup": "CREATE TABLE t(n INTEGER)", "expected": [[0]]}) + "\n"
             + json.dumps({"id": "s2", "question": "count again",
@@ -266,7 +267,7 @@ class RunnerSkipJudgeTest(unittest.TestCase):
             "--suite", str(self.dir / "sql.jsonl"),
             "--system-prompt", str(self.dir / "system.txt"),
             "--output-dir", str(self.dir / "results"),
-            "--skip-judge",                       # no --judge-model on purpose
+            # NO --skip-judge, NO --judge-model: the suite's scoring field drives it.
         ]
         for patcher in (
             mock.patch.object(candidate, "gateway_client", return_value=self.cand_stub),
@@ -303,6 +304,23 @@ class RunnerSkipJudgeTest(unittest.TestCase):
     def test_no_judge_model_needed(self) -> None:
         rows = self._rows()
         self.assertEqual(rows["s1"]["adaptation"]["judge_model"], "(none)")
+
+    def test_skip_judge_flag_still_overrides_a_non_execution_suite(self) -> None:
+        # A suite WITHOUT scoring=execution, run with the --skip-judge override:
+        # the judge is still skipped and no judge model is required.
+        (self.dir / "plain.jsonl").write_text(
+            json.dumps({"task_suite_version": "plain_v1"}) + "\n"
+            + json.dumps({"id": "p1", "question": "hello",
+                          "setup": "CREATE TABLE t(n INTEGER)", "expected": [[0]]}) + "\n",
+            encoding="utf-8",
+        )
+        argv = ["runner.py", "--candidate-model", "stub-model",
+                "--suite", str(self.dir / "plain.jsonl"),
+                "--system-prompt", str(self.dir / "system.txt"),
+                "--output-dir", str(self.dir / "results2"), "--skip-judge"]
+        with mock.patch.object(sys, "argv", argv):
+            self.assertEqual(runner.main(), 0)
+        self.assertEqual(self.judge_stub.calls, 0)
 
 
 if __name__ == "__main__":
