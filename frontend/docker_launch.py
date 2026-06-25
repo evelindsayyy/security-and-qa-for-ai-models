@@ -18,13 +18,16 @@ local debugging). CLI READMEs still document the manual docker compose workflow.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import threading
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 ENV_FILE = ROOT / ".env"
 COMPOSE_PROJECT_NAME = os.environ.get("COMPOSE_PROJECT_NAME", "qa-ai-models")
+DOCKER_SOCK = Path("/var/run/docker.sock")
 
 # stack_key -> (compose_file relative to ROOT, service name)
 STACKS: dict[str, tuple[Path, str]] = {
@@ -36,6 +39,9 @@ STACKS: dict[str, tuple[Path, str]] = {
 
 _ready: set[str] = set()
 _lock = threading.Lock()
+_status_cache: dict[str, object] | None = None
+_status_cache_at: float = 0.0
+_STATUS_TTL_SEC = 30.0
 
 
 def use_docker() -> bool:
@@ -46,24 +52,82 @@ def use_docker() -> bool:
     return mode.strip().lower() != "host"
 
 
+def docker_launch_status(*, use_cache: bool = True) -> dict[str, str | bool]:
+    """Return ``{available, reason}`` after checking CLI, socket, and daemon access."""
+    global _status_cache, _status_cache_at
+
+    now = time.monotonic()
+    if use_cache and _status_cache is not None and (now - _status_cache_at) < _STATUS_TTL_SEC:
+        return dict(_status_cache)  # type: ignore[arg-type]
+
+    if not shutil.which("docker"):
+        result = {
+            "available": False,
+            "reason": (
+                "docker CLI not in PATH — use containerized UI (python3 main.py) "
+                "or install Docker on the host"
+            ),
+        }
+    elif not DOCKER_SOCK.exists():
+        result = {
+            "available": False,
+            "reason": "docker socket not mounted into web container (/var/run/docker.sock)",
+        }
+    else:
+        try:
+            subprocess.run(
+                ["docker", "info"],
+                capture_output=True,
+                check=True,
+                timeout=10,
+            )
+            try:
+                subprocess.run(
+                    ["docker", "compose", "version"],
+                    capture_output=True,
+                    check=True,
+                    timeout=10,
+                )
+                result = {"available": True, "reason": "ok"}
+            except (OSError, subprocess.SubprocessError):
+                result = {
+                    "available": False,
+                    "reason": "docker compose plugin not available (install docker-compose-plugin)",
+                }
+        except subprocess.CalledProcessError:
+            result = {
+                "available": False,
+                "reason": (
+                    "cannot access Docker daemon — check DOCKER_GID / deploy user in docker group"
+                ),
+            }
+        except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+            result = {
+                "available": False,
+                "reason": "docker info failed — daemon unreachable or timed out",
+            }
+
+    _status_cache = result
+    _status_cache_at = now
+    return dict(result)
+
+
 def docker_available() -> bool:
-    try:
-        subprocess.run(
-            ["docker", "compose", "version"],
-            capture_output=True,
-            check=True,
-            timeout=15,
-        )
-        return True
-    except (OSError, subprocess.SubprocessError):
-        return False
+    return bool(docker_launch_status()["available"])
+
+
+def docker_detail() -> str:
+    return str(docker_launch_status()["reason"])
 
 
 def docker_required_message(stack: str) -> str:
+    detail = docker_detail()
     compose, _ = _stack_paths(stack)
+    if detail == "ok":
+        detail = "Docker daemon not reachable"
     return (
-        f"Docker is required for browser-launched {stack} runs — install Docker and ensure "
-        f"`{compose.relative_to(ROOT)}` is built, or set FRONTEND_LAUNCH_MODE=host "
+        f"Docker is required for browser-launched {stack} runs — {detail}. "
+        f"Ensure `{compose.relative_to(ROOT)}` is built, or set FRONTEND_LAUNCH_MODE=host "
         f"(CLI-only fallback)."
     )
 

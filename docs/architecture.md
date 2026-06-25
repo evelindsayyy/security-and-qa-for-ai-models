@@ -138,6 +138,16 @@ planned).
 
 Long scans and evals take minutes to hours. Start routes return immediately; the pillar runs in the background while the UI polls status.
 
+**MVP concurrency limits (shared VM, no auth):**
+
+| Concern | Behavior |
+|---------|----------|
+| Same job params twice | Deduped via in-memory `_INFLIGHT` in each `*_launch.py` |
+| Different jobs at once | Allowed — separate subprocesses and output paths |
+| Same slug (e.g. two users scan `gpt2`) | **Collides** on output dirs — last writer wins |
+| Multiple Flask workers | **Not supported** — `_RUNNING` is per-process |
+| Auth | **None** — anyone who can reach the URL can start jobs |
+
 | Piece | Role |
 |-------|------|
 | **`frontend/*_launch.py`** | `subprocess.Popen` + `threading`; spawns Docker or host CLI from UI start routes |
@@ -203,7 +213,7 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 
 **VM layout:** git clone + `.env` + `./docker/build-pillars.sh` + `./docker/run.sh up -d --build`. The web container bind-mounts the repo and Docker socket; pillar jobs write JSON on the VM disk. Postgres is external.
 
-**CI (GitLab):** lint → unit tests → on `main`, Buildah builds `docker/Dockerfile` and pushes to the GitLab container registry. Deploy job is not wired yet; GitLab CI/CD variables (`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_PRIVATE_KEY`, `DEPLOY_SSH_KNOWN_HOSTS`) are for a future SSH deploy to the VM.
+**CI (GitLab):** lint → unit tests → on `main`, Buildah builds `docker/Dockerfile` and pushes to the GitLab container registry. **`deploy`** job SSHs to the application VM (manual Play on `main`, or `DEPLOY_AUTO=true`). See [`.gitlab/README.md`](../.gitlab/README.md).
 
 ## Open questions
 

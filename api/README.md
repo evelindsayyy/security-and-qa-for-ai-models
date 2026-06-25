@@ -11,7 +11,7 @@ Bulk Postgres ingest is CLI-only: `python -m api.ingest` (see [`docs/cli.md`](..
 
 | Method | Path | Data / launch layer |
 |--------|------|---------------------|
-| GET | `/api/health` | liveness + per-pillar Postgres availability |
+| GET | `/api/health` | liveness + Docker launch status + per-pillar Postgres availability |
 | GET | `/api/scans` | `scan_data` — paged `?limit=`, `?offset=` |
 | GET | `/api/scans/<slug>` | `scan_data` |
 | GET | `/api/scans/<slug>/status` | `scan_launch.get_status` |
@@ -109,11 +109,17 @@ filtered count; `data` is the current page.
   "data": {
     "status": "ok",
     "db_available": true,
-    "pillars": { "scan": true, "safety": true, "eval": true, "benchmark": false }
+    "pillars": { "scan": true, "safety": true, "eval": true, "benchmark": false },
+    "docker_available": true,
+    "docker_detail": "ok",
+    "launch_mode": "docker"
   },
   "error": null
 }
 ```
+
+- **`docker_available: false`** — browser Start buttons are blocked. Read `docker_detail` for the cause (missing CLI, socket not mounted, permission denied). Restart via `python3 main.py` or redeploy with `docker/host-env.sh` sourced.
+- **`db_available: false`** — DSN missing, Postgres unreachable, or schemas not applied. Reads fall back to disk JSON. Run `GET /api/health` after setting `POSTGRES_DSN` and applying schemas.
 
 `db_available: false` means reads use on-disk JSON until Postgres is configured and reachable.
 

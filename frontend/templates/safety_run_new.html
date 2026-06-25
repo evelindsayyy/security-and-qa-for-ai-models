@@ -11,7 +11,7 @@
     Full runs can take 30–90 minutes per model.
     Host fallback: <code>uv run python -m safety.run "&lt;model&gt;"</code>.
     {% if not docker_available %}
-    <span class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>
+    <span class="form-warning">Docker unavailable — {{ docker_detail }}. Set <code>FRONTEND_LAUNCH_MODE=host</code> for CLI-only fallback.</span>
     {% endif %}
   </p>
 

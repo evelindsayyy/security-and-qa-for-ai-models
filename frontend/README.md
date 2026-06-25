@@ -50,7 +50,9 @@ python3 main.py --host
 ## Troubleshooting
 
 - **Host has no `python` command** — use `python3 main.py` or `./docker/run.sh` (see [`docs/cli.md`](../docs/cli.md)).
-- **Promptfoo “config not found”** — missing `HOST_REPO`. `./docker/run.sh` sets it; manual compose needs `export HOST_REPO="$(pwd)"`.
+- **Docker unavailable on Start pages** — check `GET /api/health` for `docker_detail`. Restart via `python3 main.py` (sources `docker/host-env.sh`); ensure `DOCKER_GID` matches the host socket group.
+- **Promptfoo “config not found” / empty eval.json** — missing `HOST_REPO`. `./docker/run.sh` sets it; browser launches pass it via `docker_launch.py`.
+- **Garak `run config not found: tmp*.yaml`** — redeploy after fix in `run_garak.py` (absolute config path).
 - **`POST /api/scans` → 503** (cannot write) — root-owned output from an old run. On the application VM (no sudo needed):
 
   ```bash

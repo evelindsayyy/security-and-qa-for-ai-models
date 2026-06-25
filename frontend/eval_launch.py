@@ -411,5 +411,7 @@ def get_launch_options() -> dict:
         "max_tokens_max": MAX_TOKENS_MAX,
         "custom_max_questions": CUSTOM_MAX_QUESTIONS,
         "launch_mode": "docker" if docker_launch.use_docker() else "host",
+        "launch_mode": "docker" if docker_launch.use_docker() else "host",
         "docker_available": docker_launch.docker_available(),
+        "docker_detail": docker_launch.docker_detail(),
     }

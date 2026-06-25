@@ -11,6 +11,9 @@
     Models are the live gateway catalog; benchmarks are the public pilots in
     <code>benchmarks/</code>.
     See <code>docs/cli.md</code> for manual compose commands.
+    {% if not docker_available %}
+    <span class="form-warning">Docker unavailable — {{ docker_detail }}. Set <code>FRONTEND_LAUNCH_MODE=host</code> for CLI-only fallback.</span>
+    {% endif %}
   </p>
 
   <form method="post" action="{{ url_for('benchmark_run_start') }}" class="launch-form">

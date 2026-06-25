@@ -14,7 +14,7 @@
     <code>scanner/output/</code>.
     One-time on the host: <code>./docker/build-pillars.sh</code>.
     {% if not docker_available %}
-    <span class="form-warning">Docker Compose is not available on this host — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>
+    <span class="form-warning">Docker unavailable — {{ docker_detail }}. Set <code>FRONTEND_LAUNCH_MODE=host</code> for CLI-only fallback.</span>
     {% endif %}
   </p>
 

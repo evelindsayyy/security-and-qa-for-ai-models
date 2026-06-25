@@ -5,9 +5,9 @@ Promptfoo red-team launcher — merges base config with a named profile.
 Usage (inside the Docker container or with promptfoo on PATH):
     python run_promptfoo.py <model-name> [--profile base] [--output-dir output/slug/base]
 
-Profiles are defined in promptfoo_profiles.yaml.  The "base" profile uses
-promptfooconfig.base.yaml as-is.  All other profiles append additional_plugins
-from the profiles file on top of the base plugin list.
+Profiles are defined in promptfoo_profiles.yaml.  Prefer orchestrator-side
+``build_config.py`` + ``promptfoo redteam run`` from ``safety.run``; this script
+remains for manual CLI use.
 """
 
 from __future__ import annotations
@@ -19,10 +19,12 @@ from pathlib import Path
 
 import yaml
 
-CONFIG_DIR = Path(__file__).parent
-BASE_CONFIG = CONFIG_DIR / "promptfooconfig.base.yaml"
-PROFILES_FILE = CONFIG_DIR / "promptfoo_profiles.yaml"
+try:
+    from safety.promptfoo.build_config import merge_redteam_config
+except ImportError:
+    from build_config import merge_redteam_config
 
+CONFIG_DIR = Path(__file__).parent
 PROFILES = {"base", "education", "healthcare", "finance", "rag", "agentic"}
 
 
@@ -43,20 +45,11 @@ def main() -> int:
         )
         return 1
 
-    with BASE_CONFIG.open() as f:
-        cfg = yaml.safe_load(f)
-
-    if args.profile != "base":
-        with PROFILES_FILE.open() as f:
-            profiles = yaml.safe_load(f)
-        profile_def = profiles.get(args.profile) or {}
-        additional = profile_def.get("additional_plugins") or []
-        if additional:
-            cfg["redteam"]["plugins"].extend(additional)
-            print(
-                f"[run_promptfoo] profile={args.profile!r} "
-                f"added {len(additional)} plugin(s)"
-            )
+    try:
+        cfg = merge_redteam_config(args.profile)
+    except ValueError as exc:
+        print(f"[run_promptfoo] {exc}", file=sys.stderr)
+        return 1
 
     output_dir = args.output_dir or f"output/{args.model_name}/{args.profile}"
     output_file = f"{output_dir}/redteam_eval.json"
@@ -72,6 +65,7 @@ def main() -> int:
         yaml.dump(cfg, tmp, default_flow_style=False, allow_unicode=True)
         tmp_path = Path(tmp.name)
 
+    config_path = str(tmp_path.resolve())
     try:
         result = subprocess.run(
             [
@@ -79,7 +73,7 @@ def main() -> int:
                 "redteam",
                 "run",
                 "-c",
-                tmp_path.name,
+                config_path,
                 "-o",
                 output_file,
                 "--delay",
