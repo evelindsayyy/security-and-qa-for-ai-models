@@ -14,6 +14,10 @@ GIT_REF="${GIT_REF:-main}"
 cd "$DEPLOY_PATH"
 test -f .env || { echo "Missing .env in ${DEPLOY_PATH}" >&2; exit 1; }
 
+# Repo is shared with the vcm account; group-writable objects avoid blocking vcm git pull.
+umask 002
+
+
 git fetch origin "$GIT_REF"
 git checkout "$GIT_REF"
 git pull --ff-only origin "$GIT_REF"
