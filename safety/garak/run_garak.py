@@ -96,11 +96,12 @@ def main() -> int:
         yaml.dump(cfg, tmp, default_flow_style=False, allow_unicode=True)
         tmp_path = Path(tmp.name)
 
-    print(f"[run_garak] model={model_name!r}  profile={profile}  config={tmp_path.name}")
+    config_path = str(tmp_path.resolve())
+    print(f"[run_garak] model={model_name!r}  profile={profile}  config={config_path}")
 
     try:
         result = subprocess.run(
-            [sys.executable, "-m", "garak", "--config", tmp_path.name, "-n", model_name, *extra_args],
+            [sys.executable, "-m", "garak", "--config", config_path, "-n", model_name, *extra_args],
             check=False,
         )
         return result.returncode

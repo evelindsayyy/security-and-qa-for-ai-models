@@ -18,28 +18,32 @@ docker compose --env-file .env -f safety/garak/docker/compose.yml build
 
 ## End-to-end (recommended)
 
-[`run_safety.sh`](run_safety.sh) runs **Promptfoo policy + red-team + Garak + merge** by default. Model comes from the `GATEWAY_MODEL` environment variable (default `GPT 4.1 Mini`).
+``python -m safety.run`` runs **Promptfoo policy + red-team + Garak + merge** by default. Model comes from the `GATEWAY_MODEL` environment variable (default `GPT 4.1 Mini`).
 
 **Host** (from repo root):
 
 ```bash
-./safety/run_safety.sh                                    # default model GPT 4.1 Mini
-./safety/run_safety.sh "gpt-5-chat"
-./safety/run_safety.sh --skip-redteam                     # faster
-./safety/run_safety.sh --skip-garak
-./safety/run_safety.sh --skip-promptfoo
-./safety/run_safety.sh --garak-probes "encoding,promptinject,dan.Dan_11_0"
-./safety/run_safety.sh --help
+uv run python -m safety.run                                    # default model
+uv run python -m safety.run "gpt-5-chat"
+uv run python -m safety.run --skip-redteam                     # faster
+uv run python -m safety.run --skip-garak
+uv run python -m safety.run --skip-promptfoo
+uv run python -m safety.run --garak-probes "encoding,promptinject,dan.Dan_11_0"
+uv run python -m safety.run --all-models                       # sequential batch
+uv run python -m safety.run garak-setup                        # one-time HF model download
+uv run python -m safety.run --help
 ```
 
-Output: `safety/output/<slug>/merged_safety_result.json` → frontend `/safety/<slug>`.
+Thin wrapper (same): `./safety/run_safety.sh [OPTIONS] [MODEL]`
+
+Output: `safety/output/<slug>/<profile>/merged_safety_result.json` → frontend `/safety/<slug>/<profile>`.
 
 **Via Docker orchestrator** (needs `DOCKER_GID` in `.env` for nested promptfoo/garak launches):
 
 ```bash
 export UID=$(id -u) GID=$(id -g)
 docker compose --env-file .env -f safety/docker/compose.yml run --rm safety \
-  ./safety/run_safety.sh "GPT 4.1 Mini"
+  python -m safety.run "GPT 4.1 Mini"
 ```
 
 ## Run suites individually
@@ -74,9 +78,9 @@ Omit flags for suites you did not run.
 
 | Suite | Edit | Re-run via |
 |-------|------|------------|
-| Duke policy | `promptfoo/promptfooconfig.yaml` → `tests[]` | `run_safety.sh` or promptfoo README |
-| Red-team | `promptfoo/promptfooconfig.redteam.yaml` → `redteam.plugins` | `run_safety.sh` (default) or promptfoo README |
-| Garak modules | `garak/garak_duke.yaml` → `probe_spec`, or `--garak-probes` on script | `run_safety.sh` or garak README |
+| Duke policy | `promptfoo/promptfooconfig.yaml` → `tests[]` | `python -m safety.run` or promptfoo README |
+| Red-team | `promptfoo/promptfooconfig.redteam.yaml` → `redteam.plugins` | `python -m safety.run` (default) or promptfoo README |
+| Garak modules | `garak/garak_duke.yaml` → `probe_spec`, or `--garak-probes` | `python -m safety.run` or garak README |
 
 ## Probe suites
 
@@ -134,7 +138,7 @@ artifact risk score vs. supply-chain sub-signals.
 
 | Path | Role |
 |------|------|
-| [`run_safety.sh`](run_safety.sh) | End-to-end pipeline |
+| [`run.py`](run.py) / [`run_safety.sh`](run_safety.sh) | End-to-end pipeline (`python -m safety.run`) |
 | [`schemas.py`](schemas.py) | Pydantic types |
 | [`safety_scorer.py`](safety_scorer.py) | Merge logic |
 | [`merge.py`](merge.py) | `python -m safety.merge` |

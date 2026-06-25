@@ -58,6 +58,26 @@ Rough guidance for Track B/A pilots — see live notes on `/models` for each id.
 
 ---
 
-## On-prem (future)
+## Open-weight models (DCC)
 
-[`scripts/dcc/`](../scripts/dcc/README.md) and [`scripts/azure/`](../scripts/azure/README.md) are example vLLM / Foundry workflows for open weights. When models move on-prem, scanning runs on HF artifacts before deploy; chat eval may use the same gateway or a direct endpoint.
+**Default:** safety, eval, and benchmarks use **gateway model ids** from this catalog (HTTPS to LiteLLM).
+
+**Open-weight / self-hosted:** when a model is served on the Duke Compute Cluster
+(vLLM on SLURM) instead of the gateway, use the DCC workflow in
+[`scripts/dcc/README.md`](../scripts/dcc/README.md).
+
+| Pillar | DCC support |
+|--------|-------------|
+| **evaluator** | CLI today — `--candidate-endpoint`, `--inference-backend dcc`, `--hf-repo` |
+| **safety** | Planned — same endpoint override pattern |
+| **benchmarks** | Planned — `inference_backend` in Postgres schema |
+
+Scanning is unchanged: it uses **Hugging Face repo ids**, not gateway ids. Run scans
+on HF artifacts before deploying open-weight models on DCC.
+
+---
+
+## On-prem (Azure Foundry)
+
+[`scripts/azure/`](../scripts/azure/README.md) is an example Foundry workflow for a separate
+OpenAI-compatible endpoint. Not used in production today.

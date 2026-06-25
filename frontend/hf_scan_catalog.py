@@ -78,7 +78,8 @@ def get_hf_scan_catalog() -> dict[str, Any]:
         "source": "scanner/output/*/scan_result.json",
         "output_dir": data.get("output_dir", str(OUTPUT_DIR)),
         "error": None if models or OUTPUT_DIR.exists() else (
-            f"No scan results yet — run "
-            f"`python -m scanner scan <hf_repo>` (outputs under {OUTPUT_DIR})"
+            "No scan results yet — use Start scan in the UI or from repo root: "
+            "docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner "
+            f"python -m scanner scan <hf_repo> (outputs under {OUTPUT_DIR})"
         ),
     }

@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import threading
@@ -15,6 +14,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from frontend import docker_launch
+from frontend.output_dirs import OutputDirError, ensure_writable_dir, prepare_output_dir
 from frontend.path_safety import is_safe_slug
 from scanner.paths import safe_dir_name
 
@@ -42,10 +42,8 @@ SUGGESTED_HF_REPOS: tuple[str, ...] = (
 _HF_REPO_RE = re.compile(r"^(?:[a-zA-Z0-9][a-zA-Z0-9._-]*/)?[a-zA-Z0-9][a-zA-Z0-9._-]+$")
 
 
-def _wipe_outputs(slug: str) -> None:
-    target = SCAN_OUTPUT / slug
-    if target.is_dir():
-        shutil.rmtree(target, ignore_errors=True)
+def _output_dir_for_slug(slug: str) -> Path:
+    return SCAN_OUTPUT / slug
 
 
 def _clear_registry_for_slug(slug: str) -> None:
@@ -108,7 +106,8 @@ def validate_launch(
         return "at least one scanner must be enabled"
     if docker_launch.use_docker() and not docker_launch.docker_available():
         return docker_launch.docker_required_message("scanner")
-    return None
+    slug = safe_dir_name(hf_repo)
+    return prepare_output_dir(_output_dir_for_slug(slug))
 
 
 def build_command(
@@ -166,7 +165,10 @@ def start_run(
             return existing, True
 
         _clear_registry_for_slug(slug)
-        _wipe_outputs(slug)
+        try:
+            ensure_writable_dir(_output_dir_for_slug(slug))
+        except OutputDirError:
+            raise
 
         if docker_launch.use_docker():
             docker_launch.ensure_stack("scanner")
@@ -221,10 +223,7 @@ def get_status(slug: str) -> dict:
             msg = log_path.read_text(encoding="utf-8", errors="replace")[-500:]
         return {"status": "running", "message": msg}
 
-    if proc is not None and proc.returncode == 0 and result_path.is_file():
-        return {"status": "complete", "message": ""}
-
-    if result_path.is_file() and proc is None:
+    if result_path.is_file():
         return {"status": "complete", "message": ""}
 
     if proc is not None and proc.poll() is not None:

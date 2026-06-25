@@ -31,7 +31,8 @@ RUN apt-get update \
 ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONPATH=/app
 
+COPY dbutils/ /app/dbutils/
 COPY safety/ /app/safety/
 COPY gateway/ /app/gateway/
 
-CMD ["bash", "safety/run_safety.sh", "--help"]
+CMD ["python", "-m", "safety.run", "--help"]

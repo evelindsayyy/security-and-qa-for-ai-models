@@ -26,15 +26,11 @@ Two layers:
 
 from __future__ import annotations
 
-import os
 import time
-from pathlib import Path
 
-from dotenv import load_dotenv
+from dbutils.env import load_repo_env, resolve_dsn
 
-# Repo convention: one root .env, shell-exported vars take precedence.
-# evaluator/db/queries.py -> parents[2] is the repo root.
-load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
+load_repo_env()
 
 _CONNECT_TIMEOUT_S = 2
 _AVAILABILITY_TTL_S = 60.0
@@ -50,7 +46,7 @@ _avail_cache = {"checked_at": 0.0, "ok": False}
 
 
 def dsn() -> str | None:
-    return os.environ.get("EFFICACY_DB_DSN") or None
+    return resolve_dsn("EFFICACY_DB_DSN", "POSTGRES_DSN", "DATABASE_URL")
 
 
 def available() -> bool:

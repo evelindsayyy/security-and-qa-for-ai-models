@@ -7,7 +7,7 @@ stages:
   - lint
   - test
   - build
-  #- deploy
+  - deploy
 
 default:
   interruptible: true
@@ -26,8 +26,13 @@ lint:
 unit-tests:
   extends: .default_ci
   stage: test
+  variables:
+    AUTO_INGEST: "0"
+    POSTGRES_DSN: ""
+    EFFICACY_DB_DSN: ""
+    DATABASE_URL: ""
   script:
-    - uv run python -m unittest discover -s unit_tests -v
+    - uv run python -m unittest discover -s unit_tests -q
 
 # Build is like docker but has better security permissions and better licensing
 build-web-image:
@@ -58,12 +63,50 @@ build-web-image:
     # push it to the project registry
     - buildah push "${FULL_IMAGE_NAME}"
 
-# deploy-manual:
-#   stage: deploy
-#   environment: production
-#   rules:
-#     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-#       when: manual
-#   script:
-#     - 'test -f .env || (echo "ERROR .env missing on runner host - copy from .env.example" && exit 1)'
-#     - ./docker/run.sh up -d --build
+# Deploy to the application VM after lint, tests, and image build on main.
+#
+# Default: manual (team lead safety — click Play in GitLab). Set CI/CD variable
+# DEPLOY_AUTO=true to deploy automatically on every main pipeline.
+#
+# GitLab CI/CD variables (Settings → CI/CD → Variables):
+#   DEPLOY_SSH_PRIVATE_KEY (file, masked) — CI → VM SSH key
+#   DEPLOY_SSH_KNOWN_HOSTS (file) — ssh-keyscan output for DEPLOY_HOST
+#   DEPLOY_USER — e.g. security-qa-deploy (SSH user; may differ from repo owner on VM)
+#   DEPLOY_HOST — e.g. model-advisor.colab.duke.edu
+#   DEPLOY_PATH — e.g. /home/vcm/security-and-qa-for-ai-models (clone path; required)
+# Optional: BUILD_PILLARS=1 to rebuild pillar images on the VM after git pull
+# Optional: DEPLOY_AUTO=true — automatic deploy after build-web-image (else manual)
+deploy:
+  stage: deploy
+  image: alpine:3.21
+  needs:
+    - build-web-image
+  environment:
+    name: production
+    url: https://model-advisor.colab.duke.edu
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $DEPLOY_AUTO == "true"
+      when: on_success
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+    - when: never
+  variables:
+    WEB_IMAGE: ${CI_REGISTRY_IMAGE}/web:${CI_COMMIT_SHORT_SHA}
+  before_script:
+    - apk add --no-cache openssh-client bash
+    - test -n "${DEPLOY_SSH_PRIVATE_KEY:-}" || (echo "DEPLOY_SSH_PRIVATE_KEY not set" >&2 && exit 1)
+    - test -n "${DEPLOY_SSH_KNOWN_HOSTS:-}" || (echo "DEPLOY_SSH_KNOWN_HOSTS not set" >&2 && exit 1)
+    - test -n "${DEPLOY_USER:-}" || (echo "DEPLOY_USER not set" >&2 && exit 1)
+    - test -n "${DEPLOY_HOST:-}" || (echo "DEPLOY_HOST not set" >&2 && exit 1)
+    - test -n "${DEPLOY_PATH:-}" || (echo "DEPLOY_PATH not set" >&2 && exit 1)
+    - chmod 600 "${DEPLOY_SSH_PRIVATE_KEY}"
+  script:
+    - set -euo pipefail
+    - |
+      ssh -i "${DEPLOY_SSH_PRIVATE_KEY}" \
+        -o IdentitiesOnly=yes \
+        -o StrictHostKeyChecking=yes \
+        -o UserKnownHostsFile="${DEPLOY_SSH_KNOWN_HOSTS}" \
+        "${DEPLOY_USER}@${DEPLOY_HOST}" \
+        "export DEPLOY_PATH='${DEPLOY_PATH}' WEB_IMAGE='${WEB_IMAGE}' CI_REGISTRY='${CI_REGISTRY}' CI_JOB_TOKEN='${CI_JOB_TOKEN}' BUILD_PILLARS='${BUILD_PILLARS:-0}' GIT_REF='${CI_DEFAULT_BRANCH}' && bash -s" \
+        < docker/deploy-remote.sh

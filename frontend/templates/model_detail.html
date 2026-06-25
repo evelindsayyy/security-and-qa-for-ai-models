@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import cli_eval_docker %}
 
 {% block title %}{% if missing %}Model not found{% else %}{{ model }} — efficacy{% endif %}{% endblock %}
 
@@ -7,6 +8,7 @@
   {% if missing %}
     <h1>Model not found</h1>
     <p class="sub empty">no evaluation runs for <code>{{ slug }}</code>.</p>
+    <p class="form-hint"><a href="{{ url_for('eval_run_new') }}">Start an eval run</a> or CLI: <code>{{ cli_eval_docker() }}</code></p>
     <p><a href="{{ url_for('eval_run') }}">← all runs</a></p>
   {% else %}
     <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>

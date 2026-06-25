@@ -152,8 +152,21 @@ class ConnectionLayerTest(unittest.TestCase):
     def test_available_is_false_without_dsn_and_no_psycopg_import(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("EFFICACY_DB_DSN", None)
+            os.environ.pop("POSTGRES_DSN", None)
+            os.environ.pop("DATABASE_URL", None)
             queries._avail_cache.update(checked_at=0.0, ok=False)
             self.assertFalse(queries.available())
+
+    def test_available_uses_postgres_dsn_fallback(self) -> None:
+        env = {"POSTGRES_DSN": "postgresql://u:p@h/db"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            queries._avail_cache.update(checked_at=0.0, ok=False)
+            cm = mock.MagicMock()
+            cm.__enter__ = mock.Mock(return_value=cm)
+            cm.__exit__ = mock.Mock(return_value=False)
+            with mock.patch("psycopg.connect", return_value=cm) as connect:
+                self.assertTrue(queries.available())
+                connect.assert_called_once()
 
 
 class DashboardRoutesThroughRepositoryTest(unittest.TestCase):

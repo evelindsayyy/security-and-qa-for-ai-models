@@ -17,8 +17,9 @@ Run from repo root:
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
-import os
 import sys
 import tempfile
 import unittest
@@ -144,15 +145,17 @@ class RunnerPipelineTest(unittest.TestCase):
             mock.patch.object(candidate, "_CACHE_DIR", self.dir / "cache_c"),
             mock.patch.object(judge, "_CACHE_DIR", self.dir / "cache_j"),
             mock.patch.object(sys, "argv", self.base_argv),
-            # Isolate from the real DB: the merged post-run auto-ingest fires
-            # when a DSN is set in .env; unit tests must not touch Postgres.
-            mock.patch.dict(os.environ, {"AUTO_INGEST": "0"}),
+            # Isolate from the real DB: stub the post-run auto-ingest so unit
+            # tests never touch Postgres (robust regardless of env / CI).
+            mock.patch("dbutils.post_run.maybe_sync_artifact"),
         ):
             patcher.start()
             self.addCleanup(patcher.stop)
 
     def _run(self) -> dict[str, dict]:
-        exit_code = runner.main()
+        sink = io.StringIO()
+        with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+            exit_code = runner.main()
         self.assertEqual(exit_code, 0)
         results = [p for p in (self.dir / "results").glob("*.jsonl")
                    if "_trace" not in p.name]
@@ -274,7 +277,7 @@ class RunnerSkipJudgeTest(unittest.TestCase):
             mock.patch.object(judge, "gateway_client", return_value=self.judge_stub),
             mock.patch.object(candidate, "_CACHE_DIR", self.dir / "cache_c"),
             mock.patch.object(sys, "argv", self.argv),
-            mock.patch.dict(os.environ, {"AUTO_INGEST": "0"}),  # don't touch the real DB
+            mock.patch("dbutils.post_run.maybe_sync_artifact"),  # don't touch the real DB
         ):
             patcher.start()
             self.addCleanup(patcher.stop)

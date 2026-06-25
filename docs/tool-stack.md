@@ -40,7 +40,7 @@ Run: `scanner/` via Docker (`scanner/docker/` → `scanner/models`, `scanner/out
 | Duke probes | In use | Duke-only prompts in the promptfoo policy config (`safety/promptfoo/promptfooconfig.yaml`) |
 | LiteLLM guardrails | Planned (doc) | Gateway integration path (ITSO) |
 
-Run: `./safety/run_safety.sh "GPT 4.1 Mini"` → per-tool exports merged by `python -m safety.merge` into `safety/output/<model>/merged_safety_result.json`.
+Run: `uv run python -m safety.run "GPT 4.1 Mini"` (thin wrapper: `./safety/run_safety.sh`) → per-tool exports merged by `python -m safety.merge` into `safety/output/<model>/merged_safety_result.json`.
 
 ### Not used (summer)
 

@@ -78,6 +78,9 @@ class GetStatusTest(unittest.TestCase):
         patcher = mock.patch.object(scan_launch, "ROOT", root)
         patcher.start()
         self.addCleanup(patcher.stop)
+        out_patcher = mock.patch.object(scan_launch, "SCAN_OUTPUT", root / "scanner" / "output")
+        out_patcher.start()
+        self.addCleanup(out_patcher.stop)
         self.out = root / "scanner" / "output"
 
     def test_unsafe_slug_is_not_found(self) -> None:

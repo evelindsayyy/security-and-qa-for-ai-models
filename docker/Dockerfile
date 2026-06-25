@@ -20,7 +20,7 @@ RUN apt-get update \
 WORKDIR /opt/deps
 COPY pyproject.toml uv.lock ./
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
-RUN uv sync --frozen --no-dev --no-install-project --group db
+RUN uv sync --frozen --no-dev --no-install-project
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY docker/entrypoint.sh /entrypoint.sh

@@ -1,12 +1,22 @@
+import unittest
+from unittest import mock
+
 from frontend import docker_launch
 
 
-def test_compose_run_argv_includes_docker_gid(monkeypatch) -> None:
-    monkeypatch.setattr(docker_launch, "_docker_sock_gid", lambda: 998)
+class ComposeRunArgvTest(unittest.TestCase):
+    def test_includes_docker_gid(self) -> None:
+        with mock.patch.object(docker_launch, "_docker_sock_gid", return_value=998):
+            argv = docker_launch.compose_run_argv("safety", ["bash", "-lc", "true"])
+        self.assertIn("--project-name", argv)
+        self.assertIn("qa-ai-models", argv)
+        self.assertIn("DOCKER_GID=998", argv)
 
-    argv = docker_launch.compose_run_argv("safety", ["bash", "-lc", "true"])
+    def test_includes_host_repo(self) -> None:
+        with mock.patch.object(docker_launch, "_docker_sock_gid", return_value=998):
+            argv = docker_launch.compose_run_argv("safety", ["true"])
+        self.assertIn(f"HOST_REPO={docker_launch.ROOT}", argv)
 
-    assert "--project-name" in argv
-    assert "qa-ai-models" in argv
-    assert "-e" in argv
-    assert "DOCKER_GID=998" in argv
+
+if __name__ == "__main__":
+    unittest.main()

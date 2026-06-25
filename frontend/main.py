@@ -1,4 +1,4 @@
-"""Run dev server: uv run python -m frontend.main"""
+"""Run dev server: uv run python3 -m frontend.main (or python3 main.py --host)."""
 
 import os
 
