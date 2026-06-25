@@ -127,14 +127,30 @@
   const PRICING = {{ pricing_json | safe }};
   const FAMILIES = {{ families | tojson }};
 
+  // Mirrors evaluator model_family(): match the family keyword anywhere in the
+  // id, so an HF repo like "Qwen/Qwen2.5-7B-Instruct" or "meta-llama/..." is
+  // classified correctly (not just the gateway models precomputed in FAMILIES).
+  function modelFamily(id) {
+    const m = (id || "").toLowerCase();
+    if (m.includes("llama")) return "meta";
+    if (m.includes("qwen")) return "qwen";
+    if (m.includes("mistral") || m.includes("mixtral")) return "mistral";
+    if (m.includes("gemma")) return "google";
+    if (m.includes("gpt") || m.includes("openai") || /^o[134]/.test(m)) return "openai";
+    return "other";
+  }
+
   function update() {
-    const cand = document.getElementById("candidate").value;
+    const source = (document.querySelector('input[name="source"]:checked') || {}).value || "gateway";
+    const gwCand = document.getElementById("candidate").value;
+    const hfRepo = document.getElementById("hf_repo").value;
     const judge = document.getElementById("judge").value;
     const maxTok = parseInt(document.getElementById("max_tokens").value || "0", 10);
     const suite = document.querySelector('input[name="suite"]:checked');
     const n = suite ? parseInt(suite.dataset.n, 10) : 0;
 
-    const rates = PRICING[cand];
+    // Cost preview: gateway models only (HF models aren't priced here).
+    const rates = source === "gateway" ? PRICING[gwCand] : null;
     if (rates && n && maxTok) {
       const usd = n * (250 * rates[0] + maxTok * rates[1]) / 1e6;
       document.getElementById("cost-preview").textContent = "$" + usd.toFixed(4);
@@ -142,14 +158,19 @@
       document.getElementById("cost-preview").textContent = "$—";
     }
 
-    const clash = FAMILIES[cand] === FAMILIES[judge];
+    // Cross-family check: the candidate's family depends on the source. For an
+    // HF candidate, classify its repo id; an empty repo doesn't warn.
+    const candFamily = source === "hf" ? modelFamily(hfRepo) : FAMILIES[gwCand];
+    const hasCand = source === "hf" ? hfRepo.trim() !== "" : true;
+    const clash = hasCand && candFamily === FAMILIES[judge];
     document.getElementById("family-warning").style.display = clash ? "block" : "none";
     document.getElementById("submit-btn").disabled = clash;
   }
 
-  document.querySelectorAll("#candidate, #judge, #max_tokens, input[name=suite]")
+  document.querySelectorAll("#candidate, #judge, #max_tokens, #hf_repo, input[name=suite], input[name=source]")
     .forEach(el => el.addEventListener("change", update));
   document.getElementById("max_tokens").addEventListener("input", update);
+  document.getElementById("hf_repo").addEventListener("input", update);
   update();
 </script>
 {% endblock %}
