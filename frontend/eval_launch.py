@@ -189,6 +189,34 @@ def validate_launch(
     return None
 
 
+# Suggested open-weight models for the HF-model launcher field (datalist hints).
+SUGGESTED_HF_REPOS: tuple[str, ...] = (
+    "Qwen/Qwen2.5-7B-Instruct",
+    "mistralai/Mistral-7B-Instruct-v0.3",
+    "meta-llama/Llama-3.2-1B-Instruct",
+    "gpt2",
+)
+
+
+def validate_hf_candidate(repo_id: str) -> dict:
+    """Validate a user-supplied Hugging Face model for evaluation (link path).
+
+    Wraps evaluator/hf_intake — checks the repo exists, is open, is vLLM-servable,
+    and fits the GPU. Shapes the verdict for eval_run_new.html. Serving + running
+    an HF model is the DCC-orchestration milestone; here we validate before it."""
+    from evaluator import hf_intake
+
+    res = hf_intake.validate(repo_id)
+    info = res.info
+    return {
+        "ok": res.ok,
+        "error": res.error,
+        "repo_id": repo_id,
+        "architectures": info.architectures if info else None,
+        "num_params": info.num_params if info else None,
+    }
+
+
 def _container_rel(path: Path) -> str:
     """Path inside the evaluator Docker image (WORKDIR /app/evaluator)."""
     return str(path.relative_to(EVALUATOR)).replace("\\", "/")
@@ -409,6 +437,7 @@ def get_launch_options() -> dict:
         "pricing_json": json.dumps({m: list(r) for m, r in _COST_PER_M_TOKENS.items()}),
         "max_tokens_min": MAX_TOKENS_MIN,
         "max_tokens_max": MAX_TOKENS_MAX,
+        "suggested_hf_repos": list(SUGGESTED_HF_REPOS),
         "custom_max_questions": CUSTOM_MAX_QUESTIONS,
         "launch_mode": "docker" if docker_launch.use_docker() else "host",
         "docker_available": docker_launch.docker_available(),

@@ -13,13 +13,23 @@
 
   <form method="post" action="{{ url_for('eval_run_start') }}" class="launch-form">
 
-    <label>Candidate model
+    <fieldset class="candidate-source">
+      <legend>Candidate model</legend>
+      <label class="src-opt"><input type="radio" name="source" value="gateway" checked> Gateway model</label>
       <select name="candidate" id="candidate">
         {% for m in candidates %}
         <option value="{{ m }}" {% if m == 'gpt-5-chat' %}selected{% endif %}>{{ m }}</option>
         {% endfor %}
       </select>
-    </label>
+
+      <label class="src-opt"><input type="radio" name="source" value="hf"> Hugging Face model</label>
+      <input type="text" name="hf_repo" id="hf_repo" list="hf_repo_suggestions"
+             placeholder="Qwen/Qwen2.5-7B-Instruct" autocomplete="off" spellcheck="false">
+      <datalist id="hf_repo_suggestions">
+        {% for repo in suggested_hf_repos %}<option value="{{ repo }}"></option>{% endfor %}
+      </datalist>
+      <span class="form-hint">HF models are served on the DCC GPU — serving wires in next; for now we validate the model before any run.</span>
+    </fieldset>
 
     <label>Judge model
       <select name="judge" id="judge">
@@ -58,6 +68,21 @@
 
     <button type="submit" id="submit-btn" class="btn-primary">▶ Start run</button>
   </form>
+
+  {% if hf_result %}
+    {% if hf_result.ok %}
+    <div class="intake-result intake-ok">
+      <h2>✅ {{ hf_result.repo_id }} — ready to evaluate</h2>
+      <p>Architecture: {{ hf_result.architectures | join(', ') }}{% if hf_result.num_params %} · {{ '%.1f'|format(hf_result.num_params / 1e9) }}B params{% endif %}</p>
+      <p class="form-hint">Evaluation will run once DCC serving is wired (next milestone).</p>
+    </div>
+    {% else %}
+    <div class="intake-result intake-error">
+      <h2>❌ Can't evaluate {{ hf_result.repo_id }}</h2>
+      <p>{{ hf_result.error }}</p>
+    </div>
+    {% endif %}
+  {% endif %}
 
   <details class="custom-suite">
     <summary>Or bring your own questions</summary>
