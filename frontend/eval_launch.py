@@ -71,17 +71,26 @@ JUDGE_MODELS: tuple[str, ...] = (
     "Llama 4 Maverick", "GPT 4.1 Mini", "gpt-5-chat", "gpt-oss-120b",
 )
 
-# MT-Bench rule: judge must come from a different model family than the
-# candidate. Family is derived from the Gateway id prefix. Qwen (self-hosted on
-# the DCC) is its own family so an OpenAI judge is allowed to score it; gpt-oss-*
-# stays "openai" (it's an OpenAI model, so self-preference still applies vs gpt-*).
+# MT-Bench rule: the judge must come from a different model family than the
+# candidate. The family is matched by keyword ANYWHERE in the id (case-
+# insensitive), so variants like "meta-llama/Llama-4-Scout" or "Meta-Llama-3.1"
+# classify as meta — not just ids that literally start with "llama" (a naive
+# prefix check let a Llama candidate + Llama judge slip past the cross-family
+# rule when the Gateway returned a Hub-style id). gpt-oss-* stays "openai" (it IS
+# an OpenAI model, so self-preference still applies vs gpt-*).
 def model_family(model: str) -> str:
     m = model.lower()
-    if m.startswith("llama"):
+    if "llama" in m:
         return "meta"
-    if m.startswith("qwen"):
+    if "qwen" in m:
         return "qwen"
-    return "openai"
+    if "mistral" in m or "mixtral" in m:
+        return "mistral"
+    if "gemma" in m:
+        return "google"
+    if "gpt" in m or "openai" in m or m.startswith(("o1", "o3", "o4")):
+        return "openai"
+    return "other"
 
 
 # Suite key -> contract files. Rubric/prompt pairing lives here so the
