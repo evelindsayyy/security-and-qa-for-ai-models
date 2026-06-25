@@ -133,7 +133,5 @@ def get_launch_options() -> dict:
         ],
         "models": list(models),
         "launch_mode": "docker" if docker_launch.use_docker() else "host",
-        "launch_mode": "docker" if docker_launch.use_docker() else "host",
         "docker_available": docker_launch.docker_available(),
-        "docker_detail": docker_launch.docker_detail(),
     }

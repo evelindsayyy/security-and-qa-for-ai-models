@@ -34,17 +34,11 @@ def _pillar_db_flags() -> dict[str, bool]:
 @bp.get("/health")
 def health():
     """Liveness + whether the Postgres read-path is currently reachable."""
-    from frontend import docker_launch
-
     pillars = _pillar_db_flags()
-    docker_status = docker_launch.docker_launch_status()
     return ok(
         {
             "status": "ok",
             "db_available": any(pillars.values()),
             "pillars": pillars,
-            "docker_available": docker_status["available"],
-            "docker_detail": docker_status["reason"],
-            "launch_mode": "docker" if docker_launch.use_docker() else "host",
         }
     )

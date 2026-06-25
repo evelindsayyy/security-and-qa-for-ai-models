@@ -10,7 +10,7 @@
     Launches <code>evaluator/runner.py</code> via Docker Compose (default).
     One run at a time; an identical in-flight request returns the existing run.
     {% if not docker_available %}
-    <span class="form-warning">Docker unavailable — {{ docker_detail }}. Set <code>FRONTEND_LAUNCH_MODE=host</code> for CLI-only fallback.</span>
+    <span class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>
     {% endif %}
   </p>
 

@@ -253,8 +253,6 @@ def get_launch_options() -> dict:
         "suggested_hf_repos": list(SUGGESTED_HF_REPOS),
         "existing_scan_slugs": sorted(_existing_scan_slugs()),
         "launch_mode": "docker" if docker_launch.use_docker() else "host",
-        "launch_mode": "docker" if docker_launch.use_docker() else "host",
         "docker_available": docker_launch.docker_available(),
-        "docker_detail": docker_launch.docker_detail(),
         "compose_file": str(DOCKER_COMPOSE_FILE.relative_to(ROOT)),
     }

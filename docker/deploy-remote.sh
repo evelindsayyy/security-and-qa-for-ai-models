@@ -33,12 +33,4 @@ docker compose --project-name qa-ai-models --env-file .env \
 docker compose --project-name qa-ai-models --env-file .env \
   -f docker/compose.yml -f docker/compose.deploy.yml up -d --no-build --pull missing web
 
-echo "Verifying Docker access inside web container..."
-docker compose --project-name qa-ai-models --env-file .env \
-  -f docker/compose.yml -f docker/compose.deploy.yml exec -T web docker info >/dev/null
-
-if [ "${BUILD_PILLARS:-0}" != "1" ]; then
-  echo "Tip: run deploy with BUILD_PILLARS=1 once after pillar Dockerfiles change."
-fi
-
 echo "Deployed ${WEB_IMAGE} at ${DEPLOY_PATH} ($(git rev-parse --short HEAD))"

@@ -253,9 +253,7 @@ def get_launch_options() -> dict:
         "gateway_error": gw.get("error"),
         "model_has_results": model_has_results,
         "launch_mode": "docker" if docker_launch.use_docker() else "host",
-        "launch_mode": "docker" if docker_launch.use_docker() else "host",
         "docker_available": docker_launch.docker_available(),
-        "docker_detail": docker_launch.docker_detail(),
         "profiles": [
             {"value": "base", "label": "Base (general-purpose baseline)"},
             {"value": "education", "label": "Education (+ teen safety, FERPA probes)"},
