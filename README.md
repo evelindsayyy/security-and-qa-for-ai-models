@@ -22,6 +22,7 @@ Automated **nutrition labels** for Duke AI Gateway models: **security** (artifac
 | **Docker model** (UI + pillar jobs) | [`docs/docker.md`](docs/docker.md) · [`docker/`](docker/) |
 | **Understand the system** (VM, Postgres, background jobs) | [`docs/architecture.md`](docs/architecture.md) |
 | **Postgres schema and ingest** | [`docs/data-model.md`](docs/data-model.md) · [`dbutils/README.md`](dbutils/README.md) |
+| **Authentication (OIDC, public/private views)** | [`docs/auth-setup.md`](docs/auth-setup.md) · [`auth/README.md`](auth/README.md) |
 | **Track A** (scanning + safety) | [`docs/track-a-framework.md`](docs/track-a-framework.md) |
 | **Track B** (evaluator + benchmarks) | [`docs/track-b-framework.md`](docs/track-b-framework.md) |
 | **Gateway models and HF scan tiers** | [`docs/gateway-models.md`](docs/gateway-models.md) |
@@ -39,6 +40,7 @@ safety/        Track A — promptfoo + garak red team
 evaluator/     Track B — Duke LLM-as-judge suites
 benchmarks/    Track B — public benchmarks (IFEval, TruthfulQA, …)
 gateway/       Live gateway catalog
+auth/          Duke OIDC login, sessions, allowlist
 frontend/      Nutrition-label UI
 docker/        Containerized UI for the application VM
 dbutils/       Shared Postgres ingest helpers
@@ -73,6 +75,7 @@ When `POSTGRES_DSN` is set; Set `EFFICACY_DB_DSN` to the same value. Runs auto-s
 
 ```bash
 ./scripts/apply-schemas.sh --bootstrap
+# Auth backfill (after schema apply): uv run python db/migrate_auth_columns.py --apply
 # Or one file: uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql
 ```
 
@@ -118,6 +121,7 @@ One repo-root [`.env.example`](.env.example) → `.env` (never commit). Key vari
 - `DUKE_GATEWAY_URL`, `DUKE_GATEWAY_KEY` — gateway chat and catalog (aliases: `OPENAI_*`)
 - `HF_TOKEN` — gated Hugging Face downloads (scanning)
 - `POSTGRES_DSN`, `EFFICACY_DB_DSN` — Postgres (set both to the same DSN); UI/API read DB when reachable
+- `AUTH_ENABLED`, `DUKE_OIDC_*`, `AUTH_ALLOWED_NETIDS` — optional OIDC; see [`docs/auth-setup.md`](docs/auth-setup.md)
 - `APP_PORT` — containerized UI port (default 5000 via `./docker/run.sh`)
 - `FRONTEND_LAUNCH_MODE` — defaults to `docker` for Start buttons; set `host` for legacy dev
 

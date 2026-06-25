@@ -1,0 +1,129 @@
+"""Shared launch helpers — fingerprint, reuse lookup, run metadata."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from auth.session import effective_user, get_view_mode
+from dbutils.run_access import ReusableRun, ensure_user_link, try_lookup_reusable
+from dbutils.run_fingerprint import Pillar, fingerprint, is_public_default, resolve_visibility
+from dbutils.run_meta import merge_into_scan_meta, write_run_meta
+
+
+@dataclass(frozen=True)
+class LaunchPlan:
+    config: dict[str, Any]
+    config_fingerprint: str
+    visibility: str
+    owner_user_id: str | None
+    owner_netid: str | None
+    reused: ReusableRun | None
+    is_public_default: bool
+
+
+def build_launch_plan(
+    pillar: Pillar,
+    *,
+    force_private: bool = False,
+    **config_kwargs: Any,
+) -> LaunchPlan:
+    from dbutils.run_fingerprint import normalize_config
+
+    config = normalize_config(pillar, **config_kwargs)
+    fp = fingerprint(pillar, config)
+    private_mode = get_view_mode() == "private"
+    visibility = resolve_visibility(
+        pillar,
+        config,
+        private_mode=private_mode,
+        force_private=force_private,
+    )
+    user = effective_user()
+    user_id = user.get("id") if user else None
+    netid = user.get("netid") if user else None
+
+    if visibility == "private" and not user_id:
+        user_id = None
+        netid = None
+
+    reused = try_lookup_reusable(
+        pillar,
+        fp,
+        user_id=user_id if visibility == "private" else None,
+        visibility=visibility,
+    )
+
+    if reused and user_id:
+        _link_reuse(user_id, reused)
+
+    return LaunchPlan(
+        config=config,
+        config_fingerprint=fp,
+        visibility=visibility,
+        owner_user_id=user_id if visibility == "private" else None,
+        owner_netid=netid if visibility == "private" else None,
+        reused=reused,
+        is_public_default=is_public_default(pillar, config),
+    )
+
+
+def _link_reuse(user_id: str, reused: ReusableRun) -> None:
+    from dbutils.connection import psycopg_available
+    from dbutils.env import load_repo_env, resolve_dsn
+
+    load_repo_env()
+    dsn = resolve_dsn("POSTGRES_DSN", "DATABASE_URL", "EFFICACY_DB_DSN")
+    if not dsn or not psycopg_available():
+        return
+    try:
+        import psycopg
+
+        with psycopg.connect(dsn, connect_timeout=2) as conn:
+            ensure_user_link(
+                conn,
+                user_id=user_id,
+                pillar=reused.pillar,
+                run_id=reused.run_id,
+                link_type="reused",
+            )
+    except Exception:
+        pass
+
+
+def persist_run_meta_scan(scan_dir: Path, plan: LaunchPlan) -> None:
+    meta = {
+        "visibility": plan.visibility,
+        "config_fingerprint": plan.config_fingerprint,
+        "config_json": plan.config,
+        "owner_user_id": plan.owner_user_id,
+        "owner_netid": plan.owner_netid,
+    }
+    merge_into_scan_meta(scan_dir, meta)
+
+
+def persist_run_meta_dir(directory: Path, plan: LaunchPlan) -> None:
+    write_run_meta(
+        directory,
+        visibility=plan.visibility,
+        config_fingerprint=plan.config_fingerprint,
+        config_json=plan.config,
+        owner_user_id=plan.owner_user_id,
+        owner_netid=plan.owner_netid,
+    )
+
+
+def reused_slug(plan: LaunchPlan) -> str | None:
+    if not plan.reused:
+        return None
+    return plan.reused.slug
+
+
+def reused_run_key(plan: LaunchPlan) -> str | None:
+    """Safety returns slug/profile; others return slug."""
+    if not plan.reused:
+        return None
+    if plan.reused.profile:
+        return f"{plan.reused.slug}/{plan.reused.profile}"
+    return plan.reused.slug

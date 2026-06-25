@@ -70,6 +70,17 @@ def build_command(benchmark_key: str, model: str, stem: str) -> list[str]:
 
 
 def start_run(benchmark_key: str, model: str) -> tuple[str, bool]:
+    from frontend.run_launch import build_launch_plan, persist_run_meta_dir, reused_slug
+
+    plan = build_launch_plan(
+        "benchmark",
+        benchmark_key=benchmark_key,
+        model=model,
+    )
+    if plan.reused:
+        stem = reused_slug(plan) or predict_stem(benchmark_key, model)
+        return stem, True
+
     combo = (benchmark_key, model)
     with _LOCK:
         existing = _INFLIGHT.get(combo)
@@ -82,6 +93,7 @@ def start_run(benchmark_key: str, model: str) -> tuple[str, bool]:
 
         stem = predict_stem(benchmark_key, model)
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        persist_run_meta_dir(RESULTS_DIR / stem, plan)
         log_path = RESULTS_DIR / f"{stem}.log"
         cmd = build_command(benchmark_key, model, stem)
         with log_path.open("wb") as log_f:

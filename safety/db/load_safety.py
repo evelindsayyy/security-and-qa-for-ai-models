@@ -30,6 +30,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from dbutils import apply_loader, jsonb_param, load_repo_env, read_json
+from dbutils.auth_columns import apply_auth_defaults, auth_fields_from_artifact
 from dbutils.cli import add_ingest_arguments
 from dbutils.ingest import exit_if_apply_without_dsn, print_dry_run_hint
 from safety.merged_paths import iter_merged_result_paths
@@ -83,6 +84,10 @@ def safety_run_row(data: dict[str, Any]) -> dict:
         "tool_results": data.get("tool_results") or {},
         "started_at": _parse_iso_timestamp(data.get("started_at")),
         "completed_at": _parse_iso_timestamp(data.get("completed_at")),
+        "visibility": "public",
+        "owner_user_id": None,
+        "config_fingerprint": None,
+        "config_json": {},
     }
 
 
@@ -129,6 +134,7 @@ def load_file(path: Path) -> tuple[dict, list[dict]] | None:
     run = safety_run_row(payload)
     if not run["completed_at"]:
         return None
+    apply_auth_defaults(run, auth_fields_from_artifact(path, pillar="safety"))
     findings = finding_rows(payload)
     return run, findings
 
@@ -141,13 +147,15 @@ _RUN_INSERT = """
 INSERT INTO public.safety_runs (
     model_id, gateway_model_id, display_name, status, deployment_context,
     summary_pass_rate, safety_tier, adversarial_tier, composite_tier,
-    composite_score, missing_suites, runs, tool_results, started_at, completed_at)
+    composite_score, missing_suites, runs, tool_results, started_at, completed_at,
+    visibility, owner_user_id, config_fingerprint, config_json)
 VALUES (
     %(model_id)s, %(gateway_model_id)s, %(display_name)s, %(status)s,
     %(deployment_context)s::jsonb, %(summary_pass_rate)s, %(safety_tier)s,
     %(adversarial_tier)s, %(composite_tier)s, %(composite_score)s,
     %(missing_suites)s::jsonb, %(runs)s::jsonb, %(tool_results)s::jsonb,
-    %(started_at)s, %(completed_at)s)
+    %(started_at)s, %(completed_at)s,
+    %(visibility)s, %(owner_user_id)s, %(config_fingerprint)s, %(config_json)s::jsonb)
 ON CONFLICT (gateway_model_id, completed_at) DO NOTHING
 """
 
@@ -175,6 +183,7 @@ def _run_params(run: dict) -> dict:
         "missing_suites": jsonb_param(run["missing_suites"]),
         "runs": jsonb_param(run["runs"]),
         "tool_results": jsonb_param(run["tool_results"]),
+        "config_json": jsonb_param(run.get("config_json") or {}),
     }
 
 

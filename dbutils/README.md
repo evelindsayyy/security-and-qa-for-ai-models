@@ -20,6 +20,11 @@ Each pillar keeps its own ``pillar/db/`` directory (transforms + INSERT SQL).
 | `compose` | `compose_cmd`, `compose_run` — shared Docker Compose helpers |
 | `post_run.py` | `maybe_sync_artifact` — auto-ingest after successful pillar runs |
 | `startup.py` | Flask startup log for Postgres read path |
+| `run_fingerprint.py` | Config normalize + SHA-256 for run dedup |
+| `run_access.py` | Postgres lookup for reusable runs; `user_run_links` |
+| `run_meta.py` | `run_meta.json` sidecar read/write at launch |
+| `auth_columns.py` | Merge auth fields into loader rows |
+| `visibility.py` | SQL + artifact filters for public/private views |
 
 ## Pillar loader template (scanner / safety / benchmarks)
 

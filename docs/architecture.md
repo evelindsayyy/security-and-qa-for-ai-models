@@ -138,15 +138,16 @@ planned).
 
 Long scans and evals take minutes to hours. Start routes return immediately; the pillar runs in the background while the UI polls status.
 
-**MVP concurrency limits (shared VM, no auth):**
+**MVP concurrency limits:**
 
 | Concern | Behavior |
 |---------|----------|
 | Same job params twice | Deduped via in-memory `_INFLIGHT` in each `*_launch.py` |
+| Same config in Postgres | Reused via `config_fingerprint` (no re-run when match exists) |
 | Different jobs at once | Allowed — separate subprocesses and output paths |
 | Same slug (e.g. two users scan `gpt2`) | **Collides** on output dirs — last writer wins |
 | Multiple Flask workers | **Not supported** — `_RUNNING` is per-process |
-| Auth | **None** — anyone who can reach the URL can start jobs |
+| Auth | Duke OIDC optional (`AUTH_ENABLED`); public read open; private mode + custom runs require allowlisted NetID — [`auth-setup.md`](auth-setup.md) |
 
 | Piece | Role |
 |-------|------|
@@ -199,6 +200,7 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 - **`evaluator/`** (B) — Duke task suites scored by an LLM judge against YAML rubrics; records scores plus cost / latency / tokens → `eval_runs`. Postgres path: [`evaluator/db/`](../evaluator/db/README.md). See [`track-b-framework.md`](track-b-framework.md).
 - **`benchmarks/`** (B) — public benchmarks (IFEval, TruthfulQA, MMLU, ToMi, consistency); ingest + UI read via [`benchmarks/db/`](../benchmarks/db/README.md) and `frontend/benchmark_db_data.py`.
 - **`api/`** — Flask REST under `/api`; see [`api/README.md`](../api/README.md).
+- **`auth/`** — Duke OIDC login, sessions, allowlist; see [`auth/README.md`](../auth/README.md).
 - **`frontend/`** — nutrition-label UI; `frontend/*_data.py` + launch helpers. See [`frontend/README.md`](../frontend/README.md).
 
 ## Deployment and hosts
@@ -218,6 +220,6 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 ## Open questions
 
 - Frontend stack — Flask now; possibly Next.js + Tailwind later.
-- Auth — Duke Shibboleth preferred; until then the app may run behind the VM firewall.
+- Auth — Duke OIDC (Shibboleth login screen) via [`auth/`](../auth/) and [`docs/auth-setup.md`](auth-setup.md). Public view requires no login; private mode uses netID allowlist.
 - LiteLLM guardrail hooks — integration path TBD.
 - Benchmark catalog — which pilots become standing suites.

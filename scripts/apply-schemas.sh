@@ -30,6 +30,7 @@ if [ ! -f .env ]; then
 fi
 
 for schema in \
+  db/auth_schema.sql \
   scanner/db/scan_schema.sql \
   safety/db/safety_schema.sql \
   evaluator/db/efficacy_schema.sql \

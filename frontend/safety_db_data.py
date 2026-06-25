@@ -64,7 +64,8 @@ SELECT DISTINCT ON (gateway_model_id)
     id::text, gateway_model_id, display_name, status, deployment_context,
     summary_pass_rate, safety_tier, adversarial_tier, composite_tier,
     composite_score, missing_suites, runs, tool_results, started_at, completed_at
-FROM public.safety_runs
+FROM public.safety_runs s
+WHERE {visibility_filter}
 ORDER BY gateway_model_id, completed_at DESC NULLS LAST
 """
 
@@ -72,8 +73,8 @@ _DETAIL_RUN_SQL = """
 SELECT id::text, gateway_model_id, display_name, status, deployment_context,
        summary_pass_rate, safety_tier, adversarial_tier, composite_tier,
        composite_score, missing_suites, runs, tool_results, started_at, completed_at
-FROM public.safety_runs
-WHERE gateway_model_id = %(gateway_model_id)s
+FROM public.safety_runs s
+WHERE gateway_model_id = %(gateway_model_id)s AND ({visibility_filter})
 ORDER BY completed_at DESC NULLS LAST
 LIMIT 1
 """
@@ -184,14 +185,29 @@ def _fetch_findings_by_run_id(conn, run_ids: list[str]) -> dict[str, list[dict]]
     return grouped
 
 
+def _visibility_params() -> tuple[str, dict]:
+    from dbutils.visibility import visibility_clause
+    from frontend.read_context import read_context
+
+    view_mode, user_id = read_context()
+    clause, params = visibility_clause("s", view_mode=view_mode, user_id=user_id, links_alias=True)
+    return clause, params
+
+
 def get_safety_data_db() -> dict:
     """DB-preferred merge of every known safety run (DB rows + not-yet-loaded files)."""
+    from dbutils.run_meta import read_run_meta
+    from dbutils.visibility import artifact_visible
+    from frontend.read_context import read_context
     from frontend.safety_data import _SUITE_ORDER as _SO
     from frontend.safety_data import _suite_label
 
+    vis_clause, vis_params = _visibility_params()
+    view_mode, user_id = read_context()
+
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(_LATEST_RUNS_SQL)
+            cur.execute(_LATEST_RUNS_SQL.format(visibility_filter=vis_clause), vis_params)
             run_rows = cur.fetchall()
         findings_by_run = _fetch_findings_by_run_id(conn, [row[0] for row in run_rows])
         db_rows = [
@@ -205,6 +221,9 @@ def get_safety_data_db() -> dict:
     if OUTPUT_DIR.exists():
         for path, slug, profile in iter_merged_result_paths(OUTPUT_DIR):
             if (slug, profile) in seen_keys:
+                continue
+            meta = read_run_meta(path.parent)
+            if meta and not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
                 continue
             row = _summarize_merged(path, slug, profile)
             if row is not None:
@@ -223,9 +242,12 @@ def get_safety_data_db() -> dict:
 
 def get_safety_detail_db(slug: str, profile: str = "base") -> dict | None:
     """Detail-page payload from Postgres; None if slug isn't loaded."""
+    vis_clause, vis_params = _visibility_params()
+
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(_DETAIL_RUN_SQL, {"gateway_model_id": slug})
+            params = {"gateway_model_id": slug, **vis_params}
+            cur.execute(_DETAIL_RUN_SQL.format(visibility_filter=vis_clause), params)
             run_row = cur.fetchone()
             if run_row is None:
                 return None

@@ -127,7 +127,7 @@ def register_routes(app):
         )
         if error:
             return error, 400
-        slug, _already = start_run(
+        slug, already = start_run(
             hf_repo,
             skip_modelscan=not request.form.get("run_modelscan"),
             skip_fickling=not request.form.get("run_fickling"),
@@ -135,7 +135,8 @@ def register_routes(app):
             skip_deps=not request.form.get("run_deps"),
             skip_secrets=not request.form.get("run_secrets"),
         )
-        return redirect(url_for("scan_detail", slug=slug, status="running"))
+        status = "reused" if already else "running"
+        return redirect(url_for("scan_detail", slug=slug, status=status))
 
     @app.route("/scans/<slug>/status")
     def scan_run_status(slug: str):
@@ -213,12 +214,17 @@ def register_routes(app):
     def eval_run_start_custom():
         from flask import redirect, request, url_for
 
+        from auth.session import require_private_access
         from frontend.eval_launch import (
             start_run,
             validate_custom_questions,
             validate_launch,
             write_custom_suite,
         )
+
+        user, auth_err = require_private_access()
+        if auth_err:
+            return auth_err, 403
 
         candidate = request.form.get("candidate", "")
         judge = request.form.get("judge", "")

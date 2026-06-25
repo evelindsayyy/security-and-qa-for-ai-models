@@ -121,9 +121,8 @@ class LaunchRoutesTest(unittest.TestCase):
             "run_deps": "on",
             "run_secrets": "on",
         }
-        with mock.patch.object(
-            scan_launch.subprocess, "Popen", return_value=fake_proc
-        ) as popen:
+        with mock.patch("frontend.run_launch.try_lookup_reusable", return_value=None), \
+             mock.patch.object(scan_launch.subprocess, "Popen", return_value=fake_proc) as popen:
             r = self.client.post("/scans/start", data=data)
         self.assertEqual(r.status_code, 302)
         self.assertIn("status=running", r.headers["Location"])

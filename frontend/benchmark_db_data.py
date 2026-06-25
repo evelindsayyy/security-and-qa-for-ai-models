@@ -71,7 +71,8 @@ _LIST_SQL = """
 SELECT output_slug, source_filename, gateway_model_id, benchmark_key,
        headline_metric, headline_value, n_items, metrics, items, run_params,
        completed_at
-FROM public.benchmark_runs
+FROM public.benchmark_runs b
+WHERE {visibility_filter}
 ORDER BY completed_at DESC NULLS LAST, output_slug
 """
 
@@ -79,8 +80,8 @@ _DETAIL_SQL = """
 SELECT output_slug, source_filename, gateway_model_id, benchmark_key,
        headline_metric, headline_value, n_items, metrics, items, run_params,
        completed_at
-FROM public.benchmark_runs
-WHERE output_slug = %(slug)s
+FROM public.benchmark_runs b
+WHERE output_slug = %(slug)s AND ({visibility_filter})
 LIMIT 1
 """
 
@@ -200,11 +201,27 @@ def _build_detail_db(row: tuple) -> dict:
     return _attach_meta(detail)
 
 
+def _visibility_params() -> tuple[str, dict]:
+    from dbutils.visibility import visibility_clause
+    from frontend.read_context import read_context
+
+    view_mode, user_id = read_context()
+    clause, params = visibility_clause("b", view_mode=view_mode, user_id=user_id, links_alias=True)
+    return clause, params
+
+
 def get_benchmarks_data_db() -> dict:
     """DB-preferred merge of every known benchmark run (DB rows + not-yet-loaded files)."""
+    from dbutils.run_meta import read_run_meta
+    from dbutils.visibility import artifact_visible
+    from frontend.read_context import read_context
+
+    vis_clause, vis_params = _visibility_params()
+    view_mode, user_id = read_context()
+
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(_LIST_SQL)
+            cur.execute(_LIST_SQL.format(visibility_filter=vis_clause), vis_params)
             run_rows = cur.fetchall()
     db_rows = [_summarize_db_run(row) for row in run_rows]
 
@@ -213,6 +230,9 @@ def get_benchmarks_data_db() -> dict:
     if PRIMARY_DIR.is_dir():
         for path in sorted(list(PRIMARY_DIR.glob("*.json")) + list(PRIMARY_DIR.glob("*.jsonl"))):
             if path.stem in seen_slugs:
+                continue
+            meta = read_run_meta(PRIMARY_DIR / path.stem)
+            if meta and not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
                 continue
             row = _summarize_file(path)
             if row is not None:
@@ -233,9 +253,12 @@ def get_benchmarks_data_db() -> dict:
 
 def get_benchmark_detail_db(slug: str) -> dict | None:
     """Detail-page payload from Postgres; None if slug isn't loaded."""
+    vis_clause, vis_params = _visibility_params()
+
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(_DETAIL_SQL, {"slug": slug})
+            params = {"slug": slug, **vis_params}
+            cur.execute(_DETAIL_SQL.format(visibility_filter=vis_clause), params)
             row = cur.fetchone()
             if row is None:
                 return None

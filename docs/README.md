@@ -13,6 +13,9 @@ Project guides & info. **GitLab:** [`.gitlab/README.md`](../.gitlab/README.md).
 | [`docker.md`](docker.md) | Docker model — layers, sibling launches, CI |
 | [`../frontend/README.md`](../frontend/README.md) | Nutrition label UI |
 | [`data-model.md`](data-model.md) | Postgres schema — tables, columns, JSON → DB mapping |
+| [`auth-setup.md`](auth-setup.md) | Duke OIDC registration and VM rollout (step-by-step) |
+| [`../auth/README.md`](../auth/README.md) | Auth module — routes, env, behavior |
+| [`../db/README.md`](../db/README.md) | Auth DDL and migration script |
 | [`../dbutils/README.md`](../dbutils/README.md) | Shared Postgres ingest helpers |
 | [`tool-stack.md`](tool-stack.md) | Tools and rationale |
 | [`../scripts/README.md`](../scripts/README.md) | Non-gateway inference helpers (DCC/vLLM, Azure Foundry) |

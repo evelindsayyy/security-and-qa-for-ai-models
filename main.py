@@ -26,7 +26,7 @@ def _usage() -> None:
 
 
 def _run_host_flask() -> int:
-    port = int(os.environ.get("PORT", "5000"))
+    port = int(os.environ.get("PORT", "5001"))
     from frontend import create_app
 
     create_app().run(debug=True, host="0.0.0.0", port=port)
