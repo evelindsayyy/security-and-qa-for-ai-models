@@ -40,6 +40,8 @@ from benchmark_metrics import (
     slugify_model,
     summarize_binary_accuracy,
 )
+from benchmark_run_stats import attach_run_stats, run_with_stats, write_stats_sidecar
+from benchmark_progress import init_progress, tick
 
 dotenv.load_dotenv()
 
@@ -166,6 +168,7 @@ def run_mbpp_test(dataset) -> Dict:
 
     results = []
     correct = 0
+    init_progress(total=len(dataset), unit="problems", message="Running MBPP…")
 
     for idx, row in enumerate(dataset):
         task_id = row["task_id"]
@@ -192,6 +195,7 @@ def run_mbpp_test(dataset) -> Dict:
                 "tests_total": len(test_list),
                 "test_results": [],
             })
+            tick(message=f"Problem {idx + 1}/{len(dataset)}")
             continue
 
         exec_result = run_tests(code, test_list, test_setup_code)
@@ -220,6 +224,7 @@ def run_mbpp_test(dataset) -> Dict:
             "tests_total": exec_result["tests_total"],
             "test_results": exec_result["test_results"],
         })
+        tick(message=f"Problem {idx + 1}/{len(dataset)}")
 
     attempted = len(results)
     scored = sum(1 for r in results if r["answered"])
@@ -239,6 +244,8 @@ def run_mbpp_test(dataset) -> Dict:
 
 def save_results(data: Dict, output_dir: str):
     """Save results to a JSON file."""
+    attach_run_stats(data["summary"])
+    write_stats_sidecar()
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -267,9 +274,10 @@ def main():
         print(f"[OK] Using full dataset ({len(ds)} problems)")
 
     try:
-        data = run_mbpp_test(ds)
-        save_results(data, OUTPUT_DIR)
-        print_binary_summary(MODEL, data["summary"])
+        with run_with_stats():
+            data = run_mbpp_test(ds)
+            save_results(data, OUTPUT_DIR)
+            print_binary_summary(MODEL, data["summary"])
 
     except Exception as e:
         print(f"[ERROR] {e}")

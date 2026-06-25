@@ -40,6 +40,7 @@ Below 0.75 - significantly inconsistent responses
 
 import json
 import os
+import sys
 import itertools
 import traceback
 from pathlib import Path
@@ -50,7 +51,15 @@ from bert_score import score as bert_score
 import dotenv
 
 from model_client import query_chat_completion, response_content
-from benchmark_metrics import compute_coverage, coverage_warning, has_usable_text, slugify_model
+from benchmark_metrics import (
+    compute_coverage,
+    coverage_warning,
+    has_usable_text,
+    safe_for_console,
+    slugify_model,
+)
+from benchmark_run_stats import run_with_stats, write_stats_sidecar
+from benchmark_progress import init_progress, tick
 
 dotenv.load_dotenv()
 
@@ -144,52 +153,67 @@ def run_consistency_test(model_name: str, questions: List[Dict]) -> Dict:
     question_results = []
     response_attempted = 0
     response_scored = 0
+    init_progress(total=len(questions), unit="topics", message="Running consistency…")
 
     for q in questions:
         q_id = q.get("id", "?")
         topic = q.get("topic", "")
         paraphrases = q["paraphrases"]
 
-        print(f"\n  Question [{q_id}]: {topic}")
+        print(f"\n  Question [{q_id}]: {safe_for_console(topic)}")
         responses = []
 
-        for idx, prompt in enumerate(paraphrases):
-            print(f"    Paraphrase {idx+1}: {prompt[:80]}...")
-            response = query_model(model_name, prompt)
-            response_attempted += 1
-            if has_usable_text(response):
-                response_scored += 1
-            print(f"    Response:    {(response or '')[:80]}...")
-            responses.append(response)
+        try:
+            for idx, prompt in enumerate(paraphrases):
+                print(f"    Paraphrase {idx+1}: {safe_for_console(prompt, limit=80)}...")
+                response = query_model(model_name, prompt)
+                response_attempted += 1
+                if has_usable_text(response):
+                    response_scored += 1
+                print(f"    Response:    {safe_for_console(response, limit=80)}...")
+                responses.append(response)
 
-        # Filter out empty responses before scoring
-        valid = [(p, r) for p, r in zip(paraphrases, responses) if has_usable_text(r)]
-        if len(valid) < 2:
-            print(f"  [WARN] Not enough valid responses for question {q_id}, skipping.")
+            # Filter out empty responses before scoring
+            valid = [(p, r) for p, r in zip(paraphrases, responses) if has_usable_text(r)]
+            if len(valid) < 2:
+                print(f"  [WARN] Not enough valid responses for question {q_id}, skipping.")
+                question_results.append({
+                    "id": q_id,
+                    "topic": topic,
+                    "paraphrases": paraphrases,
+                    "responses": responses,
+                    "scored": False,
+                    "bertscore": {"mean_f1": None, "min_f1": None, "pairs": []},
+                })
+            else:
+                valid_paraphrases, valid_responses = zip(*valid)
+                scores = compute_pairwise_bertscore(list(valid_responses))
+
+                print(f"    BERTScore mean F1: {scores['mean_f1']} | "
+                      f"min F1: {scores['min_f1']} | ")
+
+                question_results.append({
+                    "id": q_id,
+                    "topic": topic,
+                    "paraphrases": list(valid_paraphrases),
+                    "responses": list(valid_responses),
+                    "scored": True,
+                    "bertscore": scores,
+                })
+        except Exception as exc:
+            print(f"  [ERROR] Question {q_id} failed: {safe_for_console(str(exc))}")
+            traceback.print_exc()
             question_results.append({
                 "id": q_id,
                 "topic": topic,
                 "paraphrases": paraphrases,
                 "responses": responses,
                 "scored": False,
+                "error": str(exc),
                 "bertscore": {"mean_f1": None, "min_f1": None, "pairs": []},
             })
-            continue
 
-        valid_paraphrases, valid_responses = zip(*valid)
-        scores = compute_pairwise_bertscore(list(valid_responses))
-
-        print(f"    BERTScore mean F1: {scores['mean_f1']} | "
-              f"min F1: {scores['min_f1']} | ")
-
-        question_results.append({
-            "id": q_id,
-            "topic": topic,
-            "paraphrases": list(valid_paraphrases),
-            "responses": list(valid_responses),
-            "scored": True,
-            "bertscore": scores,
-        })
+        tick(message=f"Topic {len(question_results)}/{len(questions)}: {safe_for_console(topic, limit=60)}")
 
     # Aggregate
     scored_questions = [r for r in question_results if r["scored"]]
@@ -221,6 +245,10 @@ def run_consistency_test(model_name: str, questions: List[Dict]) -> Dict:
 
 def save_results(results: Dict, output_dir: str):
     """Save results to a JSON file."""
+    from benchmark_run_stats import attach_run_stats
+
+    attach_run_stats(results["summary"])
+    write_stats_sidecar()
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -244,15 +272,18 @@ def main():
         questions = questions[:QUESTION_LIMIT]
     
     summary_rows = []
+    failed = False
     try:
-        results = run_consistency_test(
-            model_name=MODEL,
-            questions=questions,
-        )
-        save_results(results, OUTPUT_DIR)
-        summary_rows.append((MODEL, results["summary"]))
+        with run_with_stats():
+            results = run_consistency_test(
+                model_name=MODEL,
+                questions=questions,
+            )
+            save_results(results, OUTPUT_DIR)
+            summary_rows.append((MODEL, results["summary"]))
     except Exception as e:
-        print(f"[ERROR] Failed testing {MODEL}: {e}")
+        failed = True
+        print(f"[ERROR] Failed testing {MODEL}: {safe_for_console(str(e))}")
         traceback.print_exc()
 
     # Print summary table
@@ -271,6 +302,9 @@ def main():
                 f"{s['responses_attempted']} answered "
                 f"({s['response_coverage']:.0%} coverage)"
             )
+
+    if failed:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

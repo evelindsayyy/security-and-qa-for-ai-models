@@ -9,6 +9,7 @@ from benchmark_metrics import (  # noqa: E402
     coverage_extras,
     coverage_warning,
     has_usable_text,
+    safe_for_console,
     slugify_model,
     summarize_binary_accuracy,
 )
@@ -22,6 +23,16 @@ class TestHasUsableText(unittest.TestCase):
 
     def test_non_empty(self) -> None:
         self.assertTrue(has_usable_text("A"))
+
+
+class TestSafeForConsole(unittest.TestCase):
+    def test_truncates(self) -> None:
+        self.assertEqual(safe_for_console("hello world", limit=5), "hello")
+
+    def test_does_not_raise_on_unicode(self) -> None:
+        out = safe_for_console("text\u2011here and \u2014 dash")
+        self.assertIn("text", out)
+        self.assertIn("here", out)
 
 
 class TestComputeCoverage(unittest.TestCase):

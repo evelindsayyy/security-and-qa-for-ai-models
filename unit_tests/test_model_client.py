@@ -9,6 +9,7 @@ from model_client import (  # noqa: E402
     detect_provider,
     extract_choice_letter,
     normalize_model,
+    response_usage,
     strip_reasoning,
 )
 
@@ -145,6 +146,24 @@ class TestFatalErrorHint(unittest.TestCase):
     def test_transient_error_is_not_fatal(self) -> None:
         # A normal timeout should still go through the retry path.
         self.assertIsNone(_fatal_error_hint(Exception("Connection timed out")))
+
+
+class TestResponseUsage(unittest.TestCase):
+    def test_extracts_from_object(self) -> None:
+        class Usage:
+            prompt_tokens = 11
+            completion_tokens = 7
+            total_tokens = 18
+
+        class Response:
+            usage = Usage()
+
+        usage = response_usage(Response())
+        self.assertEqual(usage, {"prompt_tokens": 11, "completion_tokens": 7, "total_tokens": 18})
+
+    def test_extracts_from_dict(self) -> None:
+        usage = response_usage({"usage": {"prompt_tokens": 5, "completion_tokens": 3}})
+        self.assertEqual(usage["total_tokens"], 8)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,8 @@ import requests
 from litellm import completion
 from urllib.parse import urlparse
 
+from benchmark_run_stats import get_active_run_stats
+
 DEFAULT_MAX_RETRIES = max(1, int(os.getenv("BENCHMARK_MAX_RETRIES", "3")))
 DEFAULT_RETRY_DELAY_SEC = float(os.getenv("BENCHMARK_RETRY_DELAY_SEC", "1.0"))
 
@@ -183,6 +185,37 @@ def response_content(response) -> str:
     return ""
 
 
+def response_usage(response) -> dict[str, int] | None:
+    """Extract token usage from a LiteLLM completion response, if present."""
+    if response is None:
+        return None
+    usage = getattr(response, "usage", None)
+    if usage is None and isinstance(response, dict):
+        usage = response.get("usage")
+    if usage is None:
+        return None
+    if isinstance(usage, dict):
+        prompt = usage.get("prompt_tokens")
+        completion_tok = usage.get("completion_tokens")
+        total = usage.get("total_tokens")
+    else:
+        prompt = getattr(usage, "prompt_tokens", None)
+        completion_tok = getattr(usage, "completion_tokens", None)
+        total = getattr(usage, "total_tokens", None)
+    if prompt is None and completion_tok is None and total is None:
+        return None
+    out: dict[str, int] = {}
+    if prompt is not None:
+        out["prompt_tokens"] = int(prompt)
+    if completion_tok is not None:
+        out["completion_tokens"] = int(completion_tok)
+    if total is not None:
+        out["total_tokens"] = int(total)
+    elif out:
+        out["total_tokens"] = out.get("prompt_tokens", 0) + out.get("completion_tokens", 0)
+    return out or None
+
+
 _REASONING_BLOCK = re.compile(
     r"<(think|thinking|reason|reasoning|scratchpad)>.*?</\1>",
     re.DOTALL | re.IGNORECASE,
@@ -284,24 +317,34 @@ def query_chat_completion(
         if tokens is not None:
             kwargs["max_tokens"] = tokens
 
+        stats = get_active_run_stats()
+        t0 = time.perf_counter()
         try:
             response = completion(**kwargs)
+            latency_ms = (time.perf_counter() - t0) * 1000
             if response_content(response) or not require_non_empty:
+                if stats is not None:
+                    stats.record_success(latency_ms, response_usage(response))
                 return response
             last_exc = EmptyModelResponseError(
                 f"empty response from {model!r} (attempt {attempt}/{retries})"
             )
+            if stats is not None:
+                stats.record_failure(latency_ms)
             print(f"  [WARN] empty model response, retrying ({attempt}/{retries})...")
             if tokens is not None and tokens < 2048:
                 tokens = min(tokens * 2, 2048)
         except Exception as exc:
+            latency_ms = (time.perf_counter() - t0) * 1000
             last_exc = exc
             hint = _fatal_error_hint(exc)
             if hint is not None:
-                # Non-retryable (provider availability / billing): surface a
-                # friendly message and stop hammering the endpoint.
+                if stats is not None:
+                    stats.record_failure(latency_ms)
                 print(f"  [ERROR] {hint}")
                 break
+            if stats is not None:
+                stats.record_failure(latency_ms)
             print(f"  [WARN] completion failed ({attempt}/{retries}): {exc}")
 
         if attempt < retries:

@@ -664,6 +664,24 @@ header nav a:hover {
 .btn-secondary:hover { background: #f0f3fa; text-decoration: none; color: #012169; }
 .btn-secondary:active { transform: translateY(1px); }
 
+.btn-danger {
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #842029;
+  background: #fff;
+  border: 1px solid #e4b4b8;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn-danger:hover { background: #fdf0f1; }
+.btn-danger.btn-sm { padding: 0.2rem 0.55rem; font-size: 12px; }
+.inline-delete-form { margin: 0; }
+.detail-delete-form { margin: 0 0 1rem; }
+.run-table .col-actions { width: 5.5rem; text-align: right; white-space: nowrap; }
+
 .refresh-form { display: inline-block; margin-left: 0.5rem; vertical-align: middle; }
 
 .gateway-strip {
@@ -733,6 +751,20 @@ header nav a:hover {
 .launch-form input[type="password"]:focus {
   outline: 2px solid #012169;
   outline-offset: 1px;
+}
+
+.launch-form .advanced-options {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0;
+  border-top: 1px solid #e8e8e8;
+}
+
+.launch-form .advanced-options summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 0.5rem;
 }
 
 .benchmark-launch-page .benchmark-launch-grid {

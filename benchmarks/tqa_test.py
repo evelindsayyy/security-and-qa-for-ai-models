@@ -29,6 +29,8 @@ from benchmark_metrics import (
     slugify_model,
     summarize_binary_accuracy,
 )
+from benchmark_run_stats import attach_run_stats, run_with_stats, write_stats_sidecar
+from benchmark_progress import init_progress, tick
 
 dotenv.load_dotenv()
 
@@ -136,6 +138,11 @@ class TruthfulQATestRunner:
         results[model_name] = ""
         
         questions_to_test = results.head(test_limit) if test_limit else results
+        init_progress(
+            total=len(questions_to_test),
+            unit="questions",
+            message="Running TruthfulQA…",
+        )
         
         for idx, (i, row) in enumerate(questions_to_test.iterrows()):
             try:
@@ -162,6 +169,7 @@ class TruthfulQATestRunner:
             except Exception as e:
                 print(f"  [ERROR] Error Q{idx}: {e}")
                 results.loc[i, model_name] = ""
+            tick(message=f"Question {idx + 1}/{len(questions_to_test)}")
         
         return results
     
@@ -309,15 +317,19 @@ def main():
     )
 
     try:
-        results = runner.run_model_test(
-            model_name=MODEL,
-            model_func=model_func,
-            test_limit=TEST_LIMIT
-        )
-        eval_metrics = runner.evaluate_answers(results, MODEL)
-        runner.save_results(results, MODEL, eval_metrics)
-        print_binary_summary(MODEL, eval_metrics)
-        print(f"\n[OK] Results saved to: {OUTPUT_DIR}/")
+        with run_with_stats():
+            results = runner.run_model_test(
+                model_name=MODEL,
+                model_func=model_func,
+                test_limit=TEST_LIMIT
+            )
+            eval_metrics = runner.evaluate_answers(results, MODEL)
+            if eval_metrics:
+                attach_run_stats(eval_metrics)
+            write_stats_sidecar()
+            runner.save_results(results, MODEL, eval_metrics)
+            print_binary_summary(MODEL, eval_metrics)
+            print(f"\n[OK] Results saved to: {OUTPUT_DIR}/")
 
     except Exception as e:
         print(f"[ERROR] Error testing {MODEL}: {e}")

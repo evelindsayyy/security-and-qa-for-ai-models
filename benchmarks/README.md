@@ -38,11 +38,12 @@ Credentials come from the repo-root `.env`. Set `FRONTEND_LAUNCH_MODE=host` to s
 
 Legacy outputs under `testing/basic_tests/test_results/` are still read as a fallback.
 
-## Custom Hugging Face / vLLM models
+## Custom / self-hosted API
 
-The default models are the Duke gateway catalog, but you can also benchmark any
-Hugging Face model via **Hosted** (HF Inference Providers) or **Custom** (your own
-vLLM / DCC server). The browser form is at `/benchmarks/new`.
+The default models are the Duke gateway catalog, but you can also benchmark via
+**Hosted** (HF Inference Providers) or **Custom** (any OpenAI-compatible API you
+run — vLLM, Ollama, LiteLLM proxy, or your own server). The browser form is at
+`/benchmarks/new`.
 
 ### Model input cheat sheet
 
@@ -50,15 +51,14 @@ vLLM / DCC server). The browser form is at `/benchmarks/new`.
 |--------|-------------|-----------------|--------------|
 | **Gateway** | Duke catalog models (easiest) | pick from dropdown, e.g. `GPT 4.1 Mini` | — |
 | **Hosted** | No GPU / no cluster; HF serves the model | HF repo id: `org/model` or `org/model:provider` | HF token (`hf_…`) with *Inference Providers* permission |
-| **Custom** | Any HF repo you self-host (vLLM on DCC, tunnel, etc.) | HF repo id: `org/model` | Base URL (`http://…:8000/v1`), API key (optional) |
+| **Custom** | Your own OpenAI-compatible chat API (local or internal) | Model id your API expects: `my-model`, `gpt-4`, `org/model`, … | Base URL (`http://…/v1`), API key (optional) |
 
-**Format rules (all sources):** use the id from the model’s Hugging Face page
-(e.g. `Qwen/Qwen3-0.6B`, `meta-llama/Llama-3.1-8B-Instruct`). Letters, digits,
-`/`, `.`, `_`, `-` only. For hosted only, you may append `:provider` to pin a
-provider (e.g. `TinyLlama/TinyLlama-1.1B-Chat-v1.0:featherless-ai`).
+**Format rules:** Hosted uses Hugging Face repo ids (optional `:provider` pin).
+Custom accepts any model id string your server's `model` parameter accepts
+(letters, digits, `.`, `_`, `-`, `/`, `+`).
 
 The model id is passed to `model_client`, which auto-routes based on the base URL
-(Duke gateway, HF router, or local vLLM → `openai/<repo-id>`).
+(Duke gateway, HF router, or self-hosted → `openai/<model-id>`).
 
 ### Hosted (no vLLM / DCC setup)
 
@@ -106,15 +106,18 @@ a provider you've enabled); there's a metered cost / limited free tier.
 | `Qwen/Qwen2.5-7B-Instruct` | ungated, good smoke test |
 | `TinyLlama/TinyLlama-1.1B-Chat-v1.0:featherless-ai` | pin Featherless if auto-routing fails |
 
-### Self-hosted vLLM (CLI)
+### Self-hosted API (CLI)
 
-Point the base URL at your server and pass the repo id as `--model`:
+Point the base URL at your server and pass the model id your API expects:
 
 ```bash
-export LITELLM_BASE_URL="http://<node>:8000/v1"   # e.g. from scripts/dcc/wait_vllm.sh
-export OPENAI_API_KEY="local-vllm"                 # any non-empty value for unauthenticated vLLM
-uv run python benchmarks/run_benchmark.py --benchmark truthfulqa --model "Qwen/Qwen3-0.6B"
+export LITELLM_BASE_URL="http://localhost:8000/v1"   # or your API's /v1 root
+export TQA_BASE_URL="http://localhost:8000/v1"
+export OPENAI_API_KEY="local-vllm"                   # or your real key; any non-empty value if auth is off
+uv run python benchmarks/run_benchmark.py --benchmark mmlu --model "my-model-id"
 ```
+
+Works with vLLM, Ollama (`/v1`), LiteLLM, or any OpenAI-compatible chat server.
 
 Quick connectivity check before a long run: `curl -s "$LITELLM_BASE_URL/models"`.
 
@@ -125,37 +128,38 @@ Quick connectivity check before a long run: `curl -s "$LITELLM_BASE_URL/models"`
 ### Browser
 
 On the **Start a benchmark run** page (`/benchmarks/new`), choose
-**Custom model (self-hosted vLLM)** and fill in:
+**Custom (self-hosted API)** and fill in:
 
-- **Hugging Face model** — the repo id, e.g. `Qwen/Qwen3-0.6B`
-- **Base URL** — your endpoint, e.g. `http://dcc-plusds-gpu-02:8000/v1`
-- **API key** — optional; defaults to `local-vllm`
+- **Model id** — whatever your API expects (e.g. `team-chat-v2`, `Qwen/Qwen3-0.6B`)
+- **Base URL** — OpenAI-compatible root, e.g. `http://localhost:8000/v1`
+- **API key** — optional; leave blank if your server does not authenticate
 
 The base URL is restricted to internal/private hosts (localhost, private IPs,
 or `*.duke.edu` / bare DCC node names) — public addresses are rejected.
 
 Notes:
 
-- **Host mode** (`FRONTEND_LAUNCH_MODE=host`) is the simplest path for DCC vLLM,
-  since the run inherits the endpoint directly.
+- **Host mode** (`FRONTEND_LAUNCH_MODE=host`) is the simplest path when the API
+  runs on the same machine as the frontend.
 - **Docker mode** also works, but the benchmarks container must be able to reach
   the endpoint — prefer a private **IP** (NAT-routable) over a cluster hostname,
   which may not resolve inside the container.
 
-**Custom (vLLM) setup checklist**
+**Custom setup checklist**
 
-1. Start vLLM on DCC: `MODEL="org/model" scripts/dcc/start_vllm.sh` then `scripts/dcc/wait_vllm.sh` (see [`scripts/dcc/README.md`](../scripts/dcc/README.md)).
-2. Note the node hostname and port (usually `:8000/v1`) from the session file or logs.
-3. **From your laptop:** the compute node is not reachable directly — use an SSH tunnel, e.g. `ssh -N -L 8000:<node>:8000 user@dcc-login`, then Base URL `http://localhost:8000/v1`.
-4. **Model field:** same HF repo id you passed to vLLM (e.g. `Qwen/Qwen3-0.6B`).
-5. **API key:** `local-vllm` or leave blank (vLLM does not authenticate by default).
+1. **Have an API already?** Use its base URL + model id — no vLLM required.
+2. **Serving a HF model yourself?** Start vLLM, Ollama, etc., then use that endpoint.
+3. **From a laptop to a remote node:** tunnel, e.g. `ssh -N -L 8000:<host>:8000 user@login`, then base URL `http://localhost:8000/v1`.
+4. **Model field:** the `model` string your server documents (not necessarily an HF repo id).
+5. **API key:** your server's key, or a placeholder if auth is disabled.
 
 **Example custom inputs**
 
-| Model | Base URL | API key |
-|-------|----------|---------|
-| `Qwen/Qwen3-0.6B` | `http://localhost:8000/v1` (tunneled) | `local-vllm` |
-| `WeiboAI/VibeThinker-3B` | `http://dcc-plusds-gpu-02:8000/v1` (from login node / host-mode frontend) | `local-vllm` |
+| Model id | Base URL | API key |
+|----------|----------|---------|
+| `my-finetune-v2` | `http://localhost:8080/v1` | (your key) |
+| `Qwen/Qwen3-0.6B` | `http://localhost:8000/v1` (vLLM, tunneled) | `local-vllm` |
+| `llama3.1` | `http://localhost:11434/v1` (Ollama) | `ollama` |
 
 ## LIST OF BENCHMARKS AND WHAT THEY DO
 

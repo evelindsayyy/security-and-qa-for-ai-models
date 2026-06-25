@@ -3,11 +3,21 @@
 from __future__ import annotations
 
 import re
+import sys
 
 
 def has_usable_text(text: str | None) -> bool:
     """True when *text* is a non-empty model response worth scoring."""
     return bool(str(text or "").strip())
+
+
+def safe_for_console(text: str | None, *, limit: int | None = None) -> str:
+    """Make model text safe to print on Windows consoles (cp1252) and log files."""
+    s = str(text or "")
+    if limit is not None:
+        s = s[:limit]
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    return s.encode(encoding, errors="replace").decode(encoding)
 
 
 def slugify_model(name: str) -> str:

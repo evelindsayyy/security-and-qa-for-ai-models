@@ -9,7 +9,7 @@
   <p class="sub">
     Choose a <strong>benchmark</strong>, then pick how the model is reached:
     Duke <strong>gateway</strong>, Hugging Face <strong>hosted</strong> inference,
-    or your own <strong>vLLM</strong> server. See
+    or a <strong>self-hosted OpenAI-compatible API</strong> (your server, vLLM, Ollama, …). See
     <a href="https://gitlab.oit.duke.edu/codeplus/security-and-qa-for-ai-models/-/blob/main/benchmarks/README.md#model-input-cheat-sheet" target="_blank" rel="noopener">benchmarks/README</a>
     for CLI details.
   </p>
@@ -39,7 +39,7 @@
         <label class="radio">
           <input type="radio" name="model_source" value="custom"
                  onchange="toggleModelSource()">
-          Custom model (self-hosted vLLM)
+          Custom (self-hosted API)
         </label>
       </fieldset>
 
@@ -69,24 +69,39 @@
       </div>
 
       <div id="custom-fields" style="display: none;">
-        <label>Hugging Face model
+        <label>Model id
           <input type="text" name="custom_model" id="custom_model"
-                 placeholder="Qwen/Qwen3-0.6B" autocomplete="off">
-          <span class="form-hint">same repo id you loaded in vLLM (e.g. <code>Qwen/Qwen3-0.6B</code>)</span>
+                 placeholder="my-model or Qwen/Qwen3-0.6B" autocomplete="off">
+          <span class="form-hint">exact <code>model</code> string your API expects in chat completions — HF repo id, fine-tune name, etc.</span>
         </label>
 
         <label>Base URL
           <input type="text" name="base_url" id="base_url"
                  placeholder="http://localhost:8000/v1" autocomplete="off">
-          <span class="form-hint">OpenAI-compatible endpoint — often <code>http://&lt;node&gt;:8000/v1</code> or tunneled <code>http://localhost:8000/v1</code></span>
+          <span class="form-hint">OpenAI-compatible root — must expose <code>/v1/chat/completions</code> (e.g. vLLM, Ollama, LiteLLM proxy, your own server)</span>
         </label>
 
         <label>API key <span class="form-hint">(optional)</span>
           <input type="text" name="api_key" id="api_key"
                  placeholder="local-vllm" autocomplete="off">
-          <span class="form-hint">defaults to <code>local-vllm</code> for unauthenticated vLLM</span>
+          <span class="form-hint">leave blank or use any placeholder if your server does not require auth</span>
         </label>
       </div>
+
+      <details class="advanced-options">
+        <summary>Advanced options</summary>
+        <label id="sample-label">Sample size
+          <input type="number" name="sample" id="sample" min="1" placeholder="default">
+          <span class="form-hint" id="sample-hint"></span>
+        </label>
+        <label id="seed-label" style="display: none;">Random seed
+          <input type="number" name="seed" id="seed" min="0" placeholder="default">
+          <span class="form-hint">for shuffled benchmarks (MMLU, IFEval, MBPP, QuALITY)</span>
+        </label>
+        <p class="form-hint" id="hosted-sample-note" style="display: none;">
+          Hosted runs are capped at {{ hosted_sample_max }} items to limit API cost.
+        </p>
+      </details>
 
       <button type="submit" class="btn-primary">▶ Start run</button>
     </form>
@@ -125,24 +140,65 @@
       </div>
 
       <div id="guide-custom" class="model-setup-panel" hidden>
-        <p><strong>Custom</strong> — you run vLLM (e.g. on DCC) and point this app at it.</p>
+        <p><strong>Custom</strong> — any server on your machine or network that speaks the OpenAI chat API. <em>vLLM is optional</em>; use it only if you still need to spin up a model.</p>
         <ol>
-          <li>Start vLLM with your repo id, e.g. <code>MODEL="Qwen/Qwen3-0.6B" scripts/dcc/start_vllm.sh</code> then <code>scripts/dcc/wait_vllm.sh</code>.</li>
-          <li>Note the node and port (usually <code>:8000</code>); health check: <code>curl http://&lt;node&gt;:8000/health</code>.</li>
-          <li><strong>From a laptop:</strong> DCC compute nodes are internal — tunnel first:<br>
-            <code>ssh -N -L 8000:&lt;node&gt;:8000 user@dcc-login</code></li>
-          <li><strong>Model field:</strong> HF repo id loaded in vLLM (e.g. <code>Qwen/Qwen3-0.6B</code>).</li>
-          <li><strong>Base URL:</strong> <code>http://localhost:8000/v1</code> (tunneled) or <code>http://&lt;node&gt;:8000/v1</code> (from login node / host-mode frontend).</li>
-          <li><strong>API key:</strong> <code>local-vllm</code> or leave blank.</li>
+          <li><strong>Already have an API?</strong> Paste its base URL and the model id it expects — no vLLM required.</li>
+          <li><strong>Need to serve a HF model?</strong> Start vLLM, Ollama (OpenAI mode), or similar — then use that endpoint's base URL and model id.</li>
+          <li><strong>From a laptop:</strong> if the API runs locally, use <code>http://localhost:8000/v1</code>. If it runs on a remote node, tunnel first:<br>
+            <code>ssh -N -L 8000:&lt;host&gt;:8000 user@login</code></li>
+          <li><strong>Model field:</strong> whatever your API's <code>model</code> parameter accepts (e.g. <code>my-finetune</code>, <code>llama3</code>, <code>Qwen/Qwen3-0.6B</code>).</li>
+          <li><strong>Base URL:</strong> OpenAI-compatible root, usually ending in <code>/v1</code>.</li>
+          <li><strong>API key:</strong> your server's key, or leave blank / use a placeholder if auth is off.</li>
         </ol>
-        <p class="model-setup-example"><strong>Example:</strong> model <code>WeiboAI/VibeThinker-3B</code>, base URL <code>http://localhost:8000/v1</code>, key <code>local-vllm</code></p>
-        <p class="model-setup-note">Works for any HF repo vLLM supports — no provider allowlist. Best for models not on HF hosted inference.</p>
+        <p class="model-setup-example"><strong>Examples:</strong></p>
+        <ul class="model-setup-examples">
+          <li>Your API — model <code>team-chat-v2</code>, URL <code>http://localhost:8080/v1</code></li>
+          <li>vLLM on DCC — model <code>Qwen/Qwen3-0.6B</code>, URL <code>http://localhost:8000/v1</code> (tunneled)</li>
+          <li>Ollama — model <code>llama3.1</code>, URL <code>http://localhost:11434/v1</code></li>
+        </ul>
+        <p class="model-setup-note">The benchmark runner only needs chat completions — not a specific serving stack. Base URL must be reachable from where this app runs (localhost, private IP, or <code>*.duke.edu</code>).</p>
       </div>
     </aside>
   </div>
 </div>
 
 <script>
+  const BENCHMARK_OPTIONS = {{ benchmark_options | tojson }};
+  const HOSTED_SAMPLE_MAX = {{ hosted_sample_max }};
+  const HOSTED_SAMPLE_WARN = {{ hosted_sample_warn }};
+
+  function updateBenchmarkOptions() {
+    const key = document.getElementById('benchmark').value;
+    const opts = BENCHMARK_OPTIONS[key] || {};
+    const sampleInput = document.getElementById('sample');
+    const sampleHint = document.getElementById('sample-hint');
+    const seedLabel = document.getElementById('seed-label');
+    const hosted = document.querySelector('input[name="model_source"]:checked').value === 'hosted';
+
+    if (opts.sample) {
+      sampleInput.disabled = false;
+      sampleInput.placeholder = String(opts.sample.default);
+      sampleInput.max = hosted ? Math.min(opts.sample.max, HOSTED_SAMPLE_MAX) : opts.sample.max;
+      sampleHint.textContent =
+        `default ${opts.sample.default} ${opts.sample.unit} (max ${sampleInput.max})`;
+    } else {
+      sampleInput.disabled = true;
+      sampleInput.value = '';
+      sampleInput.placeholder = 'n/a';
+      sampleHint.textContent = 'this benchmark does not support custom sample size here';
+    }
+
+    if (opts.seed) {
+      seedLabel.style.display = '';
+      document.getElementById('seed').placeholder = String(opts.seed.default);
+    } else {
+      seedLabel.style.display = 'none';
+      document.getElementById('seed').value = '';
+    }
+
+    document.getElementById('hosted-sample-note').style.display = hosted ? '' : 'none';
+  }
+
   function toggleModelSource() {
     const src = document.querySelector('input[name="model_source"]:checked').value;
     const isGateway = src === 'gateway';
@@ -160,7 +216,10 @@
     document.getElementById('custom_model').disabled = !isCustom;
     document.getElementById('base_url').disabled = !isCustom;
     document.getElementById('api_key').disabled = !isCustom;
+    updateBenchmarkOptions();
   }
+  document.getElementById('benchmark').addEventListener('change', updateBenchmarkOptions);
   toggleModelSource();
+  updateBenchmarkOptions();
 </script>
 {% endblock %}

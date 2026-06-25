@@ -2,9 +2,9 @@
 Launch public benchmark runs from the browser.
 
 Mirrors eval_launch.py: argv subprocess, Docker via docker_launch. Models are
-either gateway-allowlisted ids or a custom Hugging Face repo served by an
-OpenAI-compatible endpoint (local vLLM / DCC node). One in-flight run per
-(benchmark, model, base_url) combo.
+either gateway-allowlisted ids, HF Inference Providers (hosted), or any model
+served by a self-hosted OpenAI-compatible API (vLLM, Ollama, your own server).
+One in-flight run per (benchmark, model, base_url) combo.
 """
 
 from __future__ import annotations
@@ -27,23 +27,30 @@ RESULTS_DIR = BENCHMARKS_DIR / "results"
 RUNNER = BENCHMARKS_DIR / "run_benchmark.py"
 
 sys.path.insert(0, str(BENCHMARKS_DIR))
-from benchmarks.run_benchmark import BENCHMARKS, predict_stem  # noqa: E402
+from benchmarks.run_benchmark import (  # noqa: E402
+    BENCHMARKS,
+    _expected_total,
+    benchmark_options_schema,
+    predict_stem,
+)
+from benchmarks.benchmark_progress import load_progress, write_progress_stub  # noqa: E402
+
+HOSTED_SAMPLE_MAX = 200
+HOSTED_SAMPLE_WARN = 50
 
 _CANDIDATE_CATEGORIES = frozenset({"general_chat", "codex", "research"})
 
-# Custom (non-gateway) models: a Hugging Face repo id served by an
-# OpenAI-compatible endpoint (local vLLM, DCC node, etc.). The repo id is
-# validated like the scanner's, and the base URL is restricted to internal /
-# private hosts so the form can't be used to make the server reach arbitrary
-# public addresses (SSRF guard).
-# org/model, with an optional `:provider` pin (e.g. Qwen/Qwen3-0.6B:novita) used
-# by the HF Inference Providers router to force a specific serving provider.
+# Custom (self-hosted API): any model id the server's OpenAI-compatible
+# ``/v1/chat/completions`` endpoint expects. Base URL is restricted to internal /
+# private hosts (SSRF guard).
+# Hosted HF Inference Providers: repo id with optional ``:provider`` pin.
 _HF_REPO_RE = re.compile(
     r"^(?:[a-zA-Z0-9][a-zA-Z0-9._-]*/)?[a-zA-Z0-9][a-zA-Z0-9._-]+"
     r"(?::[a-zA-Z0-9][a-zA-Z0-9._-]*)?$"
 )
+_CUSTOM_API_MODEL_RE = re.compile(r"^[\w.\-/+]+$")
 _INTERNAL_HOST_SUFFIXES = (".duke.edu", ".local", ".internal")
-_DEFAULT_CUSTOM_API_KEY = "local-vllm"
+_DEFAULT_CUSTOM_API_KEY = "local-vllm"  # placeholder for unauthenticated local servers
 
 # Hosted "no-setup" path: Hugging Face Inference Providers exposes an
 # OpenAI-compatible router, so users can benchmark a repo with just a token (no
@@ -58,8 +65,8 @@ _INFLIGHT: dict[tuple[str, str, str], str] = {}
 _LOCK = threading.Lock()
 
 
-def validate_custom_model(model: str) -> str | None:
-    """Validate a free-text Hugging Face repo id (e.g. ``Qwen/Qwen3-0.6B``)."""
+def validate_hosted_model(model: str) -> str | None:
+    """Validate a Hugging Face repo id for Inference Providers (optional ``:provider`` pin)."""
     model = model.strip()
     if not model or len(model) > 200:
         return "enter a Hugging Face repo id (e.g. Qwen/Qwen3-0.6B)"
@@ -70,6 +77,26 @@ def validate_custom_model(model: str) -> str | None:
             "use org/model (optionally org/model:provider), letters, digits, . _ -"
         )
     return None
+
+
+def validate_custom_api_model(model: str) -> str | None:
+    """Validate the model id sent to a self-hosted OpenAI-compatible API."""
+    model = model.strip()
+    if not model or len(model) > 200:
+        return (
+            "enter the model id your API expects "
+            "(e.g. my-model, gpt-4, or Qwen/Qwen3-0.6B)"
+        )
+    if ".." in model or model.startswith(("/", "\\")):
+        return "invalid model id"
+    if not _CUSTOM_API_MODEL_RE.match(model):
+        return "use letters, digits, and . _ - / + only"
+    return None
+
+
+def validate_custom_model(model: str) -> str | None:
+    """Backward-compatible alias — prefer :func:`validate_custom_api_model`."""
+    return validate_custom_api_model(model)
 
 
 def _is_internal_host(host: str) -> bool:
@@ -150,17 +177,49 @@ def candidate_models() -> tuple[str, ...]:
     return ("GPT 4.1 Mini", "gpt-5-chat", "Llama 4 Maverick", "Llama 4 Scout")
 
 
+def validate_run_options(
+    benchmark_key: str,
+    sample: int | None,
+    seed: int | None,
+    *,
+    hosted: bool = False,
+) -> str | None:
+    if benchmark_key not in BENCHMARKS:
+        return f"unknown benchmark: {benchmark_key!r}"
+    cfg = BENCHMARKS[benchmark_key]
+    if sample is not None:
+        if sample < 1:
+            return "sample size must be at least 1"
+        sample_cfg = cfg.get("sample")
+        if not sample_cfg:
+            return f"{cfg['label']} does not support a custom sample size"
+        max_val = int(sample_cfg["max"])
+        if hosted:
+            max_val = min(max_val, HOSTED_SAMPLE_MAX)
+        if sample > max_val:
+            return f"sample size cannot exceed {max_val} for {cfg['label']}"
+    if seed is not None and "seed" not in cfg:
+        return f"{cfg['label']} does not support a random seed"
+    return None
+
+
 def validate_launch(
     benchmark_key: str,
     model: str,
     *,
     base_url: str | None = None,
+    sample: int | None = None,
+    seed: int | None = None,
 ) -> str | None:
     if benchmark_key not in BENCHMARKS:
         return f"unknown benchmark: {benchmark_key!r}"
-    if base_url:
-        # Custom model: free-text HF repo id served by an OpenAI-compatible URL.
-        err = validate_custom_model(model)
+    if base_url == HF_INFERENCE_BASE_URL:
+        err = validate_hosted_model(model)
+        if err:
+            return err
+    elif base_url:
+        # Self-hosted OpenAI-compatible API (vLLM, Ollama, custom server, DCC, …).
+        err = validate_custom_api_model(model)
         if err:
             return err
         err = validate_base_url(base_url)
@@ -170,7 +229,8 @@ def validate_launch(
         return f"model not in allowlist: {model!r}"
     if docker_launch.use_docker() and not docker_launch.docker_available():
         return docker_launch.docker_required_message("benchmarks")
-    return None
+    hosted = base_url == HF_INFERENCE_BASE_URL
+    return validate_run_options(benchmark_key, sample, seed, hosted=hosted)
 
 
 def build_command(
@@ -179,6 +239,8 @@ def build_command(
     stem: str,
     *,
     extra_env: dict[str, str] | None = None,
+    sample: int | None = None,
+    seed: int | None = None,
 ) -> list[str]:
     inner = [
         "python",
@@ -190,6 +252,10 @@ def build_command(
         "--output-stem",
         stem,
     ]
+    if sample is not None:
+        inner.extend(["--sample", str(sample)])
+    if seed is not None:
+        inner.extend(["--seed", str(seed)])
     if docker_launch.use_docker():
         return docker_launch.compose_run_argv(
             "benchmarks", inner, extra_env=extra_env or None
@@ -203,6 +269,8 @@ def start_run(
     *,
     base_url: str | None = None,
     api_key: str | None = None,
+    sample: int | None = None,
+    seed: int | None = None,
 ) -> tuple[str, bool]:
     combo = (benchmark_key, model, (base_url or "").strip())
     with _LOCK:
@@ -217,13 +285,34 @@ def start_run(
         stem = predict_stem(benchmark_key, model)
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         log_path = RESULTS_DIR / f"{stem}.log"
+        progress_path = RESULTS_DIR / f"{stem}.progress.json"
+
+        cfg = BENCHMARKS[benchmark_key]
+        sample_cfg = cfg.get("sample") or {}
+        write_progress_stub(
+            progress_path,
+            benchmark_key=benchmark_key,
+            benchmark_label=cfg["label"],
+            model=model,
+            total=_expected_total(cfg, os.environ, sample),
+            unit=str(sample_cfg.get("unit", "items")),
+        )
 
         extra_env = _custom_env(base_url, api_key) if base_url else {}
-        cmd = build_command(benchmark_key, model, stem, extra_env=extra_env)
+        cmd = build_command(
+            benchmark_key,
+            model,
+            stem,
+            extra_env=extra_env,
+            sample=sample,
+            seed=seed,
+        )
 
         # Host mode reads the endpoint from the subprocess env; Docker mode gets
         # it via the compose `-e` flags built into the command above.
         proc_env = os.environ.copy()
+        proc_env.setdefault("PYTHONIOENCODING", "utf-8")
+        proc_env.setdefault("PYTHONUNBUFFERED", "1")
         proc_env.update(extra_env)
 
         with log_path.open("wb") as log_f:
@@ -248,23 +337,87 @@ def _output_path(stem: str) -> Path | None:
     return None
 
 
+def _progress_path(slug: str) -> Path:
+    return RESULTS_DIR / f"{slug}.progress.json"
+
+
+def is_run_in_progress(slug: str) -> bool:
+    """True when a registered subprocess for *slug* is still running."""
+    if not is_safe_slug(slug):
+        return False
+    proc = _RUNNING.get(slug)
+    if proc is not None and proc.poll() is None:
+        return True
+    return False
+
+
+def _status_from_progress(slug: str, prog: dict) -> dict:
+    progress = int(prog.get("progress") or 0)
+    total = int(prog.get("total") or 0)
+    return {
+        "status": "running",
+        "progress": progress,
+        "total": total,
+        "unit": prog.get("unit") or "items",
+        "message": prog.get("message") or "",
+        "benchmark": prog.get("benchmark") or "",
+        "benchmark_label": prog.get("benchmark_label") or "",
+        "model": prog.get("model") or "",
+    }
+
+
 def get_status(slug: str) -> dict:
     if not is_safe_slug(slug):
-        return {"status": "not_found", "progress": 0, "total": 1}
+        return {"status": "not_found", "progress": 0, "total": 0, "unit": "items", "message": ""}
 
-    total = 1
     out = _output_path(slug)
+    prog = load_progress(_progress_path(slug))
+    progress = int(prog.get("progress") or 0)
+    total = int(prog.get("total") or 0)
+    unit = prog.get("unit") or "items"
+    message = prog.get("message") or ""
+    meta = {
+        "unit": unit,
+        "message": message,
+        "benchmark": prog.get("benchmark") or "",
+        "benchmark_label": prog.get("benchmark_label") or "",
+        "model": prog.get("model") or "",
+    }
+
     if out is not None:
-        return {"status": "complete", "progress": 1, "total": total}
+        return {
+            "status": "complete",
+            "progress": total or progress or 1,
+            "total": total or progress or 1,
+            **meta,
+        }
 
     proc = _RUNNING.get(slug)
     if proc is not None and proc.poll() is None:
-        return {"status": "running", "progress": 0, "total": total}
+        return _status_from_progress(slug, prog) if prog else {
+            "status": "running",
+            "progress": progress,
+            "total": total,
+            **meta,
+        }
     if proc is not None:
-        return {"status": "failed", "progress": 0, "total": total}
+        return {
+            "status": "failed",
+            "progress": progress,
+            "total": total,
+            **meta,
+        }
+    if _progress_path(slug).is_file() and progress < total:
+        # Flask restarted mid-run but the runner is still writing progress.
+        return _status_from_progress(slug, prog)
     if (RESULTS_DIR / f"{slug}.log").is_file():
-        return {"status": "failed", "progress": 0, "total": total}
-    return {"status": "not_found", "progress": 0, "total": total}
+        return {
+            "status": "failed",
+            "progress": progress,
+            "total": total,
+            **meta,
+        }
+    return {"status": "not_found", "progress": 0, "total": 0, "unit": "items", "message": ""}
 
 
 def get_launch_options() -> dict:
@@ -273,6 +426,9 @@ def get_launch_options() -> dict:
         "benchmarks": [
             {"key": k, "label": v["label"]} for k, v in sorted(BENCHMARKS.items())
         ],
+        "benchmark_options": benchmark_options_schema(),
+        "hosted_sample_max": HOSTED_SAMPLE_MAX,
+        "hosted_sample_warn": HOSTED_SAMPLE_WARN,
         "models": list(models),
         "launch_mode": "docker" if docker_launch.use_docker() else "host",
         "docker_available": docker_launch.docker_available(),

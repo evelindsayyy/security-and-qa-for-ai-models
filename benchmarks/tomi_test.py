@@ -36,6 +36,8 @@ from benchmark_metrics import (
     slugify_model,
     summarize_binary_accuracy,
 )
+from benchmark_run_stats import attach_run_stats, run_with_stats, write_stats_sidecar
+from benchmark_progress import init_progress, tick
 
 dotenv.load_dotenv()
 
@@ -187,6 +189,7 @@ def run_tomi_test(stories: List[Dict]) -> Dict:
 
     results = []
     correct = 0
+    init_progress(total=len(stories), unit="stories", message="Running ToMi…")
 
     for idx, item in enumerate(stories):
         model_answer = query_model(item['story'], item['question'])
@@ -209,6 +212,7 @@ def run_tomi_test(stories: List[Dict]) -> Dict:
             'passed': passed,
             'answered': answered,
         })
+        tick(message=f"Story {idx + 1}/{len(stories)}")
 
     attempted = len(results)
     scored = sum(1 for r in results if r["answered"])
@@ -228,6 +232,8 @@ def run_tomi_test(stories: List[Dict]) -> Dict:
 
 def save_results(data: Dict, output_dir: str):
     """Save results to a JSON file."""
+    attach_run_stats(data["summary"])
+    write_stats_sidecar()
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -255,9 +261,10 @@ def main():
         print(f"[OK] Limited to {SAMPLE_LIMIT} stories")
 
     try:
-        data = run_tomi_test(stories)
-        save_results(data, OUTPUT_DIR)
-        print_binary_summary(MODEL, data['summary'])
+        with run_with_stats():
+            data = run_tomi_test(stories)
+            save_results(data, OUTPUT_DIR)
+            print_binary_summary(MODEL, data['summary'])
 
     except Exception as e:
         print(f"[ERROR] {e}")

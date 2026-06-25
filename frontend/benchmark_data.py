@@ -12,13 +12,14 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from frontend.path_safety import is_safe_slug
+from frontend.path_safety import is_safe_slug, resolves_inside
 
 ROOT = Path(__file__).parent.parent
 _BENCHMARKS_DIR = ROOT / "benchmarks"
 if str(_BENCHMARKS_DIR) not in sys.path:
     sys.path.insert(0, str(_BENCHMARKS_DIR))
 from benchmark_metrics import coverage_extras  # noqa: E402
+from benchmark_run_stats import load_stats_sidecar  # noqa: E402
 PRIMARY_DIR = ROOT / "benchmarks" / "results"
 LEGACY_DIRS = (
     ROOT / "testing" / "basic_tests" / "test_results",
@@ -416,6 +417,43 @@ def _summarize_file(path: Path) -> dict | None:
     return None
 
 
+def _run_stats_chips(rs: dict) -> list[dict[str, str]]:
+    chips: list[dict[str, str]] = []
+    wall = rs.get("wall_time_sec")
+    if wall is not None:
+        chips.append({"label": "runtime", "value": f"{wall:.1f}s"})
+    lat = rs.get("latency_ms") or {}
+    if lat.get("mean") is not None:
+        chips.append({"label": "latency", "value": f"{lat['mean']:.0f} ms mean"})
+    tokens = rs.get("tokens") or {}
+    total = tokens.get("total")
+    if total is not None:
+        chips.append({"label": "tokens", "value": f"{int(total):,} total"})
+    calls = rs.get("api_calls")
+    if calls:
+        failed = int(rs.get("api_calls_failed") or 0)
+        if failed:
+            chips.append({"label": "API calls", "value": f"{calls} ({failed} failed)"})
+        else:
+            chips.append({"label": "API calls", "value": str(calls)})
+    return chips
+
+
+def _extract_run_stats(data: dict | None, path: Path) -> dict:
+    if data:
+        for key in ("summary", "metrics"):
+            block = data.get(key)
+            if isinstance(block, dict):
+                rs = block.get("run_stats")
+                if isinstance(rs, dict):
+                    return rs
+    return load_stats_sidecar(path)
+
+
+def _attach_run_stats(summary: dict, path: Path, data: dict | None = None) -> dict:
+    rs = _extract_run_stats(data, path)
+    if rs:
+        summary["run_stats_chips"] = _run_stats_chips(rs)
 def _attach_meta(summary: dict) -> dict:
     """Add benchmark context block for the detail template."""
     kind = summary.get("kind")
@@ -479,6 +517,7 @@ def _get_benchmark_detail_files(slug: str) -> dict | None:
                     summary = _summarize_ifeval(path)
                     summary["raw_rows"] = rows[:50]
                     summary["raw_row_count"] = len(rows)
+                    _attach_run_stats(summary, path)
                     return _attach_meta(summary)
                 with path.open("r", encoding="utf-8") as f:
                     data = json.load(f)
@@ -486,33 +525,91 @@ def _get_benchmark_detail_files(slug: str) -> dict | None:
                     summary = _summarize_truthfulqa(path, data)
                     summary["responses"] = (data.get("responses") or [])[:50]
                     summary["raw_row_count"] = len(data.get("responses") or [])
+                    _attach_run_stats(summary, path, data)
                     return _attach_meta(summary)
                 if kind == "consistency":
                     summary = _summarize_consistency(path, data)
                     summary["questions"] = (data.get("questions") or [])[:50]
                     summary["raw_row_count"] = len(data.get("questions") or [])
+                    _attach_run_stats(summary, path, data)
                     return _attach_meta(summary)
                 if kind == "mmlu":
                     summary = _summarize_mmlu(path, data)
                     summary["per_subject"] = data.get("per_subject") or {}
                     summary["results"] = (data.get("results") or [])[:50]
                     summary["raw_row_count"] = len(data.get("results") or [])
+                    _attach_run_stats(summary, path, data)
                     return _attach_meta(summary)
                 if kind == "tomi":
                     summary = _summarize_tomi(path, data)
                     summary["results"] = (data.get("results") or [])[:50]
                     summary["raw_row_count"] = len(data.get("results") or [])
+                    _attach_run_stats(summary, path, data)
                     return _attach_meta(summary)
                 if kind == "mbpp":
                     summary = _summarize_mbpp(path, data)
                     summary["results"] = (data.get("results") or [])[:50]
                     summary["raw_row_count"] = len(data.get("results") or [])
+                    _attach_run_stats(summary, path, data)
                     return _attach_meta(summary)
                 if kind == "quality":
                     summary = _summarize_quality(path, data)
                     summary["results"] = (data.get("results") or [])[:50]
                     summary["raw_row_count"] = len(data.get("results") or [])
+                    _attach_run_stats(summary, path, data)
                     return _attach_meta(summary)
+    return None
+
+
+# Artifact suffixes for a benchmark run stem (under benchmarks/results/ or legacy dirs).
+_ARTIFACT_SUFFIXES = (".json", ".jsonl", ".stats.json", ".progress.json", ".log")
+
+
+def _artifact_paths(slug: str) -> list[Path]:
+    """All on-disk files for *slug* under known results directories."""
+    if not is_safe_slug(slug):
+        return []
+    found: list[Path] = []
+    for base in _candidate_dirs():
+        for suffix in _ARTIFACT_SUFFIXES:
+            path = base / f"{slug}{suffix}"
+            if path.is_file() and resolves_inside(base, path):
+                found.append(path)
+    return found
+
+
+def delete_benchmark(slug: str) -> str | None:
+    """Remove benchmark artifacts (and DB row when configured).
+
+    Returns an error message, or None on success.
+    """
+    if not is_safe_slug(slug):
+        return f"invalid slug: {slug!r}"
+
+    from frontend.benchmark_launch import is_run_in_progress
+
+    if is_run_in_progress(slug):
+        return "cannot delete while the run is still in progress"
+
+    removed_files = 0
+    for path in _artifact_paths(slug):
+        try:
+            path.unlink()
+            removed_files += 1
+        except OSError as exc:
+            return f"could not delete {path.name}: {exc}"
+
+    removed_db = False
+    try:
+        from frontend import benchmark_db_data
+
+        if benchmark_db_data.available():
+            removed_db = benchmark_db_data.delete_run(slug)
+    except Exception:
+        pass
+
+    if removed_files == 0 and not removed_db:
+        return f"no benchmark result found for slug {slug!r}"
     return None
 
 

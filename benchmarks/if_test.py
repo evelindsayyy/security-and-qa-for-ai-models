@@ -18,6 +18,8 @@ from pathlib import Path
 
 from model_client import query_chat_completion, response_content
 from benchmark_metrics import compute_coverage, coverage_warning, has_usable_text, slugify_model
+from benchmark_run_stats import run_with_stats, write_stats_sidecar
+from benchmark_progress import init_progress, tick
 
 sys.path.insert(0, ".")  # so instructions_registry is importable
 import instructions_registry
@@ -111,65 +113,73 @@ def main():
     if not API_KEY:
         raise RuntimeError('LITELLM_API_KEY not set in environment')
 
-    ds = load_dataset('google/IFEval', split='train')
-    sample = ds.shuffle(seed=SEED).select(range(SAMPLE_SIZE)) if SAMPLE_SIZE > 0 else ds
+    with run_with_stats():
+        ds = load_dataset('google/IFEval', split='train')
+        sample = ds.shuffle(seed=SEED).select(range(SAMPLE_SIZE)) if SAMPLE_SIZE > 0 else ds
+        init_progress(
+            total=len(sample),
+            unit="prompts",
+            message="Running IFEval…",
+        )
 
-    print(f"testing model {MODEL}")
-    results = []
-    for row in tqdm(sample, desc='IFEval'):
-        try:
-            response = query_chat_completion(
-                model=MODEL,
-                base_url=BASE_URL,
-                api_key=API_KEY,
-                messages=[{'role': 'user', 'content': row['prompt']}],
-                temperature=1,
-            )
-            text = safe_get_response(response)
-        except Exception:
-            text = ""
-        judge_res = judge(row['prompt'], text, row.get('instruction_id_list', []), row.get('kwargs', []))
+        print(f"testing model {MODEL}")
+        results = []
+        for row in tqdm(sample, desc='IFEval'):
+            try:
+                response = query_chat_completion(
+                    model=MODEL,
+                    base_url=BASE_URL,
+                    api_key=API_KEY,
+                    messages=[{'role': 'user', 'content': row['prompt']}],
+                    temperature=1,
+                )
+                text = safe_get_response(response)
+            except Exception:
+                text = ""
+            judge_res = judge(row['prompt'], text, row.get('instruction_id_list', []), row.get('kwargs', []))
 
-        results.append({
-            'model': MODEL,
-            'key': row.get('key'),
-            'prompt': row['prompt'],
-            'response': text,
-            'answered': has_usable_text(text),
-            'instruction_id_list': row.get('instruction_id_list', []),
-            'kwargs': row.get('kwargs', []),
-            'judge': judge_res,
-            'ts': datetime.now(timezone.utc).isoformat()
-        })
+            results.append({
+                'model': MODEL,
+                'key': row.get('key'),
+                'prompt': row['prompt'],
+                'response': text,
+                'answered': has_usable_text(text),
+                'instruction_id_list': row.get('instruction_id_list', []),
+                'kwargs': row.get('kwargs', []),
+                'judge': judge_res,
+                'ts': datetime.now(timezone.utc).isoformat()
+            })
+            tick(message=f"Prompt {len(results)}/{len(sample)}")
 
-    output_path = get_output_path(MODEL)
-    save_jsonl(results, output_path)
+        output_path = get_output_path(MODEL)
+        save_jsonl(results, output_path)
+        write_stats_sidecar()
 
-    attempted = len(results)
-    scored = sum(1 for r in results if r['answered'])
-    passed = sum(1 for r in results if r['answered'] and r['judge']['passed'])
-    cov = compute_coverage(attempted=attempted, scored=scored)
-    pass_rate = passed / scored if scored else 0
+        attempted = len(results)
+        scored = sum(1 for r in results if r['answered'])
+        passed = sum(1 for r in results if r['answered'] and r['judge']['passed'])
+        cov = compute_coverage(attempted=attempted, scored=scored)
+        pass_rate = passed / scored if scored else 0
 
-    print(f"Saved {len(results)} rows to {output_path}")
-    print(f"Passed: {passed}/{scored} ({pass_rate * 100:.1f}%) over answered prompts")
-    warn = coverage_warning(cov)
-    if warn:
-        print(warn.replace("accuracy is over answered items only",
-                           "pass rate is over answered prompts only"))
-    
-    # Instruction-level accuracy (answered prompts only)
-    all_instructions = [
-        inst
-        for r in results
-        if r['answered']
-        for inst in r['judge']['per_instruction']
-        if inst.get('passed') is not None
-    ]
-    inst_passed = sum(1 for i in all_instructions if i['passed'])
-    if all_instructions:
-        print(f"Passed (instruction-level): {inst_passed}/{len(all_instructions)} "
-              f"({inst_passed/len(all_instructions)*100:.1f}%)")
+        print(f"Saved {len(results)} rows to {output_path}")
+        print(f"Passed: {passed}/{scored} ({pass_rate * 100:.1f}%) over answered prompts")
+        warn = coverage_warning(cov)
+        if warn:
+            print(warn.replace("accuracy is over answered items only",
+                               "pass rate is over answered prompts only"))
+
+        # Instruction-level accuracy (answered prompts only)
+        all_instructions = [
+            inst
+            for r in results
+            if r['answered']
+            for inst in r['judge']['per_instruction']
+            if inst.get('passed') is not None
+        ]
+        inst_passed = sum(1 for i in all_instructions if i['passed'])
+        if all_instructions:
+            print(f"Passed (instruction-level): {inst_passed}/{len(all_instructions)} "
+                  f"({inst_passed/len(all_instructions)*100:.1f}%)")
 
 
 if __name__ == '__main__':

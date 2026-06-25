@@ -6,43 +6,47 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from frontend.benchmark_launch import (  # noqa: E402
     HF_INFERENCE_BASE_URL,
+    HOSTED_SAMPLE_MAX,
     _custom_env,
     validate_base_url,
+    validate_custom_api_model,
     validate_custom_model,
+    validate_hosted_model,
+    validate_run_options,
 )
 
 
-class TestValidateCustomModel(unittest.TestCase):
+class TestValidateHostedModel(unittest.TestCase):
     def test_accepts_org_model(self) -> None:
-        self.assertIsNone(validate_custom_model("Qwen/Qwen3-0.6B"))
-
-    def test_accepts_single_name(self) -> None:
-        self.assertIsNone(validate_custom_model("gpt2"))
-
-    def test_rejects_empty(self) -> None:
-        self.assertIsNotNone(validate_custom_model(""))
-
-    def test_rejects_path_traversal(self) -> None:
-        self.assertIsNotNone(validate_custom_model("../etc/passwd"))
-
-    def test_rejects_leading_slash(self) -> None:
-        self.assertIsNotNone(validate_custom_model("/Qwen/Qwen3-0.6B"))
-
-    def test_rejects_too_long(self) -> None:
-        self.assertIsNotNone(validate_custom_model("a/" + "b" * 300))
+        self.assertIsNone(validate_hosted_model("Qwen/Qwen3-0.6B"))
 
     def test_accepts_provider_pin(self) -> None:
-        # org/model:provider forces a specific HF Inference provider.
-        self.assertIsNone(validate_custom_model("WeiboAI/VibeThinker-3B:novita"))
-
-    def test_accepts_single_name_provider_pin(self) -> None:
-        self.assertIsNone(validate_custom_model("gpt2:hf-inference"))
+        self.assertIsNone(validate_hosted_model("WeiboAI/VibeThinker-3B:novita"))
 
     def test_rejects_double_provider_pin(self) -> None:
-        self.assertIsNotNone(validate_custom_model("org/model:a:b"))
+        self.assertIsNotNone(validate_hosted_model("org/model:a:b"))
 
-    def test_rejects_trailing_colon(self) -> None:
-        self.assertIsNotNone(validate_custom_model("org/model:"))
+
+class TestValidateCustomApiModel(unittest.TestCase):
+    def test_accepts_hf_style_id(self) -> None:
+        self.assertIsNone(validate_custom_api_model("Qwen/Qwen3-0.6B"))
+
+    def test_accepts_arbitrary_name(self) -> None:
+        self.assertIsNone(validate_custom_api_model("my-finetune-v2"))
+        self.assertIsNone(validate_custom_api_model("team-chat-v2"))
+
+    def test_rejects_provider_pin(self) -> None:
+        # ``:provider`` pins are for HF hosted routing, not custom APIs.
+        self.assertIsNotNone(validate_custom_api_model("org/model:novita"))
+
+    def test_rejects_empty(self) -> None:
+        self.assertIsNotNone(validate_custom_api_model(""))
+
+    def test_rejects_path_traversal(self) -> None:
+        self.assertIsNotNone(validate_custom_api_model("../etc/passwd"))
+
+    def test_alias_matches_custom_api(self) -> None:
+        self.assertIsNone(validate_custom_model("gpt-4"))
 
 
 class TestValidateBaseUrl(unittest.TestCase):
@@ -53,7 +57,6 @@ class TestValidateBaseUrl(unittest.TestCase):
         self.assertIsNone(validate_base_url("http://localhost:8000/v1"))
 
     def test_accepts_private_ip(self) -> None:
-        # DCC compute nodes live on the 10.0.0.0/8 private range.
         self.assertIsNone(validate_base_url("http://10.183.23.44:8000/v1"))
 
     def test_accepts_bare_internal_hostname(self) -> None:
@@ -69,7 +72,6 @@ class TestValidateBaseUrl(unittest.TestCase):
         self.assertIsNotNone(validate_base_url("https://api.openai.com/v1"))
 
     def test_rejects_cloud_metadata_link_local(self) -> None:
-        # 169.254.169.254 is the classic SSRF metadata target.
         self.assertIsNotNone(validate_base_url("http://169.254.169.254/latest"))
 
     def test_rejects_non_http_scheme(self) -> None:
@@ -81,25 +83,33 @@ class TestValidateBaseUrl(unittest.TestCase):
 
 class TestHostedProvider(unittest.TestCase):
     def test_accepts_hf_router(self) -> None:
-        # The hosted "no-setup" path forces this exact URL.
         self.assertIsNone(validate_base_url(HF_INFERENCE_BASE_URL))
 
     def test_accepts_hf_router_host(self) -> None:
         self.assertIsNone(validate_base_url("https://router.huggingface.co/v1"))
 
     def test_rejects_hf_router_over_http(self) -> None:
-        # Allowlisted host must still use https.
         self.assertIsNotNone(validate_base_url("http://router.huggingface.co/v1"))
 
     def test_still_rejects_other_huggingface_hosts(self) -> None:
-        # Only the exact router host is allowlisted, not the whole domain.
         self.assertIsNotNone(validate_base_url("https://huggingface.co/v1"))
+
+
+class TestValidateRunOptions(unittest.TestCase):
+    def test_accepts_default_range(self) -> None:
+        self.assertIsNone(validate_run_options("mmlu", 50, 42))
+
+    def test_rejects_hosted_over_cap(self) -> None:
+        err = validate_run_options("mmlu", HOSTED_SAMPLE_MAX + 1, None, hosted=True)
+        self.assertIsNotNone(err)
+
+    def test_rejects_seed_when_unsupported(self) -> None:
+        self.assertIsNotNone(validate_run_options("tomi", 5, 42))
 
 
 class TestCustomEnv(unittest.TestCase):
     def test_sets_all_base_url_aliases(self) -> None:
         env = _custom_env("http://10.0.0.1:8000/v1", "key123")
-        # TruthfulQA reads TQA_BASE_URL first, so it must be set too.
         self.assertEqual(env["TQA_BASE_URL"], "http://10.0.0.1:8000/v1")
         self.assertEqual(env["LITELLM_BASE_URL"], "http://10.0.0.1:8000/v1")
         self.assertEqual(env["OPENAI_BASE_URL"], "http://10.0.0.1:8000/v1")

@@ -18,6 +18,8 @@ from benchmark_metrics import (
     slugify_model,
     summarize_binary_accuracy,
 )
+from benchmark_run_stats import attach_run_stats, run_with_stats, write_stats_sidecar
+from benchmark_progress import init_progress, tick
 
 dotenv.load_dotenv()
 litellm.suppress_debug_info = True
@@ -102,6 +104,7 @@ def run_quality_test(dataset) -> Dict:
     all_results = []
     correct = 0
     scored = 0
+    init_progress(total=len(dataset), unit="questions", message="Running QuALITY…")
 
     for row_num, row in enumerate(dataset, start=1):
         if MAX_ROWS > 0 and row_num > MAX_ROWS:
@@ -153,6 +156,7 @@ def run_quality_test(dataset) -> Dict:
             "answered": answered,
             "hard": difficult,
         })
+        tick(message=f"Question {len(all_results)}/{len(dataset)}")
 
     attempted = len(all_results)
     summary = summarize_binary_accuracy(attempted=attempted, correct=correct, scored=scored)
@@ -185,6 +189,8 @@ def run_quality_test(dataset) -> Dict:
 
 
 def save_results(data: Dict, output_dir: str):
+    attach_run_stats(data["summary"])
+    write_stats_sidecar()
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -236,9 +242,10 @@ def main():
         )
 
     try:
-        data = run_quality_test(ds)
-        save_results(data, OUTPUT_DIR)
-        print_summary(data)
+        with run_with_stats():
+            data = run_quality_test(ds)
+            save_results(data, OUTPUT_DIR)
+            print_summary(data)
     except Exception as e:
         print(f"[ERROR] {e}")
         traceback.print_exc()

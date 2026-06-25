@@ -25,7 +25,7 @@ selection. Full reference: [`benchmarks/README.md`](../benchmarks/README.md#mode
 |--------|---------------------|
 | Gateway | `GPT 4.1 Mini` (dropdown) |
 | Hosted (HF Inference) | `meta-llama/Llama-3.1-8B-Instruct` + `hf_…` token |
-| Custom (vLLM) | `Qwen/Qwen3-0.6B` + `http://localhost:8000/v1` |
+| Custom (self-hosted API) | `my-finetune-v2` + `http://localhost:8080/v1` |
 
 **Containerized (application VM):** [`docs/docker.md`](../docs/docker.md).
 

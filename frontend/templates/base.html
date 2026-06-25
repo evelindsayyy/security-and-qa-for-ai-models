@@ -28,7 +28,7 @@
     }
     document.addEventListener("click", function (e) {
       var row = e.target.closest("tr.row-link");
-      if (!row || e.target.closest("a, button, input, select, textarea, label, .expandable-toggle")) return;
+      if (!row || e.target.closest("a, button, form, input, select, textarea, label, .expandable-toggle")) return;
       go(row);
     });
     document.addEventListener("keydown", function (e) {
