@@ -77,10 +77,13 @@ class TestStripReasoning(unittest.TestCase):
         )
 
     def test_removes_unterminated_think(self) -> None:
-        # Reasoning model truncated mid-thought, answer still trailing.
+        # Truncated mid-thought: no answer should leak through.
+        self.assertEqual(strip_reasoning("<think>hmm the answer C"), "")
+
+    def test_qwen3_close_only_delimiter(self) -> None:
         self.assertEqual(
-            strip_reasoning("<think>hmm the answer C").strip(),
-            "hmm the answer C",
+            strip_reasoning("Option A looks wrong. Option B fits.</think>\n\nB"),
+            "B",
         )
 
     def test_passes_through_plain_text(self) -> None:
@@ -115,6 +118,15 @@ class TestExtractChoiceLetter(unittest.TestCase):
         self.assertEqual(
             extract_choice_letter("<think>maybe A, maybe B</think>The answer is B"),
             "B",
+        )
+
+    def test_prefers_final_answer_phrase_over_reasoning(self) -> None:
+        self.assertEqual(
+            extract_choice_letter(
+                "<think>I will answer by checking A first, then B</think>"
+                "The answer is D."
+            ),
+            "D",
         )
 
     def test_lowercase_single_letter(self) -> None:

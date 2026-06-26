@@ -216,12 +216,28 @@ def response_usage(response) -> dict[str, int] | None:
     return out or None
 
 
+_REASONING_TAG_NAMES = (
+    "think",
+    "thinking",
+    "reason",
+    "reasoning",
+    "scratchpad",
+    "redacted_thinking",
+)
 _REASONING_BLOCK = re.compile(
-    r"<(think|thinking|reason|reasoning|scratchpad)>.*?</\1>",
+    rf"<(?:{'|'.join(_REASONING_TAG_NAMES)})>.*?</(?:{'|'.join(_REASONING_TAG_NAMES)})>",
     re.DOTALL | re.IGNORECASE,
 )
 _REASONING_TAG = re.compile(
-    r"</?(think|thinking|reason|reasoning|scratchpad)>",
+    rf"</?(?:{'|'.join(_REASONING_TAG_NAMES)})>",
+    re.IGNORECASE,
+)
+_REASONING_OPEN = re.compile(
+    rf"<(?:{'|'.join(_REASONING_TAG_NAMES)})\b[^>]*>",
+    re.IGNORECASE,
+)
+_REASONING_CLOSE = re.compile(
+    rf"</(?:{'|'.join(_REASONING_TAG_NAMES)})\s*>",
     re.IGNORECASE,
 )
 
@@ -229,14 +245,27 @@ _REASONING_TAG = re.compile(
 def strip_reasoning(text: str) -> str:
     """Remove chain-of-thought blocks emitted by reasoning models.
 
-    Provider-agnostic: handles Qwen3 / DeepSeek-R1 ``<think>`` tags and the
-    other common reasoning tag names. An unterminated opening tag (model ran
-    out of tokens mid-thought) is also dropped so the trailing answer survives.
+    Provider-agnostic: handles Qwen3 / DeepSeek-R1 think tags (and related
+    reasoning tag names). Qwen3 often emits only a closing delimiter with no
+    opening tag; everything before it is dropped. An unterminated opening tag
+    (model ran out of tokens mid-thought) removes the whole tail so parsers do
+    not scrape letters from partial reasoning.
     """
     if not text:
         return ""
-    cleaned = _REASONING_BLOCK.sub(" ", text)
+
+    # Qwen3 may emit only a closing delimiter (no opening tag).
+    if _REASONING_CLOSE.search(text):
+        cleaned = _REASONING_CLOSE.split(text)[-1]
+    elif _REASONING_OPEN.search(text) and not _REASONING_BLOCK.search(text):
+        # Opening tag with no complete block and no close delimiter — truncated thought.
+        return ""
+    else:
+        cleaned = text
+
+    cleaned = _REASONING_BLOCK.sub(" ", cleaned)
     cleaned = _REASONING_TAG.sub(" ", cleaned)
+    cleaned = _REASONING_OPEN.sub(" ", cleaned)
     return cleaned.strip()
 
 
@@ -264,9 +293,12 @@ def extract_choice_letter(text: str, letters: str = "ABCD") -> str:
         return bare.upper()
 
     # 1) Explicit answer phrase: "The answer is C", "Answer: B".
-    m = re.search(rf"answer\b[^A-Za-z]{{0,20}}([{upper}])\b", cleaned, re.IGNORECASE)
-    if m:
-        return m.group(1).upper()
+    # Prefer the last match — reasoning traces often mention "answer … A" early.
+    answer_matches = list(
+        re.finditer(rf"answer\b[^A-Za-z]{{0,20}}([{upper}])\b", cleaned, re.IGNORECASE)
+    )
+    if answer_matches:
+        return answer_matches[-1].group(1).upper()
 
     # 2) A letter next to option punctuation: "C.", "B)", "(D)".
     m = re.search(rf"(?<![A-Za-z])([{upper}])\s*[).:]", cleaned)

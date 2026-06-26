@@ -85,14 +85,20 @@ the providers enabled in your
 [account settings](https://huggingface.co/settings/inference-providers) (set to
 **auto** to let it pick any available one).
 
-Caveats: the model must be **provider-backed for chat completion** (check the
-"Inference Providers" widget on its HF model page; the model has to be served by
-a provider you've enabled); there's a metered cost / limited free tier.
+Caveats: the model must be **provider-backed** and callable via HF's
+**chat-completions** API (see checklist below — the widget label is often
+**Text Generation**, not "Chat Completion"); there's a metered cost / limited
+free tier.
 
 **Hosted setup checklist**
 
 1. Pick a model on [HF with Inference Available](https://huggingface.co/models?inference_provider=all&other=conversational) (spark icon on the card).
-2. On the model page, open **Inference Providers** — confirm **Chat Completion** is listed (not just Text Generation).
+2. On the model page, open **Inference Providers** and confirm at least one
+   provider is listed. The widget often shows **Text Generation** for
+   instruct/chat LLMs — that is normal; what matters is conversational access,
+   not the exact label. Use **View Code Snippets** or the playground: if it
+   accepts user/assistant `messages` (not prompt-only completion), it works with
+   this benchmark's Hosted path.
 3. If the model is **gated**, accept the license on the model page first.
 4. Create a [fine-grained token](https://huggingface.co/settings/tokens) with **Make calls to Inference Providers** (and **Read access to public gated repos** if gated).
 5. At [Inference Providers settings](https://huggingface.co/settings/inference-providers), set routing to **Automatic** or enable the specific provider shown on the model page.
