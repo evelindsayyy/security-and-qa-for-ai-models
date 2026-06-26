@@ -1,0 +1,160 @@
+# =============================================================================
+# Text-to-SQL Judge Rubric — v1
+# =============================================================================
+# A rubric for an LLM-as-judge to grade a candidate's SQL answer by STATIC
+# INSPECTION — reading the query, the question, and the expected result set,
+# WITHOUT running anything.
+#
+# Why this exists (this is the important part):
+#   Text-to-SQL is normally scored by EXECUTION — evaluator/execution_eval.py
+#   runs the candidate SQL in a throwaway in-memory SQLite and compares the
+#   rows it returns to the gold `expected` set. That is the ground truth.
+#
+#   This rubric is the deliberate counterpart: it lets the SAME suite also be
+#   graded by the LLM judge, so we can MEASURE THE GAP between what a judge
+#   *thinks* a query does and what the query *actually* does when run. On the
+#   hard SQL suite (sql_duke_hard_v1 — NULL-in-NOT-IN, integer division,
+#   COUNT vs COUNT DISTINCT, INNER vs LEFT JOIN traps) a judge frequently rates
+#   a plausible-but-wrong query highly, while execution returns the truth. That
+#   divergence is the finding; this rubric is how we reproduce it through the
+#   real judge pipeline instead of a one-off script.
+#
+#   Therefore: execution is authoritative for correctness. The judge's
+#   correctness score here is the SUBJECT of measurement, not a source of truth.
+#
+# Run it via:
+#   runner.py --suite sql_duke_hard_v1 --force-judge \
+#             --rubric tasks/rubrics/sql_duke_v1.yaml \
+#             --judge-prompt prompts/judge/reference_based_v2.txt \
+#             --judge-model "<a different family from the candidate>"
+#
+# Design lineage:
+#   - G-Eval: anchored scales + chain-of-thought evaluation_steps + JSON out.
+#   - HELM: per-dimension scores stay visible; the overall never hides them.
+#   - MT-Bench: judge must be a different family than the candidate; temp 0.
+#
+# Dimensions are defined INLINE (no `from: shared`) so this rubric is
+# self-contained and does not depend on the shared-dimension library.
+#
+# DO NOT EDIT in place. To revise, copy to sql_duke_v2.yaml and bump the
+# version — result rows reference this string and edits break comparability.
+# =============================================================================
+
+rubric_version: "sql_duke_v1"
+task_type: "text_to_sql"
+description: |
+  Static (non-executing) LLM-judge rubric for text-to-SQL answers. Graded
+  against the question and the gold expected result set. Pairs with
+  execution_eval.py: execution is the ground truth for correctness; this
+  rubric measures how well a judge approximates it without running the query.
+
+
+# -----------------------------------------------------------------------------
+# Dimensions
+# -----------------------------------------------------------------------------
+# correctness dominates: the whole experiment is whether the judge can tell a
+# right query from a plausible-wrong one by reading it. query_clarity is a
+# secondary, genuinely-static signal (style/readability) on a coarse 1-3 scale.
+
+dimensions:
+
+  correctness:
+    definition: >
+      Reading the candidate SQL against the question and the gold expected
+      result set, would this query return exactly the expected rows (order
+      aside)? Judge by tracing the query's logic — joins, filters, NULL
+      handling, grouping, aggregation, integer vs. real division. This is a
+      static judgment: you cannot execute the query, so reason carefully about
+      edge cases the query must get right.
+    scale: [1, 5]
+    weight: 0.80
+    anchors:
+      1: >
+        The query clearly cannot produce the expected result — wrong table or
+        column, wrong aggregate, a logic error that obviously changes the rows.
+      3: >
+        Plausible and on the right track, but a subtle issue could make it
+        diverge from the expected result (e.g. NOT IN with a nullable column,
+        COUNT(*) where COUNT(DISTINCT ...) is needed, INNER where LEFT JOIN is
+        required) and you cannot fully rule the issue in or out by inspection.
+      5: >
+        The query's logic, traced carefully, returns exactly the expected rows,
+        with the relevant edge cases (NULLs, division, grouping, join type)
+        handled correctly.
+
+  query_clarity:
+    definition: >
+      Is the SQL readable and idiomatic — sensible aliases, no needless
+      subqueries or dead clauses, formatting a reviewer can follow? This is a
+      pure style signal and is independent of whether the query is correct.
+    scale: [1, 3]
+    weight: 0.20
+    anchors:
+      1: >
+        Hard to follow: cryptic, tangled, or cluttered with clauses that do
+        nothing.
+      2: >
+        Readable but unremarkable; minor redundancy or awkward structure.
+      3: >
+        Clean and idiomatic: clear structure a reviewer can follow at a glance.
+
+
+# -----------------------------------------------------------------------------
+# Aggregation
+# -----------------------------------------------------------------------------
+
+aggregation:
+  method: "weighted_normalized"
+  weights_sum_to: 1.0
+  display_scale: 5
+  note: |
+    Per HELM, the per-dimension scores remain the headline; the weighted
+    overall is for dashboard sortability only. correctness carries 0.80 because
+    it is the dimension the judge-vs-execution comparison is about.
+
+
+# -----------------------------------------------------------------------------
+# Judge evaluation steps (G-Eval chain-of-thought)
+# -----------------------------------------------------------------------------
+
+evaluation_steps:
+  - "If the candidate response is empty, whitespace-only, or not SQL at all, score 1 on every dimension with rationale 'no usable SQL'. Skip the rest."
+  - "Read the question and the schema/seed context, then state in one phrase what result set a correct query must return."
+  - "Read the gold expected result set. This is the target the query must reproduce."
+  - "Read the candidate SQL and trace its logic step by step: which rows survive the joins and filters, how NULLs behave, what the grouping and aggregates produce, and whether division is integer or real."
+  - "For CORRECTNESS, decide whether the traced result equals the expected set. You cannot run the query — if a subtle trap (NULL-in-NOT-IN, integer division, COUNT vs COUNT DISTINCT, INNER vs LEFT JOIN) could change the rows and you cannot rule it out by inspection, score 3, not 5. Reserve 5 for queries whose edge cases you have actually traced and confirmed."
+  - "For QUERY_CLARITY, judge readability and idiom only — never let a correct-looking style inflate the correctness score."
+  - "When between anchors, pick the LOWER score and say why in the rationale."
+  - "Give a one-sentence rationale per dimension, naming the specific clause that drove the score."
+  - "Output valid JSON matching the schema. No prose outside the JSON. No markdown fences."
+
+
+# -----------------------------------------------------------------------------
+# Validation
+# -----------------------------------------------------------------------------
+# The validation here is unusual: the "human rater" is execution itself.
+# execution_eval.py provides an objective pass/fail per question, so judge
+# correctness can be scored against ground truth directly (no human study
+# needed for this dimension). Reported as: of the questions the judge rated
+# >= 4 on correctness, what fraction did execution mark FAIL (the false-pass
+# rate). That single number is the headline of the judge-vs-execution finding.
+
+validation:
+  ground_truth: "execution_eval.py pass/fail on the same suite"
+  headline_metric: "false-pass rate = P(execution FAIL | judge correctness >= 4)"
+  metrics_to_report:
+    - "false-pass rate (judge says good, execution says wrong)"
+    - "false-fail rate (judge says wrong, execution says correct)"
+    - "Pearson correlation between judge correctness and execution pass(1)/fail(0)"
+
+
+# -----------------------------------------------------------------------------
+# Known limitations
+# -----------------------------------------------------------------------------
+
+limitations:
+  - "Static by design. The judge cannot execute the query, so it will miss traps that only appear at run time. That is the phenomenon being measured, not a defect to fix."
+  - "Execution is the ground truth for correctness; never report a judge correctness score as authoritative on its own."
+  - "Showing the judge the expected result set makes this an OPTIMISTIC bound on static judging — a judge with no expected answer would do worse, not better."
+  - "query_clarity is subjective and coarse (1-3); expect lower agreement there."
+  - "Illustrative Duke-flavored data, not real records; same provenance caveat as the suite."

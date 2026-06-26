@@ -91,6 +91,7 @@ def _aggregate_db_run(run: dict, results: list[dict]) -> dict:
         "suite": (run["adaptation"] or {}).get("task_suite_version", ""),
         "candidate_model": run["gateway_model_id"],
         "judge_model": run["judge_model"],
+        "inference_backend": (run["adaptation"] or {}).get("inference_backend", "gateway"),
         "n": n,
         "ok": ok,
         "cand_fail": cand_fail,
