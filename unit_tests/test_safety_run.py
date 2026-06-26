@@ -42,6 +42,14 @@ class RunPipelineValidationTest(unittest.TestCase):
         cfg = RunConfig(model="m", skip_promptfoo=True, skip_garak=True)
         self.assertEqual(run_pipeline(cfg), 1)
 
+    def test_blocks_when_lock_held(self) -> None:
+        from unittest import mock
+
+        cfg = RunConfig(model="GPT 4.1 Mini", redteam_profile="base", skip_garak=True, redteam=False)
+        with mock.patch("safety.run.run_lock.should_skip_cli_acquire", return_value=False):
+            with mock.patch("safety.run.run_lock.try_acquire", return_value=False):
+                self.assertEqual(run_pipeline(cfg), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

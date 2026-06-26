@@ -8,6 +8,18 @@
   <h1>HF artifact scans</h1>
   <p><a class="btn-primary" href="{{ url_for('scan_run_new') }}">▶ Start a new scan</a></p>
 
+  <section class="key">
+    <h2>How to read this</h2>
+    <dl class="legend-grid">
+      <dt>Tier</dt>
+      <dd>Worst severity across ModelScan, Fickling, ModelAudit, dependencies, and secrets — max, not averaged.</dd>
+      <dt class="num-sample">Risk</dt>
+      <dd>0–100 from tier anchors (0 / 40 / 70 / 95) plus bumps (e.g. benign Fickling → ~18). Findings dedupe by file+signal; corroborated tools noted on the detail page.</dd>
+      <dt>Fickling</dt>
+      <dd><code>LIKELY_UNSAFE</code> on benign PyTorch pickles often leaves tier <b>low</b>.</dd>
+    </dl>
+  </section>
+
   {% if not has_scans %}
     <p class="sub">
       No results yet. Use <b>Start a new scan</b> above, or from repo root:
@@ -49,23 +61,6 @@
       </tbody>
     </table>
     </div>
-
-    <section class="key">
-      <h2>How to read this table</h2>
-      <dl class="legend-grid">
-        <dt class="num-sample">Risk</dt>
-        <dd>0–100 score from merged ModelScan, Fickling, ModelAudit, pip-audit/OSV,
-            and TruffleHog. Click a row for per-finding detail.</dd>
-
-        <dt>Tier</dt>
-        <dd>Worst severity among normalized findings — critical and high rows
-            are highlighted and sort to the top.</dd>
-
-        <dt>Fickling</dt>
-        <dd>Benign PyTorch pickles often show <code>LIKELY_UNSAFE</code> signal
-            while the overall tier stays low. Check the detail page for context.</dd>
-      </dl>
-    </section>
   {% endif %}
 </div>
 {% endblock %}

@@ -55,15 +55,23 @@ def cmd_scan(args: argparse.Namespace) -> int:
     """Full pipeline: download → tools → ``scan_result.json``."""
     for model_id in args.models:
         print(f"scanning {model_id} ...")
-        result = scan_model(
-            model_id,
-            auto_download=True,
-            run_modelscan=not args.skip_modelscan,
-            run_fickling=not args.skip_fickling,
-            run_modelaudit=not args.skip_modelaudit,
-            run_dependencies=not args.skip_deps,
-            run_secrets=not args.skip_secrets,
-        )
+        try:
+            result = scan_model(
+                model_id,
+                auto_download=True,
+                run_modelscan=not args.skip_modelscan,
+                run_fickling=not args.skip_fickling,
+                run_modelaudit=not args.skip_modelaudit,
+                run_dependencies=not args.skip_deps,
+                run_secrets=not args.skip_secrets,
+            )
+        except Exception as exc:
+            from dbutils.run_lock import RunLockError
+
+            if isinstance(exc, RunLockError):
+                print(f"ERROR: {exc}", file=sys.stderr)
+                return 2
+            raise
         out = output_dir(model_id) / "scan_result.json"
         print(
             f"  tier={result.severity_tier.value} score={result.overall_risk_score} "

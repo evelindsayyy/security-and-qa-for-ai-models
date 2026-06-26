@@ -127,6 +127,7 @@ class LaunchRoutesTest(unittest.TestCase):
     def test_start_valid_spawns_and_redirects(self) -> None:
         fake_proc = mock.Mock()
         fake_proc.poll.return_value = None
+        fake_proc.pid = 424242
         with mock.patch.object(
             safety_launch.subprocess, "Popen", return_value=fake_proc
         ) as popen:

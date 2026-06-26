@@ -127,7 +127,7 @@ def register_routes(app):
         )
         if error:
             return error, 400
-        slug, _already = start_run(
+        slug, already = start_run(
             hf_repo,
             skip_modelscan=not request.form.get("run_modelscan"),
             skip_fickling=not request.form.get("run_fickling"),

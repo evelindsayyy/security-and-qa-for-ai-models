@@ -18,7 +18,9 @@ import threading
 from pathlib import Path
 from urllib.parse import urlparse
 
+from dbutils import run_lock
 from frontend import docker_launch
+from frontend.log_status import status_message
 from frontend.path_safety import is_safe_slug
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -263,6 +265,18 @@ def build_command(
     return [sys.executable, str(RUNNER), *inner[2:]]
 
 
+def _run_lock_path(stem: str) -> Path:
+    return run_lock.lock_path(RESULTS_DIR / stem)
+
+
+def _watch_process(stem: str, proc: subprocess.Popen, lock_path: Path) -> None:
+    proc.wait()
+    run_lock.release(lock_path)
+    with _LOCK:
+        if _RUNNING.get(stem) is proc:
+            _RUNNING.pop(stem, None)
+
+
 def start_run(
     benchmark_key: str,
     model: str,
@@ -283,6 +297,7 @@ def start_run(
             docker_launch.ensure_stack("benchmarks")
 
         stem = predict_stem(benchmark_key, model)
+        lock_file = _run_lock_path(stem)
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         log_path = RESULTS_DIR / f"{stem}.log"
         progress_path = RESULTS_DIR / f"{stem}.progress.json"
@@ -315,17 +330,32 @@ def start_run(
         proc_env.setdefault("PYTHONUNBUFFERED", "1")
         proc_env.update(extra_env)
 
+        cmd_str = " ".join(cmd)
         with log_path.open("wb") as log_f:
-            log_f.write(f"=== command: {' '.join(cmd)} ===\n".encode())
+            log_f.write(f"=== command: {cmd_str} ===\n".encode())
             proc = subprocess.Popen(
                 cmd,
                 cwd=str(ROOT if docker_launch.use_docker() else BENCHMARKS_DIR),
                 stdout=log_f,
                 stderr=subprocess.STDOUT,
                 env=proc_env,
+                start_new_session=True,
             )
+        if not run_lock.try_acquire(
+            lock_file,
+            pid=proc.pid,
+            command=cmd_str,
+            source=run_lock.FRONTEND_SOURCE,
+        ):
+            proc.terminate()
+            return stem, True
         _RUNNING[stem] = proc
         _INFLIGHT[combo] = stem
+        threading.Thread(
+            target=_watch_process,
+            args=(stem, proc, lock_file),
+            daemon=True,
+        ).start()
         return stem, False
 
 
@@ -348,7 +378,16 @@ def is_run_in_progress(slug: str) -> bool:
     proc = _RUNNING.get(slug)
     if proc is not None and proc.poll() is None:
         return True
+    if run_lock.is_active(_run_lock_path(slug)):
+        return True
     return False
+
+
+def _with_log(status: dict, slug: str) -> dict:
+    log_path = RESULTS_DIR / f"{slug}.log"
+    status["log"] = status_message(log_path)
+    status["log_path"] = f"benchmarks/results/{slug}.log"
+    return status
 
 
 def _status_from_progress(slug: str, prog: dict) -> dict:
@@ -394,29 +433,32 @@ def get_status(slug: str) -> dict:
 
     proc = _RUNNING.get(slug)
     if proc is not None and proc.poll() is None:
-        return _status_from_progress(slug, prog) if prog else {
+        base = _status_from_progress(slug, prog) if prog else {
             "status": "running",
             "progress": progress,
             "total": total,
             **meta,
         }
+        return _with_log(base, slug)
     if proc is not None:
-        return {
+        return _with_log({
             "status": "failed",
             "progress": progress,
             "total": total,
             **meta,
-        }
+        }, slug)
     if _progress_path(slug).is_file() and progress < total:
         # Flask restarted mid-run but the runner is still writing progress.
+        if run_lock.is_active(_run_lock_path(slug)):
+            return _with_log(_status_from_progress(slug, prog), slug)
         return _status_from_progress(slug, prog)
     if (RESULTS_DIR / f"{slug}.log").is_file():
-        return {
+        return _with_log({
             "status": "failed",
             "progress": progress,
             "total": total,
             **meta,
-        }
+        }, slug)
     return {"status": "not_found", "progress": 0, "total": 0, "unit": "items", "message": ""}
 
 

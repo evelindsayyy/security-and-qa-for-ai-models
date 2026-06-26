@@ -8,6 +8,18 @@
   <h1>Model comparison</h1>
   <p><a class="btn-primary" href="{{ url_for('eval_run_new') }}">▶ Start a new run</a></p>
 
+  <section class="key">
+    <h2>How to read this</h2>
+    <dl class="legend-grid">
+      <dt>Score columns</dt>
+      <dd>From each run's rubric (usually 1–5; tone 1–3). Higher is better; "—" means not graded.</dd>
+      <dt class="num-sample">Overall</dt>
+      <dd>Weighted rubric score on 0–5 — headline per run. Click a row for per-question detail.</dd>
+      <dt><span class="badge badge-warn">⚠ empty</span></dt>
+      <dd>Candidate returned no text (often token budget) — re-run with higher max-tokens before comparing.</dd>
+    </dl>
+  </section>
+
   {% if not has_runs %}
     <p class="sub">
       No runs yet. Use <b>Start a new run</b> above, or from repo root:
@@ -162,36 +174,6 @@
         }
       })();
     </script>
-
-    <section class="key">
-      <h2>How to read this table</h2>
-      <dl class="legend-grid">
-        <dt>accuracy, tone, …</dt>
-        <dd>Score columns come from each run's grading rubric. Most are 1–5; tone is 1–3.
-            Higher is better. A "—" means that run's rubric doesn't grade that dimension.</dd>
-
-        <dt class="num-sample">Overall</dt>
-        <dd>All dimensions combined using the rubric's weights, on a 0–5 scale.
-            This is the headline number per run.</dd>
-
-        <dt><span class="badge badge-best">best</span></dt>
-        <dd>Highest overall score among runs with no warnings.
-            Default order is best-first — click <b>Overall</b>, <b>Latency</b>, or <b>Cost</b> to re-sort,
-            or click any row to open its per-question scores.</dd>
-
-        <dt><span class="status-ok">OK</span></dt>
-        <dd>Every question got an answer from the candidate and a verdict from the judge.</dd>
-
-        <dt><span class="badge badge-warn">cand_fail / judge_fail</span></dt>
-        <dd>How many questions failed at the candidate or the judge step.
-            Failed questions carry no scores, so they don't inflate or deflate the means.</dd>
-
-        <dt><span class="badge badge-warn">⚠ N/n empty</span></dt>
-        <dd>The candidate returned empty text for N of n questions — typically a reasoning
-            model that spent its whole token budget on hidden thinking.
-            Re-run with a larger max-tokens; don't compare these scores.</dd>
-      </dl>
-    </section>
   {% endif %}
 </div>
 {% endblock %}

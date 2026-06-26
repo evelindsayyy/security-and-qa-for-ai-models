@@ -41,3 +41,56 @@ docker compose --env-file .env -f benchmarks/docker/compose.yml run --rm benchma
 {% macro cli_gateway_host() -%}
 uv run python -m gateway
 {%- endmacro %}
+
+{% macro progress_terminal(poll_url, interval, hint='', show_retry=false, retry_url='', initial_status='running', initial_message='') %}
+<div class="progress-card progress-card--wide">
+  <p class="progress-meta">status: <b id="prog-state">{{ initial_status }}</b></p>
+  <pre class="log-terminal" id="prog-log" aria-live="polite">{{ initial_message }}</pre>
+  {% if hint %}
+  <p class="log-terminal-hint">{{ hint }}</p>
+  {% endif %}
+  {% if show_retry %}
+  <p id="prog-retry" class="sub" style="display: none;">
+    <a href="{{ retry_url }}" id="prog-retry-link">Start a new run →</a>
+  </p>
+  {% endif %}
+</div>
+<script>
+(function () {
+  const pollUrl = {{ poll_url | tojson }};
+  const intervalMs = {{ interval }};
+  const logEl = document.getElementById("prog-log");
+  const stateEl = document.getElementById("prog-state");
+  const retryEl = document.getElementById("prog-retry");
+  let userScrolledUp = false;
+
+  logEl.addEventListener("scroll", function () {
+    userScrolledUp = logEl.scrollTop + logEl.clientHeight < logEl.scrollHeight - 40;
+  });
+
+  function updateLog(text) {
+    if (!text) return;
+    logEl.textContent = text;
+    if (!userScrolledUp) {
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+  }
+
+  function poll() {
+    fetch(pollUrl).then(function (r) { return r.json(); }).then(function (s) {
+      stateEl.textContent = s.status;
+      if (s.message) updateLog(s.message);
+      if (s.status === "complete") {
+        window.location = window.location.pathname;
+      } else if (s.status === "failed") {
+        stateEl.textContent = "failed";
+        if (retryEl) retryEl.style.display = "block";
+      }
+    }).catch(function () {});
+  }
+
+  poll();
+  setInterval(poll, intervalMs);
+})();
+</script>
+{% endmacro %}
