@@ -276,6 +276,7 @@ class RunnerSkipJudgeTest(unittest.TestCase):
             mock.patch.object(candidate, "gateway_client", return_value=self.cand_stub),
             mock.patch.object(judge, "gateway_client", return_value=self.judge_stub),
             mock.patch.object(candidate, "_CACHE_DIR", self.dir / "cache_c"),
+            mock.patch.object(judge, "_CACHE_DIR", self.dir / "cache_j"),  # isolate judge cache too
             mock.patch.object(sys, "argv", self.argv),
             mock.patch("dbutils.post_run.maybe_sync_artifact"),  # don't touch the real DB
         ):
@@ -324,6 +325,65 @@ class RunnerSkipJudgeTest(unittest.TestCase):
         with mock.patch.object(sys, "argv", argv):
             self.assertEqual(runner.main(), 0)
         self.assertEqual(self.judge_stub.calls, 0)
+
+    def _force_judge_argv(self) -> list[str]:
+        # --force-judge needs a rubric + judge prompt + judge model, like any
+        # judge run. Reuse the module's smoke rubric/template (accuracy+tone),
+        # which matches the judge stub's JUDGE_JSON.
+        (self.dir / "rubric.yaml").write_text(RUBRIC_YAML, encoding="utf-8")
+        (self.dir / "judge_prompt.txt").write_text(JUDGE_PROMPT, encoding="utf-8")
+        return [
+            "runner.py", "--candidate-model", "stub-model",
+            "--suite", str(self.dir / "sql.jsonl"),
+            "--system-prompt", str(self.dir / "system.txt"),
+            "--rubric", str(self.dir / "rubric.yaml"),
+            "--judge-prompt", str(self.dir / "judge_prompt.txt"),
+            "--judge-model", "stub-judge",
+            "--output-dir", str(self.dir / "results_fj"),
+            "--force-judge",
+        ]
+
+    def test_force_judge_runs_judge_on_execution_suite(self) -> None:
+        # The SAME scoring=execution suite, force-judged: the judge now runs on
+        # every question and rows carry scored overalls. This is the real-pipeline
+        # path used to reproduce the judge-vs-execution comparison.
+        with mock.patch.object(sys, "argv", self._force_judge_argv()):
+            self.assertEqual(runner.main(), 0)
+        self.assertEqual(self.judge_stub.calls, 2)  # one per SQL question
+        out = [p for p in (self.dir / "results_fj").glob("*.jsonl")
+               if "_trace" not in p.name]
+        rows = {r["question_id"]: r for r in
+                (json.loads(line) for line in out[0].read_text().splitlines())}
+        for r in rows.values():
+            self.assertFalse(r["judge_failed"])
+            self.assertIsNotNone(r["overall"])
+            self.assertEqual(r["scores"]["accuracy"]["score"], 4)
+
+    def test_force_judge_reference_comes_from_expected(self) -> None:
+        # The SQL rows have `expected`, not `reference`; the judge must still get
+        # a reference, synthesized from the gold result set.
+        with mock.patch.object(sys, "argv", self._force_judge_argv()):
+            self.assertEqual(runner.main(), 0)
+        blob = json.dumps(self.judge_stub.last_kwargs.get("messages"))
+        self.assertIn("Expected result rows", blob)
+
+
+class JudgeReferenceTest(unittest.TestCase):
+    """runner._judge_reference: pick the row's reference, else synthesize one
+    from the execution suite's gold `expected`, else fail loudly."""
+
+    def test_reference_field_used_when_present(self) -> None:
+        self.assertEqual(runner._judge_reference({"reference": "gold answer"}),
+                         "gold answer")
+
+    def test_expected_synthesized_when_no_reference(self) -> None:
+        ref = runner._judge_reference({"expected": [["Ben"]]})
+        self.assertIn("Expected result rows", ref)
+        self.assertIn("Ben", ref)
+
+    def test_neither_raises_keyerror(self) -> None:
+        with self.assertRaises(KeyError):
+            runner._judge_reference({"question": "no reference, no expected"})
 
 
 if __name__ == "__main__":

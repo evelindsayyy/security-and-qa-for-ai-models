@@ -151,6 +151,15 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--skip-judge", action="store_true",
                    help="candidate-only run: generate responses without calling "
                         "the LLM judge (for execution-scored suites)")
+    # The inverse of --skip-judge: run the LLM judge ON an execution-scored
+    # suite, overriding the scoring=execution auto-skip. Used to reproduce the
+    # judge-vs-execution comparison through the real pipeline — the judge grades
+    # the same SQL answers that execution_eval.py scores by running them. The
+    # judge gets the gold `expected` rows as its reference (see _judge_reference).
+    p.add_argument("--force-judge", action="store_true",
+                   help="also run the LLM judge on an execution-scored suite "
+                        "(overrides scoring=execution); requires --judge-model "
+                        "and an SQL judge rubric")
     p.add_argument("--suite", type=Path,
                    default=HERE / "tasks" / "it_support_v1.jsonl")
     p.add_argument("--rubric", type=Path,
@@ -210,6 +219,26 @@ def _safe_slug(s: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _judge_reference(q: dict) -> str:
+    """The reference answer text handed to the LLM judge for one question.
+
+    Judge-scored suites carry a ``reference`` string. Execution suites carry a
+    gold ``expected`` result set instead (they're normally checked by RUNNING
+    the SQL, not judged). When such a suite is force-judged for the
+    judge-vs-execution comparison, synthesize a reference from ``expected`` so
+    the judge sees the gold answer — but it still can't run the query, which is
+    exactly the gap the comparison measures.
+
+    Raises KeyError if a row has neither, so a genuinely malformed judge suite
+    still fails loudly instead of silently grading against nothing.
+    """
+    if "reference" in q:
+        return q["reference"]
+    if "expected" in q:
+        return f"Expected result rows (order-insensitive): {q['expected']}"
+    raise KeyError("reference")
+
+
 def main() -> int:
     args = _parse_args()
 
@@ -226,8 +255,10 @@ def main() -> int:
     # "execution" suites are scored by RUNNING the answer (execution_eval), so
     # the LLM judge is skipped automatically; --skip-judge stays as a manual
     # override for any suite. Default "judge" — every existing suite.
+    # --force-judge is the inverse: it runs the judge even on an execution suite
+    # (for the judge-vs-execution comparison) and wins over the auto-skip.
     scoring = metadata.get("scoring", "judge")
-    skip_judge = args.skip_judge or scoring == "execution"
+    skip_judge = (args.skip_judge or scoring == "execution") and not args.force_judge
 
     if not skip_judge and not args.judge_model:
         print("ERROR: --judge-model is required unless the suite declares "
@@ -330,7 +361,7 @@ def main() -> int:
                     t1 = time.perf_counter()
                     judge_verdict = judge_response(
                         question=q["question"],
-                        reference=q["reference"],
+                        reference=_judge_reference(q),
                         candidate_response=cand.response,
                         rubric_path=args.rubric,
                         judge_model=judge_model,
