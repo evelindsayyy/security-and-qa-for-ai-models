@@ -78,6 +78,7 @@ Normalized shapes: [`data-model.md`](data-model.md) (`scans`/`findings`, `safety
 | Signal | Result |
 |--------|--------|
 | `scan_result.json` | `severity_tier`: low, `overall_risk_score`: 18 |
+| Clean scan (no findings) | low / **0** |
 | ModelScan 0.8.8 | 0 issues on gpt2; many paths skipped by extension (ModelAudit covers gaps) |
 | Fickling | LIKELY_UNSAFE on `pytorch_model.bin` (benign stacked pickle) |
 | distilbert-base-uncased | Same pattern (score 18, low) |

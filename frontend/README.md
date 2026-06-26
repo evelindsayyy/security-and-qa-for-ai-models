@@ -16,14 +16,16 @@ Postgres schema and backfill (optional): see [root README — Optional Postgres]
 
 ### Run (containerized — default)
 
-**Containerized (application VM):** [`docs/docker.md`](../docs/docker.md).
-=======
+See [`docs/docker.md`](../docs/docker.md).
+
 ```bash
 python3 main.py                   # or: ./docker/run.sh up --build
 python3 main.py up -d --build     # background
 ```
 
 Open http://127.0.0.1:5000 · launch pages: `/scans/new` · `/safety/new` · `/eval-run/new` · `/benchmarks/new`
+
+While a job runs, its detail page polls status and shows a live log tail. Scan and safety start forms warn when the same model/repo is already in progress (`run.lock` under the output dir).
 
 ### Benchmark model sources (`/benchmarks/new`)
 

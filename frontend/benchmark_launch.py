@@ -266,7 +266,8 @@ def build_command(
 
 
 def _run_lock_path(stem: str) -> Path:
-    return run_lock.lock_path(RESULTS_DIR / stem)
+    """Flat lock file beside {stem}.log — not a subdirectory named after stem."""
+    return RESULTS_DIR / f"{stem}.run.lock"
 
 
 def _watch_process(stem: str, proc: subprocess.Popen, lock_path: Path) -> None:

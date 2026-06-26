@@ -132,6 +132,18 @@ Per-pillar flags and host-only paths: [`scanner/`](../scanner/README.md) ·
 [`safety/`](../safety/README.md) · [`evaluator/`](../evaluator/README.md) ·
 [`benchmarks/`](../benchmarks/README.md).
 
+### Concurrent runs and locks
+
+| Pillar | Lock location | CLI if already running |
+|--------|---------------|------------------------|
+| Scan | `scanner/output/<slug>/run.lock` | exit **2** |
+| Safety | `safety/output/<slug>/<profile>/run.lock` | exit **2** |
+| Benchmark | `benchmarks/results/<stem>.run.lock` | UI only (no CLI lock yet) |
+
+Scan and safety start forms show a warning when that model/repo is already in progress. Stale locks are removed when the holder PID is dead; delete the lock file manually if needed after `kill -9`.
+
+Historical scan rows may show pre-change `overall_risk_score` values (clean scans now score **0**; benign gpt2-style pickles stay **18**).
+
 ## Gateway catalog
 
 ```bash

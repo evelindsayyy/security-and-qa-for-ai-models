@@ -7,13 +7,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from frontend.benchmark_launch import (  # noqa: E402
     HF_INFERENCE_BASE_URL,
     HOSTED_SAMPLE_MAX,
+    RESULTS_DIR,
     _custom_env,
+    _run_lock_path,
     validate_base_url,
     validate_custom_api_model,
     validate_custom_model,
     validate_hosted_model,
     validate_run_options,
 )
+
+
+class TestRunLockPath(unittest.TestCase):
+    def test_lock_is_flat_file_under_results(self) -> None:
+        stem = "20260625T120000_truthfulqa_gpt-5-chat"
+        path = _run_lock_path(stem)
+        self.assertEqual(path, RESULTS_DIR / f"{stem}.run.lock")
+        self.assertEqual(path.name, f"{stem}.run.lock")
+        self.assertEqual(path.parent, RESULTS_DIR)
 
 
 class TestValidateHostedModel(unittest.TestCase):
