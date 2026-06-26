@@ -22,6 +22,7 @@ from pathlib import Path
 
 from dbutils.compose import compose_build, compose_run
 from dbutils.env import REPO_ROOT
+from dbutils import run_lock
 from safety.gateway_ids import normalize_gateway_model_id
 
 VALID_PROFILES = frozenset({"base", "education", "healthcare", "finance", "rag", "agentic"})
@@ -173,6 +174,30 @@ def run_pipeline(cfg: RunConfig) -> int:
     os.environ["GATEWAY_MODEL"] = cfg.model
     os.environ.setdefault("REDTEAM_GRADER_MODEL", "GPT 4.1 Mini")
     slug = normalize_gateway_model_id(cfg.model)
+    out_dir = REPO_ROOT / "safety" / "output" / slug / cfg.redteam_profile
+    lock_file = run_lock.lock_path(out_dir)
+    if run_lock.should_skip_cli_acquire(lock_file):
+        pass
+    elif not run_lock.try_acquire(
+        lock_file,
+        command=f"safety.run {cfg.model} profile={cfg.redteam_profile}",
+        source="cli",
+    ):
+        print(
+            f"ERROR: safety run already in progress for {cfg.model!r} "
+            f"(profile {cfg.redteam_profile}) — see {lock_file}",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        return _run_pipeline_impl(cfg, slug)
+    finally:
+        if not run_lock.should_skip_cli_acquire(lock_file):
+            run_lock.release(lock_file)
+
+
+def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
     _prepare_promptfoo_host_dir()
     _ensure_output_dirs(slug, cfg.redteam_profile)
 

@@ -8,6 +8,20 @@
   <h1>Benchmark results</h1>
   <p><a class="btn-primary" href="{{ url_for('benchmark_run_new') }}">▶ Start a new run</a></p>
 
+  <section class="key">
+    <h2>How to read this</h2>
+    <dl class="legend-grid">
+      <dt>TruthfulQA / MMLU / QuALITY</dt>
+      <dd>Multiple-choice accuracy — higher is better.</dd>
+      <dt>IFEval</dt>
+      <dd>Share of prompts whose formatting constraints were satisfied.</dd>
+      <dt>Consistency</dt>
+      <dd>Mean BERTScore F1 across rephrasings of the same question.</dd>
+      <dt>ToMi / MBPP</dt>
+      <dd>Theory-of-mind accuracy; code problems passing unit tests.</dd>
+    </dl>
+  </section>
+
   {% if not has_runs %}
     <p class="sub empty">
       No benchmark output yet. Use <b>Start a new run</b> above, or from repo root:
@@ -35,6 +49,7 @@
           <th class="num">n</th>
           <th class="col-nowrap">When</th>
           <th>File</th>
+          <th class="col-actions">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -66,6 +81,14 @@
           <td class="num">{{ r.n }}</td>
           <td class="col-nowrap dim">{{ r.timestamp }}</td>
           <td class="col-long">{{ expandable(r.filename, clamp=1) }}</td>
+          <td class="col-actions">
+            <form method="post" action="{{ url_for('benchmark_delete', slug=r.slug) }}"
+                  class="inline-delete-form"
+                  onsubmit="return confirm('Delete this benchmark result? This cannot be undone.');">
+              <input type="hidden" name="confirm" value="1">
+              <button type="submit" class="btn-danger btn-sm" title="Delete result">Delete</button>
+            </form>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -96,26 +119,6 @@
         }
       })();
     </script>
-
-    <section class="key">
-      <h2>How to read this table</h2>
-      <dl class="legend-grid">
-        <dt>TruthfulQA</dt>
-        <dd>Multiple-choice accuracy — higher means the model picks the truthful answer more often.</dd>
-        <dt>IFEval</dt>
-        <dd>Fraction of prompts whose constraints the response satisfied.</dd>
-        <dt>Consistency</dt>
-        <dd>Mean BERTScore F1 between responses to rephrasings of the same question.</dd>
-        <dt>MMLU</dt>
-        <dd>Multiple-choice accuracy across academic subjects (sampled subset by default).</dd>
-        <dt>ToMi</dt>
-        <dd>Theory-of-mind accuracy on belief-tracking stories.</dd>
-        <dt>MBPP</dt>
-        <dd>Fraction of code generation problems where all unit tests passed.</dd>
-        <dt>QuALITY</dt>
-        <dd>Long-document reading comprehension accuracy</dd>
-      </dl>
-    </section>
   {% endif %}
 </div>
 {% endblock %}

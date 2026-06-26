@@ -24,6 +24,7 @@ import time
 from pathlib import Path
 
 from frontend import docker_launch
+from frontend.log_status import status_message
 from frontend.path_safety import is_safe_slug
 
 ROOT = Path(__file__).parent.parent
@@ -353,17 +354,44 @@ def get_status(slug: str) -> dict:
             progress = sum(1 for line in f if line.strip())
 
     if total and progress >= total:
-        return {"status": "complete", "progress": progress, "total": total}
+        return {
+            "status": "complete",
+            "progress": progress,
+            "total": total,
+            "message": "",
+            "log_path": f"evaluator/results/{slug}.log",
+        }
+
+    log_path = RESULTS_DIR / f"{slug}.log"
+    rel_log = f"evaluator/results/{slug}.log"
 
     proc = _RUNNING.get(slug)
     if proc is not None and proc.poll() is None:
-        return {"status": "running", "progress": progress, "total": total}
+        return {
+            "status": "running",
+            "progress": progress,
+            "total": total,
+            "message": status_message(log_path),
+            "log_path": rel_log,
+        }
     if proc is not None:  # exited without a complete file
-        return {"status": "failed", "progress": progress, "total": total}
+        return {
+            "status": "failed",
+            "progress": progress,
+            "total": total,
+            "message": status_message(log_path, failed=True),
+            "log_path": rel_log,
+        }
     if path.is_file():
         # partial file, no registered process (e.g. Flask restarted mid-run)
-        return {"status": "failed", "progress": progress, "total": total}
-    return {"status": "not_found", "progress": 0, "total": total}
+        return {
+            "status": "failed",
+            "progress": progress,
+            "total": total,
+            "message": status_message(log_path, failed=True),
+            "log_path": rel_log,
+        }
+    return {"status": "not_found", "progress": 0, "total": 0, "message": ""}
 
 
 def validate_custom_questions(

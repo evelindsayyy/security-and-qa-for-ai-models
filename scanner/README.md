@@ -33,6 +33,7 @@ Defense-in-depth: the same payload may be reported by more than one tool. Correl
 |-------|-----------------|
 | ModelScan HIGH/CRITICAL | Raises tier/score |
 | Fickling LIKELY_UNSAFE, ModelScan clean | Stays **low**, score ~18 (benign PyTorch pickles) |
+| Clean scan (no findings) | **low**, score **0** |
 | Fickling LIKELY_OVERTLY_MALICIOUS | **high** tier signal |
 | ModelAudit actionable (medium+) | Raises tier; install-missing warnings filtered |
 | pip-audit/OSV HIGH/CRITICAL CVE | Raises tier |
@@ -45,6 +46,7 @@ Defense-in-depth: the same payload may be reported by more than one tool. Correl
 | Model | Tier / score | Notes |
 |-------|----------------|-------|
 | gpt2, distilbert, BAAI/bge-small-en-v1.5 | low / 18 | Benign stacked pickle; ModelAudit warnings filtered |
+| safetensors-only, no findings | low / 0 | Clean artifact |
 | neimasilk/modelscan-extension-mismatch-poc | critical / 95 | ModelScan 0 issues; Fickling + ModelAudit flag disguised pickles |
 | scan-test/supply-chain-demo | medium / 40 | Local fixture: `requirements.txt` (pip-audit + OSV); optional secret patterns in `credentials.env` |
 

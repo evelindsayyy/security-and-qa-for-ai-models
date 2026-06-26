@@ -21,7 +21,16 @@ import os
 import dotenv
 import litellm
 
-from model_client import query_chat_completion, response_content
+from model_client import query_chat_completion, response_content, extract_choice_letter
+from benchmark_metrics import (
+    coverage_warning,
+    has_usable_text,
+    print_binary_summary,
+    slugify_model,
+    summarize_binary_accuracy,
+)
+from benchmark_run_stats import attach_run_stats, run_with_stats, write_stats_sidecar
+from benchmark_progress import init_progress, tick
 
 dotenv.load_dotenv()
 
@@ -79,6 +88,8 @@ API_KEY = (
     or os.getenv("LITELLM_API_KEY")
     or os.getenv("DUKE_GATEWAY_KEY")
     or os.getenv("OPENAI_API_KEY")
+    or os.getenv("HF_TOKEN")
+    or os.getenv("HUGGINGFACE_TOKEN")
 )
 MODEL = os.getenv("TQA_MODEL", "gpt-5.1")
 OUTPUT_DIR = os.getenv("TQA_OUTPUT", str(HERE / "results"))
@@ -89,7 +100,7 @@ TEST_LIMIT = int(TQA_LIMIT) if TQA_LIMIT.isdigit() and int(TQA_LIMIT) > 0 else N
 class TruthfulQATestRunner:
     """Runs multiple-choice TruthfulQA tests on different models."""
     
-    def __init__(self, output_dir: str = "./test_results"):
+    def __init__(self, output_dir: str = str(HERE / "results")):
         """Initialize the test runner."""
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -127,6 +138,11 @@ class TruthfulQATestRunner:
         results[model_name] = ""
         
         questions_to_test = results.head(test_limit) if test_limit else results
+        init_progress(
+            total=len(questions_to_test),
+            unit="questions",
+            message="Running TruthfulQA…",
+        )
         
         for idx, (i, row) in enumerate(questions_to_test.iterrows()):
             try:
@@ -153,33 +169,49 @@ class TruthfulQATestRunner:
             except Exception as e:
                 print(f"  [ERROR] Error Q{idx}: {e}")
                 results.loc[i, model_name] = ""
+            tick(message=f"Question {idx + 1}/{len(questions_to_test)}")
         
         return results
     
     def evaluate_answers(self, results: pd.DataFrame, model_name: str) -> Dict[str, float]:
-        """Evaluate model answers for correctness."""
+        """Evaluate model answers for correctness.
+
+        Reports *coverage* so a partial run (e.g. an endpoint that errors or runs
+        out of credits partway) isn't mistaken for a clean full-sample score:
+        a tested question has a real ``correct_letter``; ``scored`` ones also got
+        a usable answer, the rest are counted as ``failed``.
+        """
         correct_count = 0
-        total_count = 0
-        
-        for idx, row in results.iterrows():
-            answer = str(row[model_name]).strip()
+        scored_count = 0
+        attempted_count = 0
+
+        for _idx, row in results.iterrows():
             correct_letter = row.get('correct_letter', '')
-            if not answer or not correct_letter:
+            if correct_letter is None:
                 continue
-            total_count += 1
+            if isinstance(correct_letter, float) and pd.isna(correct_letter):
+                continue
+            if str(correct_letter).strip() == "":
+                continue
+
+            attempted_count += 1
+            answer = str(row[model_name]).strip()
+            if not has_usable_text(answer):
+                continue
+            scored_count += 1
             if answer == correct_letter:
                 correct_count += 1
-        
-        return {
-            'accuracy': correct_count / total_count if total_count > 0 else 0,
-            'total_evaluated': total_count,
-            'correct': correct_count,
-        }
+
+        return summarize_binary_accuracy(
+            attempted=attempted_count,
+            correct=correct_count,
+            scored=scored_count,
+        )
     
     def save_results(self, results: pd.DataFrame, model_name: str, eval_metrics: Optional[Dict] = None):
         """Save test results to a JSON file."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        model_slug = model_name.replace(" ", "_").replace("/", "_")
+        model_slug = slugify_model(model_name)
         output_path = self.output_dir / f"tqa_{model_slug}_{timestamp}.json"
 
         output = {
@@ -205,6 +237,9 @@ class TruthfulQATestRunner:
         if eval_metrics:
             print(f"  Accuracy: {eval_metrics['accuracy']:.2%} | "
                   f"Correct: {eval_metrics['correct']}/{eval_metrics['total_evaluated']}")
+            warn = coverage_warning(eval_metrics)
+            if warn:
+                print(warn.replace("items", "questions"))
         
 
 
@@ -229,22 +264,21 @@ Options:"""
                 base_url=base_url,
                 api_key=api_key,
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant. Answer concisely."},
+                    {"role": "system", "content": "You are a helpful assistant. Answer concisely. /no_think"},
                     {"role": "user", "content": prompt},
                 ],
-                temperature=1,
+                temperature=0,
                 max_tokens=1000,
             )
             content = response_content(response)
-            for letter in ['A', 'B', 'C', 'D']:
-                if letter in content.upper():
-                    return {
-                        "letter": letter,
-                        "text": mc_question['choices'].get(letter, content),
-                    }
+            letter = extract_choice_letter(content)
+            if letter:
+                return {
+                    "letter": letter,
+                    "text": mc_question['choices'].get(letter, content),
+                }
             return content
-        except Exception as e:
-            print(f"  [ERROR] API Error: {e}")
+        except Exception:
             return ""
 
     return query_model
@@ -283,22 +317,19 @@ def main():
     )
 
     try:
-        results = runner.run_model_test(
-            model_name=MODEL,
-            model_func=model_func,
-            test_limit=TEST_LIMIT
-        )
-        eval_metrics = runner.evaluate_answers(results, MODEL)
-        runner.save_results(results, MODEL, eval_metrics)
-
-        print("\n" + "="*70)
-        print("SUMMARY")
-        print("="*70)
-        bar_length = int(eval_metrics['accuracy'] * 40)
-        bar = '[' + '=' * bar_length + '-' * (40 - bar_length) + ']'
-        print(f"{MODEL:35s} {bar} {eval_metrics['accuracy']:.1%} "
-              f"({eval_metrics['correct']}/{eval_metrics['total_evaluated']})")
-        print(f"\n[OK] Results saved to: {OUTPUT_DIR}/")
+        with run_with_stats():
+            results = runner.run_model_test(
+                model_name=MODEL,
+                model_func=model_func,
+                test_limit=TEST_LIMIT
+            )
+            eval_metrics = runner.evaluate_answers(results, MODEL)
+            if eval_metrics:
+                attach_run_stats(eval_metrics)
+            write_stats_sidecar()
+            runner.save_results(results, MODEL, eval_metrics)
+            print_binary_summary(MODEL, eval_metrics)
+            print(f"\n[OK] Results saved to: {OUTPUT_DIR}/")
 
     except Exception as e:
         print(f"[ERROR] Error testing {MODEL}: {e}")

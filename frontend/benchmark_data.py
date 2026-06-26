@@ -8,12 +8,18 @@ Schema detection is content-based so renames do not break the viewer.
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
-from frontend.path_safety import is_safe_slug
+from frontend.path_safety import is_safe_slug, resolves_inside
 
 ROOT = Path(__file__).parent.parent
+_BENCHMARKS_DIR = ROOT / "benchmarks"
+if str(_BENCHMARKS_DIR) not in sys.path:
+    sys.path.insert(0, str(_BENCHMARKS_DIR))
+from benchmark_metrics import coverage_extras  # noqa: E402
+from benchmark_run_stats import load_stats_sidecar  # noqa: E402
 PRIMARY_DIR = ROOT / "benchmarks" / "results"
 LEGACY_DIRS = (
     ROOT / "testing" / "basic_tests" / "test_results",
@@ -212,6 +218,7 @@ def _summarize_truthfulqa(path: Path, data: dict) -> dict:
         "extras": {
             "correct": metrics.get("correct"),
             "total_evaluated": metrics.get("total_evaluated"),
+            **coverage_extras(metrics),
         },
     }
 
@@ -230,8 +237,11 @@ def _summarize_mmlu(path: Path, data: dict) -> dict:
         "headline_metric": "accuracy",
         "headline_value": acc,
         "headline_display": f"{acc:.1%}" if acc is not None else "—",
-        "n": summary.get("total") or len(data.get("results") or []),
-        "extras": {"subjects": len(data.get("per_subject") or {})},
+        "n": summary.get("scored") or summary.get("total") or len(data.get("results") or []),
+        "extras": {
+            "subjects": len(data.get("per_subject") or {}),
+            **coverage_extras(summary),
+        },
     }
 
 
@@ -249,8 +259,8 @@ def _summarize_tomi(path: Path, data: dict) -> dict:
         "headline_metric": "accuracy",
         "headline_value": acc,
         "headline_display": f"{acc:.1%}" if acc is not None else "—",
-        "n": summary.get("total") or len(data.get("results") or []),
-        "extras": {},
+        "n": summary.get("scored") or summary.get("total") or len(data.get("results") or []),
+        "extras": coverage_extras(summary),
     }
 
 
@@ -268,8 +278,8 @@ def _summarize_consistency(path: Path, data: dict) -> dict:
         "headline_metric": "mean F1",
         "headline_value": mean_f1,
         "headline_display": f"{mean_f1:.3f}" if mean_f1 is not None else "—",
-        "n": summary.get("total_questions") or len(data.get("questions") or []),
-        "extras": {},
+        "n": summary.get("scored") or summary.get("total_questions") or len(data.get("questions") or []),
+        "extras": coverage_extras(summary),
     }
 
 
@@ -299,11 +309,24 @@ def _summarize_ifeval(path: Path) -> dict:
             "n": 0,
             "extras": {},
         }
-    passed = sum(1 for r in rows if (r.get("judge") or {}).get("passed"))
-    n = len(rows)
-    rate = passed / n if n else None
+    has_answered = any("answered" in r for r in rows)
+    if has_answered:
+        answered_rows = [r for r in rows if r.get("answered")]
+        attempted = len(rows)
+        scored = len(answered_rows)
+        passed = sum(1 for r in answered_rows if (r.get("judge") or {}).get("passed"))
+    else:
+        attempted = scored = len(rows)
+        passed = sum(1 for r in rows if (r.get("judge") or {}).get("passed"))
+    rate = passed / scored if scored else None
     model = rows[0].get("model") or "—"
     ts_raw = rows[0].get("ts") or ""
+    summary = {
+        "attempted": attempted,
+        "scored": scored,
+        "failed": max(0, attempted - scored),
+        "coverage": round(scored / attempted, 4) if attempted else 0.0,
+    }
     return {
         "slug": path.stem,
         "filename": path.name,
@@ -315,8 +338,8 @@ def _summarize_ifeval(path: Path) -> dict:
         "headline_metric": "pass rate",
         "headline_value": rate,
         "headline_display": f"{rate:.1%}" if rate is not None else "—",
-        "n": n,
-        "extras": {"passed": passed, "total": n},
+        "n": scored,
+        "extras": {"passed": passed, "total": scored, **coverage_extras(summary)},
     }
     
 def _summarize_mbpp(path: Path, data: dict) -> dict:
@@ -333,8 +356,11 @@ def _summarize_mbpp(path: Path, data: dict) -> dict:
         "headline_metric": "accuracy",
         "headline_value": acc,
         "headline_display": f"{acc:.3f}" if acc is not None else "—",
-        "n": summary.get("total") or len(data.get("results") or []),
-        "extras": {"correct": summary.get("correct")},
+        "n": summary.get("scored") or summary.get("total") or len(data.get("results") or []),
+        "extras": {
+            "correct": summary.get("correct"),
+            **coverage_extras(summary),
+        },
     }
     
 def _summarize_quality(path: Path, data: dict) -> dict:
@@ -351,10 +377,11 @@ def _summarize_quality(path: Path, data: dict) -> dict:
         "headline_metric": "accuracy",
         "headline_value": acc,
         "headline_display": f"{acc:.1%}" if acc is not None else "—",
-        "n": summary.get("total_questions") or len(data.get("results") or []),
+        "n": summary.get("scored") or summary.get("total_questions") or len(data.get("results") or []),
         "extras": {
             "hard_accuracy": summary.get("hard_accuracy"),
             "hard_questions": summary.get("hard_questions"),
+            **coverage_extras(summary),
         },
     }
 
@@ -390,6 +417,43 @@ def _summarize_file(path: Path) -> dict | None:
     return None
 
 
+def _run_stats_chips(rs: dict) -> list[dict[str, str]]:
+    chips: list[dict[str, str]] = []
+    wall = rs.get("wall_time_sec")
+    if wall is not None:
+        chips.append({"label": "runtime", "value": f"{wall:.1f}s"})
+    lat = rs.get("latency_ms") or {}
+    if lat.get("mean") is not None:
+        chips.append({"label": "latency", "value": f"{lat['mean']:.0f} ms mean"})
+    tokens = rs.get("tokens") or {}
+    total = tokens.get("total")
+    if total is not None:
+        chips.append({"label": "tokens", "value": f"{int(total):,} total"})
+    calls = rs.get("api_calls")
+    if calls:
+        failed = int(rs.get("api_calls_failed") or 0)
+        if failed:
+            chips.append({"label": "API calls", "value": f"{calls} ({failed} failed)"})
+        else:
+            chips.append({"label": "API calls", "value": str(calls)})
+    return chips
+
+
+def _extract_run_stats(data: dict | None, path: Path) -> dict:
+    if data:
+        for key in ("summary", "metrics"):
+            block = data.get(key)
+            if isinstance(block, dict):
+                rs = block.get("run_stats")
+                if isinstance(rs, dict):
+                    return rs
+    return load_stats_sidecar(path)
+
+
+def _attach_run_stats(summary: dict, path: Path, data: dict | None = None) -> dict:
+    rs = _extract_run_stats(data, path)
+    if rs:
+        summary["run_stats_chips"] = _run_stats_chips(rs)
 def _attach_meta(summary: dict) -> dict:
     """Add benchmark context block for the detail template."""
     kind = summary.get("kind")
@@ -453,6 +517,7 @@ def _get_benchmark_detail_files(slug: str) -> dict | None:
                     summary = _summarize_ifeval(path)
                     summary["raw_rows"] = rows[:50]
                     summary["raw_row_count"] = len(rows)
+                    _attach_run_stats(summary, path)
                     return _attach_meta(summary)
                 with path.open("r", encoding="utf-8") as f:
                     data = json.load(f)
@@ -460,33 +525,91 @@ def _get_benchmark_detail_files(slug: str) -> dict | None:
                     summary = _summarize_truthfulqa(path, data)
                     summary["responses"] = (data.get("responses") or [])[:50]
                     summary["raw_row_count"] = len(data.get("responses") or [])
+                    _attach_run_stats(summary, path, data)
                     return _attach_meta(summary)
                 if kind == "consistency":
                     summary = _summarize_consistency(path, data)
                     summary["questions"] = (data.get("questions") or [])[:50]
                     summary["raw_row_count"] = len(data.get("questions") or [])
+                    _attach_run_stats(summary, path, data)
                     return _attach_meta(summary)
                 if kind == "mmlu":
                     summary = _summarize_mmlu(path, data)
                     summary["per_subject"] = data.get("per_subject") or {}
                     summary["results"] = (data.get("results") or [])[:50]
                     summary["raw_row_count"] = len(data.get("results") or [])
+                    _attach_run_stats(summary, path, data)
                     return _attach_meta(summary)
                 if kind == "tomi":
                     summary = _summarize_tomi(path, data)
                     summary["results"] = (data.get("results") or [])[:50]
                     summary["raw_row_count"] = len(data.get("results") or [])
+                    _attach_run_stats(summary, path, data)
                     return _attach_meta(summary)
                 if kind == "mbpp":
                     summary = _summarize_mbpp(path, data)
                     summary["results"] = (data.get("results") or [])[:50]
                     summary["raw_row_count"] = len(data.get("results") or [])
+                    _attach_run_stats(summary, path, data)
                     return _attach_meta(summary)
                 if kind == "quality":
                     summary = _summarize_quality(path, data)
                     summary["results"] = (data.get("results") or [])[:50]
                     summary["raw_row_count"] = len(data.get("results") or [])
+                    _attach_run_stats(summary, path, data)
                     return _attach_meta(summary)
+    return None
+
+
+# Artifact suffixes for a benchmark run stem (under benchmarks/results/ or legacy dirs).
+_ARTIFACT_SUFFIXES = (".json", ".jsonl", ".stats.json", ".progress.json", ".log")
+
+
+def _artifact_paths(slug: str) -> list[Path]:
+    """All on-disk files for *slug* under known results directories."""
+    if not is_safe_slug(slug):
+        return []
+    found: list[Path] = []
+    for base in _candidate_dirs():
+        for suffix in _ARTIFACT_SUFFIXES:
+            path = base / f"{slug}{suffix}"
+            if path.is_file() and resolves_inside(base, path):
+                found.append(path)
+    return found
+
+
+def delete_benchmark(slug: str) -> str | None:
+    """Remove benchmark artifacts (and DB row when configured).
+
+    Returns an error message, or None on success.
+    """
+    if not is_safe_slug(slug):
+        return f"invalid slug: {slug!r}"
+
+    from frontend.benchmark_launch import is_run_in_progress
+
+    if is_run_in_progress(slug):
+        return "cannot delete while the run is still in progress"
+
+    removed_files = 0
+    for path in _artifact_paths(slug):
+        try:
+            path.unlink()
+            removed_files += 1
+        except OSError as exc:
+            return f"could not delete {path.name}: {exc}"
+
+    removed_db = False
+    try:
+        from frontend import benchmark_db_data
+
+        if benchmark_db_data.available():
+            removed_db = benchmark_db_data.delete_run(slug)
+    except Exception:
+        pass
+
+    if removed_files == 0 and not removed_db:
+        return f"no benchmark result found for slug {slug!r}"
     return None
 
 

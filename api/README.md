@@ -64,11 +64,13 @@ Target flow: [`docs/architecture.md`](../docs/architecture.md).
 }
 ```
 
-**Benchmarks** — `POST /api/benchmarks`
+**Benchmarks** — `POST /api/benchmarks` (gateway models only today)
 
 ```json
 { "benchmark": "truthfulqa", "model": "GPT 4.1 Mini" }
 ```
+
+Hosted HF, custom API URL, `sample`, and `seed` are supported on the UI form (`/benchmarks/new`) but not yet on this POST body.
 
 **202 response** (all pillars):
 
@@ -85,7 +87,9 @@ Target flow: [`docs/architecture.md`](../docs/architecture.md).
 }
 ```
 
-Poll `status_url` until `status` is `complete` or `failed`, then GET the detail route.
+When the same job is already in flight, `already_running` is **true** and `job_id` / `status_url` point at the existing run (no duplicate subprocess).
+
+Poll `status_url` until `status` is `complete` or `failed`, then GET the detail route. Running jobs include a log tail in `message` (scan, safety, eval) or `log` (benchmark).
 
 ### Troubleshooting
 

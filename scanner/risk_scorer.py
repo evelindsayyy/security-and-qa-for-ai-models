@@ -2,7 +2,7 @@
 Merge ModelScan, Fickling, and ModelAudit into one nutrition-label grade.
 
 This is the policy layer between raw tool JSON and ``ScanResult`` / Postgres ``findings``.
-See calibration table in ``scanner/README.md`` (gpt2 → low/18, extension-mismatch PoC → critical/95).
+See calibration table in ``scanner/README.md`` (gpt2 → low/18, clean scan → low/0, extension-mismatch PoC → critical/95).
 
 Precedence (tier is **max** across tools, not additive):
   - ModelScan: extension-routed pickle/H5/SavedModel; primary when it fires
@@ -30,7 +30,7 @@ from scanner.secret_scan import secret_tier
 from scanner.schemas import Finding, RiskScoreResult, Severity
 
 # Default score anchors per tier (overridden by explicit CRITICAL/HIGH counts).
-_TIER_SCORE = {"low": 10, "medium": 40, "high": 70, "critical": 95}
+_TIER_SCORE = {"low": 0, "medium": 40, "high": 70, "critical": 95}
 _TIER_RANK = {Severity.low: 0, Severity.medium: 1, Severity.high: 2, Severity.critical: 3}
 
 

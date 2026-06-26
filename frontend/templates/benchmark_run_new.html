@@ -3,38 +3,229 @@
 {% block title %}Start a benchmark run{% endblock %}
 
 {% block content %}
-<div class="eval-comparison">
+<div class="eval-comparison benchmark-launch-page">
   <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmark results</a></p>
   <h1>Start a benchmark run</h1>
   <p class="sub">
+    Choose a <strong>benchmark</strong>, then pick how the model is reached:
+    Duke <strong>gateway</strong>, Hugging Face <strong>hosted</strong> inference,
+    or a <strong>self-hosted OpenAI-compatible API</strong> (your server, vLLM, Ollama, …).
     Launches <code>benchmarks/run_benchmark.py</code> via Docker Compose (default).
-    Models are the live gateway catalog; benchmarks are the public pilots in
-    <code>benchmarks/</code>.
-    See <code>docs/cli.md</code> for manual compose commands.
+    See
+    <a href="https://gitlab.oit.duke.edu/codeplus/security-and-qa-for-ai-models/-/blob/main/benchmarks/README.md#model-input-cheat-sheet" target="_blank" rel="noopener">benchmarks/README</a>
+    for model setup details and <code>docs/cli.md</code> for manual compose commands.
     {% if not docker_available %}
     <span class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>
     {% endif %}
   </p>
 
-  <form method="post" action="{{ url_for('benchmark_run_start') }}" class="launch-form">
-    <label>Benchmark
-      <select name="benchmark" id="benchmark">
-        {% for b in benchmarks %}
-        <option value="{{ b.key }}">{{ b.label }}</option>
-        {% endfor %}
-      </select>
-    </label>
+  <div class="benchmark-launch-grid">
+    <form method="post" action="{{ url_for('benchmark_run_start') }}" class="launch-form">
+      <label>Benchmark
+        <select name="benchmark" id="benchmark">
+          {% for b in benchmarks %}
+          <option value="{{ b.key }}">{{ b.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
 
-    <label>Model
-      <select name="model" id="model">
-        {% for m in models %}
-        <option value="{{ m }}" {% if m == 'GPT 4.1 Mini' %}selected{% endif %}>{{ m }}</option>
-        {% endfor %}
-      </select>
-      <span class="form-hint">exact gateway id — see <a href="{{ url_for('models_catalog') }}">model catalog</a></span>
-    </label>
+      <fieldset class="model-source">
+        <legend>Model source</legend>
+        <label class="radio">
+          <input type="radio" name="model_source" value="gateway" checked
+                 onchange="toggleModelSource()">
+          Gateway model
+        </label>
+        <label class="radio">
+          <input type="radio" name="model_source" value="hosted"
+                 onchange="toggleModelSource()">
+          Hosted (Hugging Face Inference API)
+        </label>
+        <label class="radio">
+          <input type="radio" name="model_source" value="custom"
+                 onchange="toggleModelSource()">
+          Custom (self-hosted API)
+        </label>
+      </fieldset>
 
-    <button type="submit" class="btn-primary">▶ Start run</button>
-  </form>
+      <div id="gateway-fields">
+        <label>Model
+          <select name="model" id="model">
+            {% for m in models %}
+            <option value="{{ m }}" {% if m == 'GPT 4.1 Mini' %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </select>
+          <span class="form-hint">exact gateway id — see <a href="{{ url_for('models_catalog') }}">model catalog</a></span>
+        </label>
+      </div>
+
+      <div id="hosted-fields" style="display: none;">
+        <label>Hugging Face model
+          <input type="text" name="hosted_model" id="hosted_model"
+                 placeholder="meta-llama/Llama-3.1-8B-Instruct" autocomplete="off">
+          <span class="form-hint">HF repo id from the model page — e.g. <code>org/model</code> or <code>org/model:provider</code></span>
+        </label>
+
+        <label>Hugging Face token
+          <input type="password" name="hf_token" id="hosted_token"
+                 placeholder="hf_..." autocomplete="off">
+          <span class="form-hint">fine-grained token with <strong>Inference Providers</strong> — <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">create one</a></span>
+        </label>
+      </div>
+
+      <div id="custom-fields" style="display: none;">
+        <label>Model id
+          <input type="text" name="custom_model" id="custom_model"
+                 placeholder="my-model or Qwen/Qwen3-0.6B" autocomplete="off">
+          <span class="form-hint">exact <code>model</code> string your API expects in chat completions — HF repo id, fine-tune name, etc.</span>
+        </label>
+
+        <label>Base URL
+          <input type="text" name="base_url" id="base_url"
+                 placeholder="http://localhost:8000/v1" autocomplete="off">
+          <span class="form-hint">OpenAI-compatible root — must expose <code>/v1/chat/completions</code> (e.g. vLLM, Ollama, LiteLLM proxy, your own server)</span>
+        </label>
+
+        <label>API key <span class="form-hint">(optional)</span>
+          <input type="text" name="api_key" id="api_key"
+                 placeholder="local-vllm" autocomplete="off">
+          <span class="form-hint">leave blank or use any placeholder if your server does not require auth</span>
+        </label>
+      </div>
+
+      <details class="advanced-options">
+        <summary>Advanced options</summary>
+        <label id="sample-label">Sample size
+          <input type="number" name="sample" id="sample" min="1" placeholder="default">
+          <span class="form-hint" id="sample-hint"></span>
+        </label>
+        <label id="seed-label" style="display: none;">Random seed
+          <input type="number" name="seed" id="seed" min="0" placeholder="default">
+          <span class="form-hint">for shuffled benchmarks (MMLU, IFEval, MBPP, QuALITY)</span>
+        </label>
+        <p class="form-hint" id="hosted-sample-note" style="display: none;">
+          Hosted runs are capped at {{ hosted_sample_max }} items to limit API cost.
+        </p>
+      </details>
+
+      <button type="submit" class="btn-primary">▶ Start run</button>
+    </form>
+
+    <aside id="model-setup-guide" class="model-setup-guide" aria-live="polite">
+      <h2 class="model-setup-guide__title">How to fill in the model</h2>
+
+      <div id="guide-gateway" class="model-setup-panel">
+        <p><strong>Gateway</strong> — models already on the Duke LLM gateway. No extra setup.</p>
+        <ol>
+          <li>Pick a model from the dropdown (same id as the <a href="{{ url_for('models_catalog') }}">catalog</a>).</li>
+          <li>Choose a benchmark and start the run.</li>
+        </ol>
+        <p class="model-setup-example"><strong>Example:</strong> <code>GPT 4.1 Mini</code></p>
+      </div>
+
+      <div id="guide-hosted" class="model-setup-panel" hidden>
+        <p><strong>Hosted</strong> — Hugging Face serves the model via Inference Providers. No GPU or DCC needed.</p>
+        <ol>
+          <li>Find a model with the <strong>Inference Available</strong> spark on
+            <a href="https://huggingface.co/models?inference_provider=all&other=conversational" target="_blank" rel="noopener">HF models</a>.</li>
+          <li>On the model page, open <strong>Inference Providers</strong> and confirm at least one provider is listed.</li>
+          <li>If the model is <strong>gated</strong>, accept the license on that page first.</li>
+          <li>Create a <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">fine-grained token</a> with <strong>Make calls to Inference Providers</strong> (add gated-repo read if needed).</li>
+          <li>At <a href="https://huggingface.co/settings/inference-providers" target="_blank" rel="noopener">Inference Providers settings</a>, set routing to <strong>Automatic</strong> or enable the provider shown on the model page.</li>
+          <li><strong>Model field:</strong> paste the repo id — <code>org/model</code>. If you get “not supported by any provider”, pin one: <code>org/model:provider</code> (provider name is on the model page).</li>
+          <li><strong>Token field:</strong> paste <code>hf_…</code> (used once for this run, not stored).</li>
+        </ol>
+        <p class="model-setup-example"><strong>Examples:</strong></p>
+        <ul class="model-setup-examples">
+          <li><code>meta-llama/Llama-3.1-8B-Instruct</code> — accept Meta license first</li>
+          <li><code>Qwen/Qwen2.5-7B-Instruct</code> — ungated smoke test</li>
+          <li><code>TinyLlama/TinyLlama-1.1B-Chat-v1.0:featherless-ai</code> — pin Featherless</li>
+        </ul>
+        <p class="model-setup-note"><strong>Don't see "Chat Completion"?</strong> Many LLM pages only show <strong>Text Generation</strong> in that widget — that's normal for instruct models. Our Hosted path uses HF's chat-completions API; use <strong>View Code Snippets</strong> or the playground to confirm it accepts conversational <code>messages</code>.</p>
+        <p class="model-setup-note">Usage is metered (free tier + paid). Partial runs show coverage in the log if credits run out.</p>
+      </div>
+
+      <div id="guide-custom" class="model-setup-panel" hidden>
+        <p><strong>Custom</strong> — any server on your machine or network that speaks the OpenAI chat API. <em>vLLM is optional</em>; use it only if you still need to spin up a model.</p>
+        <ol>
+          <li><strong>Already have an API?</strong> Paste its base URL and the model id it expects — no vLLM required.</li>
+          <li><strong>Need to serve a HF model?</strong> Start vLLM, Ollama (OpenAI mode), or similar — then use that endpoint's base URL and model id.</li>
+          <li><strong>From a laptop:</strong> if the API runs locally, use <code>http://localhost:8000/v1</code>. If it runs on a remote node, tunnel first:<br>
+            <code>ssh -N -L 8000:&lt;host&gt;:8000 user@login</code></li>
+          <li><strong>Model field:</strong> whatever your API's <code>model</code> parameter accepts (e.g. <code>my-finetune</code>, <code>llama3</code>, <code>Qwen/Qwen3-0.6B</code>).</li>
+          <li><strong>Base URL:</strong> OpenAI-compatible root, usually ending in <code>/v1</code>.</li>
+          <li><strong>API key:</strong> your server's key, or leave blank / use a placeholder if auth is off.</li>
+        </ol>
+        <p class="model-setup-example"><strong>Examples:</strong></p>
+        <ul class="model-setup-examples">
+          <li>Your API — model <code>team-chat-v2</code>, URL <code>http://localhost:8080/v1</code></li>
+          <li>vLLM on DCC — model <code>Qwen/Qwen3-0.6B</code>, URL <code>http://localhost:8000/v1</code> (tunneled)</li>
+          <li>Ollama — model <code>llama3.1</code>, URL <code>http://localhost:11434/v1</code></li>
+        </ul>
+        <p class="model-setup-note">The benchmark runner only needs chat completions — not a specific serving stack. Base URL must be reachable from where this app runs (localhost, private IP, or <code>*.duke.edu</code>).</p>
+      </div>
+    </aside>
+  </div>
 </div>
+
+<script>
+  const BENCHMARK_OPTIONS = {{ benchmark_options | tojson }};
+  const HOSTED_SAMPLE_MAX = {{ hosted_sample_max }};
+  const HOSTED_SAMPLE_WARN = {{ hosted_sample_warn }};
+
+  function updateBenchmarkOptions() {
+    const key = document.getElementById('benchmark').value;
+    const opts = BENCHMARK_OPTIONS[key] || {};
+    const sampleInput = document.getElementById('sample');
+    const sampleHint = document.getElementById('sample-hint');
+    const seedLabel = document.getElementById('seed-label');
+    const hosted = document.querySelector('input[name="model_source"]:checked').value === 'hosted';
+
+    if (opts.sample) {
+      sampleInput.disabled = false;
+      sampleInput.placeholder = String(opts.sample.default);
+      sampleInput.max = hosted ? Math.min(opts.sample.max, HOSTED_SAMPLE_MAX) : opts.sample.max;
+      sampleHint.textContent =
+        `default ${opts.sample.default} ${opts.sample.unit} (max ${sampleInput.max})`;
+    } else {
+      sampleInput.disabled = true;
+      sampleInput.value = '';
+      sampleInput.placeholder = 'n/a';
+      sampleHint.textContent = 'this benchmark does not support custom sample size here';
+    }
+
+    if (opts.seed) {
+      seedLabel.style.display = '';
+      document.getElementById('seed').placeholder = String(opts.seed.default);
+    } else {
+      seedLabel.style.display = 'none';
+      document.getElementById('seed').value = '';
+    }
+
+    document.getElementById('hosted-sample-note').style.display = hosted ? '' : 'none';
+  }
+
+  function toggleModelSource() {
+    const src = document.querySelector('input[name="model_source"]:checked').value;
+    const isGateway = src === 'gateway';
+    const isHosted = src === 'hosted';
+    const isCustom = src === 'custom';
+    document.getElementById('gateway-fields').style.display = isGateway ? '' : 'none';
+    document.getElementById('hosted-fields').style.display = isHosted ? '' : 'none';
+    document.getElementById('custom-fields').style.display = isCustom ? '' : 'none';
+    document.getElementById('guide-gateway').hidden = !isGateway;
+    document.getElementById('guide-hosted').hidden = !isHosted;
+    document.getElementById('guide-custom').hidden = !isCustom;
+    document.getElementById('model').disabled = !isGateway;
+    document.getElementById('hosted_model').disabled = !isHosted;
+    document.getElementById('hosted_token').disabled = !isHosted;
+    document.getElementById('custom_model').disabled = !isCustom;
+    document.getElementById('base_url').disabled = !isCustom;
+    document.getElementById('api_key').disabled = !isCustom;
+    updateBenchmarkOptions();
+  }
+  document.getElementById('benchmark').addEventListener('change', updateBenchmarkOptions);
+  toggleModelSource();
+  updateBenchmarkOptions();
+</script>
 {% endblock %}

@@ -36,6 +36,9 @@
     <p id="overwrite-warning" class="form-warning" style="display: none;">
       This model already has safety results — starting again will delete the prior outputs and replace them.
     </p>
+    <p id="inflight-warning" class="form-warning" style="display: none;">
+      A safety run for this model and profile is already in progress.
+    </p>
 
     <fieldset>
       <legend>Test suites <span class="dim">(all on by default)</span></legend>
@@ -65,8 +68,11 @@
 <script>
 (function () {
   const HAS_RESULTS = {{ model_has_results | tojson }};
+  const MODEL_SLUGS = {{ model_slugs | tojson }};
+  const INFLIGHT = new Set({{ inflight_safety_keys | tojson }});
 
   const modelSel   = document.getElementById("gateway_model");
+  const profileSel = document.getElementById("redteam_profile");
   const policyBox  = document.getElementById("run_policy");
   const redteamBox = document.getElementById("run_redteam");
   const garakBox   = document.getElementById("run_garak");
@@ -74,19 +80,28 @@
   const gkRow      = document.getElementById("garak-probes-row");
   const submitBtn  = document.getElementById("submit-btn");
   const warning    = document.getElementById("overwrite-warning");
+  const inflightWarning = document.getElementById("inflight-warning");
+
+  function inflightKey() {
+    const slug = MODEL_SLUGS[modelSel.value] || modelSel.value;
+    return slug + "/" + profileSel.value;
+  }
 
   function updateUI() {
     rtRow.style.display = redteamBox.checked ? "" : "none";
     gkRow.style.display = garakBox.checked ? "" : "none";
 
-    warning.style.display = HAS_RESULTS[modelSel.value] ? "block" : "none";
+    const inflight = INFLIGHT.has(inflightKey());
+    warning.style.display = HAS_RESULTS[modelSel.value] && !inflight ? "block" : "none";
+    inflightWarning.style.display = inflight ? "block" : "none";
 
     const anyChecked = policyBox.checked || redteamBox.checked || garakBox.checked;
-    submitBtn.disabled = !anyChecked;
-    submitBtn.title = anyChecked ? "" : "Select at least one suite to run";
+    submitBtn.disabled = !anyChecked || inflight;
+    submitBtn.title = inflight ? "Run already in progress" : (anyChecked ? "" : "Select at least one suite to run");
   }
 
   modelSel.addEventListener("change", updateUI);
+  profileSel.addEventListener("change", updateUI);
   policyBox.addEventListener("change", updateUI);
   redteamBox.addEventListener("change", updateUI);
   garakBox.addEventListener("change", updateUI);

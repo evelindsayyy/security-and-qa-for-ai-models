@@ -38,7 +38,136 @@ Credentials come from the repo-root `.env`. Set `FRONTEND_LAUNCH_MODE=host` to s
 
 Legacy outputs under `testing/basic_tests/test_results/` are still read as a fallback.
 
-LIST OF BENCHMARKS AND WHAT THEY DO
+## Custom / self-hosted API
+
+The default models are the Duke gateway catalog, but you can also benchmark via
+**Hosted** (HF Inference Providers) or **Custom** (any OpenAI-compatible API you
+run — vLLM, Ollama, LiteLLM proxy, or your own server). The browser form is at
+`/benchmarks/new`.
+
+### Model input cheat sheet
+
+| Source | When to use | **Model field** | Other fields |
+|--------|-------------|-----------------|--------------|
+| **Gateway** | Duke catalog models (easiest) | pick from dropdown, e.g. `GPT 4.1 Mini` | — |
+| **Hosted** | No GPU / no cluster; HF serves the model | HF repo id: `org/model` or `org/model:provider` | HF token (`hf_…`) with *Inference Providers* permission |
+| **Custom** | Your own OpenAI-compatible chat API (local or internal) | Model id your API expects: `my-model`, `gpt-4`, `org/model`, … | Base URL (`http://…/v1`), API key (optional) |
+
+**Format rules:** Hosted uses Hugging Face repo ids (optional `:provider` pin).
+Custom accepts any model id string your server's `model` parameter accepts
+(letters, digits, `.`, `_`, `-`, `/`, `+`).
+
+The model id is passed to `model_client`, which auto-routes based on the base URL
+(Duke gateway, HF router, or self-hosted → `openai/<model-id>`).
+
+### Hosted (no vLLM / DCC setup)
+
+The fastest path — no GPU, no cluster — is **Hugging Face Inference Providers**,
+an OpenAI-compatible router. You only need an HF token with the *Inference
+Providers* permission ([create one here](https://huggingface.co/settings/tokens)).
+
+CLI:
+
+```bash
+export LITELLM_BASE_URL="https://router.huggingface.co/v1"
+export TQA_BASE_URL="https://router.huggingface.co/v1"
+export OPENAI_API_KEY="hf_your_token"
+uv run python benchmarks/run_benchmark.py --benchmark mmlu --model "microsoft/Phi-4-mini-instruct"
+```
+
+Browser: pick **Hosted (Hugging Face Inference API)** on `/benchmarks/new`, enter
+the repo id and your token. The base URL is fixed to the router server-side.
+
+To force a specific serving provider, pin it on the model id with
+`org/model:provider` (e.g. `WeiboAI/VibeThinker-3B:novita`) — both the CLI
+`--model` flag and the browser field accept it. Without a pin, the router uses
+the providers enabled in your
+[account settings](https://huggingface.co/settings/inference-providers) (set to
+**auto** to let it pick any available one).
+
+Caveats: the model must be **provider-backed** and callable via HF's
+**chat-completions** API (see checklist below — the widget label is often
+**Text Generation**, not "Chat Completion"); there's a metered cost / limited
+free tier.
+
+**Hosted setup checklist**
+
+1. Pick a model on [HF with Inference Available](https://huggingface.co/models?inference_provider=all&other=conversational) (spark icon on the card).
+2. On the model page, open **Inference Providers** and confirm at least one
+   provider is listed. The widget often shows **Text Generation** for
+   instruct/chat LLMs — that is normal; what matters is conversational access,
+   not the exact label. Use **View Code Snippets** or the playground: if it
+   accepts user/assistant `messages` (not prompt-only completion), it works with
+   this benchmark's Hosted path.
+3. If the model is **gated**, accept the license on the model page first.
+4. Create a [fine-grained token](https://huggingface.co/settings/tokens) with **Make calls to Inference Providers** (and **Read access to public gated repos** if gated).
+5. At [Inference Providers settings](https://huggingface.co/settings/inference-providers), set routing to **Automatic** or enable the specific provider shown on the model page.
+6. If auto-routing fails, pin the provider: `org/model:provider` (provider name is on the model page URL/widget, e.g. `:featherless-ai`, `:novita`).
+
+**Example hosted inputs**
+
+| Model field | Notes |
+|-------------|--------|
+| `meta-llama/Llama-3.1-8B-Instruct` | widely served; accept Meta license first |
+| `Qwen/Qwen2.5-7B-Instruct` | ungated, good smoke test |
+| `TinyLlama/TinyLlama-1.1B-Chat-v1.0:featherless-ai` | pin Featherless if auto-routing fails |
+
+### Self-hosted API (CLI)
+
+Point the base URL at your server and pass the model id your API expects:
+
+```bash
+export LITELLM_BASE_URL="http://localhost:8000/v1"   # or your API's /v1 root
+export TQA_BASE_URL="http://localhost:8000/v1"
+export OPENAI_API_KEY="local-vllm"                   # or your real key; any non-empty value if auth is off
+uv run python benchmarks/run_benchmark.py --benchmark mmlu --model "my-model-id"
+```
+
+Works with vLLM, Ollama (`/v1`), LiteLLM, or any OpenAI-compatible chat server.
+
+Quick connectivity check before a long run: `curl -s "$LITELLM_BASE_URL/models"`.
+
+> TruthfulQA reads `TQA_BASE_URL` before `LITELLM_BASE_URL`. `run_benchmark.py`
+> otherwise defaults it to the Duke gateway, so set `TQA_BASE_URL` too (or use
+> the browser flow below, which sets every alias for you).
+
+### Browser
+
+On the **Start a benchmark run** page (`/benchmarks/new`), choose
+**Custom (self-hosted API)** and fill in:
+
+- **Model id** — whatever your API expects (e.g. `team-chat-v2`, `Qwen/Qwen3-0.6B`)
+- **Base URL** — OpenAI-compatible root, e.g. `http://localhost:8000/v1`
+- **API key** — optional; leave blank if your server does not authenticate
+
+The base URL is restricted to internal/private hosts (localhost, private IPs,
+or `*.duke.edu` / bare DCC node names) — public addresses are rejected.
+
+Notes:
+
+- **Host mode** (`FRONTEND_LAUNCH_MODE=host`) is the simplest path when the API
+  runs on the same machine as the frontend.
+- **Docker mode** also works, but the benchmarks container must be able to reach
+  the endpoint — prefer a private **IP** (NAT-routable) over a cluster hostname,
+  which may not resolve inside the container.
+
+**Custom setup checklist**
+
+1. **Have an API already?** Use its base URL + model id — no vLLM required.
+2. **Serving a HF model yourself?** Start vLLM, Ollama, etc., then use that endpoint.
+3. **From a laptop to a remote node:** tunnel, e.g. `ssh -N -L 8000:<host>:8000 user@login`, then base URL `http://localhost:8000/v1`.
+4. **Model field:** the `model` string your server documents (not necessarily an HF repo id).
+5. **API key:** your server's key, or a placeholder if auth is disabled.
+
+**Example custom inputs**
+
+| Model id | Base URL | API key |
+|----------|----------|---------|
+| `my-finetune-v2` | `http://localhost:8080/v1` | (your key) |
+| `Qwen/Qwen3-0.6B` | `http://localhost:8000/v1` (vLLM, tunneled) | `local-vllm` |
+| `llama3.1` | `http://localhost:11434/v1` (Ollama) | `ollama` |
+
+## LIST OF BENCHMARKS AND WHAT THEY DO
 
 1. MMLU - mmlu_test.py
 
