@@ -226,11 +226,22 @@ def register_routes(app):
         from flask import redirect, request, url_for
 
         from frontend.eval_launch import (
+            get_launch_options,
             start_run,
             validate_custom_questions,
+            validate_hf_candidate,
             validate_launch,
             write_custom_suite,
         )
+
+        # Candidate source mirrors the standard start form: a gateway model runs
+        # now; a Hugging Face model is validated now and served on the DCC in a
+        # later milestone. The HF branch validates the model only (no run yet),
+        # identical to /eval-run/start.
+        if request.form.get("source") == "hf":
+            hf_result = validate_hf_candidate(request.form.get("hf_repo", "").strip())
+            return render_template("eval_run_new.html",
+                                   hf_result=hf_result, **get_launch_options())
 
         candidate = request.form.get("candidate", "")
         judge = request.form.get("judge", "")

@@ -77,5 +77,57 @@ class HfLaunchValidateTest(_Base):
         self.assertIn(b"gated", r.data)
 
 
+class CustomHfLaunchTest(_Base):
+    """The 'bring your own questions' form supports HF models the same way the
+    standard start-run form does: a gateway/hf source toggle, an HF repo field,
+    and a /eval-run/start-custom HF branch that validates the model (serving is
+    the later DCC milestone)."""
+
+    def test_custom_form_offers_hf_source(self) -> None:
+        r = _client().get("/eval-run/new")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b'id="hf_repo_c"', r.data)   # the custom form's HF field
+
+    def test_post_custom_hf_valid_shows_ready(self) -> None:
+        with mock.patch.object(hf_intake, "validate", return_value=_GOOD):
+            r = _client().post("/eval-run/start-custom",
+                               data={"source": "hf",
+                                     "hf_repo": "Qwen/Qwen2.5-7B-Instruct"})
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"Qwen2ForCausalLM", r.data)
+
+    def test_post_custom_hf_invalid_shows_reason(self) -> None:
+        with mock.patch.object(hf_intake, "validate", return_value=_BAD):
+            r = _client().post("/eval-run/start-custom",
+                               data={"source": "hf", "hf_repo": "org/gated"})
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"gated", r.data)
+
+    def test_post_custom_hf_does_not_start_a_run(self) -> None:
+        # HF serving isn't wired yet — the custom HF path validates only, never
+        # spawning a runner, exactly like the standard HF path.
+        with mock.patch.object(hf_intake, "validate", return_value=_GOOD), \
+             mock.patch.object(eval_launch, "start_run") as sr:
+            _client().post("/eval-run/start-custom",
+                           data={"source": "hf",
+                                 "hf_repo": "Qwen/Qwen2.5-7B-Instruct"})
+        sr.assert_not_called()
+
+    def test_post_custom_gateway_still_starts_a_run(self) -> None:
+        # Regression: the gateway custom path is unchanged by the HF branch.
+        with mock.patch.object(eval_launch, "start_run",
+                               return_value=("slug123", False)) as sr, \
+             mock.patch.object(eval_launch, "write_custom_suite",
+                               return_value="custom_x"), \
+             mock.patch.object(eval_launch, "validate_launch", return_value=None):
+            r = _client().post(
+                "/eval-run/start-custom",
+                data={"candidate": "gpt-5-chat", "judge": "Llama 4 Maverick",
+                      "max_tokens": "2000",
+                      "questions": '{"question": "q", "reference": "r"}'})
+        self.assertEqual(r.status_code, 302)
+        sr.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
