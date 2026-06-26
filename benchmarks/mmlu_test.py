@@ -12,7 +12,7 @@ ENV VARIABLES:
     LITELLM_API_KEY     - required
     LITELLM_BASE_URL    - default: https://litellm.oit.duke.edu/v1
     MMLU_MODEL          - default: openai/gpt-5.1
-    MMLU_OUTPUT         - default: test_results
+    MMLU_OUTPUT         - default: results
     MMLU_SAMPLE         - number of questions to sample (default: 100, 0 = full dataset)
     MMLU_SEED           - random seed for sampling (default: 42)
 """
@@ -28,7 +28,16 @@ from datasets import load_dataset
 import litellm
 import dotenv
 
-from model_client import query_chat_completion, response_content
+from model_client import query_chat_completion, response_content, extract_choice_letter
+from benchmark_metrics import (
+    accuracy_bar,
+    has_usable_text,
+    print_binary_summary,
+    slugify_model,
+    summarize_binary_accuracy,
+)
+from benchmark_run_stats import attach_run_stats, run_with_stats, write_stats_sidecar
+from benchmark_progress import init_progress, tick
 
 dotenv.load_dotenv()
 
@@ -75,17 +84,13 @@ def query_model(question: str, choices: List[str]) -> str:
             base_url=BASE_URL,
             api_key=API_KEY,
             messages=[{"role": "user", "content": prompt}],
-            temperature=1,
+            temperature=0,
             max_tokens=1000,
         )
-        content = response_content(response).upper()
-        # Extract first valid letter from response
-        for char in content:
-            if char in LETTERS:
-                return char
-        return ""
-    except Exception as e:
-        print(f"  [ERROR] API error: {e}")
+        content = response_content(response)
+        return extract_choice_letter(content, "".join(LETTERS))
+    except Exception:
+        # model_client already logs a friendly message for fatal endpoint errors.
         return ""
 
 
@@ -101,7 +106,8 @@ def run_mmlu_test(dataset) -> Dict:
     print(f"{'='*60}")
 
     results = []
-    subject_stats = defaultdict(lambda: {"correct": 0, "total": 0})
+    subject_stats = defaultdict(lambda: {"correct": 0, "scored": 0, "total": 0})
+    init_progress(total=len(dataset), unit="questions", message="Running MMLU…")
 
     for idx, row in enumerate(dataset):
         question = row["question"]
@@ -111,13 +117,16 @@ def run_mmlu_test(dataset) -> Dict:
         subject = row["subject"]
 
         model_answer = query_model(question, choices)
-        passed = model_answer == correct_letter
+        answered = has_usable_text(model_answer)
+        passed = answered and model_answer == correct_letter
 
         subject_stats[subject]["total"] += 1
+        if answered:
+            subject_stats[subject]["scored"] += 1
         if passed:
             subject_stats[subject]["correct"] += 1
 
-        status = "OK" if passed else "FAIL"
+        status = "OK" if passed else ("SKIP" if not answered else "FAIL")
         print(f"  [{status}] Q{idx+1} ({subject}): "
               f"expected={correct_letter} got={model_answer or '?'}")
 
@@ -128,30 +137,30 @@ def run_mmlu_test(dataset) -> Dict:
             "correct_answer": correct_letter,
             "model_answer": model_answer,
             "passed": passed,
+            "answered": answered,
         })
+        tick(message=f"Question {idx + 1}/{len(dataset)}")
 
-    # Compute per-subject accuracy
+    # Compute per-subject accuracy (over answered questions only).
     per_subject = {
         subject: {
             "correct": stats["correct"],
-            "total": stats["total"],
-            "accuracy": round(stats["correct"] / stats["total"], 4) if stats["total"] > 0 else 0,
+            "scored": stats["scored"],
+            "attempted": stats["total"],
+            "accuracy": round(stats["correct"] / stats["scored"], 4) if stats["scored"] > 0 else 0,
         }
         for subject, stats in sorted(subject_stats.items())
     }
 
-    total = len(results)
+    attempted = len(results)
+    scored = sum(1 for r in results if r["answered"])
     correct = sum(1 for r in results if r["passed"])
-    accuracy = round(correct / total, 4) if total > 0 else 0
+    summary = summarize_binary_accuracy(attempted=attempted, correct=correct, scored=scored)
 
     return {
         "model": MODEL,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "summary": {
-            "total": total,
-            "correct": correct,
-            "accuracy": accuracy,
-        },
+        "summary": summary,
         "per_subject": per_subject,
         "results": results,
     }
@@ -163,10 +172,12 @@ def run_mmlu_test(dataset) -> Dict:
 
 def save_results(data: Dict, output_dir: str):
     """Save results to a JSON file."""
+    attach_run_stats(data["summary"])
+    write_stats_sidecar()
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_slug = data["model"].replace(" ", "_").replace("/", "_")
+    model_slug = slugify_model(data["model"])
     path = out / f"mmlu_{model_slug}_{timestamp}.json"
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
@@ -175,23 +186,15 @@ def save_results(data: Dict, output_dir: str):
 
 def print_summary(data: Dict):
     """Print overall and per-subject accuracy to terminal."""
-    s = data["summary"]
-    bar_len = int(s["accuracy"] * 40)
-    bar = "[" + "=" * bar_len + "-" * (40 - bar_len) + "]"
-
-    print(f"\n{'='*70}")
-    print("SUMMARY")
-    print(f"{'='*70}")
-    print(f"{'Overall':40s} {bar} {s['accuracy']:.1%} ({s['correct']}/{s['total']})")
+    print_binary_summary("Overall", data["summary"])
 
     print(f"\n{'='*70}")
     print("PER-SUBJECT BREAKDOWN")
     print(f"{'='*70}")
     for subject, stats in data["per_subject"].items():
-        bar_len = int(stats["accuracy"] * 40)
-        bar = "[" + "=" * bar_len + "-" * (40 - bar_len) + "]"
+        bar = accuracy_bar(stats["accuracy"])
         print(f"  {subject:38s} {bar} {stats['accuracy']:.1%} "
-              f"({stats['correct']}/{stats['total']})")
+              f"({stats['correct']}/{stats['scored']})")
 
 
 # ============================================================================
@@ -212,9 +215,10 @@ def main():
         print(f"[OK] Using full dataset ({len(ds)} questions)")
 
     try:
-        data = run_mmlu_test(ds)
-        save_results(data, OUTPUT_DIR)
-        print_summary(data)
+        with run_with_stats():
+            data = run_mmlu_test(ds)
+            save_results(data, OUTPUT_DIR)
+            print_summary(data)
     except Exception as e:
         print(f"[ERROR] {e}")
         traceback.print_exc()

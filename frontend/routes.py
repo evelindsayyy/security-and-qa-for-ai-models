@@ -308,14 +308,52 @@ def register_routes(app):
     def benchmark_run_start():
         from flask import redirect, request, url_for
 
-        from frontend.benchmark_launch import start_run, validate_launch
+        from frontend.benchmark_launch import (
+            HF_INFERENCE_BASE_URL,
+            start_run,
+            validate_launch,
+        )
 
         benchmark_key = request.form.get("benchmark", "")
-        model = request.form.get("model", "")
-        error = validate_launch(benchmark_key, model)
+        model_source = request.form.get("model_source", "gateway")
+        sample_raw = request.form.get("sample", "").strip()
+        seed_raw = request.form.get("seed", "").strip()
+        try:
+            sample = int(sample_raw) if sample_raw else None
+            seed = int(seed_raw) if seed_raw else None
+        except ValueError:
+            return "sample and seed must be integers", 400
+        if model_source == "custom":
+            model = request.form.get("custom_model", "").strip()
+            base_url = request.form.get("base_url", "").strip()
+            api_key = request.form.get("api_key", "").strip() or None
+        elif model_source == "hosted":
+            model = request.form.get("hosted_model", "").strip()
+            base_url = HF_INFERENCE_BASE_URL
+            api_key = request.form.get("hf_token", "").strip() or None
+            if not api_key:
+                return "enter your Hugging Face token", 400
+        else:
+            model = request.form.get("model", "")
+            base_url = None
+            api_key = None
+        error = validate_launch(
+            benchmark_key,
+            model,
+            base_url=base_url,
+            sample=sample,
+            seed=seed,
+        )
         if error:
             return error, 400
-        slug, _already = start_run(benchmark_key, model)
+        slug, _already = start_run(
+            benchmark_key,
+            model,
+            base_url=base_url,
+            api_key=api_key,
+            sample=sample,
+            seed=seed,
+        )
         return redirect(url_for("benchmark_detail", slug=slug, status="running"))
 
     @app.route("/benchmarks/<slug>/status")
@@ -353,6 +391,19 @@ def register_routes(app):
                 slug=slug,
             )
         return render_template("benchmark_detail.html", missing=False, **detail)
+
+    @app.route("/benchmarks/<slug>/delete", methods=["POST"])
+    def benchmark_delete(slug: str):
+        from flask import redirect, request, url_for
+
+        from frontend.benchmark_data import delete_benchmark
+
+        if request.form.get("confirm") != "1":
+            return "confirmation required", 400
+        error = delete_benchmark(slug)
+        if error:
+            return error, 400
+        return redirect(url_for("benchmarks"))
 
     @app.route("/safety")
     def safety():

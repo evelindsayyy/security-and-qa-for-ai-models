@@ -35,6 +35,7 @@
           <th class="num">n</th>
           <th class="col-nowrap">When</th>
           <th>File</th>
+          <th class="col-actions">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -66,6 +67,14 @@
           <td class="num">{{ r.n }}</td>
           <td class="col-nowrap dim">{{ r.timestamp }}</td>
           <td class="col-long">{{ expandable(r.filename, clamp=1) }}</td>
+          <td class="col-actions">
+            <form method="post" action="{{ url_for('benchmark_delete', slug=r.slug) }}"
+                  class="inline-delete-form"
+                  onsubmit="return confirm('Delete this benchmark result? This cannot be undone.');">
+              <input type="hidden" name="confirm" value="1">
+              <button type="submit" class="btn-danger btn-sm" title="Delete result">Delete</button>
+            </form>
+          </td>
         </tr>
         {% endfor %}
       </tbody>

@@ -16,12 +16,25 @@ Postgres schema and backfill (optional): see [root README — Optional Postgres]
 
 ### Run (containerized — default)
 
+**Containerized (application VM):** [`docs/docker.md`](../docs/docker.md).
+=======
 ```bash
 python3 main.py                   # or: ./docker/run.sh up --build
 python3 main.py up -d --build     # background
 ```
 
 Open http://127.0.0.1:5000 · launch pages: `/scans/new` · `/safety/new` · `/eval-run/new` · `/benchmarks/new`
+
+### Benchmark model sources (`/benchmarks/new`)
+
+Three ways to pick a model — the form shows a setup guide that changes with your
+selection. Full reference: [`benchmarks/README.md`](../benchmarks/README.md#model-input-cheat-sheet).
+
+| Source | Model input example |
+|--------|---------------------|
+| Gateway | `GPT 4.1 Mini` (dropdown) |
+| Hosted (HF Inference) | `meta-llama/Llama-3.1-8B-Instruct` + `hf_…` token |
+| Custom (self-hosted API) | `my-finetune-v2` + `http://localhost:8080/v1` |
 
 ### JSON API
 
