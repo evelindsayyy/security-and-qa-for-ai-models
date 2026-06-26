@@ -7,19 +7,32 @@
   <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
   <h1>Start an evaluation run</h1>
   <p class="sub">
-    Launches <code>evaluator/runner.py</code> on the server. One run at a time;
-    an identical in-flight request returns the existing run.
+    Launches <code>evaluator/runner.py</code> via Docker Compose (default).
+    One run at a time; an identical in-flight request returns the existing run.
+    {% if not docker_available %}
+    <span class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>
+    {% endif %}
   </p>
 
   <form method="post" action="{{ url_for('eval_run_start') }}" class="launch-form">
 
-    <label>Candidate model
+    <fieldset class="candidate-source">
+      <legend>Candidate model</legend>
+      <label class="src-opt"><input type="radio" name="source" value="gateway" checked> Gateway model</label>
       <select name="candidate" id="candidate">
         {% for m in candidates %}
         <option value="{{ m }}" {% if m == 'gpt-5-chat' %}selected{% endif %}>{{ m }}</option>
         {% endfor %}
       </select>
-    </label>
+
+      <label class="src-opt"><input type="radio" name="source" value="hf"> Hugging Face model</label>
+      <input type="text" name="hf_repo" id="hf_repo" list="hf_repo_suggestions"
+             placeholder="Qwen/Qwen2.5-7B-Instruct" autocomplete="off" spellcheck="false">
+      <datalist id="hf_repo_suggestions">
+        {% for repo in suggested_hf_repos %}<option value="{{ repo }}"></option>{% endfor %}
+      </datalist>
+      <span class="form-hint">HF models are served on the DCC GPU — serving wires in next; for now we validate the model before any run.</span>
+    </fieldset>
 
     <label>Judge model
       <select name="judge" id="judge">
@@ -58,6 +71,21 @@
 
     <button type="submit" id="submit-btn" class="btn-primary">▶ Start run</button>
   </form>
+
+  {% if hf_result %}
+    {% if hf_result.ok %}
+    <div class="intake-result intake-ok">
+      <h2>✅ {{ hf_result.repo_id }} — ready to evaluate</h2>
+      <p>Architecture: {{ hf_result.architectures | join(', ') }}{% if hf_result.num_params %} · {{ '%.1f'|format(hf_result.num_params / 1e9) }}B params{% endif %}</p>
+      <p class="form-hint">Evaluation will run once DCC serving is wired (next milestone).</p>
+    </div>
+    {% else %}
+    <div class="intake-result intake-error">
+      <h2>❌ Can't evaluate {{ hf_result.repo_id }}</h2>
+      <p>{{ hf_result.error }}</p>
+    </div>
+    {% endif %}
+  {% endif %}
 
   <details class="custom-suite">
     <summary>Or bring your own questions</summary>
@@ -102,14 +130,30 @@
   const PRICING = {{ pricing_json | safe }};
   const FAMILIES = {{ families | tojson }};
 
+  // Mirrors evaluator model_family(): match the family keyword anywhere in the
+  // id, so an HF repo like "Qwen/Qwen2.5-7B-Instruct" or "meta-llama/..." is
+  // classified correctly (not just the gateway models precomputed in FAMILIES).
+  function modelFamily(id) {
+    const m = (id || "").toLowerCase();
+    if (m.includes("llama")) return "meta";
+    if (m.includes("qwen")) return "qwen";
+    if (m.includes("mistral") || m.includes("mixtral")) return "mistral";
+    if (m.includes("gemma")) return "google";
+    if (m.includes("gpt") || m.includes("openai") || /^o[134]/.test(m)) return "openai";
+    return "other";
+  }
+
   function update() {
-    const cand = document.getElementById("candidate").value;
+    const source = (document.querySelector('input[name="source"]:checked') || {}).value || "gateway";
+    const gwCand = document.getElementById("candidate").value;
+    const hfRepo = document.getElementById("hf_repo").value;
     const judge = document.getElementById("judge").value;
     const maxTok = parseInt(document.getElementById("max_tokens").value || "0", 10);
     const suite = document.querySelector('input[name="suite"]:checked');
     const n = suite ? parseInt(suite.dataset.n, 10) : 0;
 
-    const rates = PRICING[cand];
+    // Cost preview: gateway models only (HF models aren't priced here).
+    const rates = source === "gateway" ? PRICING[gwCand] : null;
     if (rates && n && maxTok) {
       const usd = n * (250 * rates[0] + maxTok * rates[1]) / 1e6;
       document.getElementById("cost-preview").textContent = "$" + usd.toFixed(4);
@@ -117,14 +161,19 @@
       document.getElementById("cost-preview").textContent = "$—";
     }
 
-    const clash = FAMILIES[cand] === FAMILIES[judge];
+    // Cross-family check: the candidate's family depends on the source. For an
+    // HF candidate, classify its repo id; an empty repo doesn't warn.
+    const candFamily = source === "hf" ? modelFamily(hfRepo) : FAMILIES[gwCand];
+    const hasCand = source === "hf" ? hfRepo.trim() !== "" : true;
+    const clash = hasCand && candFamily === FAMILIES[judge];
     document.getElementById("family-warning").style.display = clash ? "block" : "none";
     document.getElementById("submit-btn").disabled = clash;
   }
 
-  document.querySelectorAll("#candidate, #judge, #max_tokens, input[name=suite]")
+  document.querySelectorAll("#candidate, #judge, #max_tokens, #hf_repo, input[name=suite], input[name=source]")
     .forEach(el => el.addEventListener("change", update));
   document.getElementById("max_tokens").addEventListener("input", update);
+  document.getElementById("hf_repo").addEventListener("input", update);
   update();
 </script>
 {% endblock %}

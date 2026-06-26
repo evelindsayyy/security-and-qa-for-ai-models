@@ -9,9 +9,14 @@
   <p class="sub">
     Choose a <strong>benchmark</strong>, then pick how the model is reached:
     Duke <strong>gateway</strong>, Hugging Face <strong>hosted</strong> inference,
-    or a <strong>self-hosted OpenAI-compatible API</strong> (your server, vLLM, Ollama, …). See
+    or a <strong>self-hosted OpenAI-compatible API</strong> (your server, vLLM, Ollama, …).
+    Launches <code>benchmarks/run_benchmark.py</code> via Docker Compose (default).
+    See
     <a href="https://gitlab.oit.duke.edu/codeplus/security-and-qa-for-ai-models/-/blob/main/benchmarks/README.md#model-input-cheat-sheet" target="_blank" rel="noopener">benchmarks/README</a>
-    for CLI details.
+    for model setup details and <code>docs/cli.md</code> for manual compose commands.
+    {% if not docker_available %}
+    <span class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>
+    {% endif %}
   </p>
 
   <div class="benchmark-launch-grid">

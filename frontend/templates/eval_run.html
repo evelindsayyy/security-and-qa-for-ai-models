@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable %}
+{% from '_macros.html' import expandable, cli_eval_docker %}
 
 {% block title %}Model comparison{% endblock %}
 
@@ -10,8 +10,8 @@
 
   {% if not has_runs %}
     <p class="sub">
-      No runs yet. Use Start a new run above, or run
-      <code>python evaluator/runner.py --candidate-model &lt;model&gt; --judge-model &lt;model&gt;</code>.
+      No runs yet. Use <b>Start a new run</b> above, or from repo root:
+      <code>{{ cli_eval_docker() }}</code>
     </p>
   {% else %}
     <p class="sub">

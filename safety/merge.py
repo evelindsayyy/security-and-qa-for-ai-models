@@ -9,7 +9,7 @@ Usage (repo root):
       --garak safety/garak/output/gpt-4.1-mini/safety_result.json \
       -o safety/output/gpt-4.1-mini/merged_safety_result.json
 
-Or use ``safety/run_safety.sh`` for the full pipeline (Promptfoo + Garak + merge).
+Or use ``python -m safety.run`` for the full pipeline (Promptfoo + Garak + merge).
 """
 
 from __future__ import annotations
@@ -33,6 +33,7 @@ def main() -> int:
     parser.add_argument("--garak", type=Path, action="append", default=[])
     parser.add_argument("inputs", nargs="*", type=Path)
     parser.add_argument("-o", "--output", type=Path, required=True)
+    parser.add_argument("--profile", default="base", help="Red-team profile name to embed in the merged result")
     args = parser.parse_args()
 
     paths = list(args.promptfoo) + list(args.garak) + list(args.inputs)
@@ -52,6 +53,8 @@ def main() -> int:
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
+
+    merged.redteam_profile = args.profile
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

@@ -48,10 +48,9 @@ Defense-in-depth: the same payload may be reported by more than one tool. Correl
 | neimasilk/modelscan-extension-mismatch-poc | critical / 95 | ModelScan 0 issues; Fickling + ModelAudit flag disguised pickles |
 | scan-test/supply-chain-demo | medium / 40 | Local fixture: `requirements.txt` (pip-audit + OSV); optional secret patterns in `credentials.env` |
 
-## DGX/VM setup
+## VM setup (production)
 
-Secrets (`HF_TOKEN`, optional) come from the repo-root `.env`. Run from the repo root;
-set `UID`/`GID` so output files are owned by you (not root):
+Production scans run on the **application VM** via the UI or CLI. Secrets (`HF_TOKEN`, optional) come from the repo-root `.env`. Run from the repo root; set `UID`/`GID` so output files are owned by you (not root):
 
 ```bash
 export UID=$(id -u) GID=$(id -g)

@@ -105,6 +105,8 @@ class MergedSafetyResult(BaseModel):
 
     gateway_model_id: str
     display_name: str | None = None
+    # Red-team plugin profile used for this run (base, education, healthcare, …).
+    redteam_profile: str = "base"
     status: str = "complete"
     deployment_context: dict[str, Any] = Field(default_factory=dict)
     summary_pass_rate: float = 0.0

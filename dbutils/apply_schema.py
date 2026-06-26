@@ -1,7 +1,7 @@
 """
 Apply a pillar ``.sql`` schema file to Postgres (psycopg).
 
-Run from repo root after ``uv sync --group db`` and setting ``POSTGRES_DSN`` in ``.env``:
+Run from repo root after ``uv sync`` and setting ``POSTGRES_DSN`` in ``.env``:
 
     uv run python -m dbutils.apply_schema benchmarks/db/benchmark_schema.sql
 """

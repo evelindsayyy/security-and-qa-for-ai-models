@@ -16,6 +16,28 @@ cd evaluator && python compare_judges.py --from-results --suite it_support_v1
 | **Primary judge** (all suites) | **Llama 4 Maverick** | temperature 0, `reference_based_v2` prompt |
 | Secondary / strict spot-check | gpt-oss-120b | requires `--judge-max-tokens 2000` (reasoning model) |
 | Dropped from pool | Llama 3.3 | leniency ceiling — adds no information |
+| Available (optional) | GPT 4.1 Mini, gpt-5-chat | re-enabled 2026-06-22 — see Update below |
+
+## Update — OpenAI judges re-enabled (2026-06-22)
+
+Triggered by reconsideration item #3 (new judge-capable Gateway models). The
+gateway `metadata`/`store` 400 that had blocked all OpenAI models was fixed
+gateway-side; `GPT 4.1 Mini` and `gpt-5-chat` were verified to return valid
+judge JSON via our SDK path (the bar `gpt-oss-120b` fails ~75% of the time),
+and both are non-reasoning chat models (no hidden-thinking-token risk). Both are
+now in the launcher allowlist (`frontend/eval_launch.py`).
+
+- **Data handling — approved.** Mentor sign-off (2026-06-22): OpenAI judges are
+  acceptable **as long as the model is accessed through the Duke Gateway** (not
+  the direct OpenAI API). This is already how the pipeline works — every call
+  goes through `litellm.oit.duke.edu`, so eval data is covered by the Gateway's
+  agreement (which routes OpenAI via Azure OpenAI).
+- **Still options, not the new primary.** Maverick stays the documented primary
+  judge until the weeks 7–8 human-validation study decides primacy; these are
+  available for cross-judge comparison and for users who want a stronger grader.
+- **Cross-family rule still applies.** An OpenAI judge must not score an OpenAI
+  candidate (self-preference). `model_family()` now treats Qwen as its own
+  family, so an OpenAI judge *is* allowed to score a self-hosted Qwen candidate.
 
 ## The evidence
 

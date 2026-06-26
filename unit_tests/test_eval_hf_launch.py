@@ -1,0 +1,81 @@
+"""
+Tests for the eval-run launcher's Hugging Face model path.
+
+/eval-run/new lets you run a gateway model OR specify an HF model. The HF path
+validates the repo (evaluator/hf_intake) before any run; actually serving an HF
+model on the DCC is a later milestone, so this validates + reports. All offline
+(the HF Hub validation is mocked).
+
+Run from repo root:
+  uv run python -m unittest unit_tests.test_eval_hf_launch -v
+"""
+
+from __future__ import annotations
+
+import os
+import unittest
+from unittest import mock
+
+os.environ.setdefault("FRONTEND_LAUNCH_MODE", "host")
+
+from evaluator import hf_intake  # noqa: E402
+from frontend import create_app, eval_launch  # noqa: E402
+
+
+def _client():
+    return create_app(test_config={"TESTING": True}).test_client()
+
+
+_GOOD = hf_intake.ValidationResult(
+    True, None,
+    hf_intake.ModelInfo(repo_id="Qwen/Qwen2.5-7B-Instruct",
+                        architectures=["Qwen2ForCausalLM"],
+                        num_params=7_000_000_000, gated=False))
+_BAD = hf_intake.ValidationResult(
+    False, "model is gated/private; not supported in the MVP")
+
+
+class _Base(unittest.TestCase):
+    def setUp(self) -> None:
+        # Keep the candidate allowlist offline/deterministic (no gateway call).
+        p = mock.patch.object(eval_launch, "candidate_models",
+                              return_value=eval_launch._CANDIDATE_FALLBACK)
+        p.start()
+        self.addCleanup(p.stop)
+
+
+class HfLaunchFormTest(_Base):
+    def test_new_page_offers_gateway_and_hf_sources(self) -> None:
+        r = _client().get("/eval-run/new")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b'name="hf_repo"', r.data)        # the HF field
+        self.assertIn(b'name="source"', r.data)         # gateway/hf toggle
+        self.assertIn(b'name="candidate"', r.data)      # gateway dropdown still there
+
+
+class HfLaunchValidateTest(_Base):
+    def test_validate_hf_candidate_shapes_result(self) -> None:
+        with mock.patch.object(hf_intake, "validate", return_value=_GOOD):
+            out = eval_launch.validate_hf_candidate("Qwen/Qwen2.5-7B-Instruct")
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["architectures"], ["Qwen2ForCausalLM"])
+        self.assertEqual(out["repo_id"], "Qwen/Qwen2.5-7B-Instruct")
+
+    def test_post_hf_valid_shows_ready(self) -> None:
+        with mock.patch.object(hf_intake, "validate", return_value=_GOOD):
+            r = _client().post("/eval-run/start",
+                               data={"source": "hf",
+                                     "hf_repo": "Qwen/Qwen2.5-7B-Instruct"})
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"Qwen2ForCausalLM", r.data)
+
+    def test_post_hf_invalid_shows_reason(self) -> None:
+        with mock.patch.object(hf_intake, "validate", return_value=_BAD):
+            r = _client().post("/eval-run/start",
+                               data={"source": "hf", "hf_repo": "org/gated"})
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"gated", r.data)
+
+
+if __name__ == "__main__":
+    unittest.main()

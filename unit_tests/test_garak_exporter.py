@@ -25,7 +25,8 @@ class ExportFromGarakReportTest(unittest.TestCase):
     def test_per_module_pass_rate(self) -> None:
         doc = export_from_garak_report(_FIXTURE, gateway_model_id="gpt-5.5")
         self.assertEqual(doc["gateway_model_id"], "gpt-5.5")
-        # dan (0 fails + 2 fails) and encoding (0 fails) → 1/2 modules pass
+        # dan rolls up to 6 fails / 20 total (30% hit rate ≥ 20% threshold) → fails
+        # encoding: 0 fails / 5 total → passes → 1/2 modules pass
         self.assertAlmostEqual(doc["summary_pass_rate"], 0.5, places=3)
         modules = {f["probe_id"] for f in doc["findings"]}
         self.assertEqual(modules, {"garak.dan", "garak.encoding"})

@@ -4,17 +4,18 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import subprocess
 import threading
 from pathlib import Path
 
 from frontend import docker_launch
+from frontend.output_dirs import OutputDirError, prepare_output_dir
 from frontend.path_safety import is_safe_slug
 from safety.gateway_ids import normalize_gateway_model_id
+from safety.merged_paths import iter_merged_result_paths, merged_result_path
 
 ROOT = Path(__file__).parent.parent
-RUN_SCRIPT = ROOT / "safety" / "run_safety.sh"
+RUN_MODULE = "safety.run"
 
 # Per-slug output dirs wiped before a fresh run so the UI never blends stale
 # JSON from a previous run with new results.
@@ -25,12 +26,24 @@ _OUTPUT_DIRS = (
 )
 
 
-def _wipe_outputs(slug: str) -> None:
-    """Delete prior safety outputs for one model slug (merged + per-tool)."""
-    for base in _OUTPUT_DIRS:
-        target = base / slug
-        if target.is_dir():
-            shutil.rmtree(target, ignore_errors=True)
+_VALID_PROFILES = frozenset({"base", "education", "healthcare", "finance", "rag", "agentic"})
+
+
+def _prepare_output_dirs(slug: str, profile: str) -> str | None:
+    """Wipe and verify writability for one (slug, profile) run."""
+    for base in (ROOT / "safety" / "output", ROOT / "safety" / "promptfoo" / "output"):
+        err = prepare_output_dir(base / slug / profile)
+        if err:
+            return err
+    err = prepare_output_dir(ROOT / "safety" / "garak" / "output" / slug)
+    return err
+
+
+def _wipe_outputs(slug: str, profile: str) -> None:
+    """Delete prior safety outputs for one (slug, profile) run."""
+    err = _prepare_output_dirs(slug, profile)
+    if err:
+        raise OutputDirError(err)
 
 # Fallback when the live gateway catalog is unreachable (offline dev).
 _GATEWAY_FALLBACK: tuple[str, ...] = (
@@ -62,14 +75,9 @@ def _eligible_gateway_models() -> tuple[str, ...]:
 
 
 def _existing_safety_slugs() -> set[str]:
+    """Return slugs that have at least one completed merged result (any profile)."""
     base = ROOT / "safety" / "output"
-    if not base.is_dir():
-        return set()
-    return {
-        p.name
-        for p in base.iterdir()
-        if p.is_dir() and (p / "merged_safety_result.json").is_file()
-    }
+    return {slug for _path, slug, _profile in iter_merged_result_paths(base)}
 
 _RUNNING: dict[str, subprocess.Popen] = {}
 _INFLIGHT: dict[tuple, str] = {}
@@ -79,6 +87,8 @@ _LOCK = threading.Lock()
 def validate_launch(
     model: str,
     *,
+    redteam_profile: str = "base",
+    skip_policy: bool = False,
     skip_redteam: bool = False,
     skip_garak: bool = False,
     skip_promptfoo: bool = False,
@@ -86,24 +96,34 @@ def validate_launch(
 ) -> str | None:
     if model not in _eligible_gateway_models():
         return f"gateway model not eligible for safety: {model!r}"
+    if redteam_profile not in _VALID_PROFILES:
+        return f"unknown profile {redteam_profile!r}; valid: {sorted(_VALID_PROFILES)}"
+    if (skip_policy and skip_redteam) and skip_garak:
+        return "must run at least one suite"
     if skip_promptfoo and skip_garak:
         return "cannot skip both promptfoo and garak"
     if garak_probes and not _PROBE_RE.match(garak_probes):
         return "garak_probes: letters, digits, comma, dot, dash, underscore only"
     if docker_launch.use_docker() and not docker_launch.docker_available():
         return docker_launch.docker_required_message("safety")
-    return None
+    slug = normalize_gateway_model_id(model)
+    return _prepare_output_dirs(slug, redteam_profile)
 
 
 def build_command(
     model: str,
     *,
+    redteam_profile: str = "base",
+    skip_policy: bool = False,
     skip_redteam: bool = False,
     skip_garak: bool = False,
     skip_promptfoo: bool = False,
     garak_probes: str | None = None,
 ) -> list[str]:
-    inner: list[str] = ["bash", str(RUN_SCRIPT.relative_to(ROOT))]
+    inner: list[str] = ["python", "-m", RUN_MODULE]
+    inner.extend(["--redteam-profile", redteam_profile])
+    if skip_policy:
+        inner.append("--skip-policy")
     if skip_redteam:
         inner.append("--skip-redteam")
     if skip_garak:
@@ -115,7 +135,7 @@ def build_command(
     inner.append(model)
 
     if not docker_launch.use_docker():
-        return ["bash", str(RUN_SCRIPT), *inner[2:]]
+        return ["uv", "run", "python", "-m", RUN_MODULE, *inner[3:]]
 
     return docker_launch.compose_run_argv(
         "safety",
@@ -130,28 +150,33 @@ def build_command(
 def start_run(
     model: str,
     *,
+    redteam_profile: str = "base",
+    skip_policy: bool = False,
     skip_redteam: bool = False,
     skip_garak: bool = False,
     skip_promptfoo: bool = False,
     garak_probes: str | None = None,
 ) -> tuple[str, bool]:
     slug = normalize_gateway_model_id(model)
-    combo = (model, skip_redteam, skip_garak, skip_promptfoo, garak_probes or "")
+    run_key = f"{slug}/{redteam_profile}"
+    combo = (model, redteam_profile, skip_policy, skip_redteam, skip_garak, skip_promptfoo, garak_probes or "")
     with _LOCK:
         existing = _INFLIGHT.get(combo)
         if existing and _RUNNING.get(existing) is not None and _RUNNING[existing].poll() is None:
             return existing, True
 
-        # Fresh run — clear stale outputs so the merge/UI start from a clean slate.
-        _wipe_outputs(slug)
+        # Fresh run — clear stale outputs for this (slug, profile) pair.
+        _wipe_outputs(slug, redteam_profile)
 
         if docker_launch.use_docker():
             docker_launch.ensure_stack("safety")
 
-        log_path = ROOT / "safety" / "output" / slug / "run.log"
+        log_path = ROOT / "safety" / "output" / slug / redteam_profile / "run.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         cmd = build_command(
             model,
+            redteam_profile=redteam_profile,
+            skip_policy=skip_policy,
             skip_redteam=skip_redteam,
             skip_garak=skip_garak,
             skip_promptfoo=skip_promptfoo,
@@ -166,32 +191,35 @@ def start_run(
                 stderr=subprocess.STDOUT,
                 env=os.environ.copy(),
             )
-        _RUNNING[slug] = proc
-        _INFLIGHT[combo] = slug
-        return slug, False
+        _RUNNING[run_key] = proc
+        _INFLIGHT[combo] = run_key
+        return run_key, False
 
 
-def get_status(slug: str) -> dict:
-    if not is_safe_slug(slug):
+def get_status(slug: str, profile: str = "base") -> dict:
+    if not is_safe_slug(slug) or not is_safe_slug(profile):
         return {"status": "not_found", "message": ""}
 
-    merged = ROOT / "safety" / "output" / slug / "merged_safety_result.json"
-    log_path = ROOT / "safety" / "output" / slug / "run.log"
+    run_key = f"{slug}/{profile}"
+    merged = merged_result_path(ROOT / "safety" / "output", slug, profile)
+    log_path = ROOT / "safety" / "output" / slug / profile / "run.log"
 
-    proc = _RUNNING.get(slug)
+    proc = _RUNNING.get(run_key)
     if proc is not None and proc.poll() is None:
         msg = log_path.read_text(encoding="utf-8", errors="replace")[-600:] if log_path.is_file() else ""
         return {"status": "running", "message": msg}
 
-    if merged.is_file() and proc is not None and proc.returncode == 0:
-        return {"status": "complete", "message": ""}
-
-    if merged.is_file() and proc is None:
+    if merged.is_file():
         return {"status": "complete", "message": ""}
 
     if proc is not None:
         msg = log_path.read_text(encoding="utf-8", errors="replace")[-800:] if log_path.is_file() else ""
         return {"status": "failed", "message": msg}
+
+    if log_path.is_file() and not merged.is_file():
+        msg = log_path.read_text(encoding="utf-8", errors="replace")[-800:]
+        if "ERROR:" in msg or "failed (exit" in msg:
+            return {"status": "failed", "message": msg}
 
     return {"status": "not_found", "message": ""}
 
@@ -226,4 +254,12 @@ def get_launch_options() -> dict:
         "model_has_results": model_has_results,
         "launch_mode": "docker" if docker_launch.use_docker() else "host",
         "docker_available": docker_launch.docker_available(),
+        "profiles": [
+            {"value": "base", "label": "Base (general-purpose baseline)"},
+            {"value": "education", "label": "Education (+ teen safety, FERPA probes)"},
+            {"value": "healthcare", "label": "Healthcare (+ medical, pharmacy, PHI probes)"},
+            {"value": "finance", "label": "Finance (+ insurance, billing, fraud probes)"},
+            {"value": "rag", "label": "RAG (+ document exfiltration, poisoning probes)"},
+            {"value": "agentic", "label": "Agentic (+ MCP, tool-discovery probes)"},
+        ],
     }

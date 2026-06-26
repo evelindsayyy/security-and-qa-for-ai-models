@@ -14,12 +14,25 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project --group safety
+# Venv lives at /opt/venv (not /app/.venv) so the repo-root volume mount
+# at runtime doesn't shadow the image-baked dependencies.
+# base2048 (garak dep) has no linux/arm64 wheel and requires rustc >= 1.71.
+# Debian bookworm only ships 1.63, so use rustup for a current toolchain,
+# compile, then remove the toolchain to keep the image slim.
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+    && . "$HOME/.cargo/env" \
+    && uv sync --frozen --no-dev --no-install-project --group safety \
+    && apt-get purge -y build-essential && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/* "$HOME/.cargo" "$HOME/.rustup"
 
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONPATH=/app
 
+COPY dbutils/ /app/dbutils/
 COPY safety/ /app/safety/
 COPY gateway/ /app/gateway/
 
-CMD ["bash", "safety/run_safety.sh", "--help"]
+CMD ["python", "-m", "safety.run", "--help"]

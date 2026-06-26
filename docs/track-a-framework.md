@@ -20,7 +20,7 @@ Track B: [`track-b-framework.md`](track-b-framework.md). Tools: [`tool-stack.md`
 ## Scanning (artifacts)
 
 When: before on-prem or HF weights are deployed.  
-Where: **`scanner/`** only (code, `models/`, `output/` on DGX; spikes in `scanner/experiments/`).
+Where: **`scanner/`** only (code, `models/`, `output/` on the application VM in production; optional dev host; spikes in `scanner/experiments/`).
 
 ```text
 model_id → metadata (optional) → download → ModelScan + Fickling + ModelAudit
@@ -69,7 +69,7 @@ Normalized shapes: [`data-model.md`](data-model.md) (`scans`/`findings`, `safety
 | Part | Output (JSON today) | Production |
 |------|---------------------|------------|
 | Scanning | `scanner/` → `scanner/output/<slug>/scan_result.json` (Docker: `scanner/docker/`) | Postgres (ingest) |
-| Safety | `safety/` → `safety/output/<slug>/merged_safety_result.json` (`run_safety.sh` → `safety.merge`) | Postgres (ingest) |
+| Safety | `safety/` → `safety/output/<slug>/merged_safety_result.json` (`python -m safety.run` → `safety.merge`) | Postgres (ingest) |
 
 ---
 
@@ -101,7 +101,8 @@ Do not block deploy on Fickling alone when ModelScan and ModelAudit are clean. S
 | Stage | `scanner/` | `safety/` |
 |-------|------------|-----------|
 | Done | package + CLI; deps, secrets, E2E `scan_model()`; Postgres ingest | `garak` + `promptfoo` + Duke probes; merge → `MergedSafetyResult`; Postgres ingest |
-| Next | GET `/api/scans`, `/api/safety`; full label UI in `frontend/` | same |
+| Done | `/api/scans` + label UI; output-dir writability checks | `/api/safety` + profile UI |
+| Next | LiteLLM guardrail hooks | agentic deployment probes |
 
 Target layout: [`scanner/README.md`](../scanner/README.md), [`docs/architecture.md`](architecture.md).
 

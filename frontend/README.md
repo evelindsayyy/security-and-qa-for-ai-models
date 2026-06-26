@@ -1,20 +1,29 @@
 # Frontend (`frontend/`)
 
-Nutrition-label UI. Each pillar reads via ``*_data.py`` (Postgres when a DSN
-is configured, with artifact fallback). Browser-launched runs via Docker + polling.
+Nutrition-label **UI and JSON API** (one Flask process). Browser **Start** buttons and `POST /api/*` spawn pillar jobs in Docker via [`docker_launch.py`](docker_launch.py). Reads use Postgres when configured, else on-disk JSON.
 
-## Run
+## Quick start
 
-**Local (fastest):**
+### One-time setup
 
 ```bash
-uv sync
-uv run flask --app frontend:create_app run --debug
+uv sync --group dev
+cp .env.example .env             # DUKE_GATEWAY_KEY required
+./docker/build-pillars.sh        # pillar images for Start buttons
 ```
 
-Launch pages: `/scans/new` · `/safety/new` · `/eval-run/new` · `/benchmarks/new`
+Postgres schema and backfill (optional): see [root README — Optional Postgres](../README.md#optional--postgres).
 
-Set `FRONTEND_LAUNCH_MODE=host` to skip Docker for launches (debugging, unit tests).
+### Run (containerized — default)
+
+**Containerized (application VM):** [`docs/docker.md`](../docs/docker.md).
+=======
+```bash
+python3 main.py                   # or: ./docker/run.sh up --build
+python3 main.py up -d --build     # background
+```
+
+Open http://127.0.0.1:5000 · launch pages: `/scans/new` · `/safety/new` · `/eval-run/new` · `/benchmarks/new`
 
 ### Benchmark model sources (`/benchmarks/new`)
 
@@ -27,36 +36,45 @@ selection. Full reference: [`benchmarks/README.md`](../benchmarks/README.md#mode
 | Hosted (HF Inference) | `meta-llama/Llama-3.1-8B-Instruct` + `hf_…` token |
 | Custom (self-hosted API) | `my-finetune-v2` + `http://localhost:8080/v1` |
 
-**Containerized (application VM):** [`docs/docker.md`](../docs/docker.md).
+### JSON API
 
-## Routes
+Same data as the UI. Full routes: [`../api/README.md`](../api/README.md).
 
-| Route | Purpose |
-|-------|---------|
-| `/` | Hub — pillar counts + gateway link |
-| `/models` | Live gateway catalog |
-| `/scans`, `/scans/new`, `/scans/start`, `/scans/<slug>` | HF scanning |
-| `/eval-run`, `/eval-run/new`, … | Duke efficacy (LLM-as-judge) |
-| `/benchmarks`, `/benchmarks/new`, … | Public benchmarks |
-| `/safety`, `/safety/new`, … | Inference safety |
+```bash
+curl -s localhost:5000/api/health | python3 -m json.tool
+curl -s localhost:5000/api/scans | python3 -m json.tool
+curl -s -X POST localhost:5000/api/scans \
+  -H 'Content-Type: application/json' \
+  -d '{"hf_repo":"distilbert-base-uncased"}' | python3 -m json.tool
+curl -s localhost:5000/api/scans/distilbert-base-uncased/status | python3 -m json.tool
+```
 
-Each pillar has `/<slug>/status` JSON for in-progress polling.
+POST returns **202** with `job_id` and `status_url`; poll status, then GET detail.
 
-## Layout
+### Host Flask (development)
 
-| Module | Role |
-|--------|------|
-| [`gateway/`](../gateway/) | Live catalog for `/models` and dropdowns |
-| `scan_data.py` / `scan_db_data.py` | `/scans` — DB when `POSTGRES_DSN` set |
-| `safety_data.py` / `safety_db_data.py` | `/safety` — DB when `POSTGRES_DSN` set |
-| `eval_run_data.py` / `eval_db_data.py` | `/eval-run` — DB when `EFFICACY_DB_DSN` set |
-| `benchmark_data.py` / `benchmark_db_data.py` | `/benchmarks` — DB when `POSTGRES_DSN` set |
-| `*_launch.py` | Spawn Docker/host subprocess for browser runs |
-| `docker_launch.py` | Shared Docker helper (`.env`, UID/GID, compose build) |
-| `routes.py`, `templates/`, `static/` | UI |
+UI without containerizing the app; pillar jobs still use Docker unless `FRONTEND_LAUNCH_MODE=host`:
 
-## Related docs
+```bash
+python3 main.py --host
+# Or: uv run flask --app frontend:create_app run --debug --port 5001
+```
 
-- [`docs/architecture.md`](../docs/architecture.md)
-- [`docs/docker.md`](../docs/docker.md)
-- Pillar READMEs: [`scanner/`](../scanner/README.md) · [`safety/`](../safety/README.md) · [`evaluator/`](../evaluator/README.md) · [`benchmarks/`](../benchmarks/README.md)
+## Troubleshooting
+
+- **Host has no `python` command** — use `python3 main.py` or `./docker/run.sh` (see [`docs/cli.md`](../docs/cli.md)).
+- **Promptfoo “config not found” / empty eval.json** — missing `HOST_REPO`. `./docker/run.sh` sets it; browser launches pass it via `docker_launch.py`.
+- **Garak `run config not found: tmp*.yaml`** — redeploy after fix in `run_garak.py` (absolute config path).
+- **`POST /api/scans` → 503** (cannot write) — root-owned output from an old run. On the application VM (no sudo needed):
+
+  ```bash
+  docker run --rm -v "$PWD/scanner/output:/out" -u root busybox \
+    chown -R "$(id -u):$(id -g)" /out
+  ```
+
+- **`db_available: false`** — check `POSTGRES_DSN`, schema apply, and network ([`docs/cli.md`](../docs/cli.md)).
+- **Skip Docker for jobs** — `FRONTEND_LAUNCH_MODE=host` in `.env` (legacy; safety may still use nested Docker).
+
+## See also
+
+- [`../README.md`](../README.md) · [`docs/cli.md`](../docs/cli.md) · [`docs/docker.md`](../docs/docker.md) · [`../api/README.md`](../api/README.md)

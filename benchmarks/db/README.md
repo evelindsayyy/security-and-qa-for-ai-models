@@ -11,7 +11,7 @@ is set. The frontend reads Postgres when the DSN is reachable, else files (see
 ## One-time setup
 
 ```bash
-uv sync --group db
+uv sync
 cp .env.example .env    # paste real POSTGRES_DSN from team lead (not YOUR_USER placeholders)
 ```
 
@@ -19,10 +19,11 @@ Connection errors usually mean: placeholder credentials still in ``.env``, missi
 
 ## Apply schema (one-time)
 
-Requires ``uv sync --group db`` and a real ``POSTGRES_DSN`` in ``.env`` (see ``.env.example`` — include ``?sslmode=require``).
+Requires ``uv sync --group dev`` and a real ``POSTGRES_DSN`` in ``.env`` (see ``.env.example`` — include ``?sslmode=require``).
 
 ```bash
-uv run python -m dbutils.apply_schema benchmarks/db/benchmark_schema.sql
+./scripts/apply-schemas.sh              # all four pillars
+uv run python -m dbutils.apply_schema benchmarks/db/benchmark_schema.sql   # this pillar only
 ```
 
 ## Load benchmark runs

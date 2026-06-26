@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable %}
+{% from '_macros.html' import expandable, cli_gateway_host %}
 
 {% block title %}Model catalog{% endblock %}
 
@@ -81,7 +81,7 @@
           <a href="{{ url_for('safety') }}">safety</a> runs.</li>
       <li>Artifact scanning uses Hugging Face repo ids — see <a href="{{ url_for('scans') }}">scan results</a>.</li>
       <li><b>Prices</b> are USD per 1M tokens (input / output) from the evaluator cost table — a dated snapshot covering priced chat models; others show "—". Verify against current Duke rates before quoting.</li>
-      <li>Refresh: use the button above, or run <code>uv run python -m gateway</code>.</li>
+      <li>Refresh: use the button above, or from repo root run <code>{{ cli_gateway_host() }}</code>.</li>
     </ul>
   </section>
 </div>

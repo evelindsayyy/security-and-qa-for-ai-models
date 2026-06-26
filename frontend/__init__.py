@@ -30,4 +30,9 @@ def create_app(test_config=None):
     from api import register_api
 
     register_api(app)
+
+    if not app.config.get("TESTING"):
+        from dbutils.startup import log_db_read_path
+
+        log_db_read_path()
     return app

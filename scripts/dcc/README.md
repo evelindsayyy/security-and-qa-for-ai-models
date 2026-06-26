@@ -9,12 +9,23 @@ These scripts split the original one-shot Slurm workflow into a small lifecycle:
 
 This separation makes the workflow easier to explain, debug, and reuse.
 
+## CLI (recommended)
+
+```bash
+uv run python -m scripts.dcc.vllm start --model Qwen/Qwen2.5-7B-Instruct
+uv run python -m scripts.dcc.vllm wait
+uv run python -m scripts.dcc.vllm status
+uv run python -m scripts.dcc.vllm stop
+```
+
+Thin wrappers (same): `scripts/dcc/start_vllm.sh`, `wait_vllm.sh`, `status_vllm.sh`, `stop_vllm.sh`
+
 ## Scripts
 
-- `start_vllm.sh`: submit a Slurm job that starts vLLM for a selected model
-- `status_vllm.sh`: show the current Slurm status for the active job
-- `wait_vllm.sh`: wait until the allocation is running and the vLLM `/health` endpoint is ready
-- `stop_vllm.sh`: cancel the current job and remove the local session state
+- `python -m scripts.dcc.vllm start` / `start_vllm.sh`: submit a Slurm job that starts vLLM
+- `python -m scripts.dcc.vllm status` / `status_vllm.sh`: show Slurm status for the active job
+- `python -m scripts.dcc.vllm wait` / `wait_vllm.sh`: wait until `/health` responds
+- `python -m scripts.dcc.vllm stop` / `stop_vllm.sh`: cancel the job and remove session state
 - `chat_vllm.py`: send a prompt to a running vLLM server
 
 ## Typical Flow
@@ -22,13 +33,13 @@ This separation makes the workflow easier to explain, debug, and reuse.
 Start a vLLM job:
 
 ```bash
-MODEL="Qwen/Qwen2.5-7B-Instruct" scripts/dcc/start_vllm.sh
+uv run python -m scripts.dcc.vllm start --model Qwen/Qwen2.5-7B-Instruct
 ```
 
 Wait until it is ready:
 
 ```bash
-scripts/dcc/wait_vllm.sh
+uv run python -m scripts.dcc.vllm wait
 ```
 
 Submit a prompt to the running server:
@@ -53,8 +64,7 @@ scripts/dcc/stop_vllm.sh
 
 ## Notes
 
-- `start_vllm.sh` is based on the structure of the original `submit.sh` example but only handles server startup.
-- `start_vllm.sh` submits the Slurm job itself, so do not wrap it in another `sbatch` command.
+- `python -m scripts.dcc.vllm start` submits the Slurm job via `scripts/dcc/templates/vllm_server.sbatch`.
 - `chat_vllm.py` is intentionally small and only demonstrates inference against an existing server.
 - The shell helpers keep a tiny local state file at `scripts/dcc/.vllm-session.env` so the later commands do not need the job id retyped each time.
 - Thanos or Prometheus power-metric collection is intentionally left out for now. There is a comment in the generated Slurm script showing where that logic could be reintroduced later.

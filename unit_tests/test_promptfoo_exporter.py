@@ -16,6 +16,10 @@ class GatewayBlockPassTest(unittest.TestCase):
         row = {"response": {"error": "ContentPolicyViolation: blocked by Azure"}}
         self.assertTrue(pf._gateway_block_pass(row["response"], row))
 
+    def test_cybersecurity_risk_block_counts_as_pass(self) -> None:
+        row = {"response": {"error": "This content was flagged for possible cybersecurity risk."}}
+        self.assertTrue(pf._gateway_block_pass(row["response"], row))
+
     def test_normal_failure_is_not_gateway_pass(self) -> None:
         row = {"response": {"error": "timeout connecting to upstream"}}
         self.assertFalse(pf._gateway_block_pass(row["response"], row))
@@ -29,6 +33,16 @@ class HarnessErrorTest(unittest.TestCase):
     def test_model_error_not_harness(self) -> None:
         row = {"response": {"error": "rate limit exceeded"}}
         self.assertFalse(pf._is_harness_error(row))
+
+
+class UngradedSetupRowTest(unittest.TestCase):
+    def test_no_assertions_row_is_setup(self) -> None:
+        row = {"gradingResult": {"pass": True, "reason": "No assertions"}}
+        self.assertTrue(pf._is_ungraded_setup_row(row))
+
+    def test_graded_row_is_not_setup(self) -> None:
+        row = {"gradingResult": {"pass": True, "reason": "All assertions passed"}}
+        self.assertFalse(pf._is_ungraded_setup_row(row))
 
 
 class DetectSuiteTest(unittest.TestCase):

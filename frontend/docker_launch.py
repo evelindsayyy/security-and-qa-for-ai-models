@@ -9,6 +9,8 @@ On first launch per stack the module:
   1. Exports the current ``UID``/``GID`` so Compose writes editable output files
   2. Runs ``docker compose build`` once (cached in-process for the Flask lifetime)
 
+One-time pillar image builds: ``./docker/build-pillars.sh`` (see root README).
+
 Set ``FRONTEND_LAUNCH_MODE=host`` to force the legacy host-Python path (unit tests,
 local debugging). CLI READMEs still document the manual docker compose workflow.
 """
@@ -90,6 +92,7 @@ def compose_run_argv(
     for key, val in {
         **_uid_gid_env(),
         **_docker_gid_env(),
+        "HOST_REPO": str(ROOT),
         **(extra_env or {}),
     }.items():
         argv.extend(["-e", f"{key}={val}"])

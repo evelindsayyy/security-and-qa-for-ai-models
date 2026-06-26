@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable %}
+{% from '_macros.html' import expandable, cli_scan_docker %}
 
 {% block title %}HF artifact scans{% endblock %}
 
@@ -10,7 +10,8 @@
 
   {% if not has_scans %}
     <p class="sub">
-      No results yet. Run <code>python -m scanner scan &lt;hf_repo&gt;</code> or use Start a new scan above.
+      No results yet. Use <b>Start a new scan</b> above, or from repo root:
+      <code>{{ cli_scan_docker() }}</code>
     </p>
   {% else %}
     <p class="sub">

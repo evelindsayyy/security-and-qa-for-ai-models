@@ -1,6 +1,9 @@
 # Scanning spike (Track A)
 
-Dockerized HF artifact scanning on DGX — ModelScan, Fickling, deps, optional Trivy. **Purpose:** run tools, inspect raw output, map to [`docs/data-model.md`](../../docs/data-model.md) (`scans`, `findings`). Spike schemas: `schemas.py`. Production: [`scanner/`](../../scanner/).
+> **Production path:** [`scanner/`](../../scanner/) on the **application VM** (UI or CLI).
+> This folder is an early spike — kept for reference.
+
+Dockerized HF artifact scanning — ModelScan, Fickling, deps, optional Trivy. **Purpose:** run tools, inspect raw output, map to [`docs/data-model.md`](../../docs/data-model.md) (`scans`, `findings`). Spike schemas: `schemas.py`.
 
 ---
 

@@ -24,19 +24,17 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import statistics
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dbutils.env import load_repo_env, resolve_dsn
+
+load_repo_env()
 
 EVALUATOR = Path(__file__).resolve().parent.parent
 RESULTS_DIR = EVALUATOR / "results"
-
-# Repo convention: one root .env, shell-exported vars take precedence.
-load_dotenv(EVALUATOR.parent / ".env", override=False)
 
 
 @dataclass
@@ -229,7 +227,7 @@ def apply_to_db(dsn: str, parsed: list[tuple[dict, dict, list[dict]]]) -> None:
         import psycopg
     except ImportError:
         sys.exit(
-            "psycopg is required for --apply:  uv sync --group db"
+            "psycopg is required for --apply:  re-run uv sync"
         )
 
     with psycopg.connect(dsn) as conn:
@@ -281,7 +279,7 @@ def run_ingest(
         return IngestResult(count=len(parsed))
 
     if not dsn:
-        sys.exit("--apply needs a DSN: pass --dsn or set EFFICACY_DB_DSN / DATABASE_URL")
+        sys.exit("--apply needs a DSN: pass --dsn or set EFFICACY_DB_DSN / POSTGRES_DSN / DATABASE_URL")
     apply_to_db(dsn, parsed)
     return IngestResult(count=len(parsed))
 
@@ -291,9 +289,8 @@ def main() -> int:
     ap.add_argument("--results-dir", type=Path, default=RESULTS_DIR)
     ap.add_argument("--apply", action="store_true",
                     help="actually write to the database (default: dry run)")
-    ap.add_argument("--dsn", default=os.environ.get("EFFICACY_DB_DSN")
-                    or os.environ.get("DATABASE_URL"),
-                    help="Postgres DSN (or set EFFICACY_DB_DSN / DATABASE_URL)")
+    ap.add_argument("--dsn", default=resolve_dsn("EFFICACY_DB_DSN", "POSTGRES_DSN", "DATABASE_URL"),
+                    help="Postgres DSN (or set EFFICACY_DB_DSN / POSTGRES_DSN / DATABASE_URL)")
     args = ap.parse_args()
     run_ingest(apply=args.apply, dsn=args.dsn, results_dir=args.results_dir)
     return 0

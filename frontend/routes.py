@@ -190,7 +190,19 @@ def register_routes(app):
     def eval_run_start():
         from flask import redirect, request, url_for
 
-        from frontend.eval_launch import start_run, validate_launch
+        from frontend.eval_launch import (
+            get_launch_options,
+            start_run,
+            validate_hf_candidate,
+            validate_launch,
+        )
+
+        # Candidate source: a gateway model (runs now) or a Hugging Face model
+        # (validated now; served on the DCC in a later milestone).
+        if request.form.get("source") == "hf":
+            hf_result = validate_hf_candidate(request.form.get("hf_repo", "").strip())
+            return render_template("eval_run_new.html",
+                                   hf_result=hf_result, **get_launch_options())
 
         candidate = request.form.get("candidate", "")
         judge = request.form.get("judge", "")
@@ -412,12 +424,21 @@ def register_routes(app):
         from frontend.safety_launch import start_run, validate_launch
 
         model = request.form.get("gateway_model", "")
-        skip_redteam = request.form.get("skip_redteam") == "on"
-        skip_garak = request.form.get("skip_garak") == "on"
-        skip_promptfoo = request.form.get("skip_promptfoo") == "on"
+        redteam_profile = request.form.get("redteam_profile", "base")
+        # Positive suite checkboxes from the new form UI
+        run_policy = bool(request.form.get("run_policy"))
+        run_redteam = bool(request.form.get("run_redteam"))
+        run_garak = bool(request.form.get("run_garak"))
+        # Derive skip flags from what the user selected
+        skip_policy = not run_policy
+        skip_redteam = not run_redteam
+        skip_garak = not run_garak
+        skip_promptfoo = skip_policy and skip_redteam
         garak_probes = request.form.get("garak_probes", "").strip()
         error = validate_launch(
             model,
+            redteam_profile=redteam_profile,
+            skip_policy=skip_policy,
             skip_redteam=skip_redteam,
             skip_garak=skip_garak,
             skip_promptfoo=skip_promptfoo,
@@ -425,34 +446,48 @@ def register_routes(app):
         )
         if error:
             return error, 400
-        slug, _already = start_run(
+        run_key, _already = start_run(
             model,
+            redteam_profile=redteam_profile,
+            skip_policy=skip_policy,
             skip_redteam=skip_redteam,
             skip_garak=skip_garak,
             skip_promptfoo=skip_promptfoo,
             garak_probes=garak_probes or None,
         )
-        return redirect(url_for("safety_detail", slug=slug, status="running"))
+        slug, profile = run_key.split("/", 1)
+        return redirect(url_for("safety_detail", slug=slug, profile=profile, status="running"))
 
     @app.route("/safety/<slug>/status")
-    def safety_run_status(slug: str):
+    def safety_run_status_legacy(slug: str):
+        from flask import redirect, url_for
+
+        return redirect(url_for("safety_run_status", slug=slug, profile="base"))
+
+    @app.route("/safety/<slug>")
+    def safety_detail_legacy(slug: str):
+        from flask import redirect, url_for
+
+        return redirect(url_for("safety_detail", slug=slug, profile="base"))
+
+    @app.route("/safety/<slug>/<profile>/status")
+    def safety_run_status(slug: str, profile: str):
         from flask import jsonify
 
         from frontend.safety_launch import get_status
 
-        return jsonify(get_status(slug))
+        return jsonify(get_status(slug, profile))
 
-    @app.route("/safety/<slug>")
-    def safety_detail(slug: str):
+    @app.route("/safety/<slug>/<profile>")
+    def safety_detail(slug: str, profile: str):
         from flask import request
 
         from frontend.safety_data import get_safety_detail
+        from frontend.safety_launch import get_status
 
-        detail = get_safety_detail(slug)
+        detail = get_safety_detail(slug, profile)
         if detail is None or request.args.get("status") == "running":
-            from frontend.safety_launch import get_status
-
-            status = get_status(slug)
+            status = get_status(slug, profile)
             if status["status"] in ("running", "failed"):
                 return render_template(
                     "safety_detail.html",
@@ -460,6 +495,7 @@ def register_routes(app):
                     running=True,
                     run_status=status,
                     slug=slug,
+                    profile=profile,
                 )
 
         if detail is None:
@@ -467,6 +503,7 @@ def register_routes(app):
                 "safety_detail.html",
                 missing=True,
                 slug=slug,
+                profile=profile,
             )
         return render_template("safety_detail.html", missing=False, **detail)
 

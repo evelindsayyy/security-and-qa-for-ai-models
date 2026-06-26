@@ -60,7 +60,7 @@ class BuildCommandTest(unittest.TestCase):
     def test_command_is_argv_list(self) -> None:
         cmd = safety_launch.build_command("gpt-5.5")
         self.assertIsInstance(cmd, list)
-        self.assertIn("run_safety.sh", " ".join(cmd))
+        self.assertIn("safety.run", " ".join(cmd))
         self.assertIn("gpt-5.5", cmd)
 
     def test_garak_probes_forwarded(self) -> None:
@@ -84,13 +84,24 @@ class GetStatusTest(unittest.TestCase):
         self.out = root / "safety" / "output"
 
     def test_unsafe_slug_is_not_found(self) -> None:
-        self.assertEqual(safety_launch.get_status("../../etc")["status"], "not_found")
+        self.assertEqual(safety_launch.get_status("../../etc", "base")["status"], "not_found")
 
     def test_complete_when_merged_exists(self) -> None:
         slug = "gpt-5.5"
-        (self.out / slug).mkdir(parents=True)
-        (self.out / slug / "merged_safety_result.json").write_text("{}", encoding="utf-8")
-        self.assertEqual(safety_launch.get_status(slug)["status"], "complete")
+        (self.out / slug / "base").mkdir(parents=True)
+        (self.out / slug / "base" / "merged_safety_result.json").write_text("{}", encoding="utf-8")
+        self.assertEqual(safety_launch.get_status(slug, "base")["status"], "complete")
+
+    def test_complete_when_merged_exists_despite_failed_proc(self) -> None:
+        slug = "gpt-4.1-mini"
+        (self.out / slug / "base").mkdir(parents=True)
+        (self.out / slug / "base" / "merged_safety_result.json").write_text("{}", encoding="utf-8")
+        fake_proc = mock.Mock()
+        fake_proc.poll.return_value = 1
+        fake_proc.returncode = 1
+        safety_launch._RUNNING[f"{slug}/base"] = fake_proc
+        self.addCleanup(lambda: safety_launch._RUNNING.pop(f"{slug}/base", None))
+        self.assertEqual(safety_launch.get_status(slug, "base")["status"], "complete")
 
 
 class LaunchRoutesTest(unittest.TestCase):
@@ -119,14 +130,19 @@ class LaunchRoutesTest(unittest.TestCase):
         with mock.patch.object(
             safety_launch.subprocess, "Popen", return_value=fake_proc
         ) as popen:
-            r = self.client.post("/safety/start", data={"gateway_model": "gpt-5.5"})
+            r = self.client.post("/safety/start", data={
+                "gateway_model": "gpt-5.5",
+                "run_policy": "1",
+                "run_redteam": "1",
+                "run_garak": "1",
+            })
         self.assertEqual(r.status_code, 302)
         self.assertIn("status=running", r.headers["Location"])
         popen.assert_called_once()
         self.assertIsInstance(popen.call_args.args[0], list)
 
     def test_status_endpoint_returns_json(self) -> None:
-        r = self.client.get("/safety/nonexistent-slug/status")
+        r = self.client.get("/safety/nonexistent-slug/base/status")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.get_json()["status"], "not_found")
 
