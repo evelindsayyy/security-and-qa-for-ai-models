@@ -6,7 +6,6 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 from safety.garak import run_garak
 from safety.garak.report_validation import (
@@ -14,6 +13,7 @@ from safety.garak.report_validation import (
     validate_report,
 )
 from safety.run import garak_xdg_env
+from unit_tests.garak_test_helpers import install_fake_garak, remove_fake_garak
 
 DUKE14_PROBE_SPEC = (
     "packagehallucination,snowball,encoding,goodside,web_injection,sysprompt_extraction,"
@@ -77,18 +77,17 @@ class GarakXdgEnvTest(unittest.TestCase):
 
 class ToxicDetectorPreflightTest(unittest.TestCase):
     def test_prefetch_toxic_detector_exits_on_failure(self) -> None:
-        with mock.patch(
-            "garak.detectors.unsafe_content.ToxicCommentModel",
-            side_effect=KeyError("getpwuid(): uid not found"),
-        ):
-            with self.assertRaises(SystemExit) as ctx:
-                run_garak._prefetch_toxic_detector()
-            self.assertEqual(ctx.exception.code, 1)
+        fake = install_fake_garak(toxic_side_effect=KeyError("getpwuid(): uid not found"))
+        self.addCleanup(lambda: remove_fake_garak(fake))
+        with self.assertRaises(SystemExit) as ctx:
+            run_garak._prefetch_toxic_detector()
+        self.assertEqual(ctx.exception.code, 1)
 
     def test_prefetch_toxic_detector_succeeds(self) -> None:
-        with mock.patch("garak.detectors.unsafe_content.ToxicCommentModel") as model_cls:
-            run_garak._prefetch_toxic_detector()
-            model_cls.assert_called_once()
+        fake = install_fake_garak()
+        self.addCleanup(lambda: remove_fake_garak(fake))
+        run_garak._prefetch_toxic_detector()
+        fake["garak.detectors.unsafe_content"].ToxicCommentModel.assert_called_once()
 
 
 class ExitStatusTest(unittest.TestCase):

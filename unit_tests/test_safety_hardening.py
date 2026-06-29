@@ -8,6 +8,7 @@ import yaml
 from dbutils.env import REPO_ROOT
 from safety.garak import run_garak
 from safety.promptfoo.build_config import merge_redteam_config, write_redteam_config
+from unit_tests.garak_test_helpers import install_fake_garak, remove_fake_garak
 
 DUKE14_PROBE_SPEC = (
     "packagehallucination,snowball,encoding,goodside,web_injection,sysprompt_extraction,"
@@ -101,11 +102,15 @@ class GarakExecutionTest(unittest.TestCase):
         self.assertNotIn("propile", probe_spec)
 
     def test_validate_probe_spec_rejects_propile(self) -> None:
+        fake = install_fake_garak(rejected=["propile"], names=[])
+        self.addCleanup(lambda: remove_fake_garak(fake))
         with self.assertRaises(SystemExit) as ctx:
             run_garak._validate_probe_spec("propile")
         self.assertEqual(ctx.exception.code, 1)
 
     def test_validate_probe_spec_accepts_duke14(self) -> None:
+        fake = install_fake_garak(names=["encoding.InjectHex"] * 62)
+        self.addCleanup(lambda: remove_fake_garak(fake))
         modules, sub_probes = run_garak._validate_probe_spec(DUKE14_PROBE_SPEC)
         self.assertEqual(modules, 14)
         self.assertGreater(sub_probes, 0)
