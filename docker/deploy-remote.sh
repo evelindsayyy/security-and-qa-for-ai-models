@@ -34,7 +34,10 @@ fi
 docker compose --project-name qa-ai-models --env-file .env \
   -f docker/compose.yml -f docker/compose.deploy.yml pull web
 
+# Recreate the web container so Flask reloads bind-mounted code and refreshes
+# HOST_UID / DOCKER_GID from host-env.sh (git pull alone does not restart the process).
 docker compose --project-name qa-ai-models --env-file .env \
-  -f docker/compose.yml -f docker/compose.deploy.yml up -d --no-build --pull missing web
+  -f docker/compose.yml -f docker/compose.deploy.yml \
+  up -d --force-recreate --no-build --pull missing --no-deps web
 
 echo "Deployed ${WEB_IMAGE} at ${DEPLOY_PATH} ($(git rev-parse --short HEAD))"

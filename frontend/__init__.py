@@ -33,6 +33,8 @@ def create_app(test_config=None):
 
     if not app.config.get("TESTING"):
         from dbutils.startup import log_db_read_path
+        from frontend import docker_launch
 
         log_db_read_path()
+        docker_launch.warm_stacks_async()
     return app
