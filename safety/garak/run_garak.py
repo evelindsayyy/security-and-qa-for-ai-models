@@ -29,7 +29,6 @@ from pathlib import Path
 
 import yaml
 
-from dbutils.env import REPO_ROOT
 from safety.garak.report_validation import validate_report
 
 CONFIG_FILE = Path(__file__).parent / "garak_duke.yaml"

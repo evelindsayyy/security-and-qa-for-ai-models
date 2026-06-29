@@ -327,7 +327,7 @@ def delete_safety_paths(slug: str, profile: str) -> list[str]:
         f"safety/promptfoo/output/{slug}/{profile}/",
     ]
     other_profiles = [
-        p for _path, s, prof in iter_merged_result_paths(OUTPUT_DIR)
+        prof for _path, s, prof in iter_merged_result_paths(OUTPUT_DIR)
         if s == slug and prof != profile
     ]
     if not other_profiles:
