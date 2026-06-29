@@ -45,6 +45,7 @@ uv run python -m gateway
 {% macro progress_terminal(poll_url, interval, hint='', show_retry=false, retry_url='', initial_status='running', initial_message='') %}
 <div class="progress-card progress-card--wide">
   <p class="progress-meta">status: <b id="prog-state">{{ initial_status }}</b></p>
+  <p id="prog-alert" class="form-warning" style="display: none;" role="alert"></p>
   <pre class="log-terminal" id="prog-log" aria-live="polite">{{ initial_message }}</pre>
   {% if hint %}
   <p class="log-terminal-hint">{{ hint }}</p>
@@ -61,6 +62,7 @@ uv run python -m gateway
   const intervalMs = {{ interval }};
   const logEl = document.getElementById("prog-log");
   const stateEl = document.getElementById("prog-state");
+  const alertEl = document.getElementById("prog-alert");
   const retryEl = document.getElementById("prog-retry");
   let userScrolledUp = false;
 
@@ -76,11 +78,28 @@ uv run python -m gateway
     }
   }
 
+  function showAlert(text) {
+    if (!text || !alertEl) return;
+    alertEl.textContent = text;
+    alertEl.style.display = "block";
+  }
+
   function poll() {
     fetch(pollUrl).then(function (r) { return r.json(); }).then(function (s) {
-      stateEl.textContent = s.status;
+      if (s.alert) {
+        stateEl.textContent = "running (suite failed)";
+        showAlert(s.alert);
+      } else if (s.warnings && s.warnings.length) {
+        const msg = s.warnings.map(function (w) {
+          return w.toLowerCase().indexOf("partial") >= 0 ? w : w + " did not run.";
+        }).join("; ");
+        showAlert(msg);
+      } else {
+        stateEl.textContent = s.status;
+        if (alertEl) alertEl.style.display = "none";
+      }
       if (s.message) updateLog(s.message);
-      if (s.status === "complete") {
+      if (s.status === "complete" || s.status === "partial") {
         window.location = window.location.pathname;
       } else if (s.status === "failed") {
         stateEl.textContent = "failed";

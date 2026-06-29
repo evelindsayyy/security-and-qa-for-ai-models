@@ -23,6 +23,11 @@
          initial_status=run_status.status,
          initial_message=run_status.message
        ) }}
+    {% if run_status.status == 'failed' %}
+    <p class="detail-delete-form">
+      <a href="{{ url_for('scan_delete', slug=slug) }}" class="btn-danger">Delete failed run</a>
+    </p>
+    {% endif %}
   {% else %}
     <p class="back"><a href="{{ url_for('scans') }}">← all scans</a></p>
     <h1><span class="model">{{ model_id }}</span></h1>
@@ -30,6 +35,10 @@
       <span class="tier tier-{{ severity_tier }}">{{ severity_tier }}</span>
       · risk {{ overall_risk_score }} · {{ n_findings }} finding{{ "" if n_findings == 1 else "s" }} ·
       scanned {{ scanned_at[:10] if scanned_at != "—" else "—" }}
+    </p>
+
+    <p class="detail-delete-form">
+      <a href="{{ url_for('scan_delete', slug=slug) }}" class="btn-danger">Delete result</a>
     </p>
 
     <h2>Findings ({{ n_findings }})</h2>

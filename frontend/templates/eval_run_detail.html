@@ -27,6 +27,11 @@
       <p class="progress-fail" id="fail-hint" style="display: {{ 'block' if run_status.status == 'failed' else 'none' }};">
         Run failed — see log above or <code>evaluator/results/{{ slug }}.log</code>.
       </p>
+      {% if run_status.status == 'failed' %}
+      <p class="detail-delete-form">
+        <a href="{{ url_for('eval_run_delete', slug=slug) }}" class="btn-danger">Delete failed run</a>
+      </p>
+      {% endif %}
     </div>
     <script>
       (function () {
@@ -63,6 +68,10 @@
       slug <code>{{ slug }}</code> ·
       run <code>{{ run_id }}</code> ·
       {{ timestamp }}
+    </p>
+
+    <p class="detail-delete-form">
+      <a href="{{ url_for('eval_run_delete', slug=slug) }}" class="btn-danger">Delete result</a>
     </p>
 
     <div class="summary-row">

@@ -235,3 +235,20 @@ def get_safety_detail_db(slug: str, profile: str = "base") -> dict | None:
 
     data = _run_tuple_to_data(run_row, findings_json)
     return _build_safety_detail(slug, data, profile)
+
+
+def delete_run(gateway_model_id: str, completed_at: str) -> bool:
+    """Delete one safety_runs row (findings cascade). Returns True if removed."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM public.safety_runs
+                WHERE gateway_model_id = %(gateway_model_id)s
+                  AND completed_at = %(completed_at)s::timestamptz
+                """,
+                {"gateway_model_id": gateway_model_id, "completed_at": completed_at},
+            )
+            deleted = cur.rowcount > 0
+        conn.commit()
+    return deleted

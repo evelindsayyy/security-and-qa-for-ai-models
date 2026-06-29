@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
 import threading
+import time
 from pathlib import Path
 
 from dbutils import run_lock
@@ -59,6 +61,114 @@ _GATEWAY_FALLBACK: tuple[str, ...] = (
 
 _SAFETY_CATEGORIES = frozenset({"general_chat", "codex", "research"})
 _PROBE_RE = re.compile(r"^[a-zA-Z0-9.,_-]+$")
+
+_SUITE_LABELS = {
+    "promptfoo_duke_policy_v1": "Duke policy",
+    "promptfoo_duke_redteam_v1": "Red-team",
+    "garak_subset_v1": "Garak",
+}
+
+_LOG_ALERT_MARKERS: tuple[tuple[str, str], ...] = (
+    ("ERROR: Garak finished", "Garak failed — see log; merge may continue without Garak."),
+    ("ERROR: garak report incomplete", "Garak scan incomplete — see log; merge omits Garak."),
+    ("WARNING: Garak failed", "Garak failed — see log; merge may continue without Garak."),
+    ("ERROR: red-team failed", "Red-team failed — see log."),
+    ("ERROR: export failed", "Export failed — see log."),
+)
+
+
+def _read_lock(lock_file: Path) -> dict | None:
+    if not lock_file.is_file():
+        return None
+    try:
+        data = json.loads(lock_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _is_stale_lock(lock_file: Path, log_path: Path, run_key: str) -> bool:
+    """True when a lock file outlives the process that should hold it."""
+    proc = _RUNNING.get(run_key)
+    if proc is not None and proc.poll() is None:
+        return False
+    if not lock_file.is_file():
+        return False
+    if log_path.is_file():
+        try:
+            text = log_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            text = ""
+        if "Complete:" in text:
+            return True
+        if "ERROR:" in text or "Garak: FAILED" in text:
+            return True
+    lock = _read_lock(lock_file)
+    if not lock:
+        return True
+    pid = int(lock.get("pid") or 0)
+    if pid == 1 and lock.get("source") == "cli" and log_path.is_file():
+        try:
+            if time.time() - log_path.stat().st_mtime > 300:
+                return True
+        except OSError:
+            pass
+    if pid > 1 and not run_lock.pid_alive(pid):
+        return True
+    return False
+
+
+def _garak_partial_warning(data: dict) -> str | None:
+    garak_tool = (data.get("tool_results") or {}).get("garak_subset_v1") or {}
+    garak_meta = garak_tool.get("garak") or {}
+    expected = garak_meta.get("expected_modules")
+    completed = garak_meta.get("completed_modules")
+    if garak_meta.get("report_complete") is False:
+        if expected and completed is not None:
+            return f"Garak partial ({completed}/{expected} modules)"
+        return "Garak partial (incomplete report)"
+    if expected and completed is not None and completed < expected:
+        return f"Garak partial ({completed}/{expected} modules)"
+    return None
+
+
+def _log_alert(log_path: Path) -> str | None:
+    if not log_path.is_file():
+        return None
+    tail = status_message(log_path, failed=True)
+    for marker, message in _LOG_ALERT_MARKERS:
+        if marker in tail:
+            return message
+    return None
+
+
+def _merged_warnings(merged: Path) -> list[str]:
+    if not merged.is_file():
+        return []
+    try:
+        data = json.loads(merged.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+    warnings: list[str] = []
+    missing = data.get("missing_suites") or []
+    warnings.extend(_SUITE_LABELS.get(s, s.replace("_", " ")) for s in missing)
+    partial = _garak_partial_warning(data)
+    if partial:
+        warnings.append(partial)
+    return warnings
+
+
+def _running_payload(log_path: Path, rel_log: str) -> dict:
+    payload = {
+        "status": "running",
+        "message": status_message(log_path),
+        "log_path": rel_log,
+    }
+    alert = _log_alert(log_path)
+    if alert:
+        payload["alert"] = alert
+    return payload
+
 
 _RUNNING: dict[str, subprocess.Popen] = {}
 _INFLIGHT: dict[tuple, str] = {}
@@ -268,20 +378,24 @@ def get_status(slug: str, profile: str = "base") -> dict:
 
     proc = _RUNNING.get(run_key)
     if proc is not None and proc.poll() is None:
-        return {
-            "status": "running",
-            "message": status_message(log_path),
-            "log_path": rel_log,
-        }
+        return _running_payload(log_path, rel_log)
 
     if run_lock.is_active(lock_file) and not merged.is_file():
-        return {
-            "status": "running",
-            "message": status_message(log_path),
-            "log_path": rel_log,
-        }
+        if _is_stale_lock(lock_file, log_path, run_key):
+            run_lock.release(lock_file)
+            msg = status_message(log_path, failed=True)
+            return {"status": "failed", "message": msg, "log_path": rel_log}
+        return _running_payload(log_path, rel_log)
 
     if merged.is_file():
+        warnings = _merged_warnings(merged)
+        if warnings:
+            return {
+                "status": "partial",
+                "message": "",
+                "warnings": warnings,
+                "log_path": rel_log,
+            }
         return {"status": "complete", "message": "", "log_path": rel_log}
 
     if proc is not None:

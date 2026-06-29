@@ -436,3 +436,45 @@ def get_run_detail(slug: str) -> dict | None:
     except Exception:
         pass
     return _get_run_detail_files(slug)
+
+
+_EVAL_ARTIFACT_SUFFIXES = (".jsonl", ".log", "_trace.jsonl")
+
+
+def delete_eval_run_paths(slug: str) -> list[str]:
+    if not is_safe_slug(slug):
+        return []
+    return [f"evaluator/results/{slug}{suffix}" for suffix in _EVAL_ARTIFACT_SUFFIXES]
+
+
+def delete_eval_run(slug: str) -> str | None:
+    """Remove eval run artifacts (and DB row when configured). Returns error or None."""
+    from frontend.eval_launch import is_eval_run_in_progress
+
+    if not is_safe_slug(slug):
+        return f"invalid slug: {slug!r}"
+    if is_eval_run_in_progress(slug):
+        return "cannot delete while the run is still in progress"
+
+    removed_files = 0
+    for suffix in _EVAL_ARTIFACT_SUFFIXES:
+        path = RESULTS_DIR / f"{slug}{suffix}"
+        if path.is_file():
+            try:
+                path.unlink()
+                removed_files += 1
+            except OSError as exc:
+                return f"could not delete {path.name}: {exc}"
+
+    removed_db = False
+    try:
+        from frontend import eval_db_data
+
+        if eval_db_data.available():
+            removed_db = eval_db_data.delete_run(slug)
+    except Exception:
+        pass
+
+    if removed_files == 0 and not removed_db:
+        return f"no eval run found for slug {slug!r}"
+    return None

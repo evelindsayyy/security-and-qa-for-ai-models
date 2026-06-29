@@ -23,20 +23,11 @@ python3 main.py                   # or: ./docker/run.sh up --build
 python3 main.py up -d --build     # background
 ```
 
-Open http://127.0.0.1:5000 · launch pages: `/scans/new` · `/safety/new` · `/eval-run/new` · `/benchmarks/new`
+Open http://127.0.0.1:5000.
+
+Launch pages: `/scans/new`, `/safety/new`, `/eval-run/new`, `/benchmarks/new` — gateway dropdowns on each form. Benchmark model-input options (Gateway / Hosted / Custom): [`benchmarks/README.md`](../benchmarks/README.md).
 
 While a job runs, its detail page polls status and shows a live log tail. Scan and safety start forms warn when the same model/repo is already in progress (`run.lock` under the output dir).
-
-### Benchmark model sources (`/benchmarks/new`)
-
-Three ways to pick a model — the form shows a setup guide that changes with your
-selection. Full reference: [`benchmarks/README.md`](../benchmarks/README.md#model-input-cheat-sheet).
-
-| Source | Model input example |
-|--------|---------------------|
-| Gateway | `GPT 4.1 Mini` (dropdown) |
-| Hosted (HF Inference) | `meta-llama/Llama-3.1-8B-Instruct` + `hf_…` token |
-| Custom (self-hosted API) | `my-finetune-v2` + `http://localhost:8080/v1` |
 
 ### JSON API
 
@@ -66,7 +57,8 @@ python3 main.py --host
 
 - **Host has no `python` command** — use `python3 main.py` or `./docker/run.sh` (see [`docs/cli.md`](../docs/cli.md)).
 - **Promptfoo “config not found” / empty eval.json** — missing `HOST_REPO`. `./docker/run.sh` sets it; browser launches pass it via `docker_launch.py`.
-- **Garak `run config not found: tmp*.yaml`** — redeploy after fix in `run_garak.py` (absolute config path).
+- **Stale safety `run.lock`** — if a container died mid-run, the UI marks the job `failed` and releases the lock when the log shows completion or errors without a live holder.
+- **Partial Garak** — incomplete Garak scans are omitted from merge; detail may show `garak_subset_v1` in `missing_suites` or a partial-Garak warning.
 - **`POST /api/scans` → 503** (cannot write) — root-owned output from an old run. On the application VM (no sudo needed):
 
   ```bash

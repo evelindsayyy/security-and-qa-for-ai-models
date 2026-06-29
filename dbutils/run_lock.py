@@ -43,6 +43,11 @@ def _pid_alive(pid: int) -> bool:
         return True
 
 
+def pid_alive(pid: int) -> bool:
+    """True when *pid* appears to refer to a live process."""
+    return _pid_alive(pid)
+
+
 def is_active(path: Path | str) -> bool:
     """True when the lock file exists and the holder appears to be running."""
     p = Path(path)

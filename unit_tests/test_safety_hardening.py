@@ -9,6 +9,12 @@ from dbutils.env import REPO_ROOT
 from safety.garak import run_garak
 from safety.promptfoo.build_config import merge_redteam_config, write_redteam_config
 
+DUKE14_PROBE_SPEC = (
+    "packagehallucination,snowball,encoding,goodside,web_injection,sysprompt_extraction,"
+    "apikey,promptinject,dan.Dan_11_0,dan.DanInTheWild,misleading,leakreplay,latentinjection,"
+    "divergence"
+)
+
 
 class BuildConfigTest(unittest.TestCase):
     def test_base_profile_matches_base_yaml(self) -> None:
@@ -56,7 +62,10 @@ class GarakExecutionTest(unittest.TestCase):
                             "standard": {"type": "openai"},
                             "openai5": {"type": "openai"},
                         },
-                        "plugins": {"generators": {"openai": {}}},
+                        "plugins": {
+                            "generators": {"openai": {}},
+                            "probe_spec": DUKE14_PROBE_SPEC,
+                        },
                     }
                 ),
                 encoding="utf-8",
@@ -69,6 +78,8 @@ class GarakExecutionTest(unittest.TestCase):
 
             with mock.patch.object(run_garak, "CONFIG_FILE", config_file), \
                  mock.patch.object(run_garak, "_prefetch_hf_models", lambda: None), \
+                 mock.patch.object(run_garak, "_prefetch_toxic_detector", lambda: None), \
+                 mock.patch.object(run_garak, "_validate_probe_spec", return_value=(14, 62)), \
                  mock.patch.object(run_garak.subprocess, "run", side_effect=fake_run), \
                  mock.patch("sys.argv", ["run_garak.py", "GPT 4.1 Mini"]):
                 exit_code = run_garak.main()
@@ -76,6 +87,28 @@ class GarakExecutionTest(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             config_arg = captured["cmd"][captured["cmd"].index("--config") + 1]
             self.assertTrue(Path(config_arg).is_absolute())
+            garak_dir = REPO_ROOT / "safety" / "garak"
+            self.assertNotEqual(Path(config_arg).parent.resolve(), garak_dir.resolve())
+            self.assertIn("-p", captured["cmd"])
+            p_idx = captured["cmd"].index("-p")
+            self.assertEqual(captured["cmd"][p_idx + 1], DUKE14_PROBE_SPEC)
+
+    def test_duke14_probe_spec_in_yaml(self) -> None:
+        cfg = yaml.safe_load(run_garak.CONFIG_FILE.read_text(encoding="utf-8"))
+        probe_spec = cfg["plugins"]["probe_spec"]
+        self.assertEqual(probe_spec, DUKE14_PROBE_SPEC)
+        self.assertEqual(len(probe_spec.split(",")), 14)
+        self.assertNotIn("propile", probe_spec)
+
+    def test_validate_probe_spec_rejects_propile(self) -> None:
+        with self.assertRaises(SystemExit) as ctx:
+            run_garak._validate_probe_spec("propile")
+        self.assertEqual(ctx.exception.code, 1)
+
+    def test_validate_probe_spec_accepts_duke14(self) -> None:
+        modules, sub_probes = run_garak._validate_probe_spec(DUKE14_PROBE_SPEC)
+        self.assertEqual(modules, 14)
+        self.assertGreater(sub_probes, 0)
 
 
 if __name__ == "__main__":

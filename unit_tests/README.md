@@ -28,7 +28,9 @@ Tests mock gateway calls and default to `FRONTEND_LAUNCH_MODE=host` — no Docke
 | `test_safety_data` | Merged safety summarize/detail |
 | `test_promptfoo_exporter` | Promptfoo grading helpers |
 | `test_garak_exporter` | Garak JSONL → SafetyRunResult |
+| `test_garak_report_validation` | Garak report completeness, XDG env, ToxicCommentModel preflight |
 | `test_safety_scorer` | Safety merge + tier calibration (committed fixtures) |
+| `test_safety_launch` | Safety browser launch, stale locks, partial Garak warnings |
 | `test_scanner_*` | ModelAudit filters, dependency merge, secret parse, paths |
 | `test_run_benchmark` | Benchmark slug/stem validation |
 

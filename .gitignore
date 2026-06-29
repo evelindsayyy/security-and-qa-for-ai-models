@@ -76,5 +76,7 @@ safety/promptfoo/output/*
 safety/promptfoo/.promptfoo/
 safety/garak/output/*
 !safety/garak/output/README.md
+safety/garak/tmp*.yaml
+safety/garak/.runtime/
 safety/output/*
 !safety/output/README.md

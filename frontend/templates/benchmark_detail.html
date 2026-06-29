@@ -35,12 +35,9 @@
         Run failed — see log above or <code>benchmarks/results/{{ slug }}.log</code>.
       </p>
       {% if run_status.status == 'failed' %}
-      <form method="post" action="{{ url_for('benchmark_delete', slug=slug) }}"
-            class="detail-delete-form"
-            onsubmit="return confirm('Delete this failed run and its log files?');">
-        <input type="hidden" name="confirm" value="1">
-        <button type="submit" class="btn-danger">Delete failed run</button>
-      </form>
+      <p class="detail-delete-form">
+        <a href="{{ url_for('benchmark_delete', slug=slug) }}" class="btn-danger">Delete failed run</a>
+      </p>
       {% endif %}
     </div>
     <script>
@@ -91,12 +88,9 @@
       {{ timestamp }}
     </p>
 
-    <form method="post" action="{{ url_for('benchmark_delete', slug=slug) }}"
-          class="detail-delete-form"
-          onsubmit="return confirm('Delete this benchmark result? This cannot be undone.');">
-      <input type="hidden" name="confirm" value="1">
-      <button type="submit" class="btn-danger">Delete result</button>
-    </form>
+    <p class="detail-delete-form">
+      <a href="{{ url_for('benchmark_delete', slug=slug) }}" class="btn-danger">Delete result</a>
+    </p>
 
     <div class="summary-row">
       <div class="summary-chips">

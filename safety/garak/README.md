@@ -24,18 +24,21 @@ mkdir -p safety/garak/output/${SLUG}
 
 ## Run scan
 
-Default 15 Duke-focused modules from `garak_duke.yaml`:
+Default 14 Duke-focused modules from `garak_duke.yaml` (garak 0.15.1 in `safety/docker`):
+(`propile` omitted — inactive upstream in garak 0.15.x)
 
 ```bash
 $GARAK_DC run --rm garak \
-  python -m garak --config garak_duke.yaml -n "${GATEWAY_MODEL}"
+  python safety/garak/run_garak.py "${GATEWAY_MODEL}" \
+  --report-dir safety/garak/output/${SLUG}
 ```
 
 Subset via CLI (`-p` overrides yaml `probe_spec`):
 
 ```bash
 $GARAK_DC run --rm garak \
-  python -m garak --config garak_duke.yaml -n "${GATEWAY_MODEL}" \
+  python safety/garak/run_garak.py "${GATEWAY_MODEL}" \
+  --report-dir safety/garak/output/${SLUG} \
   -p "encoding,promptinject,dan.Dan_11_0"
 ```
 
@@ -47,6 +50,8 @@ Equivalent via wrapper:
 ```
 
 Reports land under `output/<slug>/` (e.g. `output/gpt-4.1-mini/garak-duke.report.jsonl`). `run_safety.sh` sets `target_name` and `report_dir` per selected model so outputs never share a flat root.
+
+`run_garak.py` writes a temporary merged config outside the repo tree (never `tmp*.yaml` beside `garak_duke.yaml`).
 
 ## Export results
 
@@ -87,7 +92,7 @@ plugins:
 
 Avoid `*Full` variants (large prompt counts).
 
-### Default modules (15)
+### Default modules (14 — garak 0.15.1)
 
 | Module | Category | Fail severity |
 |--------|----------|---------------|
@@ -104,8 +109,9 @@ Avoid `*Full` variants (large prompt counts).
 | `misleading` | policy | medium |
 | `leakreplay` | leakage | medium |
 | `latentinjection` | jailbreak | high |
-| `propile` | leakage | high |
 | `divergence` | leakage | medium |
+
+`propile` is not included — all `propile.*` sub-probes are marked inactive in garak 0.15.x.
 
 `dan.*` sub-probes roll up to one `garak.dan` finding.
 
@@ -118,6 +124,8 @@ Azure gateway may block jailbreak prompts before the model responds. Garak repor
 | Path | Role |
 |------|------|
 | `garak_duke.yaml` | Scan config |
+| `run_garak.py` | Launcher (profile pick, temp config, preflight, report validation) |
+| `report_validation.py` | Duke 14 completeness checks |
 | `export_safety_result.py` | Normalizer CLI |
 | `output/<slug>/garak-duke.report.jsonl` | Raw report |
 | `output/<slug>/safety_result.json` | Normalized export |
@@ -126,6 +134,9 @@ Azure gateway may block jailbreak prompts before the model responds. Garak repor
 
 | Issue | Fix |
 |-------|-----|
-| `No detectors, nothing to do` | Use stock `compose.yml` |
+| `No detectors, nothing to do` / `getpwuid(): uid not found` | Full pipeline sets `USER`/`LOGNAME` via [`garak_xdg_env()`](../run.py) in Docker; standalone runs need the same env or [`safety/garak/docker/compose.yml`](docker/compose.yml) |
+| `ToxicCommentModel` preflight failed | Rebuild safety image; confirm `USER=garak` in XDG env before scan |
+| Scan exits non-zero after probes | Report missing `completion` or modules — see `report_validation.py`; partial reports are rejected |
 | Root-owned `output/` | `chown -R "$(id -u):$(id -g)" safety/garak/output` |
-| No report after scan | Check the gateway token in the repo-root `.env` (`OPENAI_API_KEY`/`DUKE_GATEWAY_KEY`) |
+| No report after scan | Check gateway token in repo-root `.env` (`OPENAI_API_KEY` / `DUKE_GATEWAY_KEY`) |
+| `Unknown probes` | Rebuild `safety/docker` image so garak 0.15.1 is installed |

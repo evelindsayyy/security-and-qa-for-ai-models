@@ -76,6 +76,7 @@
           <th class="num sortable" data-sort="qpd" style="cursor: pointer;">q / $ <span class="s-ind"></span></th>
           <th class="num sortable" data-sort="utility" style="cursor: pointer;">Value <span class="s-ind"></span></th>
           <th class="col-nowrap">Status</th>
+          <th class="col-actions">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -121,6 +122,10 @@
             {% else %}
               <span class="status-ok">OK</span>
             {% endif %}
+          </td>
+          <td class="col-actions" onclick="event.stopPropagation()">
+            <a href="{{ url_for('eval_run_delete', slug=r.slug) }}"
+               class="btn-danger btn-sm" title="Delete result">Delete</a>
           </td>
         </tr>
         {% endfor %}

@@ -173,6 +173,27 @@ def register_routes(app):
             )
         return render_template("scan_detail.html", missing=False, **detail)
 
+    @app.route("/scans/<slug>/delete", methods=["GET", "POST"])
+    def scan_delete(slug: str):
+        from flask import redirect, render_template, request, url_for
+
+        from frontend.result_delete import scan_delete_context
+        from frontend.scan_data import delete_scan
+
+        if request.method == "GET":
+            ctx = scan_delete_context(slug)
+            if ctx is None:
+                return redirect(url_for("scans"))
+            if ctx.get("error"):
+                return ctx["error"], 400
+            return render_template("delete_confirm.html", **ctx)
+        if request.form.get("confirm") != "1":
+            return "confirmation required", 400
+        error = delete_scan(slug)
+        if error:
+            return error, 400
+        return redirect(url_for("scans"))
+
     @app.route("/eval-run")
     def eval_run():
         # lazy import — don't load evaluator/openai at app startup
@@ -303,6 +324,27 @@ def register_routes(app):
             )
         return render_template("eval_run_detail.html", missing=False, **detail)
 
+    @app.route("/eval-run/<slug>/delete", methods=["GET", "POST"])
+    def eval_run_delete(slug: str):
+        from flask import redirect, render_template, request, url_for
+
+        from frontend.eval_run_data import delete_eval_run
+        from frontend.result_delete import eval_delete_context
+
+        if request.method == "GET":
+            ctx = eval_delete_context(slug)
+            if ctx is None:
+                return redirect(url_for("eval_run"))
+            if ctx.get("error"):
+                return ctx["error"], 400
+            return render_template("delete_confirm.html", **ctx)
+        if request.form.get("confirm") != "1":
+            return "confirmation required", 400
+        error = delete_eval_run(slug)
+        if error:
+            return error, 400
+        return redirect(url_for("eval_run"))
+
     @app.route("/benchmarks")
     def benchmarks():
         from frontend.benchmark_data import get_benchmarks_data
@@ -403,12 +445,20 @@ def register_routes(app):
             )
         return render_template("benchmark_detail.html", missing=False, **detail)
 
-    @app.route("/benchmarks/<slug>/delete", methods=["POST"])
+    @app.route("/benchmarks/<slug>/delete", methods=["GET", "POST"])
     def benchmark_delete(slug: str):
-        from flask import redirect, request, url_for
+        from flask import redirect, render_template, request, url_for
 
         from frontend.benchmark_data import delete_benchmark
+        from frontend.result_delete import benchmark_delete_context
 
+        if request.method == "GET":
+            ctx = benchmark_delete_context(slug)
+            if ctx is None:
+                return redirect(url_for("benchmarks"))
+            if ctx.get("error"):
+                return ctx["error"], 400
+            return render_template("delete_confirm.html", **ctx)
         if request.form.get("confirm") != "1":
             return "confirmation required", 400
         error = delete_benchmark(slug)
@@ -517,6 +567,27 @@ def register_routes(app):
                 profile=profile,
             )
         return render_template("safety_detail.html", missing=False, **detail)
+
+    @app.route("/safety/<slug>/<profile>/delete", methods=["GET", "POST"])
+    def safety_delete(slug: str, profile: str):
+        from flask import redirect, render_template, request, url_for
+
+        from frontend.result_delete import safety_delete_context
+        from frontend.safety_data import delete_safety
+
+        if request.method == "GET":
+            ctx = safety_delete_context(slug, profile)
+            if ctx is None:
+                return redirect(url_for("safety"))
+            if ctx.get("error"):
+                return ctx["error"], 400
+            return render_template("delete_confirm.html", **ctx)
+        if request.form.get("confirm") != "1":
+            return "confirmation required", 400
+        error = delete_safety(slug, profile)
+        if error:
+            return error, 400
+        return redirect(url_for("safety"))
 
     @app.route("/models")
     def models_catalog():

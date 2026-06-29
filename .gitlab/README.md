@@ -24,7 +24,7 @@ Labels: `scanning` · `safety` · `gateway` · `efficacy` · `evaluator` · `fro
 | **W3** | **Closed** — packages, catalog, frontend, MVP efficacy |
 | **W4** | **Closed** — E2E scan/safety/eval; CI on shared runners (Jun 17) |
 | **W5** | **Closed** — Postgres loaders (partial carry to W6) |
-| **W6** | **Current** — full `api/`, demo-ready UI |
+| **W6** | **Current** — demo-ready UI; REST GET/POST all pillars |
 | W7+ | Demo freeze, polish |
 
 ---
@@ -33,7 +33,7 @@ Labels: `scanning` · `safety` · `gateway` · `efficacy` · `evaluator` · `fro
 
 GitLab jobs run on Duke **shared runners** (`docker+machine`).
 
-1. Pipeline: **lint** (ruff) → **unit-tests** (~380).
+1. Pipeline: **lint** (ruff) → **unit-tests** (~565).
 2. On **`main`**: Buildah builds `docker/Dockerfile` → GitLab container registry (`web:${CI_COMMIT_SHORT_SHA}`).
 3. **`deploy`** — default **manual** on `main` (click Play after `build-web-image`). Set CI/CD variable **`DEPLOY_AUTO=true`** for automatic deploy.
 
@@ -67,7 +67,7 @@ Spikes in `testing/` exist to **run tools and inspect output**, not to ship prod
 | 2. Map | Align fields to [`docs/data-model.md`](../docs/data-model.md); note gaps in the issue comment |
 | 3. Package | `scanner/`, `safety/`, `evaluator/`, `benchmarks/` schemas + artifacts |
 | 4. Postgres | `*/db/` loaders, `api.ingest`, UI `*_db_data.py` |
-| 5. API | REST GET/POST for all pillars (eval GET live) |
+| 5. API | REST GET/POST for all pillars (live on `main`) |
 
 Use label `spike` when the issue is mainly “see what the tool returns.” Parent `mvp` issues should link the spike MR or sample files.
 
@@ -76,7 +76,7 @@ Use label `spike` when the issue is mainly “see what the tool returns.” Pare
 ## Hygiene
 
 1. New issue → `issue_templates/`
-2. Assign **current** milestone (W3 now)
+2. Assign **current** milestone
 3. Child tasks when work splits; MR uses `Closes #N`
 4. Monday: open issues for **that week only** (parent first, then its children in order)
 
