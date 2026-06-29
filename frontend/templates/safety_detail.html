@@ -21,6 +21,11 @@
          initial_status=run_status.status,
          initial_message=run_status.message
        ) }}
+    {% if run_status.status == 'failed' %}
+    <p class="detail-delete-form">
+      <a href="{{ url_for('safety_delete', slug=slug, profile=profile) }}" class="btn-danger">Delete failed run</a>
+    </p>
+    {% endif %}
   {% else %}
     <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
     <h1><span class="model">{{ gateway_model_id }}</span> <span class="badge">{{ profile }}</span></h1>
@@ -33,6 +38,13 @@
     {% if missing_suites %}
     <p class="sub dim">Note: {{ missing_suites|join(", ") }} did not run — tier reflects only the completed suites.</p>
     {% endif %}
+    {% if garak_partial_note %}
+    <p class="sub form-warning" role="alert">{{ garak_partial_note }}</p>
+    {% endif %}
+
+    <p class="detail-delete-form">
+      <a href="{{ url_for('safety_delete', slug=slug, profile=profile) }}" class="btn-danger">Delete result</a>
+    </p>
 
     <h2>Probe findings ({{ n_findings }})</h2>
     {% if findings %}

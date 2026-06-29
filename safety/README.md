@@ -18,7 +18,7 @@ docker compose --env-file .env -f safety/garak/docker/compose.yml build
 
 ## End-to-end (recommended)
 
-``python -m safety.run`` runs **Promptfoo policy + red-team + Garak + merge** by default. Model comes from the `GATEWAY_MODEL` environment variable (default `GPT 4.1 Mini`).
+`python -m safety.run` runs **Promptfoo policy + red-team + Garak + merge** by default. Model comes from the `GATEWAY_MODEL` environment variable (default `GPT 4.1 Mini`).
 
 **Host** (from repo root):
 
@@ -38,13 +38,23 @@ Thin wrapper (same): `./safety/run_safety.sh [OPTIONS] [MODEL]`
 
 Output: `safety/output/<slug>/<profile>/merged_safety_result.json` → frontend `/safety/<slug>/<profile>`.
 
-**Via Docker orchestrator** (needs `DOCKER_GID` in `.env` for nested promptfoo/garak launches):
+**Via Docker orchestrator** (needs `DOCKER_GID` for nested promptfoo/garak launches; matches UI path):
 
 ```bash
-export UID=$(id -u) GID=$(id -g)
-docker compose --env-file .env -f safety/docker/compose.yml run --rm safety \
+env UID=$(id -u) GID=$(id -g) DOCKER_GID=$(stat -c '%g' /var/run/docker.sock) \
+  docker compose --env-file .env -f safety/docker/compose.yml run --rm safety \
   python -m safety.run "GPT 4.1 Mini"
 ```
+
+See [`docs/cli.md`](../docs/cli.md) for shared Docker patterns.
+
+## Garak completeness
+
+Duke 14 queues 14 yaml probe entries; export rolls `dan.*` into one module → **~13 Garak findings** when complete.
+
+- `run_garak.py` preflights `ToxicCommentModel` before the scan (fail-fast on container passwd/env issues).
+- [`garak/report_validation.py`](garak/report_validation.py) requires a `completion` entry and the expected module count before export/merge.
+- **Partial Garak** is omitted from merge → `missing_suites` includes `garak_subset_v1`; the UI shows a partial-Garak warning when metadata is present.
 
 ## Run suites individually
 
@@ -54,7 +64,7 @@ Use this when debugging one tool, editing probes, or re-exporting without re-run
 |-------|--------|--------------|
 | Promptfoo policy | [`promptfoo/README.md`](promptfoo/README.md) | 14 Duke policy probes |
 | Promptfoo red-team | [`promptfoo/README.md`](promptfoo/README.md) | 15 local plugins |
-| Garak | [`garak/README.md`](garak/README.md) | 10 Duke-focused modules |
+| Garak | [`garak/README.md`](garak/README.md) | 14 Duke-focused modules |
 | Merge | below | Combine `safety_result.json` files |
 
 ```bash
@@ -88,7 +98,7 @@ Omit flags for suites you did not run.
 |---------------|------|--------|
 | `promptfoo_duke_policy_v1` | Promptfoo | `promptfooconfig.yaml` — 14 probes |
 | `promptfoo_duke_redteam_v1` | Promptfoo | `promptfooconfig.redteam.yaml` — 15 plugins |
-| `garak_subset_v1` | Garak | `garak_duke.yaml` — 15 modules |
+| `garak_subset_v1` | Garak | `garak_duke.yaml` — 14 modules (garak 0.15.1) |
 
 ## Pass rate and tier calibration
 
@@ -114,7 +124,7 @@ per-suite pass rates, then escalated by curated Duke policy failures
 - Weights renormalize over suites that **actually ran**; skipped suites are
   listed in `missing_suites` and never silently count as passing.
 
-Calibrated June 2026 against known-safe models: `gpt-4.1-mini` and `gpt-5.5`
+Calibrated June 2026 (sample — not a product guarantee): `gpt-4.1-mini` and `gpt-5.5`
 land at `low`, `llama-4-maverick` / `gpt-5-chat` at `medium`.
 
 > Red-team `maxCharsPerMessage` is set high (6000) so attack prompts aren't
@@ -129,7 +139,7 @@ artifact risk score vs. supply-chain sub-signals.
 
 | Severity | Modules |
 |----------|---------|
-| `high` | `dan`, `encoding`, `promptinject`, `sysprompt_extraction`, `web_injection`, `apikey`, `packagehallucination`, `latentinjection`, `propile` |
+| `high` | `dan`, `encoding`, `promptinject`, `web_injection`, `apikey`, `packagehallucination`, `latentinjection` |
 | `medium` | `goodside`, `snowball`, `misleading`, `leakreplay`, `divergence` |
 
 **After config changes** you must re-run `./safety/run_safety.sh` (or at least the changed suite + merge). Existing `merged_safety_result.json` files are not auto-updated.
@@ -144,4 +154,5 @@ artifact risk score vs. supply-chain sub-signals.
 | [`merge.py`](merge.py) | `python -m safety.merge` |
 | [`promptfoo/`](promptfoo/README.md) | Policy + red-team |
 | [`garak/`](garak/README.md) | Automated modules |
+| [`garak/report_validation.py`](garak/report_validation.py) | Report completeness checks |
 | [`output/`](output/README.md) | Merged labels |

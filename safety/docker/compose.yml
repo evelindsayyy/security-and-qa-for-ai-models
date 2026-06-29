@@ -30,6 +30,7 @@ services:
       - EFFICACY_DB_DSN=${EFFICACY_DB_DSN:-}
       - DATABASE_URL=${DATABASE_URL:-}
       - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
       - HOME=/app/safety/garak/output/.garak-home
       - XDG_DATA_HOME=/app/safety/garak/output/.garak-data
       - XDG_CACHE_HOME=/app/safety/garak/output/.garak-cache

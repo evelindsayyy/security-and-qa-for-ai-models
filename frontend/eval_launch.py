@@ -394,6 +394,16 @@ def get_status(slug: str) -> dict:
     return {"status": "not_found", "progress": 0, "total": 0, "message": ""}
 
 
+def is_eval_run_in_progress(slug: str) -> bool:
+    """True when a registered subprocess for *slug* is still running."""
+    if not is_safe_slug(slug):
+        return False
+    proc = _RUNNING.get(slug)
+    if proc is not None and proc.poll() is None:
+        return True
+    return get_status(slug)["status"] == "running"
+
+
 def validate_custom_questions(
     raw_text: str,
 ) -> tuple[list[dict] | None, str | None]:

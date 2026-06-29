@@ -41,6 +41,7 @@
           <th class="num">Findings</th>
           <th>Breakdown</th>
           <th class="col-nowrap">Scanned</th>
+          <th class="col-actions">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -56,6 +57,10 @@
           <td class="num dim">{{ s.n_findings }}</td>
           <td class="col-long dim">{{ expandable(s.severity_summary, clamp=1) }}</td>
           <td class="col-nowrap dim">{{ s.scanned_at[:10] if s.scanned_at != "—" else "—" }}</td>
+          <td class="col-actions" onclick="event.stopPropagation()">
+            <a href="{{ url_for('scan_delete', slug=s.slug) }}"
+               class="btn-danger btn-sm" title="Delete result">Delete</a>
+          </td>
         </tr>
         {% endfor %}
       </tbody>

@@ -865,6 +865,24 @@ header nav a:hover {
   margin: 0.5rem 0 0;
 }
 .form-warning { color: #842029; background: #fdf0f0; border-radius: 6px; padding: 8px 12px; font-size: 14px; margin: 0; }
+.delete-removal-box {
+  background: #f8f9fb;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+}
+.delete-removal-heading {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+  color: #012169;
+}
+.delete-removal-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: #333;
+}
 .cost-line { font-size: 14px; color: #333; margin: 0; }
 .cost-line b { font-size: 16px; color: #012169; }
 

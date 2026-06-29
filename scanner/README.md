@@ -41,7 +41,7 @@ Defense-in-depth: the same payload may be reported by more than one tool. Correl
 | TruffleHog unverified secret | **high** tier |
 | `safetensors_only` | Fickling omitted from label |
 
-**Calibration**
+**Calibration** (sample)
 
 | Model | Tier / score | Notes |
 |-------|----------------|-------|
@@ -50,23 +50,26 @@ Defense-in-depth: the same payload may be reported by more than one tool. Correl
 | neimasilk/modelscan-extension-mismatch-poc | critical / 95 | ModelScan 0 issues; Fickling + ModelAudit flag disguised pickles |
 | scan-test/supply-chain-demo | medium / 40 | Local fixture: `requirements.txt` (pip-audit + OSV); optional secret patterns in `credentials.env` |
 
-## VM setup (production)
+## Run
 
-Production scans run on the **application VM** via the UI or CLI. Secrets (`HF_TOKEN`, optional) come from the repo-root `.env`. Run from the repo root; set `UID`/`GID` so output files are owned by you (not root):
+Production scans run on the **application VM** via the UI or CLI. Secrets (`HF_TOKEN`, optional) come from the repo-root `.env`. Shared Docker patterns: [`docs/cli.md`](../docs/cli.md).
 
 ```bash
-export UID=$(id -u) GID=$(id -g)
-docker compose --env-file .env -f scanner/docker/compose.yml build
-docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner python -m scanner scan gpt2
-docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner python -m scanner validate gpt2
+env UID=$(id -u) GID=$(id -g) \
+  docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner \
+  python -m scanner scan gpt2
 ```
+
+Build once: `docker compose --env-file .env -f scanner/docker/compose.yml build`.
 
 Outputs: `scanner/output/<slug>/scan_result.json` (primary), `combined_scan.json`, `modelscan_report.json`, `modelaudit_report.json` when applicable.
 
 ## New models
 
 ```bash
-docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner python -m scanner scan <HF_REPO_ID>
+env UID=$(id -u) GID=$(id -g) \
+  docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner \
+  python -m scanner scan <HF_REPO_ID>
 ```
 
 Hub `org/model` → weights download into `models/org--model/` for the duration of the scan, then **`output/org--model/scan_result.json` is kept** and weights are **deleted automatically** (unless `SCAN_KEEP_WEIGHTS=1` for CLI debugging). Every scan re-downloads from Hugging Face Hub.

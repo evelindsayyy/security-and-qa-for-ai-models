@@ -112,19 +112,27 @@ export HOST_UID=$(id -u) HOST_GID=$(id -g)   # web stack (docker/run.sh sets the
 
 ```bash
 # Scan an HF repo -> scanner/output/<slug>/scan_result.json (+ auto-ingest)
-docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner \
+env UID=$(id -u) GID=$(id -g) \
+  docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner \
   python -m scanner scan gpt2
 
-# Safety red-team -> safety/output/<slug>/<profile>/merged_safety_result.json
+# Safety -> safety/output/<slug>/<profile>/merged_safety_result.json
 uv run python -m safety.run "GPT 4.1 Mini"
 # Thin wrapper (same): ./safety/run_safety.sh "GPT 4.1 Mini"
 
+# Safety via Docker orchestrator (matches browser / UI path)
+env UID=$(id -u) GID=$(id -g) DOCKER_GID=$(stat -c '%g' /var/run/docker.sock) \
+  docker compose --env-file .env -f safety/docker/compose.yml run --rm safety \
+  python -m safety.run "GPT 4.1 Mini"
+
 # Efficacy (LLM-as-judge) -> evaluator/results/*.jsonl
-docker compose --env-file .env -f evaluator/docker/compose.yml run --rm evaluator \
+env UID=$(id -u) GID=$(id -g) \
+  docker compose --env-file .env -f evaluator/docker/compose.yml run --rm evaluator \
   python runner.py --candidate-model "GPT 4.1 Mini" --judge-model "Llama 4 Maverick"
 
 # Public benchmark -> benchmarks/results/
-docker compose --env-file .env -f benchmarks/docker/compose.yml run --rm benchmarks \
+env UID=$(id -u) GID=$(id -g) \
+  docker compose --env-file .env -f benchmarks/docker/compose.yml run --rm benchmarks \
   python run_benchmark.py --benchmark truthfulqa --model "GPT 4.1 Mini"
 ```
 
@@ -140,7 +148,11 @@ Per-pillar flags and host-only paths: [`scanner/`](../scanner/README.md) ·
 | Safety | `safety/output/<slug>/<profile>/run.lock` | exit **2** |
 | Benchmark | `benchmarks/results/<stem>.run.lock` | UI only (no CLI lock yet) |
 
-Scan and safety start forms show a warning when that model/repo is already in progress. Stale locks are removed when the holder PID is dead; delete the lock file manually if needed after `kill -9`.
+Scan and safety start forms show a warning when that model/repo is already in progress.
+
+**Stale locks:** removed when the holder PID is dead. Safety UI also treats orphaned locks as `failed` when the log shows `Complete:` or errors without a live process. Delete `run.lock` manually after `kill -9` if needed.
+
+**Garak (safety):** Duke 14 `probe_spec` queues 14 yaml entries → ~13 exported module findings (`dan.*` rolls up). Incomplete reports (no `completion` entry or fewer modules) fail export/merge — `garak_subset_v1` appears in `missing_suites`.
 
 Historical scan rows may show pre-change `overall_risk_score` values (clean scans now score **0**; benign gpt2-style pickles stay **18**).
 

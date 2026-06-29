@@ -251,3 +251,54 @@ def get_scan_detail_db(slug: str) -> dict | None:
     data = _scan_tuple_to_data(scan_row, findings)
     detail_slug = _slug_for_scan(scan_row[1], data.get("scan_metadata"))
     return _build_scan_detail(detail_slug, data)
+
+
+def resolve_delete_keys(slug: str) -> tuple[str, str] | None:
+    """Map UI slug to ``(hf_repo, completed_at)`` for the latest Postgres row."""
+    if not is_safe_slug(slug):
+        return None
+
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            scan_row = None
+            for hf_repo in _hf_repo_candidates(slug):
+                cur.execute(_DETAIL_SCAN_SQL, {"hf_repo": hf_repo})
+                scan_row = cur.fetchone()
+                if scan_row is not None:
+                    break
+            if scan_row is None:
+                return None
+            repo = scan_row[1]
+            completed_at = scan_row[9]
+            if not repo or completed_at is None:
+                return None
+            if hasattr(completed_at, "isoformat"):
+                completed_at = completed_at.isoformat()
+            else:
+                completed_at = str(completed_at)
+            return repo, completed_at
+
+
+def delete_run_by_slug(slug: str) -> bool:
+    """Delete the latest Postgres scan row for a UI slug."""
+    keys = resolve_delete_keys(slug)
+    if keys is None:
+        return False
+    return delete_run(*keys)
+
+
+def delete_run(hf_repo: str, completed_at: str) -> bool:
+    """Delete one scans row (findings cascade). Returns True if removed."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM public.scans
+                WHERE hf_repo = %(hf_repo)s
+                  AND completed_at = %(completed_at)s::timestamptz
+                """,
+                {"hf_repo": hf_repo, "completed_at": completed_at},
+            )
+            deleted = cur.rowcount > 0
+        conn.commit()
+    return deleted

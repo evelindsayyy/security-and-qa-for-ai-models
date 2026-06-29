@@ -17,10 +17,15 @@ local debugging). CLI READMEs still document the manual docker compose workflow.
 
 from __future__ import annotations
 
+import logging
 import os
+import socket
 import subprocess
 import threading
+import time
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent.parent
 ENV_FILE = ROOT / ".env"
@@ -51,17 +56,70 @@ def use_docker() -> bool:
     return hasattr(os, "getuid")
 
 
-def docker_available() -> bool:
+def _docker_socket_ping(*, timeout: float = 5.0) -> bool:
+    """Lightweight daemon check via the mounted socket (no CLI subprocess)."""
+    sock_path = "/var/run/docker.sock"
+    if not os.path.exists(sock_path):
+        return False
+    if not os.access(sock_path, os.R_OK | os.W_OK):
+        return False
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(timeout)
+            sock.connect(sock_path)
+            sock.sendall(
+                b"GET /_ping HTTP/1.1\r\nHost: docker\r\nConnection: close\r\n\r\n"
+            )
+            reply = sock.recv(256)
+        return b"200" in reply or b"OK" in reply
+    except OSError:
+        return False
+
+
+def _docker_compose_ready(*, timeout: float = 20.0) -> bool:
     try:
         subprocess.run(
             ["docker", "compose", "version"],
             capture_output=True,
             check=True,
-            timeout=15,
+            timeout=timeout,
         )
         return True
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.debug("docker compose version failed: %s", exc)
         return False
+
+
+def docker_available(*, retries: int = 3) -> bool:
+    """True when the host daemon and compose plugin are reachable.
+
+    Retries absorb transient slowness when long pillar jobs are running.
+    """
+    for attempt in range(max(1, retries)):
+        if _docker_socket_ping() and _docker_compose_ready():
+            return True
+        if attempt + 1 < retries:
+            time.sleep(0.75 * (attempt + 1))
+    log.warning("docker unavailable after %s attempt(s)", retries)
+    return False
+
+
+def warm_stacks_async() -> None:
+    """Pre-build pillar images in the background so Start clicks do not block."""
+    if not use_docker():
+        return
+
+    def _warm() -> None:
+        if not docker_available(retries=2):
+            log.warning("docker warm skipped — daemon not reachable at startup")
+            return
+        for stack in STACKS:
+            try:
+                ensure_stack(stack)
+            except Exception:
+                log.exception("docker warm failed for stack %r", stack)
+
+    threading.Thread(target=_warm, daemon=True, name="docker-warm").start()
 
 
 def docker_required_message(stack: str) -> str:

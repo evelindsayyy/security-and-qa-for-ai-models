@@ -11,6 +11,8 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from frontend.path_safety import is_safe_slug
+
 ROOT = Path(__file__).parent.parent
 OUTPUT_DIR = ROOT / "scanner" / "output"
 
@@ -448,3 +450,55 @@ def get_scan_detail(slug: str) -> dict | None:
     except Exception:
         pass
     return _get_scan_detail_files(slug)
+
+
+def delete_scan_paths(slug: str) -> list[str]:
+    """Human-readable paths removed by ``delete_scan``."""
+    if not is_safe_slug(slug):
+        return []
+    return [f"scanner/output/{slug}/"]
+
+
+def delete_scan(slug: str) -> str | None:
+    """Remove scan artifacts (and DB row when configured). Returns error or None."""
+    from frontend.output_dirs import wipe_dir
+    from frontend.scan_launch import inflight_scan_slugs
+
+    if not is_safe_slug(slug):
+        return f"invalid slug: {slug!r}"
+    if slug in inflight_scan_slugs():
+        return "cannot delete while the scan is still in progress"
+
+    scan_dir = OUTPUT_DIR / slug
+    result_path = scan_dir / "scan_result.json"
+    db_keys: tuple[str, str] | None = None
+    if result_path.is_file():
+        try:
+            data = json.loads(result_path.read_text(encoding="utf-8"))
+            meta = data.get("scan_metadata") or {}
+            scanned_at = meta.get("scanned_at")
+            hf_repo = data.get("model_id")
+            if hf_repo and scanned_at:
+                db_keys = (hf_repo, scanned_at)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    removed_disk = scan_dir.is_dir()
+    if removed_disk:
+        wipe_dir(scan_dir)
+
+    removed_db = False
+    try:
+        from frontend import scan_db_data
+
+        if scan_db_data.available():
+            if db_keys:
+                removed_db = scan_db_data.delete_run(*db_keys)
+            if not removed_db:
+                removed_db = scan_db_data.delete_run_by_slug(slug)
+    except Exception:
+        pass
+
+    if not removed_disk and not removed_db:
+        return f"no scan result found for slug {slug!r}"
+    return None

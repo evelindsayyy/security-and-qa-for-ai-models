@@ -4,11 +4,11 @@ Gateway **efficacy** evaluation via Duke task suites and an LLM-as-judge (`runne
 
 Public academic benchmarks (TruthfulQA, IFEval, MMLU, …) are a sibling pillar — see [`../benchmarks/`](../benchmarks/README.md) (`/benchmarks` tab).
 
-Launch from the browser or CLI; both use Docker by default from the frontend.
+Launch from the browser or CLI; both use Docker by default. CLI reference: [`docs/cli.md`](../docs/cli.md).
 
 ## Quickstart
 
-**1. Environment** (repo root `.env` or shell):
+**1. Environment** (repo root `.env`):
 
 ```bash
 DUKE_GATEWAY_URL=https://litellm.oit.duke.edu/v1   # confirm with OIT
@@ -31,11 +31,11 @@ uv run python runner.py \
 - `evaluator/results/<same>_trace.jsonl` — raw responses for debugging
 - `evaluator/cache/` — candidate/judge caches (re-runs are cheap). **Docker:** `evaluator/cache` is bind-mounted in `evaluator/docker/compose.yml` so the container user (host UID/GID) can write cache files.
 
-**Docker (browser or CLI):** secrets come from the repo-root `.env`. Set ownership so cache/results are writable:
+**Docker (browser or CLI):**
 
 ```bash
-export UID=$(id -u) GID=$(id -g)
-docker compose --env-file .env \
+env UID=$(id -u) GID=$(id -g) \
+  docker compose --env-file .env \
   -f evaluator/docker/compose.yml run --rm evaluator \
   python runner.py --candidate-model "GPT 4.1 Mini" --judge-model "Llama 4 Maverick" \
   --max-tokens 2000 --judge-max-tokens 2000
