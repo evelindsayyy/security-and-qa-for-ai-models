@@ -29,6 +29,7 @@ import re
 import sqlite3
 import threading
 from pathlib import Path
+from typing import Callable
 
 HERE = Path(__file__).resolve().parent
 TASKS_DIR = HERE / "tasks"
@@ -100,10 +101,11 @@ def passed(candidate_rows: list | None, expected: list) -> bool:
 
 
 def load_suite(suite_version: str) -> dict[str, dict]:
-    """question_id -> {setup, expected} from tasks/<suite_version>.jsonl.
+    """question_id -> task dict (the row minus 'id') from tasks/<suite_version>.jsonl.
 
-    The metadata line (no 'id') is skipped; only execution rows (carrying both
-    setup and expected) are kept."""
+    The metadata line (no 'id') is skipped; only execution rows are kept. An
+    execution row carries at least 'expected'; 'setup' is SQL-specific (other
+    check types carry only their own fields)."""
     path = TASKS_DIR / f"{suite_version}.jsonl"
     out: dict[str, dict] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -111,9 +113,44 @@ def load_suite(suite_version: str) -> dict[str, dict]:
         if not line:
             continue
         row = json.loads(line)
-        if "id" in row and "setup" in row and "expected" in row:
-            out[row["id"]] = {"setup": row["setup"], "expected": row["expected"]}
+        if "id" in row and "expected" in row:
+            out[row["id"]] = {k: v for k, v in row.items() if k != "id"}
     return out
+
+
+def suite_check_type(suite_version: str) -> str:
+    """The execution checker a suite uses (default 'sql'), from its metadata line."""
+    path = TASKS_DIR / f"{suite_version}.jsonl"
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        meta = json.loads(line)
+        if "id" not in meta:                 # the metadata line
+            return meta.get("check", "sql")
+        break                                # first row had an id -> no metadata
+    return "sql"
+
+
+# ---------------------------------------------------------------------------
+# Checker registry — one entry per execution task type. A checker takes the
+# candidate's response + the task dict and returns (passed, error). SQL is the
+# only checker today; structured-output / numeric checkers plug in HERE, without
+# touching the runner (the suite's `check` field selects which one runs).
+# ---------------------------------------------------------------------------
+
+
+def _check_sql(candidate_response: str, task: dict) -> tuple[bool, str | None]:
+    """Run the candidate SQL against the task's `setup`; compare rows to `expected`."""
+    rows, err = run_sql(candidate_response, task["setup"])
+    if err is not None:
+        return False, err
+    return passed(rows, task["expected"]), None
+
+
+CHECKERS: dict[str, Callable[[str, dict], tuple]] = {
+    "sql": _check_sql,
+}
 
 
 def score_results_file(results_path: Path, suite_version: str | None = None) -> dict:
@@ -130,16 +167,22 @@ def score_results_file(results_path: Path, suite_version: str | None = None) -> 
     if suite_version is None:
         suite_version = rows[0].get("adaptation", {}).get("task_suite_version", "")
     suite = load_suite(suite_version)
+    check_type = suite_check_type(suite_version)
+    checker = CHECKERS.get(check_type)
+    if checker is None:
+        raise ValueError(
+            f"unknown execution check type {check_type!r} for suite "
+            f"{suite_version!r} (known: {sorted(CHECKERS)})")
 
     scored = []
     for r in rows:
         qid = r.get("question_id")
         if qid not in suite:
             continue
-        got, err = run_sql(r.get("candidate_response", ""), suite[qid]["setup"])
+        ok, err = checker(r.get("candidate_response", ""), suite[qid])
         scored.append({
             "question_id": qid,
-            "passed": passed(got, suite[qid]["expected"]),
+            "passed": ok,
             "error": err,
             "judge_overall": r.get("overall"),
         })
@@ -149,6 +192,7 @@ def score_results_file(results_path: Path, suite_version: str | None = None) -> 
     return {
         "results_file": results_path.name,
         "suite_version": suite_version,
+        "check": check_type,
         "candidate_model": rows[0].get("adaptation", {}).get("candidate_model", ""),
         "n": n,
         "passed": npass,

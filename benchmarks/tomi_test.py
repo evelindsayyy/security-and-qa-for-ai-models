@@ -29,7 +29,15 @@ from typing import Dict, List
 import litellm
 import dotenv
 
-from model_client import query_chat_completion, response_content
+from model_client import query_chat_completion, response_content, strip_reasoning
+from benchmark_metrics import (
+    has_usable_text,
+    print_binary_summary,
+    slugify_model,
+    summarize_binary_accuracy,
+)
+from benchmark_run_stats import attach_run_stats, run_with_stats, write_stats_sidecar
+from benchmark_progress import init_progress, tick
 
 dotenv.load_dotenv()
 
@@ -145,12 +153,16 @@ Answer with ONLY the location (one word). Do not explain."""
             base_url=BASE_URL,
             api_key=API_KEY,
             messages=[{"role": "user", "content": prompt}],
-            temperature=1,
+            temperature=0,
             max_tokens=1000,
         )
-        return response_content(response).lower()
-    except Exception as e:
-        print(f"  [ERROR] API error: {e}")
+        content = strip_reasoning(response_content(response))
+        # The model is asked for a single-word location; if a reasoning/verbose
+        # model returns extra prose, keep the last non-empty line so the
+        # downstream exact-match isn't defeated by leading explanation.
+        lines = [ln.strip() for ln in content.splitlines() if ln.strip()]
+        return (lines[-1] if lines else content).lower()
+    except Exception:
         return ""
 
 
@@ -177,16 +189,18 @@ def run_tomi_test(stories: List[Dict]) -> Dict:
 
     results = []
     correct = 0
+    init_progress(total=len(stories), unit="stories", message="Running ToMi…")
 
     for idx, item in enumerate(stories):
         model_answer = query_model(item['story'], item['question'])
-        passed = check_answer(model_answer, item['correct_answer'])
+        answered = has_usable_text(model_answer)
+        passed = answered and check_answer(model_answer, item['correct_answer'])
         if passed:
             correct += 1
 
-        status = "OK" if passed else "FAIL"
+        status = "OK" if passed else ("SKIP" if not answered else "FAIL")
         print(f"  [{status}] Q{idx+1} ({item['question_type']}): "
-              f"expected={item['correct_answer']} got={model_answer}")
+              f"expected={item['correct_answer']} got={model_answer or '?'}")
 
         results.append({
             'id': item['id'],
@@ -196,19 +210,18 @@ def run_tomi_test(stories: List[Dict]) -> Dict:
             'correct_answer': item['correct_answer'],
             'model_answer': model_answer,
             'passed': passed,
+            'answered': answered,
         })
+        tick(message=f"Story {idx + 1}/{len(stories)}")
 
-    total = len(results)
-    accuracy = correct / total if total > 0 else 0
+    attempted = len(results)
+    scored = sum(1 for r in results if r["answered"])
+    summary = summarize_binary_accuracy(attempted=attempted, correct=correct, scored=scored)
 
     return {
         'model': MODEL,
         'timestamp': datetime.now(timezone.utc).isoformat(),
-        'summary': {
-            'total': total,
-            'correct': correct,
-            'accuracy': round(accuracy, 4),
-        },
+        'summary': summary,
         'results': results,
     }
 
@@ -219,10 +232,12 @@ def run_tomi_test(stories: List[Dict]) -> Dict:
 
 def save_results(data: Dict, output_dir: str):
     """Save results to a JSON file."""
+    attach_run_stats(data["summary"])
+    write_stats_sidecar()
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_slug = data['model'].replace(' ', '_').replace('/', '_')
+    model_slug = slugify_model(data['model'])
     path = out / f"tomi_{model_slug}_{timestamp}.json"
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
@@ -246,17 +261,10 @@ def main():
         print(f"[OK] Limited to {SAMPLE_LIMIT} stories")
 
     try:
-        data = run_tomi_test(stories)
-        save_results(data, OUTPUT_DIR)
-
-        s = data['summary']
-        bar_len = int(s['accuracy'] * 40)
-        bar = '[' + '=' * bar_len + '-' * (40 - bar_len) + ']'
-        print(f"\n{'='*70}")
-        print("SUMMARY")
-        print(f"{'='*70}")
-        print(f"{MODEL:35s} {bar} {s['accuracy']:.1%} "
-              f"({s['correct']}/{s['total']})")
+        with run_with_stats():
+            data = run_tomi_test(stories)
+            save_results(data, OUTPUT_DIR)
+            print_binary_summary(MODEL, data['summary'])
 
     except Exception as e:
         print(f"[ERROR] {e}")

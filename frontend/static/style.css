@@ -694,6 +694,24 @@ header nav a:hover {
 .btn-secondary:hover { background: #f0f3fa; text-decoration: none; color: #012169; }
 .btn-secondary:active { transform: translateY(1px); }
 
+.btn-danger {
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #842029;
+  background: #fff;
+  border: 1px solid #e4b4b8;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn-danger:hover { background: #fdf0f1; }
+.btn-danger.btn-sm { padding: 0.2rem 0.55rem; font-size: 12px; }
+.inline-delete-form { margin: 0; }
+.detail-delete-form { margin: 0 0 1rem; }
+.run-table .col-actions { width: 5.5rem; text-align: right; white-space: nowrap; }
+
 .refresh-form { display: inline-block; margin-left: 0.5rem; vertical-align: middle; }
 
 .gateway-strip {
@@ -747,6 +765,98 @@ header nav a:hover {
 .launch-form legend { font-size: 14px; font-weight: 600; color: #333; padding: 0 0 0.3rem; }
 .launch-form fieldset label { display: block; font-weight: 400; padding: 2px 0; }
 .form-hint { display: block; color: #888; font-size: 12.5px; font-weight: 400; margin-top: 0.25rem; }
+.launch-form input[type="password"] {
+  display: block;
+  width: 100%;
+  margin-top: 0.3rem;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: #222;
+  background: #fcfcfc;
+  border: 1px solid #d5d9e2;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+.launch-form input[type="password"]:focus {
+  outline: 2px solid #012169;
+  outline-offset: 1px;
+}
+
+.launch-form .advanced-options {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0;
+  border-top: 1px solid #e8e8e8;
+}
+
+.launch-form .advanced-options summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 0.5rem;
+}
+
+.benchmark-launch-page .benchmark-launch-grid {
+  display: grid;
+  gap: 1.5rem;
+  align-items: start;
+  max-width: 920px;
+}
+@media (min-width: 820px) {
+  .benchmark-launch-page .benchmark-launch-grid {
+    grid-template-columns: minmax(280px, 480px) 1fr;
+  }
+}
+.model-setup-guide {
+  background: #f8f9fb;
+  border: 1px solid #e5e9f0;
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #333;
+}
+.model-setup-guide__title {
+  margin: 0 0 0.75rem;
+  font-size: 15px;
+  color: #012169;
+}
+.model-setup-panel { margin: 0; }
+.model-setup-panel p { margin: 0 0 0.75rem; }
+.model-setup-panel ol,
+.model-setup-panel ul {
+  margin: 0 0 0.75rem;
+  padding-left: 1.25rem;
+}
+.model-setup-panel li { margin-bottom: 0.35rem; }
+.model-setup-panel li:last-child { margin-bottom: 0; }
+.model-setup-example {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 0.75rem;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #e5e9f0;
+  font-size: 13px;
+}
+.model-setup-examples {
+  list-style: none;
+  padding-left: 0;
+  margin: 0.25rem 0 0.75rem;
+}
+.model-setup-examples li {
+  padding: 0.35rem 0.5rem;
+  background: #fff;
+  border-radius: 4px;
+  margin-bottom: 0.35rem;
+  font-size: 13px;
+  font-family: ui-monospace, Consolas, monospace;
+}
+.model-setup-note {
+  font-size: 12.5px;
+  color: #666;
+  margin: 0.5rem 0 0;
+}
 .form-warning { color: #842029; background: #fdf0f0; border-radius: 6px; padding: 8px 12px; font-size: 14px; margin: 0; }
 .cost-line { font-size: 14px; color: #333; margin: 0; }
 .cost-line b { font-size: 16px; color: #012169; }
@@ -758,6 +868,28 @@ header nav a:hover {
   padding: 1.5rem 1.75rem;
   max-width: 520px;
   box-shadow: 0 1px 3px rgba(1, 33, 105, 0.05);
+}
+.progress-card--wide {
+  max-width: min(960px, 100%);
+}
+.log-terminal {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  background: #1a1d23;
+  color: #e6edf3;
+  border-radius: 8px;
+  padding: 12px 14px;
+  height: min(420px, 50vh);
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0.75rem 0 0;
+}
+.log-terminal-hint {
+  font-size: 12px;
+  color: #888;
+  margin: 0.5rem 0 0;
 }
 .progress-track {
   background: #e9edf3;

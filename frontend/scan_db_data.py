@@ -273,3 +273,20 @@ def get_scan_detail_db(slug: str) -> dict | None:
     data = _scan_tuple_to_data(scan_row, findings)
     detail_slug = _slug_for_scan(scan_row[1], data.get("scan_metadata"))
     return _build_scan_detail(detail_slug, data)
+
+
+def delete_run(hf_repo: str, completed_at: str) -> bool:
+    """Delete one scans row (findings cascade). Returns True if removed."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM public.scans
+                WHERE hf_repo = %(hf_repo)s
+                  AND completed_at = %(completed_at)s::timestamptz
+                """,
+                {"hf_repo": hf_repo, "completed_at": completed_at},
+            )
+            deleted = cur.rowcount > 0
+        conn.commit()
+    return deleted

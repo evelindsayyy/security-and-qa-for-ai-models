@@ -145,13 +145,17 @@ Long scans and evals take minutes to hours. Start routes return immediately; the
 | Same job params twice | Deduped via in-memory `_INFLIGHT` in each `*_launch.py` |
 | Same config in Postgres | Reused via `config_fingerprint` (no re-run when match exists) |
 | Different jobs at once | Allowed — separate subprocesses and output paths |
-| Same slug (e.g. two users scan `gpt2`) | **Collides** on output dirs — last writer wins |
+| Same scan slug or safety `(slug, profile)` | Blocked by `run.lock` under the output dir (UI + CLI); second start returns existing job or exit **2** |
+| Benchmark re-click same combo | Deduped in-memory; lock file is `benchmarks/results/<stem>.run.lock` |
 | Multiple Flask workers | **Not supported** — `_RUNNING` is per-process |
 | Auth | Duke OIDC optional (`AUTH_ENABLED`); public read open; private mode + custom runs require allowlisted NetID — [`auth-setup.md`](auth-setup.md) |
+
+While a job runs, status routes return a log tail (`message` or `log` field) for progress pages.
 
 | Piece | Role |
 |-------|------|
 | **`frontend/*_launch.py`** | `subprocess.Popen` + `threading`; spawns Docker or host CLI from UI start routes |
+| **`dbutils/run_lock.py`** | File lock coordinating UI launchers and scan/safety CLI |
 | **Ingest** | Per-pillar `*/db/` loaders + `dbutils/post_run.py` — auto-sync after each successful run when DSN set; bulk via `python -m api.ingest` |
 | **Postgres** | Optional read path when DSN is set; disk JSON remains source of truth |
 | **`api/`** | JSON reads under `/api`; ingest orchestrator in `api/ingest.py` (CLI, not a route) |

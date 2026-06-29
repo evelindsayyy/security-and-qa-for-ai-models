@@ -18,12 +18,18 @@ Postgres schema and backfill (optional): see [root README — Optional Postgres]
 
 ### Run (containerized — default)
 
+See [`docs/docker.md`](../docs/docker.md).
+
 ```bash
 python3 main.py                   # or: ./docker/run.sh up --build
 python3 main.py up -d --build     # background
 ```
 
-Open http://127.0.0.1:5000 · launch pages: `/scans/new` · `/safety/new` · `/eval-run/new` · `/benchmarks/new`
+Open http://127.0.0.1:5000.
+
+Launch pages: `/scans/new`, `/safety/new`, `/eval-run/new`, `/benchmarks/new` — gateway dropdowns on each form. Benchmark model-input options (Gateway / Hosted / Custom): [`benchmarks/README.md`](../benchmarks/README.md).
+
+While a job runs, its detail page polls status and shows a live log tail. Scan and safety start forms warn when the same model/repo is already in progress (`run.lock` under the output dir).
 
 Header: **Public | Private** view toggle · **Sign in with Duke NetID** (when `AUTH_ENABLED=1`).
 
@@ -66,7 +72,8 @@ python3 main.py --host
 
 - **Host has no `python` command** — use `python3 main.py` or `./docker/run.sh` (see [`docs/cli.md`](../docs/cli.md)).
 - **Promptfoo “config not found” / empty eval.json** — missing `HOST_REPO`. `./docker/run.sh` sets it; browser launches pass it via `docker_launch.py`.
-- **Garak `run config not found: tmp*.yaml`** — redeploy after fix in `run_garak.py` (absolute config path).
+- **Stale safety `run.lock`** — if a container died mid-run, the UI marks the job `failed` and releases the lock when the log shows completion or errors without a live holder.
+- **Partial Garak** — incomplete Garak scans are omitted from merge; detail may show `garak_subset_v1` in `missing_suites` or a partial-Garak warning.
 - **`POST /api/scans` → 503** (cannot write) — root-owned output from an old run. On the application VM (no sudo needed):
 
   ```bash

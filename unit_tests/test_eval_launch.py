@@ -89,6 +89,30 @@ class ValidateLaunchTest(unittest.TestCase):
             )
             self.assertIn("max_tokens", err, f"max_tokens={bad} should be rejected")
 
+    def test_hub_style_llama_candidate_still_rejected(self) -> None:
+        # Regression: a Llama candidate whose id does NOT start with "llama"
+        # (a Hub-style "meta-llama/Llama-4-Scout") must still classify as meta,
+        # so the Llama judge is correctly rejected as same-family. A naive
+        # startswith() check let this exact pair slip through.
+        hub_id = "meta-llama/Llama-4-Scout"
+        with mock.patch.object(eval_launch, "candidate_models",
+                               return_value=(*eval_launch._CANDIDATE_FALLBACK, hub_id)):
+            err = eval_launch.validate_launch(
+                hub_id, "Llama 4 Maverick", "it_support_v1", 500)
+        self.assertIn("same model family", err)
+
+
+class ModelFamilyTest(unittest.TestCase):
+    def test_llama_variants_classify_as_meta(self) -> None:
+        for s in ("Llama 4 Maverick", "meta-llama/Llama-4-Scout",
+                  "Meta-Llama-3.1-8B", "llama-3.3-70b"):
+            self.assertEqual(eval_launch.model_family(s), "meta", s)
+
+    def test_openai_and_qwen_families(self) -> None:
+        self.assertEqual(eval_launch.model_family("gpt-5-chat"), "openai")
+        self.assertEqual(eval_launch.model_family("gpt-oss-120b"), "openai")
+        self.assertEqual(eval_launch.model_family("Qwen/Qwen2.5-7B-Instruct"), "qwen")
+
 
 class BuildCommandTest(unittest.TestCase):
     def test_command_is_argv_list_with_expected_flags(self) -> None:

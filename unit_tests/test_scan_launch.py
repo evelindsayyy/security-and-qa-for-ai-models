@@ -92,6 +92,31 @@ class GetStatusTest(unittest.TestCase):
         (self.out / slug / "scan_result.json").write_text("{}", encoding="utf-8")
         self.assertEqual(scan_launch.get_status(slug)["status"], "complete")
 
+    def test_running_includes_log_tail(self) -> None:
+        slug = "gpt2"
+        out_slug = self.out / slug
+        out_slug.mkdir(parents=True)
+        log = out_slug / "scan_run.log"
+        log.write_text("x" * 2000, encoding="utf-8")
+        fake_proc = mock.Mock()
+        fake_proc.poll.return_value = None
+        scan_launch._RUNNING[slug] = fake_proc
+        self.addCleanup(lambda: scan_launch._RUNNING.pop(slug, None))
+        status = scan_launch.get_status(slug)
+        self.assertEqual(status["status"], "running")
+        self.assertGreater(len(status["message"]), 500)
+
+    def test_validate_rejects_inflight(self) -> None:
+        slug = "gpt2"
+        lock = self.out / slug / "run.lock"
+        lock.parent.mkdir(parents=True, exist_ok=True)
+        from dbutils import run_lock
+
+        run_lock.try_acquire(lock, pid=os.getpid(), source=run_lock.FRONTEND_SOURCE)
+        self.addCleanup(run_lock.release, lock)
+        err = scan_launch.validate_launch("gpt2")
+        self.assertIn("already running", err)
+
 
 class LaunchRoutesTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -113,6 +138,7 @@ class LaunchRoutesTest(unittest.TestCase):
     def test_start_valid_spawns_and_redirects(self) -> None:
         fake_proc = mock.Mock()
         fake_proc.poll.return_value = None
+        fake_proc.pid = 424242
         data = {
             "hf_repo": "gpt2",
             "run_modelscan": "on",

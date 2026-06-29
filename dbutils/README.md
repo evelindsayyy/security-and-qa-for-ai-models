@@ -25,6 +25,8 @@ Each pillar keeps its own ``pillar/db/`` directory (transforms + INSERT SQL).
 | `run_meta.py` | `run_meta.json` sidecar read/write at launch |
 | `auth_columns.py` | Merge auth fields into loader rows |
 | `visibility.py` | SQL + artifact filters for public/private views |
+| `run_lock.py` | File-based `run.lock` for scan/safety/benchmark job coordination |
+| `log_tail.py` | `read_log_tail` — tail of run logs for UI status polling |
 
 ## Pillar loader template (scanner / safety / benchmarks)
 

@@ -34,6 +34,8 @@ class GarakXdgEnvTest(unittest.TestCase):
         env = garak_xdg_env("test-slug-xdg")
         self.assertIn("HOME", env)
         self.assertIn("test-slug-xdg", env["HOME"])
+        self.assertEqual(env["USER"], "garak")
+        self.assertEqual(env["LOGNAME"], "garak")
         self.assertTrue(os.path.isdir(env["HOME"]))
 
 
@@ -41,6 +43,14 @@ class RunPipelineValidationTest(unittest.TestCase):
     def test_rejects_both_skips(self) -> None:
         cfg = RunConfig(model="m", skip_promptfoo=True, skip_garak=True)
         self.assertEqual(run_pipeline(cfg), 1)
+
+    def test_blocks_when_lock_held(self) -> None:
+        from unittest import mock
+
+        cfg = RunConfig(model="GPT 4.1 Mini", redteam_profile="base", skip_garak=True, redteam=False)
+        with mock.patch("safety.run.run_lock.should_skip_cli_acquire", return_value=False):
+            with mock.patch("safety.run.run_lock.try_acquire", return_value=False):
+                self.assertEqual(run_pipeline(cfg), 2)
 
 
 if __name__ == "__main__":

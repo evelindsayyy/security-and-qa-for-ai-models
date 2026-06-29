@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_safety_docker %}
+{% from '_macros.html' import expandable, cli_safety_docker, progress_terminal %}
 
 {% block title %}{% if missing %}Safety not found{% else %}{{ gateway_model_id }} — safety{% endif %}{% endblock %}
 
@@ -13,26 +13,19 @@
   {% elif running %}
     <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
     <h1>Safety run in progress</h1>
-    <p class="sub"><code>{{ slug }}</code> · profile <span class="badge">{{ profile }}</span> · updates every 10 seconds (may take 30–90 min)</p>
-    <div class="progress-card">
-      <p class="progress-meta">status: <b id="prog-state">{{ run_status.status }}</b></p>
-      <pre class="log-snippet" id="prog-log">{{ run_status.message }}</pre>
-    </div>
-    <script>
-      (function () {
-        const slug = {{ slug | tojson }};
-        const profile = {{ profile | tojson }};
-        function poll() {
-          fetch("/safety/" + slug + "/" + profile + "/status").then(r => r.json()).then(function (s) {
-            document.getElementById("prog-state").textContent = s.status;
-            if (s.message) document.getElementById("prog-log").textContent = s.message;
-            if (s.status === "complete") window.location = "/safety/" + slug + "/" + profile;
-            else if (s.status === "failed") document.getElementById("prog-state").textContent = "failed";
-          });
-        }
-        setInterval(poll, 10000);
-      })();
-    </script>
+    <p class="sub"><code>{{ slug }}</code> · profile <span class="badge">{{ profile }}</span> · live log every 5 seconds</p>
+    {{ progress_terminal(
+         url_for('safety_run_status', slug=slug, profile=profile),
+         5000,
+         hint='Full runs may take 30–90 min. Run continues if you leave this tab. Log: safety/output/' ~ slug ~ '/' ~ profile ~ '/run.log',
+         initial_status=run_status.status,
+         initial_message=run_status.message
+       ) }}
+    {% if run_status.status == 'failed' %}
+    <p class="detail-delete-form">
+      <a href="{{ url_for('safety_delete', slug=slug, profile=profile) }}" class="btn-danger">Delete failed run</a>
+    </p>
+    {% endif %}
   {% else %}
     <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
     <h1><span class="model">{{ gateway_model_id }}</span> <span class="badge">{{ profile }}</span></h1>
@@ -45,6 +38,13 @@
     {% if missing_suites %}
     <p class="sub dim">Note: {{ missing_suites|join(", ") }} did not run — tier reflects only the completed suites.</p>
     {% endif %}
+    {% if garak_partial_note %}
+    <p class="sub form-warning" role="alert">{{ garak_partial_note }}</p>
+    {% endif %}
+
+    <p class="detail-delete-form">
+      <a href="{{ url_for('safety_delete', slug=slug, profile=profile) }}" class="btn-danger">Delete result</a>
+    </p>
 
     <h2>Probe findings ({{ n_findings }})</h2>
     {% if findings %}

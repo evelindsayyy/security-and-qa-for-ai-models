@@ -1,4 +1,4 @@
-# Public benchmarks (Track B)
+# Public benchmarks
 
 Gateway-backed public benchmark pilots — TruthfulQA, IFEval, MMLU, ToMi, and
 consistency. The Duke LLM-as-judge eval is separate, in [`../evaluator/`](../evaluator/).
@@ -25,8 +25,8 @@ any benchmark with one argv shape.
 uv run python benchmarks/run_benchmark.py --benchmark truthfulqa --model "GPT 4.1 Mini"
 
 # docker (matches the browser launch)
-export UID=$(id -u) GID=$(id -g)
-docker compose --env-file .env \
+env UID=$(id -u) GID=$(id -g) \
+  docker compose --env-file .env \
   -f benchmarks/docker/compose.yml run --rm benchmarks \
   python run_benchmark.py --benchmark ifeval --model "gpt-5-chat"
 ```
@@ -38,7 +38,71 @@ Credentials come from the repo-root `.env`. Set `FRONTEND_LAUNCH_MODE=host` to s
 
 Legacy outputs under `testing/basic_tests/test_results/` are still read as a fallback.
 
-LIST OF BENCHMARKS AND WHAT THEY DO
+Full CLI patterns: [`docs/cli.md`](../docs/cli.md).
+
+## Model input
+
+Form: `/benchmarks/new`. Cheat sheet below.
+
+**Scope**
+
+- **UI** (`/benchmarks/new`): Gateway (dropdown), Hosted (HF Inference Providers), Custom (OpenAI-compatible URL).
+- **REST** (`POST /api/benchmarks`): **gateway models only** today — see [`api/README.md`](../api/README.md).
+
+### Cheat sheet
+
+| Source | When to use | **Model field** | Other fields |
+|--------|-------------|-----------------|--------------|
+| **Gateway** | Duke catalog models (easiest) | pick from dropdown, e.g. `GPT 4.1 Mini` | — |
+| **Hosted** | No GPU / no cluster; HF serves the model | HF repo id: `org/model` or `org/model:provider` | HF token (`hf_…`) with *Inference Providers* permission |
+| **Custom** | Your own OpenAI-compatible chat API (local or internal) | Model id your API expects: `my-model`, `gpt-4`, `org/model`, … | Base URL (`http://…/v1`), API key (optional) |
+
+**Format rules:** Hosted uses Hugging Face repo ids (optional `:provider` pin).
+Custom accepts any model id string your server's `model` parameter accepts
+(letters, digits, `.`, `_`, `-`, `/`, `+`).
+
+The model id is passed to `model_client`, which auto-routes based on the base URL
+(Duke gateway, HF router, or self-hosted → `openai/<model-id>`).
+
+### Hosted (HF Inference Providers)
+
+OpenAI-compatible router — no local GPU. Token needs *Inference Providers* permission ([create one](https://huggingface.co/settings/tokens)).
+
+```bash
+export LITELLM_BASE_URL="https://router.huggingface.co/v1"
+export TQA_BASE_URL="https://router.huggingface.co/v1"
+export OPENAI_API_KEY="hf_your_token"
+uv run python benchmarks/run_benchmark.py --benchmark mmlu --model "microsoft/Phi-4-mini-instruct"
+```
+
+On `/benchmarks/new`, pick **Hosted**; base URL is fixed server-side. Pin a provider with `org/model:provider` if auto-routing fails.
+
+**Hosted setup (short checklist)**
+
+1. Pick a model with [Inference Available](https://huggingface.co/models?inference_provider=all&other=conversational) on HF.
+2. Confirm at least one provider on the model page; accept license if gated.
+3. Fine-grained HF token with **Make calls to Inference Providers**.
+4. Enable providers at [Inference Providers settings](https://huggingface.co/settings/inference-providers) (Automatic or a named provider).
+5. Smoke-test: playground accepts `messages` (chat), not prompt-only completion.
+
+**Example hosted inputs:** `meta-llama/Llama-3.1-8B-Instruct`, `Qwen/Qwen2.5-7B-Instruct`, `TinyLlama/TinyLlama-1.1B-Chat-v1.0:featherless-ai`.
+
+### Custom (self-hosted API)
+
+```bash
+export LITELLM_BASE_URL="http://localhost:8000/v1"
+export TQA_BASE_URL="http://localhost:8000/v1"
+export OPENAI_API_KEY="local-vllm"
+uv run python benchmarks/run_benchmark.py --benchmark mmlu --model "my-model-id"
+```
+
+Works with vLLM, Ollama (`/v1`), LiteLLM, or any OpenAI-compatible chat server. TruthfulQA reads `TQA_BASE_URL` before `LITELLM_BASE_URL` — set both for CLI hosted/custom runs.
+
+On `/benchmarks/new`, choose **Custom**: model id, base URL (localhost, private IP, or `*.duke.edu` only), optional API key.
+
+**Example custom inputs:** `my-finetune-v2` + `http://localhost:8080/v1`; `llama3.1` + `http://localhost:11434/v1` (Ollama).
+
+## Benchmark catalog
 
 1. MMLU - mmlu_test.py
 

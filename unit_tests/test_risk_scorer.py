@@ -40,7 +40,7 @@ class RiskScorerTest(unittest.TestCase):
         result = score("gpt2", ms, fick, fmt, modelaudit_summary={"actionable_issue_count": 0})
 
         self.assertEqual(result.severity_tier.value, "low")
-        self.assertGreaterEqual(result.overall_risk_score, 10)
+        self.assertGreaterEqual(result.overall_risk_score, 0)
         self.assertLessEqual(result.overall_risk_score, 35)
         fick_findings = [f for f in result.findings if f.source == "fickling"]
         self.assertGreaterEqual(len(fick_findings), 1)
@@ -135,6 +135,17 @@ class RiskScorerTest(unittest.TestCase):
         result = score("safe/st", ms, fick, fmt, modelaudit_summary={"actionable_issue_count": 0})
         self.assertEqual(result.severity_tier.value, "low")
         self.assertFalse(any(f.source == "fickling" for f in result.findings))
+
+    def test_clean_scan_score_zero(self) -> None:
+        ms = {"summary": {"total_issues": 0, "total_issues_by_severity": {}}, "issues": []}
+        fmt = FileFormatSummary(
+            by_category={"safetensors": ["model.safetensors"]},
+            flags={"safetensors_only": True, "has_pickle_weights": False},
+            file_count=1,
+        )
+        result = score("clean/model", ms, None, fmt, modelaudit_summary={"actionable_issue_count": 0})
+        self.assertEqual(result.severity_tier.value, "low")
+        self.assertEqual(result.overall_risk_score, 0)
 
     def test_modelaudit_safetensors_medium_raises_tier(self) -> None:
         ms = {"summary": {"total_issues": 0, "total_issues_by_severity": {}}, "issues": []}

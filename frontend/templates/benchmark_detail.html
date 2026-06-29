@@ -13,27 +13,71 @@
   {% elif running %}
     <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
     <h1>Benchmark run in progress</h1>
-    <p class="sub">slug <code>{{ slug }}</code> · updates every 5 seconds</p>
-    <div class="progress-card">
+    <p class="sub">
+      {% if run_status.benchmark_label %}<strong>{{ run_status.benchmark_label }}</strong>{% endif %}
+      {% if run_status.model %} · {{ run_status.model }}{% endif %}
+      · slug <code>{{ slug }}</code>
+      · updates every 3 seconds
+    </p>
+    <div class="progress-card progress-card--wide">
+      <div class="progress-track">
+        <div id="prog-bar" class="progress-fill" style="width: {{ (100 * run_status.progress / run_status.total) if run_status.total else 0 }}%;"></div>
+      </div>
       <p class="progress-meta">
-        status: <b id="prog-state">{{ run_status.status }}</b>
+        <b id="prog-text">{% if run_status.total %}{{ run_status.progress }}/{{ run_status.total }}{% else %}{{ run_status.progress }}{% endif %}</b>
+        <span id="prog-unit">{{ run_status.unit or 'items' }}</span> ·
+        <span id="prog-state" class="progress-state">{{ run_status.status }}</span>
       </p>
+      <p class="progress-meta dim" id="prog-message"{% if not run_status.message %} style="display:none"{% endif %}>{{ run_status.message }}</p>
+      <pre class="log-terminal" id="prog-log" aria-live="polite">{{ run_status.log or '' }}</pre>
+      <p class="log-terminal-hint">Run continues in the background if you switch tabs.</p>
       <p class="progress-fail" id="fail-hint" style="display: {{ 'block' if run_status.status == 'failed' else 'none' }};">
-        Run failed — check <code>benchmarks/results/{{ slug }}.log</code>.
+        Run failed — see log above or <code>benchmarks/results/{{ slug }}.log</code>.
       </p>
+      {% if run_status.status == 'failed' %}
+      <p class="detail-delete-form">
+        <a href="{{ url_for('benchmark_delete', slug=slug) }}" class="btn-danger">Delete failed run</a>
+      </p>
+      {% endif %}
     </div>
     <script>
-      const poll = setInterval(async () => {
-        const r = await fetch("{{ url_for('benchmark_run_status', slug=slug) }}");
-        if (!r.ok) return;
-        const s = await r.json();
-        document.getElementById("prog-state").textContent = s.status;
-        if (s.status === "complete") { clearInterval(poll); location.href = location.pathname; }
-        if (s.status === "failed") {
-          clearInterval(poll);
-          document.getElementById("fail-hint").style.display = "block";
-        }
-      }, 5000);
+      (function () {
+        const logEl = document.getElementById("prog-log");
+        let userScrolledUp = false;
+        logEl.addEventListener("scroll", function () {
+          userScrolledUp = logEl.scrollTop + logEl.clientHeight < logEl.scrollHeight - 40;
+        });
+        const poll = setInterval(async () => {
+          const r = await fetch("{{ url_for('benchmark_run_status', slug=slug) }}");
+          if (!r.ok) return;
+          const s = await r.json();
+          if (s.total) {
+            document.getElementById("prog-bar").style.width = (100 * s.progress / s.total) + "%";
+            document.getElementById("prog-text").textContent = s.progress + "/" + s.total;
+          } else {
+            document.getElementById("prog-bar").style.width = "0%";
+            document.getElementById("prog-text").textContent = String(s.progress || 0);
+          }
+          document.getElementById("prog-unit").textContent = s.unit || "items";
+          document.getElementById("prog-state").textContent = s.status;
+          const msgEl = document.getElementById("prog-message");
+          if (s.message) {
+            msgEl.textContent = s.message;
+            msgEl.style.display = "";
+          } else {
+            msgEl.style.display = "none";
+          }
+          if (s.log) {
+            logEl.textContent = s.log;
+            if (!userScrolledUp) logEl.scrollTop = logEl.scrollHeight;
+          }
+          if (s.status === "complete") { clearInterval(poll); location.href = location.pathname; }
+          if (s.status === "failed") {
+            clearInterval(poll);
+            document.getElementById("fail-hint").style.display = "block";
+          }
+        }, 3000);
+      })();
     </script>
   {% else %}
     <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
@@ -44,6 +88,10 @@
       {{ timestamp }}
     </p>
 
+    <p class="detail-delete-form">
+      <a href="{{ url_for('benchmark_delete', slug=slug) }}" class="btn-danger">Delete result</a>
+    </p>
+
     <div class="summary-row">
       <div class="summary-chips">
         <span class="badge badge-pilot">{{ kind_label }}</span>
@@ -51,6 +99,11 @@
           {{ headline_metric }} <b>{{ headline_display }}</b>
         </span>
         <span class="dim">n = {{ n }}</span>
+        {% if run_stats_chips %}
+          {% for chip in run_stats_chips %}
+          <span class="dim">{{ chip.label }}: <b>{{ chip.value }}</b></span>
+          {% endfor %}
+        {% endif %}
         {% if raw_row_count and raw_row_count > 50 %}
           <span class="dim">detail view: first 50 of {{ raw_row_count }}</span>
         {% endif %}

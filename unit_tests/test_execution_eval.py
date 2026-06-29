@@ -142,5 +142,45 @@ class ScoreResultsFileTest(unittest.TestCase):
         self.assertEqual(out["n"], 0)
 
 
+class CheckerRegistryTest(unittest.TestCase):
+    def test_sql_checker_registered(self) -> None:
+        self.assertIn("sql", ex.CHECKERS)
+
+    def test_check_type_defaults_to_sql(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / "s_v1.jsonl").write_text(
+                json.dumps({"_metadata": "no check field"}) + "\n"
+                + json.dumps({"id": "q1", "setup": "CREATE TABLE t(n)", "expected": [[0]]}) + "\n",
+                encoding="utf-8")
+            with mock.patch.object(ex, "TASKS_DIR", tmp):
+                self.assertEqual(ex.suite_check_type("s_v1"), "sql")
+
+    def test_check_type_read_from_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / "s_v1.jsonl").write_text(
+                json.dumps({"check": "json"}) + "\n"
+                + json.dumps({"id": "q1", "expected": [[0]]}) + "\n",
+                encoding="utf-8")
+            with mock.patch.object(ex, "TASKS_DIR", tmp):
+                self.assertEqual(ex.suite_check_type("s_v1"), "json")
+
+    def test_unknown_check_type_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / "bogus_v1.jsonl").write_text(
+                json.dumps({"check": "bogus"}) + "\n"
+                + json.dumps({"id": "q1", "expected": [[0]]}) + "\n",
+                encoding="utf-8")
+            results = tmp / "run.jsonl"
+            results.write_text(
+                json.dumps({"question_id": "q1", "candidate_response": "x",
+                            "adaptation": {"task_suite_version": "bogus_v1"}}) + "\n",
+                encoding="utf-8")
+            with mock.patch.object(ex, "TASKS_DIR", tmp), self.assertRaises(ValueError):
+                ex.score_results_file(results)
+
+
 if __name__ == "__main__":
     unittest.main()

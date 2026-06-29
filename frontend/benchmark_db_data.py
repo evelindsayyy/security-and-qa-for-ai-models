@@ -263,3 +263,16 @@ def get_benchmark_detail_db(slug: str) -> dict | None:
             if row is None:
                 return None
     return _build_detail_db(row)
+
+
+def delete_run(slug: str) -> bool:
+    """Delete one row from ``benchmark_runs``. Returns True if a row was removed."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM public.benchmark_runs WHERE output_slug = %(slug)s",
+                {"slug": slug},
+            )
+            deleted = cur.rowcount > 0
+        conn.commit()
+    return deleted

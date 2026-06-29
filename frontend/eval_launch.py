@@ -24,6 +24,7 @@ import time
 from pathlib import Path
 
 from frontend import docker_launch
+from frontend.log_status import status_message
 from frontend.path_safety import is_safe_slug
 
 ROOT = Path(__file__).parent.parent
@@ -71,17 +72,26 @@ JUDGE_MODELS: tuple[str, ...] = (
     "Llama 4 Maverick", "GPT 4.1 Mini", "gpt-5-chat", "gpt-oss-120b",
 )
 
-# MT-Bench rule: judge must come from a different model family than the
-# candidate. Family is derived from the Gateway id prefix. Qwen (self-hosted on
-# the DCC) is its own family so an OpenAI judge is allowed to score it; gpt-oss-*
-# stays "openai" (it's an OpenAI model, so self-preference still applies vs gpt-*).
+# MT-Bench rule: the judge must come from a different model family than the
+# candidate. The family is matched by keyword ANYWHERE in the id (case-
+# insensitive), so variants like "meta-llama/Llama-4-Scout" or "Meta-Llama-3.1"
+# classify as meta — not just ids that literally start with "llama" (a naive
+# prefix check let a Llama candidate + Llama judge slip past the cross-family
+# rule when the Gateway returned a Hub-style id). gpt-oss-* stays "openai" (it IS
+# an OpenAI model, so self-preference still applies vs gpt-*).
 def model_family(model: str) -> str:
     m = model.lower()
-    if m.startswith("llama"):
+    if "llama" in m:
         return "meta"
-    if m.startswith("qwen"):
+    if "qwen" in m:
         return "qwen"
-    return "openai"
+    if "mistral" in m or "mixtral" in m:
+        return "mistral"
+    if "gemma" in m:
+        return "google"
+    if "gpt" in m or "openai" in m or m.startswith(("o1", "o3", "o4")):
+        return "openai"
+    return "other"
 
 
 # Suite key -> contract files. Rubric/prompt pairing lives here so the
@@ -187,6 +197,34 @@ def validate_launch(
     if docker_launch.use_docker() and not docker_launch.docker_available():
         return docker_launch.docker_required_message("evaluator")
     return None
+
+
+# Suggested open-weight models for the HF-model launcher field (datalist hints).
+SUGGESTED_HF_REPOS: tuple[str, ...] = (
+    "Qwen/Qwen2.5-7B-Instruct",
+    "mistralai/Mistral-7B-Instruct-v0.3",
+    "meta-llama/Llama-3.2-1B-Instruct",
+    "gpt2",
+)
+
+
+def validate_hf_candidate(repo_id: str) -> dict:
+    """Validate a user-supplied Hugging Face model for evaluation (link path).
+
+    Wraps evaluator/hf_intake — checks the repo exists, is open, is vLLM-servable,
+    and fits the GPU. Shapes the verdict for eval_run_new.html. Serving + running
+    an HF model is the DCC-orchestration milestone; here we validate before it."""
+    from evaluator import hf_intake
+
+    res = hf_intake.validate(repo_id)
+    info = res.info
+    return {
+        "ok": res.ok,
+        "error": res.error,
+        "repo_id": repo_id,
+        "architectures": info.architectures if info else None,
+        "num_params": info.num_params if info else None,
+    }
 
 
 def _container_rel(path: Path) -> str:
@@ -332,17 +370,54 @@ def get_status(slug: str) -> dict:
             progress = sum(1 for line in f if line.strip())
 
     if total and progress >= total:
-        return {"status": "complete", "progress": progress, "total": total}
+        return {
+            "status": "complete",
+            "progress": progress,
+            "total": total,
+            "message": "",
+            "log_path": f"evaluator/results/{slug}.log",
+        }
+
+    log_path = RESULTS_DIR / f"{slug}.log"
+    rel_log = f"evaluator/results/{slug}.log"
 
     proc = _RUNNING.get(slug)
     if proc is not None and proc.poll() is None:
-        return {"status": "running", "progress": progress, "total": total}
+        return {
+            "status": "running",
+            "progress": progress,
+            "total": total,
+            "message": status_message(log_path),
+            "log_path": rel_log,
+        }
     if proc is not None:  # exited without a complete file
-        return {"status": "failed", "progress": progress, "total": total}
+        return {
+            "status": "failed",
+            "progress": progress,
+            "total": total,
+            "message": status_message(log_path, failed=True),
+            "log_path": rel_log,
+        }
     if path.is_file():
         # partial file, no registered process (e.g. Flask restarted mid-run)
-        return {"status": "failed", "progress": progress, "total": total}
-    return {"status": "not_found", "progress": 0, "total": total}
+        return {
+            "status": "failed",
+            "progress": progress,
+            "total": total,
+            "message": status_message(log_path, failed=True),
+            "log_path": rel_log,
+        }
+    return {"status": "not_found", "progress": 0, "total": 0, "message": ""}
+
+
+def is_eval_run_in_progress(slug: str) -> bool:
+    """True when a registered subprocess for *slug* is still running."""
+    if not is_safe_slug(slug):
+        return False
+    proc = _RUNNING.get(slug)
+    if proc is not None and proc.poll() is None:
+        return True
+    return get_status(slug)["status"] == "running"
 
 
 def validate_custom_questions(
@@ -425,6 +500,7 @@ def get_launch_options() -> dict:
         "pricing_json": json.dumps({m: list(r) for m, r in _COST_PER_M_TOKENS.items()}),
         "max_tokens_min": MAX_TOKENS_MIN,
         "max_tokens_max": MAX_TOKENS_MAX,
+        "suggested_hf_repos": list(SUGGESTED_HF_REPOS),
         "custom_max_questions": CUSTOM_MAX_QUESTIONS,
         "launch_mode": "docker" if docker_launch.use_docker() else "host",
         "docker_available": docker_launch.docker_available(),

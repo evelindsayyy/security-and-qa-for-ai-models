@@ -141,8 +141,25 @@ def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Evaluator pipeline runner.")
     p.add_argument("--candidate-model", required=True,
                    help="Gateway model id (e.g. 'gpt-5-chat')")
-    p.add_argument("--judge-model", required=True,
-                   help="Gateway model id (e.g. 'Llama 4 Maverick')")
+    p.add_argument("--judge-model", default=None,
+                   help="Gateway model id (e.g. 'Llama 4 Maverick'); "
+                        "required unless --skip-judge")
+    # Execution-scored suites (text-to-SQL) have no rubric and no reference —
+    # the answer is checked by RUNNING it (evaluator/execution_eval.py), not by
+    # an LLM judge. --skip-judge produces a candidate-only run: it generates the
+    # responses and writes rows with empty scores, no judge model/rubric needed.
+    p.add_argument("--skip-judge", action="store_true",
+                   help="candidate-only run: generate responses without calling "
+                        "the LLM judge (for execution-scored suites)")
+    # The inverse of --skip-judge: run the LLM judge ON an execution-scored
+    # suite, overriding the scoring=execution auto-skip. Used to reproduce the
+    # judge-vs-execution comparison through the real pipeline — the judge grades
+    # the same SQL answers that execution_eval.py scores by running them. The
+    # judge gets the gold `expected` rows as its reference (see _judge_reference).
+    p.add_argument("--force-judge", action="store_true",
+                   help="also run the LLM judge on an execution-scored suite "
+                        "(overrides scoring=execution); requires --judge-model "
+                        "and an SQL judge rubric")
     p.add_argument("--suite", type=Path,
                    default=HERE / "tasks" / "it_support_v1.jsonl")
     p.add_argument("--rubric", type=Path,
@@ -202,6 +219,26 @@ def _safe_slug(s: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _judge_reference(q: dict) -> str:
+    """The reference answer text handed to the LLM judge for one question.
+
+    Judge-scored suites carry a ``reference`` string. Execution suites carry a
+    gold ``expected`` result set instead (they're normally checked by RUNNING
+    the SQL, not judged). When such a suite is force-judged for the
+    judge-vs-execution comparison, synthesize a reference from ``expected`` so
+    the judge sees the gold answer — but it still can't run the query, which is
+    exactly the gap the comparison measures.
+
+    Raises KeyError if a row has neither, so a genuinely malformed judge suite
+    still fails loudly instead of silently grading against nothing.
+    """
+    if "reference" in q:
+        return q["reference"]
+    if "expected" in q:
+        return f"Expected result rows (order-insensitive): {q['expected']}"
+    raise KeyError("reference")
+
+
 def main() -> int:
     args = _parse_args()
 
@@ -214,37 +251,60 @@ def main() -> int:
     suite_family = suite_id.rsplit("_v", 1)[0]
     questions = [json.loads(line) for line in suite_lines[1:] if line.strip()]
 
+    # Routing: a suite declares its scoring method in its metadata line.
+    # "execution" suites are scored by RUNNING the answer (execution_eval), so
+    # the LLM judge is skipped automatically; --skip-judge stays as a manual
+    # override for any suite. Default "judge" — every existing suite.
+    # --force-judge is the inverse: it runs the judge even on an execution suite
+    # (for the judge-vs-execution comparison) and wins over the auto-skip.
+    scoring = metadata.get("scoring", "judge")
+    skip_judge = (args.skip_judge or scoring == "execution") and not args.force_judge
+
+    if not skip_judge and not args.judge_model:
+        print("ERROR: --judge-model is required unless the suite declares "
+              "scoring=execution (or --skip-judge is set).", file=sys.stderr)
+        return 2
+
     # resolve_rubric inlines any {from: shared} references against
     # _shared_dimensions.yaml so rubric["dimensions"][dim] always has the
     # full scale/weight/anchors block _weighted_overall expects. For inline
     # rubrics (like the locked it_support_v1.yaml) this is a no-op.
-    rubric, rubric_raw = resolve_rubric(args.rubric)
-    rubric_version = rubric.get("rubric_version", args.rubric.stem)
+    # Execution-scored (judge-skipped) suites have no rubric.
+    if skip_judge:
+        rubric: dict = {}
+        rubric_version = "(none)"
+    else:
+        rubric, _rubric_raw = resolve_rubric(args.rubric)
+        rubric_version = rubric.get("rubric_version", args.rubric.stem)
 
     system_prompt = args.system_prompt.read_text(encoding="utf-8")
     system_prompt_version = args.system_prompt.stem
-    judge_prompt_version = args.judge_prompt.stem
+    judge_prompt_version = "(none)" if skip_judge else args.judge_prompt.stem
+    # The judge model recorded into every row; "(none)" when there's no judge.
+    judge_model = args.judge_model or "(none)"
 
     # Fail fast on a judge-prompt/rubric mismatch. A template without the
     # {output_schema} placeholder (like the locked reference_based_v1) has
     # its dimension keys hardcoded in its OUTPUT FORMAT block; running it
     # against a rubric with a different dimension set would fail every
     # judge call twice (the parse retry) before producing an all-failed
-    # run. Catch the pairing here, before any API call.
-    judge_template = args.judge_prompt.read_text(encoding="utf-8")
-    if "{output_schema}" not in judge_template:
-        rubric_dims = tuple((rubric.get("dimensions") or {}).keys())
-        missing = [d for d in rubric_dims if f'"{d}"' not in judge_template]
-        if missing:
-            print(
-                f"ERROR: judge prompt {args.judge_prompt.name!r} hardcodes its "
-                f"output dimensions and does not cover rubric dimension(s) "
-                f"{missing} from rubric {rubric_version!r}. Use a rubric-aware "
-                f"template instead, e.g.\n"
-                f"  --judge-prompt {HERE / 'prompts' / 'judge' / 'reference_based_v2.txt'}",
-                file=sys.stderr,
-            )
-            return 2
+    # run. Catch the pairing here, before any API call. (Skipped when there
+    # is no judge.)
+    if not skip_judge:
+        judge_template = args.judge_prompt.read_text(encoding="utf-8")
+        if "{output_schema}" not in judge_template:
+            rubric_dims = tuple((rubric.get("dimensions") or {}).keys())
+            missing = [d for d in rubric_dims if f'"{d}"' not in judge_template]
+            if missing:
+                print(
+                    f"ERROR: judge prompt {args.judge_prompt.name!r} hardcodes its "
+                    f"output dimensions and does not cover rubric dimension(s) "
+                    f"{missing} from rubric {rubric_version!r}. Use a rubric-aware "
+                    f"template instead, e.g.\n"
+                    f"  --judge-prompt {HERE / 'prompts' / 'judge' / 'reference_based_v2.txt'}",
+                    file=sys.stderr,
+                )
+                return 2
 
     # ---- prepare output paths ----
     run_id = new_run_id()
@@ -261,7 +321,7 @@ def main() -> int:
 
     # ---- banner ----
     print(f"Runner started  run_id={run_id}")
-    print(f"  candidate: {args.candidate_model}    judge: {args.judge_model}")
+    print(f"  candidate: {args.candidate_model}    judge: {judge_model}")
     print(f"  suite: {suite_id} ({len(questions)} questions)    rubric: {rubric_version}")
     print(f"  output: {out_path}")
     print()
@@ -294,17 +354,17 @@ def main() -> int:
                 )
                 cand_dur = time.perf_counter() - t0
 
-                # ---- judge (only if candidate succeeded) ----
+                # ---- judge (only if candidate succeeded AND not skipped) ----
                 judge_verdict = None
                 judge_dur = 0.0
-                if not cand.failed:
+                if not cand.failed and not skip_judge:
                     t1 = time.perf_counter()
                     judge_verdict = judge_response(
                         question=q["question"],
-                        reference=q["reference"],
+                        reference=_judge_reference(q),
                         candidate_response=cand.response,
                         rubric_path=args.rubric,
-                        judge_model=args.judge_model,
+                        judge_model=judge_model,
                         judge_prompt_path=args.judge_prompt,
                         max_tokens=args.judge_max_tokens,
                     )
@@ -316,13 +376,21 @@ def main() -> int:
                     overall: Optional[float] = None
                     judge_failed_flag = False
                     error = cand.error
-                elif judge_verdict is not None and judge_verdict.failed:
+                elif judge_verdict is None:
+                    # candidate ok but no judge ran (--skip-judge). Functional
+                    # correctness is scored out-of-band by execution_eval, so
+                    # there are no rubric scores on the row.
+                    scores = {}
+                    overall = None
+                    judge_failed_flag = False
+                    error = None
+                elif judge_verdict.failed:
                     scores = {}
                     overall = None
                     judge_failed_flag = True
                     error = judge_verdict.error
                 else:
-                    scores = judge_verdict.scores  # type: ignore[union-attr]
+                    scores = judge_verdict.scores
                     overall = _weighted_overall(scores, rubric)
                     judge_failed_flag = False
                     error = None
@@ -337,7 +405,7 @@ def main() -> int:
                     max_tokens=args.max_tokens,
                     task_suite_version=suite_id,
                     rubric_version=rubric_version,
-                    judge_model=args.judge_model,
+                    judge_model=judge_model,
                     judge_prompt_version=judge_prompt_version,
                     inference_backend=args.inference_backend,
                     hf_repo=args.hf_repo,
@@ -417,7 +485,7 @@ def main() -> int:
                         max_tokens=args.max_tokens,
                         task_suite_version=suite_id,
                         rubric_version=rubric_version,
-                        judge_model=args.judge_model,
+                        judge_model=judge_model,
                         judge_prompt_version=judge_prompt_version,
                         inference_backend=args.inference_backend,
                         hf_repo=args.hf_repo,

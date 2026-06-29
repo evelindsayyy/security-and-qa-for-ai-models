@@ -91,6 +91,7 @@ def _aggregate_db_run(run: dict, results: list[dict]) -> dict:
         "suite": (run["adaptation"] or {}).get("task_suite_version", ""),
         "candidate_model": run["gateway_model_id"],
         "judge_model": run["judge_model"],
+        "inference_backend": (run["adaptation"] or {}).get("inference_backend", "gateway"),
         "n": n,
         "ok": ok,
         "cand_fail": cand_fail,
@@ -211,3 +212,22 @@ def get_run_detail_db(slug: str) -> dict | None:
         "total_completion_tokens": sum(r["tokens_out"] or 0 for r in results),
         "questions": questions_rows,
     }
+
+
+def delete_run(slug: str) -> bool:
+    """Delete one eval_runs row (results cascade). Returns True if removed."""
+    if not is_safe_slug(slug):
+        return False
+    source_file = f"{slug}.jsonl"
+    with queries.connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM public.eval_runs
+                WHERE source_file = %(source_file)s
+                """,
+                {"source_file": source_file},
+            )
+            deleted = cur.rowcount > 0
+        conn.commit()
+    return deleted

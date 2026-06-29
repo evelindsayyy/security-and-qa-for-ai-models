@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Delete result — {{ pillar_label }}{% endblock %}
+
+{% block content %}
+<div class="eval-comparison">
+  <p class="back"><a href="{{ cancel_url }}">← {{ cancel_label }}</a></p>
+  <h1>Delete this result?</h1>
+  <p class="form-warning">
+    This permanently removes the result from disk{% if db_note %} and {{ db_note }}{% endif %}.
+    This cannot be undone.
+  </p>
+
+  {% if summary_items %}
+  <dl class="legend-grid">
+    {% for label, value in summary_items %}
+    <dt>{{ label }}</dt>
+    <dd>{{ value }}</dd>
+    {% endfor %}
+  </dl>
+  {% endif %}
+
+  {% if paths %}
+  <details class="tool-panel">
+    <summary>What will be removed</summary>
+    <ul class="file-list">
+      {% for p in paths %}
+      <li><code>{{ p }}</code></li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+
+  <form method="post" action="{{ delete_url }}" class="detail-delete-form">
+    <input type="hidden" name="confirm" value="1">
+    <button type="submit" class="btn-danger">Delete permanently</button>
+    <a class="btn-secondary" href="{{ cancel_url }}">Cancel</a>
+  </form>
+</div>
+{% endblock %}

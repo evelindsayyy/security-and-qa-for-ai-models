@@ -14,7 +14,7 @@
     <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
     <h1>Run in progress</h1>
     <p class="sub">slug <code>{{ slug }}</code> · this page updates itself every 5 seconds</p>
-    <div class="progress-card">
+    <div class="progress-card progress-card--wide">
       <div class="progress-track">
         <div id="prog-bar" class="progress-fill" style="width: {{ (100 * run_status.progress / run_status.total) if run_status.total else 0 }}%;"></div>
       </div>
@@ -22,26 +22,44 @@
         <b id="prog-text">{{ run_status.progress }}/{{ run_status.total }}</b> questions ·
         <span id="prog-state" class="progress-state">{{ run_status.status }}</span>
       </p>
+      <pre class="log-terminal" id="prog-log" aria-live="polite">{{ run_status.message }}</pre>
+      <p class="log-terminal-hint">Run continues in the background if you switch tabs.</p>
       <p class="progress-fail" id="fail-hint" style="display: {{ 'block' if run_status.status == 'failed' else 'none' }};">
-        Run failed — check <code>evaluator/results/{{ slug }}.log</code> for the runner output.
+        Run failed — see log above or <code>evaluator/results/{{ slug }}.log</code>.
       </p>
+      {% if run_status.status == 'failed' %}
+      <p class="detail-delete-form">
+        <a href="{{ url_for('eval_run_delete', slug=slug) }}" class="btn-danger">Delete failed run</a>
+      </p>
+      {% endif %}
     </div>
     <script>
-      const poll = setInterval(async () => {
-        const r = await fetch("{{ url_for('eval_run_status', slug=slug) }}");
-        if (!r.ok) return;
-        const s = await r.json();
-        if (s.total) {
-          document.getElementById("prog-bar").style.width = (100 * s.progress / s.total) + "%";
-        }
-        document.getElementById("prog-text").textContent = s.progress + "/" + s.total;
-        document.getElementById("prog-state").textContent = s.status;
-        if (s.status === "complete") { clearInterval(poll); location.href = location.pathname; }
-        if (s.status === "failed") {
-          clearInterval(poll);
-          document.getElementById("fail-hint").style.display = "block";
-        }
-      }, 5000);
+      (function () {
+        const logEl = document.getElementById("prog-log");
+        let userScrolledUp = false;
+        logEl.addEventListener("scroll", function () {
+          userScrolledUp = logEl.scrollTop + logEl.clientHeight < logEl.scrollHeight - 40;
+        });
+        const poll = setInterval(async () => {
+          const r = await fetch("{{ url_for('eval_run_status', slug=slug) }}");
+          if (!r.ok) return;
+          const s = await r.json();
+          if (s.total) {
+            document.getElementById("prog-bar").style.width = (100 * s.progress / s.total) + "%";
+          }
+          document.getElementById("prog-text").textContent = s.progress + "/" + s.total;
+          document.getElementById("prog-state").textContent = s.status;
+          if (s.message) {
+            logEl.textContent = s.message;
+            if (!userScrolledUp) logEl.scrollTop = logEl.scrollHeight;
+          }
+          if (s.status === "complete") { clearInterval(poll); location.href = location.pathname; }
+          if (s.status === "failed") {
+            clearInterval(poll);
+            document.getElementById("fail-hint").style.display = "block";
+          }
+        }, 5000);
+      })();
     </script>
   {% else %}
     <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
@@ -50,6 +68,10 @@
       slug <code>{{ slug }}</code> ·
       run <code>{{ run_id }}</code> ·
       {{ timestamp }}
+    </p>
+
+    <p class="detail-delete-form">
+      <a href="{{ url_for('eval_run_delete', slug=slug) }}" class="btn-danger">Delete result</a>
     </p>
 
     <div class="summary-row">

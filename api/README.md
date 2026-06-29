@@ -66,11 +66,13 @@ Target flow: [`docs/architecture.md`](../docs/architecture.md).
 }
 ```
 
-**Benchmarks** — `POST /api/benchmarks`
+**Benchmarks** — `POST /api/benchmarks` (gateway models only today)
 
 ```json
 { "benchmark": "truthfulqa", "model": "GPT 4.1 Mini" }
 ```
+
+Hosted HF, custom API URL, `sample`, and `seed` are supported on the UI form (`/benchmarks/new`) but not yet on this POST body.
 
 **202 response** (all pillars):
 
@@ -87,11 +89,13 @@ Target flow: [`docs/architecture.md`](../docs/architecture.md).
 }
 ```
 
-Poll `status_url` until `status` is `complete` or `failed`, then GET the detail route.
+When the same job is already in flight, `already_running` is **true** and `job_id` / `status_url` point at the existing run (no duplicate subprocess).
+
+Poll `status_url` until `status` is `complete` or `failed`, then GET the detail route. Running jobs include a log tail in `message` (scan, safety, eval) or `log` (benchmark).
 
 ### Troubleshooting
 
-- **503 on POST** — output directory not writable (often root-owned from an old Docker run). **Application VM (no sudo):** `docker run --rm -v "$PWD/scanner/output:/out" -u root busybox chown -R "$(id -u):$(id -g)" /out`. **With sudo:** `chown -R "$USER" scanner/output`. Export `UID`/`GID` before compose so new runs write as your user.
+- **503 on POST** — output directory not writable (often root-owned from an old Docker run). **Application VM (no sudo):** `docker run --rm -v "$PWD/scanner/output:/out" -u root busybox chown -R "$(id -u):$(id -g)" /out`. Use `env UID=$(id -u) GID=$(id -g)` before compose so new runs write as your user.
 - **`db_available: false`** — DSN missing, Postgres unreachable, or schemas not applied. Reads fall back to disk JSON. Run `GET /api/health` after setting `POSTGRES_DSN` and applying schemas.
 
 ### Pagination (list endpoints)

@@ -22,6 +22,7 @@ import json
 import statistics
 from pathlib import Path
 
+from cost_perf import quality_per_dollar
 from schemas import EvaluationResult
 
 
@@ -125,6 +126,29 @@ def main() -> int:
     print(f"  total prompt tok:  {total_prompt}")
     print(f"  total compl tok:   {total_completion}")
     print(f"  total cost:        ${total_cost:.4f}")
+    print()
+
+    # ---- cost-vs-performance (single-model view) ----
+    # quality-per-dollar is the one cost-perf number that is meaningful for a
+    # model in isolation. The weighted utility and Pareto frontier compare a
+    # model against others, so they live on the dashboard's comparison view,
+    # not here. cost / response = total run cost spread over its rows.
+    cost_per_response = total_cost / n if n else 0.0
+    print("Cost-vs-performance:")
+    print(f"  cost / response:   ${cost_per_response:.4f}")
+    if overall_mean is None:
+        print("  quality per $:     —  (no overall quality this run)")
+    else:
+        qpd = quality_per_dollar(overall_mean, cost_per_response)
+        if qpd is None:
+            backend = first.adaptation.inference_backend
+            print(f"  quality per $:     N/A  (self-hosted '{backend}': "
+                  "$0 at the gateway; GPU-hour cost not modeled)")
+        else:
+            print(f"  quality per $:     {qpd:.0f} pts/$  "
+                  f"({overall_mean:.2f} / ${cost_per_response:.4f})")
+    print("  (weighted utility + Pareto frontier are cohort metrics — "
+          "see the dashboard comparison)")
     return 0
 
 

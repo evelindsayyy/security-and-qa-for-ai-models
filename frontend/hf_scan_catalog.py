@@ -15,7 +15,7 @@ from frontend.scan_data import OUTPUT_DIR, get_scans_data
 
 # Optional notes for known regression / calibration models (keyed by HF repo id).
 HF_ANNOTATIONS: dict[str, str] = {
-    "gpt2": "calibration baseline — low/18 with benign fickling",
+    "gpt2": "calibration baseline — low/18 with benign fickling (0 if clean)",
     "distilbert-base-uncased": "default scanner regression",
     "BAAI/bge-small-en-v1.5": "safetensors + pickle paths",
     "google/flan-t5-small": "org/model path layout",
