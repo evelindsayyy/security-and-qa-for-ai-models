@@ -309,6 +309,17 @@ def register_routes(app):
 
         return render_template("benchmarks.html", **get_benchmarks_data())
 
+    @app.route("/benchmarks/reference")
+    def benchmark_reference():
+        from flask import redirect, url_for
+
+        from frontend.benchmark_data import get_benchmark_reference_data
+
+        data = get_benchmark_reference_data()
+        if not data.get("has_reference"):
+            return redirect(url_for("benchmarks"))
+        return render_template("benchmark_reference.html", **data)
+
     @app.route("/benchmarks/new")
     def benchmark_run_new():
         from frontend.benchmark_launch import get_launch_options

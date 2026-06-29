@@ -254,11 +254,17 @@ header nav a:hover {
 .badge-best { background: #dff1df; color: #1f6b1f; margin-left: 0.35rem; }
 .badge-warn { background: #fde2c8; color: #a35200; max-width: none; }
 .status-ok,
-.status-fail {
+.status-fail,
+.status-skip {
   white-space: nowrap;
   flex-shrink: 0;
 }
 .status-ok { color: #2a7a2a; font-size: 13px; font-weight: 600; }
+.status-skip {
+  color: #6b5a00;
+  font-size: 13px;
+  font-weight: 600;
+}
 
 /* benchmark-type badges — neutral (not severity colors) */
 .badge-tqa,
@@ -297,6 +303,33 @@ header nav a:hover {
   border-color: #f0d4c8;
   background: #fdf8f5;
 }
+.finding-detail.finding-skip {
+  border-color: #e8dfc0;
+  background: #fdfcf5;
+}
+.coverage-banner {
+  margin: 1rem 0 1.25rem;
+  padding: 0.75rem 1rem;
+  background: #fff8e6;
+  border: 1px solid #e8d9a8;
+  border-radius: 4px;
+  font-size: 14px;
+}
+.coverage-banner p { margin: 0 0 0.35rem; }
+.coverage-banner p:last-child { margin-bottom: 0; }
+.coverage-partial-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.1rem 0.45rem;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b5a00;
+  background: #fff3cd;
+  border: 1px solid #e8d9a8;
+  border-radius: 3px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
 .summary-score.score-strong { color: #1f6b1f; }
 .summary-score.score-mid    { color: #856404; }
 .summary-score.score-weak   { color: #842029; }
@@ -330,6 +363,10 @@ header nav a:hover {
 .finding-detail.finding-fail:hover {
   background: #f8ebe3;
   border-color: #e8c9b8;
+}
+.finding-detail.finding-skip:hover {
+  background: #f5f0e0;
+  border-color: #ddd0a8;
 }
 .finding-detail summary {
   cursor: pointer;
@@ -947,6 +984,14 @@ header nav a:hover {
 }
 .legend-grid dt.num-sample { font-weight: 700; color: #222; }
 .legend-grid dd { margin: 0; color: #555; max-width: 64ch; }
+
+.benchmark-reference { margin: 1.5rem 0 2rem; }
+.benchmark-reference h2 { margin-bottom: 0.35rem; }
+.reference-table .reference-benchmark-cell { min-width: 14rem; vertical-align: top; }
+.reference-score-hint { margin: 0.35rem 0 0; max-width: 42ch; }
+.reference-score-link { font-weight: 600; text-decoration: none; }
+.reference-score-link:hover { text-decoration: underline; }
+
 @media (max-width: 640px) {
   .legend-grid { grid-template-columns: 1fr; row-gap: 0.2rem; }
   .legend-grid dd { margin-bottom: 0.6rem; }

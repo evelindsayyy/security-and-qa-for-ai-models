@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_benchmark_docker %}
+{% from '_macros.html' import expandable, cli_benchmark_docker, benchmark_item_status %}
 
 {% block title %}{% if missing %}Benchmark not found{% else %}{{ kind_label }} — {{ model }}{% endif %}{% endblock %}
 
@@ -84,27 +84,34 @@
     </script>
   {% else %}
     <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
-    <h1>{{ kind_label }} — {{ model }}</h1>
+    <h1>{{ kind_label }} — {{ model }}{% if is_reference %} <span class="badge badge-pilot">Reference</span>{% endif %}</h1>
     <p class="sub">
       slug <code>{{ slug }}</code> ·
       file <code>{{ filename }}</code> ·
       {{ timestamp }}
     </p>
 
+    {% if not is_reference %}
     <form method="post" action="{{ url_for('benchmark_delete', slug=slug) }}"
           class="detail-delete-form"
           onsubmit="return confirm('Delete this benchmark result? This cannot be undone.');">
       <input type="hidden" name="confirm" value="1">
       <button type="submit" class="btn-danger">Delete result</button>
     </form>
+    {% endif %}
 
     <div class="summary-row">
       <div class="summary-chips">
         <span class="badge badge-pilot">{{ kind_label }}</span>
-        <span class="summary-score">
+        <span class="summary-score {{ score_class }}">
           {{ headline_metric }} <b>{{ headline_display }}</b>
         </span>
-        <span class="dim">n = {{ n }}</span>
+        <span class="dim">n = {{ n_display or n }}</span>
+        {% if coverage and coverage.partial %}
+        <span class="coverage-partial-badge" title="{{ coverage_skip_explanation }}">
+          {{ coverage.failed }} skipped
+        </span>
+        {% endif %}
         {% if run_stats_chips %}
           {% for chip in run_stats_chips %}
           <span class="dim">{{ chip.label }}: <b>{{ chip.value }}</b></span>
@@ -116,10 +123,15 @@
       </div>
     </div>
 
+    {% include '_benchmark_coverage.html' %}
+
     {% if meta %}
     <details class="tool-panel" open>
       <summary>About {{ meta.title or kind_label }}</summary>
       <p>{{ meta.about }}</p>
+      {% if meta.score_hint %}
+        <p class="form-hint"><strong>Score guide:</strong> {{ meta.score_hint }}</p>
+      {% endif %}
       {% if meta.source %}
         <p class="dim">Source:
           {% if meta.source.startswith('http') %}
@@ -171,10 +183,10 @@
     {% if kind == 'ifeval' %}
       <h2>Per prompt ({{ raw_rows|length }}{% if raw_row_count > raw_rows|length %} of {{ raw_row_count }}{% endif %})</h2>
       {% if raw_rows %}
-        {% for r in raw_rows %}
-        <details class="finding-detail {% if not r.judge.passed %}finding-fail{% endif %}">
+        {% for r in raw_rows|sort(attribute='answered') %}
+        <details class="finding-detail {% if r.answered is defined and not r.answered %}finding-skip{% elif not r.judge.passed %}finding-fail{% endif %}">
           <summary>
-            {% if r.judge.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+            {{ benchmark_item_status(r) }}
             <code>{{ r.key }}</code>
             {% if r.instruction_id_list %}
               · <span class="dim">{{ r.instruction_id_list|join(", ") }}</span>
@@ -299,12 +311,13 @@
 
       <h2>Sample questions ({{ results|length }}{% if raw_row_count > results|length %} of {{ raw_row_count }}{% endif %})</h2>
       {% if results %}
-        {% for r in results %}
-        <details class="finding-detail {% if not r.passed %}finding-fail{% endif %}">
+        {% for r in results|sort(attribute='answered') %}
+        <details class="finding-detail {% if r.answered is defined and not r.answered %}finding-skip{% elif not r.passed %}finding-fail{% endif %}">
           <summary>
-            {% if r.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+            {{ benchmark_item_status(r) }}
             · {{ r.subject|replace("_", " ") }}
-            · correct <b>{{ r.correct_answer }}</b> · model <b>{{ r.model_answer }}</b>
+            · correct <b>{{ r.correct_answer }}</b>
+            · model <b>{% if r.answered is defined and not r.answered %}<span class="dim">(no answer)</span>{% else %}{{ r.model_answer }}{% endif %}</b>
             {% if r.question %}
               · <span class="finding-summary-title">{{ r.question[:70] }}{% if r.question|length > 70 %}…{% endif %}</span>
             {% endif %}
@@ -328,7 +341,12 @@
             <dl class="benchmark-meta-dl">
               <dt>Subject</dt><dd>{{ r.subject|replace("_", " ") }}</dd>
               <dt>Correct</dt><dd>{{ r.correct_answer }}</dd>
-              <dt>Model picked</dt><dd>{{ r.model_answer }}</dd>
+              <dt>Model picked</dt>
+              <dd>{% if r.answered is defined and not r.answered %}<span class="dim">Skipped — no usable answer</span>{% else %}{{ r.model_answer }}{% endif %}</dd>
+              {% if r.answered is defined and not r.answered %}
+              <dt>Why skipped?</dt>
+              <dd class="form-hint">{{ coverage_skip_explanation }}</dd>
+              {% endif %}
             </dl>
           </div>
         </details>
@@ -340,12 +358,13 @@
     {% if kind == 'tomi' %}
       <h2>Per story ({{ results|length }}{% if raw_row_count > results|length %} of {{ raw_row_count }}{% endif %})</h2>
       {% if results %}
-        {% for r in results %}
-        <details class="finding-detail {% if not r.passed %}finding-fail{% endif %}">
+        {% for r in results|sort(attribute='answered') %}
+        <details class="finding-detail {% if r.answered is defined and not r.answered %}finding-skip{% elif not r.passed %}finding-fail{% endif %}">
           <summary>
-            {% if r.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+            {{ benchmark_item_status(r) }}
             · <span class="dim">{{ r.question_type }}</span>
-            · correct <b>{{ r.correct_answer }}</b> · model <b>{{ r.model_answer }}</b>
+            · correct <b>{{ r.correct_answer }}</b>
+            · model <b>{% if r.answered is defined and not r.answered %}<span class="dim">(no answer)</span>{% else %}{{ r.model_answer }}{% endif %}</b>
             {% if r.question %}
               · <span class="finding-summary-title">{{ r.question[:70] }}…</span>
             {% endif %}
@@ -360,8 +379,10 @@
             <dl class="benchmark-meta-dl">
               <dt>Type</dt><dd><code>{{ r.question_type }}</code> — see “About ToMi” for what each type tests.</dd>
               <dt>Correct answer</dt><dd>{{ r.correct_answer }}</dd>
-              <dt>Model answer</dt><dd>{{ r.model_answer }}</dd>
-              <dt>Outcome</dt><dd>{% if r.passed %}Answer matches expected belief/reality tracking.{% else %}Mismatch — model may have failed theory-of-mind reasoning for this story.{% endif %}</dd>
+              <dt>Model answer</dt>
+              <dd>{% if r.answered is defined and not r.answered %}<span class="dim">Skipped — no usable answer</span>{% else %}{{ r.model_answer }}{% endif %}</dd>
+              <dt>Outcome</dt>
+              <dd>{% if r.answered is defined and not r.answered %}Not scored — model output was missing or unusable.{% elif r.passed %}Answer matches expected belief/reality tracking.{% else %}Mismatch — model may have failed theory-of-mind reasoning for this story.{% endif %}</dd>
             </dl>
           </div>
         </details>
@@ -373,10 +394,10 @@
 
     {# ---- MBPP ---- #}
     {% if kind == 'mbpp' %}
-      {% for r in results %}
-      <details class="finding-detail {% if not r.passed %}finding-fail{% endif %}">
+      {% for r in results|sort(attribute='answered') %}
+      <details class="finding-detail {% if r.answered is defined and not r.answered %}finding-skip{% elif not r.passed %}finding-fail{% endif %}">
         <summary>
-          {% if r.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+          {{ benchmark_item_status(r) }}
           · task {{ r.task_id }} · {{ r.tests_passed }}/{{ r.tests_total }} tests
         </summary>
         <div class="finding-detail-panel benchmark-item-panel">
@@ -389,7 +410,8 @@
           <dl class="benchmark-meta-dl">
             <dt>Task ID</dt><dd><code>{{ r.task_id }}</code></dd>
             <dt>Tests</dt><dd>{{ r.tests_passed }}/{{ r.tests_total }}</dd>
-            <dt>Outcome</dt><dd>{% if r.passed %}All tests passed.{% else %}One or more tests failed.{% endif %}</dd>
+            <dt>Outcome</dt>
+            <dd>{% if r.answered is defined and not r.answered %}Not scored — no code was generated.{% elif r.passed %}All tests passed.{% else %}One or more tests failed.{% endif %}</dd>
           </dl>
 
           {% if not r.passed and r.test_results %}
@@ -412,13 +434,14 @@
 
     {# ---- QuALITY ---- #}
     {% if kind == 'quality' %}
-    {% for r in results %}
-    <details class="finding-detail {% if not r.passed %}finding-fail{% endif %}">
+    {% for r in results|sort(attribute='answered') %}
+    <details class="finding-detail {% if r.answered is defined and not r.answered %}finding-skip{% elif not r.passed %}finding-fail{% endif %}">
       <summary>
-        {% if r.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+        {{ benchmark_item_status(r) }}
         · article {{ r.article_id }}
         {% if r.hard %}· <span class="dim">HARD</span>{% endif %}
-        · correct <b>{{ r.correct_answer }}</b> · model <b>{{ r.model_answer }}</b>
+        · correct <b>{{ r.correct_answer }}</b>
+        · model <b>{% if r.answered is defined and not r.answered %}<span class="dim">(no answer)</span>{% else %}{{ r.model_answer }}{% endif %}</b>
         {% if r.question %}
           · <span class="finding-summary-title">{{ r.question[:70] }}{% if r.question|length > 70 %}…{% endif %}</span>
         {% endif %}
@@ -455,7 +478,7 @@
           <dt>Correct</dt><dd>{{ r.correct_answer or "—" }}</dd>
           <dt>Model picked</dt><dd>{{ r.model_answer or "—" }}</dd>
           <dt>Outcome</dt>
-          <dd>{% if r.passed %}Model picked the correct letter.{% else %}Mismatch — counts against accuracy.{% endif %}</dd>
+          <dd>{% if r.answered is defined and not r.answered %}Not scored — model output was missing or unparseable.{% elif r.passed %}Model picked the correct letter.{% else %}Mismatch — counts against accuracy.{% endif %}</dd>
         </dl>
       </div>
     </details>

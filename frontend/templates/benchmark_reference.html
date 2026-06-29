@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}Reference benchmark scores{% endblock %}
+
+{% block content %}
+<div class="eval-comparison">
+  <p class="back"><a href="{{ url_for('benchmarks') }}">← your benchmark runs</a></p>
+  <h1>Reference benchmark scores</h1>
+  <p class="sub">
+    Sample runs on default pilot sizes via the Duke gateway
+    ({% for m in reference_models %}{{ m }}{% if not loop.last %} · {% endif %}{% endfor %}).
+    Use these as orientation — your runs may use different sample sizes or models.
+  </p>
+
+  <div class="table-wrap">
+  <table class="run-table reference-table">
+    <thead>
+      <tr>
+        <th>Benchmark</th>
+        {% for m in reference_models %}
+        <th class="num">{{ m }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in reference_rows %}
+      {% set badge_class = {'truthfulqa': 'badge-tqa',
+                            'ifeval': 'badge-ifeval',
+                            'consistency': 'badge-consistency',
+                            'mmlu': 'badge-mmlu',
+                            'tomi': 'badge-tomi',
+                            'mbpp': 'badge-mbpp',
+                            'quality': 'badge-quality'}.get(row.key, 'badge-pilot') %}
+      <tr>
+        <td class="reference-benchmark-cell">
+          <span class="badge {{ badge_class }}">{{ row.label }}</span>
+          {% if row.score_hint %}
+          <p class="form-hint reference-score-hint">{{ row.score_hint }}</p>
+          {% endif %}
+        </td>
+        {% for m in reference_models %}
+        {% set cell = row.cells.get(m) %}
+        <td class="num">
+          {% if cell %}
+          <a href="{{ url_for('benchmark_detail', slug=cell.slug) }}"
+             class="reference-score-link {{ cell.score_class }}">{{ cell.headline_display }}</a>
+          <span class="dim"> {{ cell.headline_metric }}</span>
+          <span class="dim"> · n={{ cell.coverage.n_display }}</span>
+          {% if cell.coverage.partial %}
+          <span class="coverage-partial-badge" title="{{ coverage_skip_explanation }}">
+            {{ cell.coverage.failed }} skipped
+          </span>
+          {% endif %}
+          {% else %}
+          <span class="dim">—</span>
+          {% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <section class="key">
+    <h2>Skipped items</h2>
+    <p class="sub">{{ coverage_skip_explanation }}</p>
+    <p class="form-hint">
+      When a run shows <span class="coverage-partial-badge">N skipped</span> or
+      <code>n=99/100</code>, open the run to see which items were marked
+      <span class="status-skip">SKIP</span> in the per-question list.
+    </p>
+  </section>
+
+  <section class="key">
+    <h2>How to read scores</h2>
+    <dl class="legend-grid">
+      <dt>TruthfulQA / MMLU / QuALITY</dt>
+      <dd>Multiple-choice accuracy (over answered items only when skips occurred).</dd>
+      <dt>IFEval</dt>
+      <dd>Share of prompts whose formatting constraints were satisfied.</dd>
+      <dt>Consistency</dt>
+      <dd>Mean BERTScore F1 across rephrasings of the same question.</dd>
+      <dt>ToMi</dt>
+      <dd>Theory-of-mind accuracy.</dd>
+      <dt>MBPP</dt>
+      <dd>Percent of code problems fully passing all unit tests (no partial credit).</dd>
+    </dl>
+  </section>
+</div>
+{% endblock %}

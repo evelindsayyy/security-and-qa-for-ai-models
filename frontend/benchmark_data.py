@@ -20,6 +20,14 @@ if str(_BENCHMARKS_DIR) not in sys.path:
     sys.path.insert(0, str(_BENCHMARKS_DIR))
 from benchmark_metrics import coverage_extras  # noqa: E402
 from benchmark_run_stats import load_stats_sidecar  # noqa: E402
+
+COVERAGE_SKIP_EXPLANATION = (
+    "Items marked SKIP had no usable model output — for example a blank response, "
+    "an unparseable multiple-choice letter, failed code generation, an API or network "
+    "error, a rate limit, or exhausted provider credits. Headline accuracy is computed "
+    "over answered items only."
+)
+
 PRIMARY_DIR = ROOT / "benchmarks" / "results"
 LEGACY_DIRS = (
     ROOT / "testing" / "basic_tests" / "test_results",
@@ -137,8 +145,50 @@ BENCHMARK_META: dict[str, dict] = {
             ("model_answer", "Letter A-D the model chose."),
         ],
         "item_label": "question",
-    }
+    },
 }
+
+# Per-benchmark orientation bands for reference scores (pilot sample sizes — not leaderboard claims).
+SCORE_BANDS: dict[str, dict] = {
+    "truthfulqa": {
+        "mid": 0.55,
+        "strong": 0.70,
+        "hint": "Random guessing ≈25%. Many chat models land in the 55–70% range on MCQ samples.",
+    },
+    "ifeval": {
+        "mid": 0.50,
+        "strong": 0.75,
+        "hint": "Strict all-constraints pass rate. Formatting-heavy; small samples vary a lot.",
+    },
+    "mmlu": {
+        "mid": 0.60,
+        "strong": 0.75,
+        "hint": "Academic MCQ subset. Score depends on sample size and subject mix.",
+    },
+    "tomi": {
+        "mid": 0.70,
+        "strong": 0.85,
+        "hint": "Short theory-of-mind stories. Answer format must match exactly.",
+    },
+    "consistency": {
+        "mid": 0.75,
+        "strong": 0.85,
+        "hint": "Mean BERTScore F1 (0–1), not accuracy. Measures paraphrase stability.",
+    },
+    "mbpp": {
+        "mid": 0.40,
+        "strong": 0.60,
+        "hint": "Fraction of problems where all unit tests pass — no partial credit per problem.",
+    },
+    "quality": {
+        "mid": 0.45,
+        "strong": 0.55,
+        "hint": "Long-document MCQ. Hard questions are marked separately on the detail page.",
+    },
+}
+
+REFERENCE_DIR = ROOT / "frontend" / "benchmark_refs"
+_PREFERRED_REFERENCE_MODELS = ("GPT 4.1 Mini", "Llama 3.3")
 
 
 def _candidate_dirs() -> list[Path]:
@@ -355,14 +405,151 @@ def _summarize_mbpp(path: Path, data: dict) -> dict:
         "timestamp": _format_ts(data.get("timestamp") or ""),
         "headline_metric": "accuracy",
         "headline_value": acc,
-        "headline_display": f"{acc:.3f}" if acc is not None else "—",
+        "headline_display": f"{acc:.1%}" if acc is not None else "—",
         "n": summary.get("scored") or summary.get("total") or len(data.get("results") or []),
         "extras": {
             "correct": summary.get("correct"),
             **coverage_extras(summary),
         },
     }
-    
+
+
+def _normalize_model_name(raw: str) -> str:
+    if not raw or raw == "—":
+        return raw
+    if "/" in raw:
+        return raw.rsplit("/", 1)[-1]
+    return raw
+
+
+def _score_class(kind: str, value: float | None) -> str:
+    if value is None:
+        return ""
+    bands = SCORE_BANDS.get(kind) or {"mid": 0.6, "strong": 0.8}
+    if value >= bands["strong"]:
+        return "score-strong"
+    if value >= bands["mid"]:
+        return "score-mid"
+    return "score-weak"
+
+
+def _reference_dir() -> Path | None:
+    return REFERENCE_DIR if REFERENCE_DIR.is_dir() else None
+
+
+def _coverage_info(row: dict) -> dict:
+    """Normalize partial-run coverage for list/detail/reference views."""
+    extras = row.get("extras") or {}
+    failed = int(extras.get("failed") or 0)
+    attempted = extras.get("attempted")
+    scored = extras.get("scored")
+    n = row.get("n")
+    if failed <= 0:
+        return {
+            "partial": False,
+            "failed": 0,
+            "n_display": str(n if n is not None else "—"),
+        }
+    if attempted is not None and scored is not None:
+        n_display = f"{scored}/{attempted}"
+    else:
+        n_display = str(n if n is not None else "—")
+    return {
+        "partial": True,
+        "failed": failed,
+        "attempted": attempted,
+        "scored": scored,
+        "coverage_pct": extras.get("coverage"),
+        "n_display": n_display,
+    }
+
+
+def _attach_coverage(summary: dict) -> dict:
+    cov = _coverage_info(summary)
+    summary["coverage"] = cov
+    summary["n_display"] = cov["n_display"]
+    summary["coverage_skip_explanation"] = COVERAGE_SKIP_EXPLANATION
+    return summary
+
+
+def is_reference_slug(slug: str) -> bool:
+    ref = _reference_dir()
+    if ref is None or not is_safe_slug(slug):
+        return False
+    for suffix in (".json", ".jsonl"):
+        path = ref / f"{slug}{suffix}"
+        if path.is_file() and resolves_inside(ref, path):
+            return True
+    return False
+
+
+def _load_reference_summaries() -> list[dict]:
+    ref = _reference_dir()
+    if ref is None:
+        return []
+    rows: list[dict] = []
+    for path in sorted(list(ref.glob("*.json")) + list(ref.glob("*.jsonl"))):
+        row = _summarize_file(path)
+        if row is None:
+            continue
+        row = dict(row)
+        row["model"] = _normalize_model_name(row.get("model") or "—")
+        row["is_reference"] = True
+        row["score_class"] = _score_class(row.get("kind"), row.get("headline_value"))
+        rows.append(row)
+    return rows
+
+
+def _build_reference_section() -> dict:
+    from run_benchmark import BENCHMARKS  # noqa: E402
+
+    summaries = _load_reference_summaries()
+    if not summaries:
+        return {"has_reference": False, "reference_models": [], "reference_rows": []}
+
+    by_kind_model: dict[str, dict[str, dict]] = {}
+    for row in summaries:
+        kind = row.get("kind")
+        model = row.get("model")
+        if not kind or not model or model == "—":
+            continue
+        by_kind_model.setdefault(kind, {})[model] = row
+
+    models_set = {m for per in by_kind_model.values() for m in per}
+    reference_models = [m for m in _PREFERRED_REFERENCE_MODELS if m in models_set]
+    reference_models.extend(sorted(models_set - set(reference_models)))
+
+    reference_rows: list[dict] = []
+    for key, cfg in BENCHMARKS.items():
+        bands = SCORE_BANDS.get(key, {})
+        cells: dict[str, dict] = {}
+        for model in reference_models:
+            cell = by_kind_model.get(key, {}).get(model)
+            if cell:
+                cells[model] = {
+                    "slug": cell["slug"],
+                    "headline_display": cell["headline_display"],
+                    "headline_metric": cell["headline_metric"],
+                    "headline_value": cell["headline_value"],
+                    "n": cell["n"],
+                    "score_class": cell["score_class"],
+                    "coverage": _coverage_info(cell),
+                }
+        reference_rows.append({
+            "key": key,
+            "label": cfg["label"],
+            "score_hint": bands.get("hint", ""),
+            "cells": cells,
+        })
+
+    return {
+        "has_reference": True,
+        "reference_models": reference_models,
+        "reference_rows": reference_rows,
+        "coverage_skip_explanation": COVERAGE_SKIP_EXPLANATION,
+    }
+
+
 def _summarize_quality(path: Path, data: dict) -> dict:
     summary = data.get("summary") or {}
     acc = summary.get("accuracy")
@@ -454,11 +641,26 @@ def _attach_run_stats(summary: dict, path: Path, data: dict | None = None) -> di
     rs = _extract_run_stats(data, path)
     if rs:
         summary["run_stats_chips"] = _run_stats_chips(rs)
+    return summary
+
+
 def _attach_meta(summary: dict) -> dict:
     """Add benchmark context block for the detail template."""
     kind = summary.get("kind")
-    summary["meta"] = BENCHMARK_META.get(kind, {})
+    meta = dict(BENCHMARK_META.get(kind, {}))
+    bands = SCORE_BANDS.get(kind or "")
+    if bands.get("hint"):
+        meta["score_hint"] = bands["hint"]
+    summary["meta"] = meta
     return summary
+
+
+def _result_dirs() -> list[Path]:
+    dirs = list(_candidate_dirs())
+    ref = _reference_dir()
+    if ref is not None:
+        dirs.append(ref)
+    return dirs
 
 
 def _get_benchmarks_data_files() -> dict:
@@ -496,7 +698,7 @@ def _get_benchmarks_data_files() -> dict:
 def _get_benchmark_detail_files(slug: str) -> dict | None:
     if not is_safe_slug(slug):
         return None
-    for d in _candidate_dirs():
+    for d in _result_dirs():
         candidate_paths = [d / f"{slug}.json", d / f"{slug}.jsonl"]
         for path in candidate_paths:
             if path.is_file():
@@ -586,6 +788,9 @@ def delete_benchmark(slug: str) -> str | None:
     if not is_safe_slug(slug):
         return f"invalid slug: {slug!r}"
 
+    if is_reference_slug(slug):
+        return "reference benchmark runs cannot be deleted"
+
     from frontend.benchmark_launch import is_run_in_progress
 
     if is_run_in_progress(slug):
@@ -616,25 +821,47 @@ def delete_benchmark(slug: str) -> str | None:
 # Public entry points — Postgres when configured, artifact fallback otherwise.
 
 
+def get_benchmark_reference_data() -> dict:
+    return _build_reference_section()
+
+
 def get_benchmarks_data() -> dict:
     try:
         from frontend import benchmark_db_data
 
         if benchmark_db_data.available():
-            return benchmark_db_data.get_benchmarks_data_db()
+            data = benchmark_db_data.get_benchmarks_data_db()
+        else:
+            data = _get_benchmarks_data_files()
     except Exception:
-        pass
-    return _get_benchmarks_data_files()
+        data = _get_benchmarks_data_files()
+    ref = _build_reference_section()
+    data["has_reference"] = ref.get("has_reference", False)
+    data["coverage_skip_explanation"] = COVERAGE_SKIP_EXPLANATION
+    for row in data.get("runs", []):
+        row["score_class"] = _score_class(row.get("kind"), row.get("headline_value"))
+        row["coverage"] = _coverage_info(row)
+    return data
 
 
 def get_benchmark_detail(slug: str) -> dict | None:
-    try:
-        from frontend import benchmark_db_data
+    detail: dict | None = None
+    if is_reference_slug(slug):
+        detail = _get_benchmark_detail_files(slug)
+        if detail is not None:
+            detail["is_reference"] = True
+            detail["model"] = _normalize_model_name(detail.get("model") or "—")
+    else:
+        try:
+            from frontend import benchmark_db_data
 
-        if benchmark_db_data.available():
-            detail = benchmark_db_data.get_benchmark_detail_db(slug)
-            if detail is not None:
-                return detail
-    except Exception:
-        pass
-    return _get_benchmark_detail_files(slug)
+            if benchmark_db_data.available():
+                detail = benchmark_db_data.get_benchmark_detail_db(slug)
+        except Exception:
+            pass
+        if detail is None:
+            detail = _get_benchmark_detail_files(slug)
+    if detail is not None:
+        detail["score_class"] = _score_class(detail.get("kind"), detail.get("headline_value"))
+        _attach_coverage(detail)
+    return detail
