@@ -1,4 +1,3 @@
-import socket
 import unittest
 from unittest import mock
 
@@ -52,16 +51,21 @@ class DockerAvailableTest(unittest.TestCase):
 
 class DockerSocketPingTest(unittest.TestCase):
     def test_ping_accepts_ok_response(self) -> None:
-        fake = mock.Mock(spec=socket.socket)
+        fake = mock.Mock()
         fake.recv.return_value = b"HTTP/1.1 200 OK\r\n\r\nOK"
         ctx = mock.MagicMock()
         ctx.__enter__.return_value = fake
+        ctx.__exit__.return_value = False
         with (
-            mock.patch.object(docker_launch.os, "path", wraps=docker_launch.os.path),
+            mock.patch.object(docker_launch.os.path, "exists", return_value=True),
             mock.patch.object(docker_launch.os, "access", return_value=True),
             mock.patch.object(docker_launch.socket, "socket", return_value=ctx),
         ):
             self.assertTrue(docker_launch._docker_socket_ping())
+
+    def test_ping_returns_false_when_socket_missing(self) -> None:
+        with mock.patch.object(docker_launch.os.path, "exists", return_value=False):
+            self.assertFalse(docker_launch._docker_socket_ping())
 
 
 if __name__ == "__main__":
