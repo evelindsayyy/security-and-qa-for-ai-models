@@ -184,14 +184,18 @@ def register_routes(app):
             ctx = scan_delete_context(slug)
             if ctx is None:
                 return redirect(url_for("scans"))
-            if ctx.get("error"):
-                return ctx["error"], 400
             return render_template("delete_confirm.html", **ctx)
         if request.form.get("confirm") != "1":
-            return "confirmation required", 400
+            ctx = scan_delete_context(slug, error_message="Confirmation required.")
+            if ctx is None:
+                return redirect(url_for("scans"))
+            return render_template("delete_confirm.html", **ctx)
         error = delete_scan(slug)
         if error:
-            return error, 400
+            ctx = scan_delete_context(slug, error_message=error)
+            if ctx is None:
+                return redirect(url_for("scans"))
+            return render_template("delete_confirm.html", **ctx)
         return redirect(url_for("scans"))
 
     @app.route("/eval-run")
@@ -335,14 +339,18 @@ def register_routes(app):
             ctx = eval_delete_context(slug)
             if ctx is None:
                 return redirect(url_for("eval_run"))
-            if ctx.get("error"):
-                return ctx["error"], 400
             return render_template("delete_confirm.html", **ctx)
         if request.form.get("confirm") != "1":
-            return "confirmation required", 400
+            ctx = eval_delete_context(slug, error_message="Confirmation required.")
+            if ctx is None:
+                return redirect(url_for("eval_run"))
+            return render_template("delete_confirm.html", **ctx)
         error = delete_eval_run(slug)
         if error:
-            return error, 400
+            ctx = eval_delete_context(slug, error_message=error)
+            if ctx is None:
+                return redirect(url_for("eval_run"))
+            return render_template("delete_confirm.html", **ctx)
         return redirect(url_for("eval_run"))
 
     @app.route("/benchmarks")
@@ -456,14 +464,18 @@ def register_routes(app):
             ctx = benchmark_delete_context(slug)
             if ctx is None:
                 return redirect(url_for("benchmarks"))
-            if ctx.get("error"):
-                return ctx["error"], 400
             return render_template("delete_confirm.html", **ctx)
         if request.form.get("confirm") != "1":
-            return "confirmation required", 400
+            ctx = benchmark_delete_context(slug, error_message="Confirmation required.")
+            if ctx is None:
+                return redirect(url_for("benchmarks"))
+            return render_template("delete_confirm.html", **ctx)
         error = delete_benchmark(slug)
         if error:
-            return error, 400
+            ctx = benchmark_delete_context(slug, error_message=error)
+            if ctx is None:
+                return redirect(url_for("benchmarks"))
+            return render_template("delete_confirm.html", **ctx)
         return redirect(url_for("benchmarks"))
 
     @app.route("/safety")
@@ -579,14 +591,18 @@ def register_routes(app):
             ctx = safety_delete_context(slug, profile)
             if ctx is None:
                 return redirect(url_for("safety"))
-            if ctx.get("error"):
-                return ctx["error"], 400
             return render_template("delete_confirm.html", **ctx)
         if request.form.get("confirm") != "1":
-            return "confirmation required", 400
+            ctx = safety_delete_context(slug, profile, error_message="Confirmation required.")
+            if ctx is None:
+                return redirect(url_for("safety"))
+            return render_template("delete_confirm.html", **ctx)
         error = delete_safety(slug, profile)
         if error:
-            return error, 400
+            ctx = safety_delete_context(slug, profile, error_message=error)
+            if ctx is None:
+                return redirect(url_for("safety"))
+            return render_template("delete_confirm.html", **ctx)
         return redirect(url_for("safety"))
 
     @app.route("/models")

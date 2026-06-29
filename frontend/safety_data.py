@@ -357,7 +357,14 @@ def delete_safety(slug: str, profile: str = "base") -> str | None:
         except (json.JSONDecodeError, OSError):
             pass
 
-    removed_disk = merged_path.is_file()
+    removed_disk = False
+    if merged_path.is_file():
+        try:
+            merged_path.unlink()
+            removed_disk = True
+        except OSError:
+            pass
+
     for rel in (
         OUTPUT_DIR / slug / profile,
         ROOT / "safety" / "promptfoo" / "output" / slug / profile,
@@ -377,14 +384,16 @@ def delete_safety(slug: str, profile: str = "base") -> str | None:
         removed_disk = True
 
     removed_db = False
-    if db_keys:
-        try:
-            from frontend import safety_db_data
+    try:
+        from frontend import safety_db_data
 
-            if safety_db_data.available():
+        if safety_db_data.available():
+            if db_keys:
                 removed_db = safety_db_data.delete_run(*db_keys)
-        except Exception:
-            pass
+            if not removed_db:
+                removed_db = safety_db_data.delete_run_by_slug(slug)
+    except Exception:
+        pass
 
     if not removed_disk and not removed_db:
         return f"no safety result found for {slug!r}/{profile!r}"
