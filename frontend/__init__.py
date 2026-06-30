@@ -16,11 +16,14 @@ def create_app(test_config=None):
         static_folder="static",
     )
     secret = os.environ.get("SECRET_KEY", "dev")
+    trust_proxy = _trust_proxy_enabled()
     app.config.from_mapping(
         SECRET_KEY=secret,
         DATABASE=os.path.join(app.instance_path, "frontend.sqlite"),
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SECURE=trust_proxy,
+        PREFERRED_URL_SCHEME="https" if trust_proxy else "http",
     )
 
     if test_config is None:
@@ -38,6 +41,11 @@ def create_app(test_config=None):
 
     register_api(app)
 
+    if trust_proxy and not app.config.get("TESTING"):
+        from werkzeug.middleware.proxy_fix import ProxyFix
+
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
     if not app.config.get("TESTING"):
         from dbutils.startup import log_db_read_path
         from frontend import docker_launch
@@ -45,3 +53,9 @@ def create_app(test_config=None):
         log_db_read_path()
         docker_launch.warm_stacks_async()
     return app
+
+
+def _trust_proxy_enabled() -> bool:
+    if os.environ.get("TRUST_PROXY", "").strip().lower() in ("1", "true", "yes", "on"):
+        return True
+    return bool(os.environ.get("CADDY_DOMAIN", "").strip())

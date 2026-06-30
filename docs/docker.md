@@ -9,7 +9,7 @@ How the images fit together. For commands, see [`cli.md`](cli.md).
 python3 main.py               # containerized UI (default); same as ./docker/run.sh up --build
 ```
 
-Production on the application VM uses the same scripts. Host Flask (`uv run flask …`) is a development alternative only.
+Production on the application VM uses the same scripts with optional **Caddy HTTPS** when `CADDY_DOMAIN` is set in `.env`. See [`https-setup.md`](https-setup.md). Host Flask (`uv run flask …`) is a development alternative only.
 
 ## Two layers
 
@@ -66,3 +66,13 @@ registry, pulls the tagged web image, and **recreates** the web container
 [`.gitlab/README.md`](../.gitlab/README.md) for CI/CD variables.
 
 Postgres is external (`POSTGRES_DSN` on OIT host). End-to-end flow diagram: [`architecture.md`](architecture.md#how-a-run-flows).
+
+## Production HTTPS (Caddy)
+
+On the application VM, set `CADDY_DOMAIN` in `.env`. [`docker/run.sh`](../docker/run.sh) automatically adds [`compose.caddy.yml`](../docker/compose.caddy.yml):
+
+- **Caddy** listens on ports 80/443 with Duke Locksmith ACME (`locksmith.oit.duke.edu`)
+- **web** is reachable only inside the Docker network (not published on `:5000`)
+- Set `TRUST_PROXY=1` so Flask trusts `X-Forwarded-Proto`
+
+Full operator steps: [`https-setup.md`](https-setup.md). Do not run Caddy locally.

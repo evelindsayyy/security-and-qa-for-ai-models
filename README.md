@@ -23,6 +23,7 @@ Automated **nutrition labels** for Duke AI Gateway models: **security** (artifac
 | **Understand the system** (VM, Postgres, background jobs) | [`docs/architecture.md`](docs/architecture.md) |
 | **Postgres schema and ingest** | [`docs/data-model.md`](docs/data-model.md) · [`dbutils/README.md`](dbutils/README.md) |
 | **Authentication (OIDC, public/private views)** | [`docs/auth-setup.md`](docs/auth-setup.md) · [`auth/README.md`](auth/README.md) |
+| **HTTPS / TLS (production Caddy)** | [`docs/https-setup.md`](docs/https-setup.md) |
 | **Track A** (scanning + safety) | [`docs/track-a-framework.md`](docs/track-a-framework.md) |
 | **Track B** (evaluator + benchmarks) | [`docs/track-b-framework.md`](docs/track-b-framework.md) |
 | **Gateway models and HF scan tiers** | [`docs/gateway-models.md`](docs/gateway-models.md) |

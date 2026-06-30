@@ -40,6 +40,7 @@ _POPUP_DONE_HTML = """
 def register_auth(app) -> None:
     init_oauth(app)
     app.register_blueprint(bp)
+    app.add_url_rule("/login", view_func=oauth_callback, methods=["GET"])
     app.context_processor(lambda: auth_context_for_template())
 
 
@@ -68,6 +69,11 @@ def login():
 
 @bp.route("/callback")
 def callback():
+    return oauth_callback()
+
+
+def oauth_callback():
+    """OIDC authorization-code callback (also mounted at GET /login)."""
     if not auth_enabled():
         return redirect(url_for("index"))
 

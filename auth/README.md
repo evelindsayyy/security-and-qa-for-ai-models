@@ -29,7 +29,7 @@ Registered from `frontend/create_app()` via `register_auth(app)`.
 | `AUTH_ENABLED` | `1` = real OIDC; `0` = dev bypass |
 | `SECRET_KEY` | Flask session signing (required in production) |
 | `DUKE_OIDC_CLIENT_ID` / `DUKE_OIDC_CLIENT_SECRET` | From Duke Authentication Manager |
-| `DUKE_OIDC_REDIRECT_URI` | Must match registered redirect exactly |
+| `DUKE_OIDC_REDIRECT_URI` | Must match registered redirect exactly (`https://…/login` in production) |
 | `AUTH_ALLOWED_NETIDS` | Comma-separated netIDs for private mode |
 | `AUTH_DEV_NETID` | Optional fake user when `AUTH_ENABLED=0` |
 
@@ -46,7 +46,9 @@ curl -s -X POST http://127.0.0.1:5000/auth/view-mode -d mode=public
 curl -s -X POST http://127.0.0.1:5000/auth/logout
 ```
 
-Login is browser-only: header **Sign in with Duke NetID** opens `/auth/login?popup=1` → Duke OIDC → `/auth/callback`.
+Login is browser-only: header **Sign in with Duke NetID** opens `/auth/login?popup=1` → Duke OIDC → `/login` (or `/auth/callback`).
+
+Production HTTPS and OIDC rollout: [`docs/https-setup.md`](../docs/https-setup.md) then [`docs/auth-setup.md`](../docs/auth-setup.md).
 
 ## Related code
 

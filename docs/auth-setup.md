@@ -2,6 +2,8 @@
 
 Operator guide for Duke OIDC on the application VM (`model-advisor.colab.duke.edu`). Code lives in [`auth/`](../auth/README.md).
 
+**Prerequisite:** Production HTTPS via Caddy — complete [`https-setup.md`](https-setup.md) **before** setting `AUTH_ENABLED=1`.
+
 **Model:** Public view needs no login. Private view and custom runs require an allowlisted Duke netID. Runs are deduplicated by config fingerprint in Postgres.
 
 ---
@@ -67,7 +69,7 @@ Ask your faculty lead or OIT sponsor whether Code+ / OIT already has a support g
 | Field | Value |
 |-------|--------|
 | **Group display name** | `Code+ AI Model Security & QA — model-advisor` |
-| **Description** | `Support group for the Code+ 2026 OIT project "Security & QA Tools for Duke's AI Models". Owns OAuth client registration and administration for the model-advisor nutrition-label web application at http://model-advisor.colab.duke.edu:5000 (scanning, safety, efficacy, and benchmark runs for Duke AI Gateway models). Faculty/staff co-owners: project faculty lead and student developers who will rotate credentials and update redirect URIs.` |
+| **Description** | `Support group for the Code+ 2026 OIT project "Security & QA Tools for Duke's AI Models". Owns OAuth client registration and administration for the model-advisor nutrition-label web application at https://model-advisor.colab.duke.edu (scanning, safety, efficacy, and benchmark runs for Duke AI Gateway models). Faculty/staff co-owners: project faculty lead and student developers who will rotate credentials and update redirect URIs.` |
 
 4. **Owners** — add at minimum:
    - Faculty lead / OIT sponsor (staff NetID)
@@ -88,7 +90,7 @@ Ask your faculty lead or OIT sponsor whether Code+ / OIT already has a support g
    `Register and maintain a Duke OAuth/OIDC client for the model-advisor web app (AI model security scanning, safety red-teaming, and efficacy evaluation UI). Authentication is used for private-mode access and custom run configuration; public catalog browsing does not require login.`
 
    **Application URL:**  
-   `http://model-advisor.colab.duke.edu:5000`
+   `https://model-advisor.colab.duke.edu`
 
    **Department / sponsor:**  
    `Duke Office of Information Technology — Code+ 2026`
@@ -108,8 +110,8 @@ Please approve a Group Manager Support Group for OAuth client registration.
 
 Project: Code+ 2026 — Security & QA Tools for Duke's AI Models
 Application: model-advisor nutrition-label UI
-Production URL: http://model-advisor.colab.duke.edu:5000
-OAuth redirect URI (planned): http://model-advisor.colab.duke.edu:5000/auth/callback
+Production URL: https://model-advisor.colab.duke.edu
+OAuth redirect URI (planned): https://model-advisor.colab.duke.edu/login
 
 Requested group display name:
   Code+ AI Model Security & QA — model-advisor
@@ -126,33 +128,32 @@ We have created ad hoc group <group_id_if_known> and requested promotion, or nee
 
 ---
 
-### Step 2: Register the OAuth client
+### Step 2: OAuth client (registered by OIT lead)
 
-After the support group is active:
+The Code+ OAuth client is already registered:
 
-1. Open [Authentication Manager — Register OAuth Client](https://authentication.oit.duke.edu/manager/oauth/faq) (link at top of the OAuth FAQ page).
-2. Sign in with your Duke NetID. Select the **support group** from Step 1 when prompted.
-3. Fill in the client registration form:
+| Field | Value |
+|-------|--------|
+| **Client ID** | `codeplus-model-advisor` |
+| **Grant type** | `authorization_code` |
+| **Redirect URI (production)** | `https://model-advisor.colab.duke.edu/login` |
+| **Redirect URI (local dev)** | `http://localhost:5000/login` |
+| **Scopes** | `openid`, `profile`, `email` |
+
+Get the **client secret** from your team lead (1Password) — store only in VM `.env`.
+
+The app handles OAuth callback at **`/login`** (George's registered path) and also **`/auth/callback`**. Login entry is **`/auth/login`**.
+
+If you register a new client instead, use these values:
 
 | Field | Value |
 |-------|--------|
 | **Client name** (display) | `Model Advisor — AI Security & QA` |
 | **Description** | `Flask web UI and JSON API for security scanning, inference safety testing, and efficacy evaluation of Duke AI Gateway models. Code+ 2026 / OIT internal tool. OIDC login required only for private view and custom run configs; public nutrition-label catalog does not require authentication.` |
 | **Grant type** | `authorization_code` |
-| **Redirect URI** | `http://model-advisor.colab.duke.edu:5000/auth/callback` |
+| **Redirect URI** | `https://model-advisor.colab.duke.edu/login` |
 
-   The redirect URI must match **exactly** (scheme, host, port, path). If the VM later moves to HTTPS or drops `:5000`, register a **new** redirect URI in Authentication Manager and update `DUKE_OIDC_REDIRECT_URI` in `.env`.
-
-4. **Scopes:** enable **`openid`**, **`profile`**, **`email`**  
-   - `openid` → `dukeNetID`, `dukeUniqueID`, `sub`  
-   - `profile` → name, `dukePrimaryAffiliation`  
-   - `email` → institutional email  
-
-   Do **not** request `groups` scope unless you later move allowlisting to Grouper (out of scope today; app uses `AUTH_ALLOWED_NETIDS` in `.env`).
-
-5. Review the [OAuth overview](https://authentication.oit.duke.edu/manager/documentation/oauth/overview.md) and [mobile development standard](https://authentication.oit.duke.edu/manager/oauth/faq) if OIT flags the client type.
-
-6. Submit registration. Copy the **client ID** and **client secret** immediately — store only in the VM `.env`, never in git.
+   The redirect URI must match **exactly** (scheme, host, port, path). See [`https-setup.md`](https-setup.md) for Caddy TLS setup.
 
 | Endpoint | URL |
 |----------|-----|
@@ -170,17 +171,22 @@ On `model-advisor.colab.duke.edu`, edit `/home/vcm/security-and-qa-for-ai-models
 ```bash
 AUTH_ENABLED=1
 SECRET_KEY=<run: python3 -c "import secrets; print(secrets.token_hex(32))">
-DUKE_OIDC_CLIENT_ID=<from Authentication Manager>
-DUKE_OIDC_CLIENT_SECRET=<from Authentication Manager>
-DUKE_OIDC_REDIRECT_URI=http://model-advisor.colab.duke.edu:5000/auth/callback
+DUKE_OIDC_CLIENT_ID=codeplus-model-advisor
+DUKE_OIDC_CLIENT_SECRET=<from 1Password>
+DUKE_OIDC_REDIRECT_URI=https://model-advisor.colab.duke.edu/login
 AUTH_ALLOWED_NETIDS=yournetid,teammate1,teammate2
+TRUST_PROXY=1
+CADDY_DOMAIN=model-advisor.colab.duke.edu
+CADDY_EMAIL=your-netid@duke.edu
+CADDY_ACME_HOSTNAME=locksmith.oit.duke.edu
+CADDY_BACKEND_PORT=5000
 ```
 
-Restart the web container:
+Restart the stack (Caddy + web):
 
 ```bash
 cd /home/vcm/security-and-qa-for-ai-models
-./docker/run.sh up -d --build
+./docker/run.sh up -d --force-recreate web caddy
 ```
 
 ---
@@ -190,7 +196,7 @@ cd /home/vcm/security-and-qa-for-ai-models
 Run these in order after restart.
 
 ```bash
-BASE=http://model-advisor.colab.duke.edu:5000
+BASE=https://model-advisor.colab.duke.edu
 
 # 1. Health
 curl -s "$BASE/api/health" | python3 -m json.tool
@@ -263,5 +269,4 @@ When multiple historical runs share the same config, only the **newest** row per
 ## Later (out of scope)
 
 - Grouper / `groups` OAuth scope for colab-wide allowlist
-- HTTPS reverse proxy (update redirect URI)
 - Require login for all job POSTs (abuse hardening)

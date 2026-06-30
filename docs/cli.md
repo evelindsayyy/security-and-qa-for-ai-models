@@ -54,7 +54,7 @@ AUTH_ENABLED=1
 SECRET_KEY=<random hex>
 DUKE_OIDC_CLIENT_ID=...
 DUKE_OIDC_CLIENT_SECRET=...
-DUKE_OIDC_REDIRECT_URI=http://model-advisor.colab.duke.edu:5000/auth/callback
+DUKE_OIDC_REDIRECT_URI=https://model-advisor.colab.duke.edu/login
 AUTH_ALLOWED_NETIDS=netid1,netid2
 
 # Local dev without Duke login:

@@ -34,4 +34,4 @@ def redirect_uri() -> str:
     uri = os.environ.get("DUKE_OIDC_REDIRECT_URI", "").strip()
     if uri:
         return uri
-    return "http://127.0.0.1:5000/auth/callback"
+    return "http://127.0.0.1:5000/login"
