@@ -81,16 +81,27 @@ class CustomHfLaunchTest(_Base):
     """The 'bring your own questions' form supports HF models the same way the
     standard start-run form does: a gateway/hf source toggle, an HF repo field,
     and a /eval-run/start-custom HF branch that validates the model (serving is
-    the later DCC milestone)."""
+    the later DCC milestone). Custom eval requires private view + allowlisted user."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        os.environ["AUTH_ENABLED"] = "0"
+        os.environ["AUTH_DEV_NETID"] = "testuser"
+        os.environ["AUTH_ALLOWED_NETIDS"] = "testuser"
+        self.app = create_app({"TESTING": True, "SECRET_KEY": "test"})
+        self.client = self.app.test_client()
+        with self.client.session_transaction() as sess:
+            sess["view_mode"] = "private"
+            sess["user"] = {"id": "u-test", "netid": "testuser", "display_name": "Test"}
 
     def test_custom_form_offers_hf_source(self) -> None:
-        r = _client().get("/eval-run/new")
+        r = self.client.get("/eval-run/new")
         self.assertEqual(r.status_code, 200)
         self.assertIn(b'id="hf_repo_c"', r.data)   # the custom form's HF field
 
     def test_post_custom_hf_valid_shows_ready(self) -> None:
         with mock.patch.object(hf_intake, "validate", return_value=_GOOD):
-            r = _client().post("/eval-run/start-custom",
+            r = self.client.post("/eval-run/start-custom",
                                data={"source": "hf",
                                      "hf_repo": "Qwen/Qwen2.5-7B-Instruct"})
         self.assertEqual(r.status_code, 200)
@@ -98,7 +109,7 @@ class CustomHfLaunchTest(_Base):
 
     def test_post_custom_hf_invalid_shows_reason(self) -> None:
         with mock.patch.object(hf_intake, "validate", return_value=_BAD):
-            r = _client().post("/eval-run/start-custom",
+            r = self.client.post("/eval-run/start-custom",
                                data={"source": "hf", "hf_repo": "org/gated"})
         self.assertEqual(r.status_code, 200)
         self.assertIn(b"gated", r.data)
@@ -108,7 +119,7 @@ class CustomHfLaunchTest(_Base):
         # spawning a runner, exactly like the standard HF path.
         with mock.patch.object(hf_intake, "validate", return_value=_GOOD), \
              mock.patch.object(eval_launch, "start_run") as sr:
-            _client().post("/eval-run/start-custom",
+            self.client.post("/eval-run/start-custom",
                            data={"source": "hf",
                                  "hf_repo": "Qwen/Qwen2.5-7B-Instruct"})
         sr.assert_not_called()
@@ -120,7 +131,7 @@ class CustomHfLaunchTest(_Base):
              mock.patch.object(eval_launch, "write_custom_suite",
                                return_value="custom_x"), \
              mock.patch.object(eval_launch, "validate_launch", return_value=None):
-            r = _client().post(
+            r = self.client.post(
                 "/eval-run/start-custom",
                 data={"candidate": "gpt-5-chat", "judge": "Llama 4 Maverick",
                       "max_tokens": "2000",

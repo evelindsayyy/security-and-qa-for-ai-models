@@ -2,6 +2,8 @@
 
 Nutrition-label **UI and JSON API** (one Flask process). Browser **Start** buttons and `POST /api/*` spawn pillar jobs in Docker via [`docker_launch.py`](docker_launch.py). Reads use Postgres when configured, else on-disk JSON.
 
+**Auth:** Public view (default) needs no login. Private view and custom runs require an allowlisted Duke netID — [`docs/auth-setup.md`](../docs/auth-setup.md) · [`../auth/README.md`](../auth/README.md).
+
 ## Quick start
 
 ### One-time setup
@@ -28,6 +30,19 @@ Open http://127.0.0.1:5000.
 Launch pages: `/scans/new`, `/safety/new`, `/eval-run/new`, `/benchmarks/new` — gateway dropdowns on each form. Benchmark model-input options (Gateway / Hosted / Custom): [`benchmarks/README.md`](../benchmarks/README.md).
 
 While a job runs, its detail page polls status and shows a live log tail. Scan and safety start forms warn when the same model/repo is already in progress (`run.lock` under the output dir).
+
+Header: **Public | Private** view toggle · **Sign in with Duke NetID** (when `AUTH_ENABLED=1`).
+
+### Auth (local dev)
+
+```bash
+# .env — no Duke OAuth required
+AUTH_ENABLED=0
+AUTH_DEV_NETID=yournetid
+AUTH_ALLOWED_NETIDS=yournetid
+
+curl -s localhost:5000/auth/me | python3 -m json.tool
+```
 
 ### JSON API
 
@@ -72,4 +87,4 @@ python3 main.py --host
 
 ## See also
 
-- [`../README.md`](../README.md) · [`docs/cli.md`](../docs/cli.md) · [`docs/docker.md`](../docs/docker.md) · [`../api/README.md`](../api/README.md)
+- [`../README.md`](../README.md) · [`docs/cli.md`](../docs/cli.md) · [`docs/auth-setup.md`](../docs/auth-setup.md) · [`docs/docker.md`](../docs/docker.md) · [`../api/README.md`](../api/README.md)

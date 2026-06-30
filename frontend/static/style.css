@@ -55,6 +55,36 @@ header nav a:hover {
   text-decoration: none;
 }
 
+.header-auth {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+  font-size: 14px;
+}
+.view-mode-form { display: inline-flex; align-items: center; gap: 0.35rem; }
+.view-mode-label { color: #666; }
+.view-mode-btn, .auth-login-btn, .logout-form button {
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 4px;
+  padding: 0.2rem 0.55rem;
+  cursor: pointer;
+  font-size: 13px;
+}
+.view-mode-btn.is-active { background: #012169; color: #fff; border-color: #012169; }
+.auth-user { color: #444; }
+.auth-banner {
+  background: #eef3fb;
+  border: 1px solid #c9d7ef;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  font-size: 14px;
+}
+.auth-banner-warn { background: #fff4e5; border-color: #f0c987; }
+
 /* shared tables (eval + scan pages use the same class names) */
 .table-wrap {
   width: 100%;

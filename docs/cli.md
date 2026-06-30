@@ -35,12 +35,37 @@ When `POSTGRES_DSN` is reachable from the application VM (or VPN). Set `EFFICACY
 
 ```bash
 ./scripts/apply-schemas.sh --bootstrap
+# Auth backfill (one-time, after apply-schemas):
+uv run python db/migrate_auth_columns.py --apply
 # Or one file: uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql
 ```
 
 Verify: `curl -s localhost:5000/api/health | python3 -m json.tool` → `db_available: true`.
 
 **Data flow:** runs write JSON → auto-sync to Postgres (default) → UI/API read Postgres first. Set `AUTO_INGEST=0` to disable.
+
+### Optional — authentication (OIDC)
+
+Deploy code first with `AUTH_ENABLED=0`. Full operator sequence: [`auth-setup.md`](auth-setup.md).
+
+```bash
+# After OAuth client is registered on the VM .env:
+AUTH_ENABLED=1
+SECRET_KEY=<random hex>
+DUKE_OIDC_CLIENT_ID=...
+DUKE_OIDC_CLIENT_SECRET=...
+DUKE_OIDC_REDIRECT_URI=https://model-advisor.colab.duke.edu/login
+AUTH_ALLOWED_NETIDS=netid1,netid2
+
+# Local dev without Duke login:
+AUTH_ENABLED=0
+AUTH_DEV_NETID=yournetid
+AUTH_ALLOWED_NETIDS=yournetid
+```
+
+```bash
+curl -s localhost:5000/auth/me | python3 -m json.tool
+```
 
 ### Optional — pillar deps on the host
 
@@ -234,11 +259,12 @@ cp .env.example .env
 uv sync --group dev
 ./docker/build-pillars.sh
 ./scripts/apply-schemas.sh --bootstrap
+uv run python db/migrate_auth_columns.py --apply   # auth fingerprints (one-time)
 
 python3 main.py up -d --build
 curl -s http://127.0.0.1:5000/api/health | python3 -m json.tool
 ```
 
-After deploy: `GET /api/health` → `db_available: true`, then POST a job and poll `status_url`. See [`api/README.md`](../api/README.md).
+After deploy: `GET /api/health` → `db_available: true`, then POST a job and poll `status_url`. Enable OIDC when ready: [`auth-setup.md`](auth-setup.md).
 
 Ongoing: `git pull && ./docker/run.sh up -d --build`; `uv run python -m api.ingest --apply` to bulk re-ingest artifacts from VM disk.

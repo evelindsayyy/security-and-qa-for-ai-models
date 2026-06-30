@@ -305,6 +305,23 @@ def start_run(
     skip_promptfoo: bool = False,
     garak_probes: str | None = None,
 ) -> tuple[str, bool]:
+    from frontend.run_launch import build_launch_plan, persist_run_meta_dir, reused_run_key
+
+    plan = build_launch_plan(
+        "safety",
+        force_private=bool(garak_probes) or redteam_profile != "base",
+        model=model,
+        redteam_profile=redteam_profile,
+        skip_policy=skip_policy,
+        skip_redteam=skip_redteam,
+        skip_garak=skip_garak,
+        skip_promptfoo=skip_promptfoo,
+        garak_probes=garak_probes,
+    )
+    if plan.reused:
+        run_key = reused_run_key(plan) or f"{normalize_gateway_model_id(model)}/{redteam_profile}"
+        return run_key, True
+
     slug = normalize_gateway_model_id(model)
     run_key = f"{slug}/{redteam_profile}"
     combo = (model, redteam_profile, skip_policy, skip_redteam, skip_garak, skip_promptfoo, garak_probes or "")
@@ -325,6 +342,7 @@ def start_run(
 
         log_path = ROOT / "safety" / "output" / slug / redteam_profile / "run.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        persist_run_meta_dir(log_path.parent, plan)
         cmd = build_command(
             model,
             redteam_profile=redteam_profile,

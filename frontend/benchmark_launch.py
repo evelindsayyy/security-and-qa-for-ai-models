@@ -287,6 +287,17 @@ def start_run(
     sample: int | None = None,
     seed: int | None = None,
 ) -> tuple[str, bool]:
+    from frontend.run_launch import build_launch_plan, persist_run_meta_dir, reused_slug
+
+    plan = build_launch_plan(
+        "benchmark",
+        benchmark_key=benchmark_key,
+        model=model,
+    )
+    if plan.reused:
+        stem = reused_slug(plan) or predict_stem(benchmark_key, model)
+        return stem, True
+
     combo = (benchmark_key, model, (base_url or "").strip())
     with _LOCK:
         existing = _INFLIGHT.get(combo)
@@ -300,6 +311,7 @@ def start_run(
         stem = predict_stem(benchmark_key, model)
         lock_file = _run_lock_path(stem)
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        persist_run_meta_dir(RESULTS_DIR / stem, plan)
         log_path = RESULTS_DIR / f"{stem}.log"
         progress_path = RESULTS_DIR / f"{stem}.progress.json"
 
