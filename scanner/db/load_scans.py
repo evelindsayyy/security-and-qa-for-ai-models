@@ -31,6 +31,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from dbutils import apply_loader, iter_files, jsonb_param, load_repo_env, read_json
+from dbutils.auth_columns import apply_auth_defaults, auth_fields_from_artifact
 from dbutils.cli import add_ingest_arguments
 from dbutils.ingest import exit_if_apply_without_dsn, print_dry_run_hint
 from scanner.paths import safe_dir_name
@@ -103,6 +104,10 @@ def scan_row(data: dict[str, Any], slug: str, *, scan_dir: Path | None = None) -
         "scan_metadata": meta,
         "started_at": started_at,
         "completed_at": completed_at,
+        "visibility": "public",
+        "owner_user_id": None,
+        "config_fingerprint": None,
+        "config_json": {},
     }
 
 
@@ -148,6 +153,7 @@ def load_file(path: Path) -> tuple[dict, list[dict]] | None:
 
     slug = path.parent.name
     scan = scan_row(payload, slug, scan_dir=path.parent)
+    apply_auth_defaults(scan, auth_fields_from_artifact(path, pillar="scan"))
     if not scan["completed_at"]:
         return None
     findings = finding_rows(payload)
@@ -161,11 +167,13 @@ def load_file(path: Path) -> tuple[dict, list[dict]] | None:
 _SCAN_INSERT = """
 INSERT INTO public.scans (
     model_id, hf_repo, status, overall_risk_score, severity_tier,
-    scanned_files, tool_results, scan_metadata, started_at, completed_at)
+    scanned_files, tool_results, scan_metadata, started_at, completed_at,
+    visibility, owner_user_id, config_fingerprint, config_json)
 VALUES (
     %(model_id)s, %(hf_repo)s, %(status)s, %(overall_risk_score)s, %(severity_tier)s,
     %(scanned_files)s::jsonb, %(tool_results)s::jsonb, %(scan_metadata)s::jsonb,
-    %(started_at)s, %(completed_at)s)
+    %(started_at)s, %(completed_at)s,
+    %(visibility)s, %(owner_user_id)s, %(config_fingerprint)s, %(config_json)s::jsonb)
 ON CONFLICT (hf_repo, completed_at) DO NOTHING
 """
 
@@ -193,6 +201,7 @@ def _scan_params(scan: dict) -> dict:
         "scanned_files": jsonb_param(scan["scanned_files"]),
         "tool_results": jsonb_param(scan["tool_results"]),
         "scan_metadata": jsonb_param(scan["scan_metadata"]),
+        "config_json": jsonb_param(scan.get("config_json") or {}),
     }
 
 

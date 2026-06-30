@@ -135,7 +135,8 @@ def register_routes(app):
             skip_deps=not request.form.get("run_deps"),
             skip_secrets=not request.form.get("run_secrets"),
         )
-        return redirect(url_for("scan_detail", slug=slug, status="running"))
+        status = "reused" if already else "running"
+        return redirect(url_for("scan_detail", slug=slug, status=status))
 
     @app.route("/scans/<slug>/status")
     def scan_run_status(slug: str):
@@ -250,6 +251,7 @@ def register_routes(app):
     def eval_run_start_custom():
         from flask import redirect, request, url_for
 
+        from auth.session import require_private_access
         from frontend.eval_launch import (
             get_launch_options,
             start_run,
@@ -258,6 +260,10 @@ def register_routes(app):
             validate_launch,
             write_custom_suite,
         )
+
+        user, auth_err = require_private_access()
+        if auth_err:
+            return auth_err, 403
 
         # Candidate source mirrors the standard start form: a gateway model runs
         # now; a Hugging Face model is validated now and served on the DCC in a

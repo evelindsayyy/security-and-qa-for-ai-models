@@ -15,7 +15,28 @@
       <a href="{{ url_for('eval_run') }}">Eval</a>
       <a href="{{ url_for('benchmarks') }}">Benchmarks</a>
     </nav>
+    <div class="header-auth">
+      <form class="view-mode-form" method="post" action="{{ url_for('auth.view_mode') }}">
+        <span class="view-mode-label">View:</span>
+        <button type="submit" name="mode" value="public" class="view-mode-btn{% if view_mode == 'public' %} is-active{% endif %}">Public</button>
+        <button type="submit" name="mode" value="private" class="view-mode-btn{% if view_mode == 'private' %} is-active{% endif %}">Private</button>
+      </form>
+      {% if is_logged_in and current_user %}
+        <span class="auth-user">Signed in as {{ current_user.netid }}</span>
+        <form method="post" action="{{ url_for('auth.logout') }}" class="logout-form">
+          <button type="submit">Logout</button>
+        </form>
+      {% elif auth_enabled %}
+        <button type="button" id="auth-login-btn" class="auth-login-btn">Sign in with Duke NetID</button>
+      {% endif %}
+    </div>
   </header>
+
+  {% if view_mode == 'private' and not is_logged_in %}
+  <div class="auth-banner">Sign in with your Duke NetID to access private runs and custom configurations.</div>
+  {% elif view_mode == 'private' and is_logged_in and not is_allowlisted %}
+  <div class="auth-banner auth-banner-warn">Your NetID is not on the allowlist for private mode.</div>
+  {% endif %}
 
   <main>
     {% block content %}{% endblock %}
@@ -68,6 +89,28 @@
     } else {
       initExpandables();
     }
+
+    var loginBtn = document.getElementById("auth-login-btn");
+    if (loginBtn) {
+      loginBtn.addEventListener("click", function () {
+        window.open("{{ url_for('auth.login', popup=1) }}", "duke-login", "width=520,height=720");
+      });
+      window.addEventListener("message", function (ev) {
+        if (ev.origin !== window.location.origin) return;
+        if (ev.data && ev.data.type === "auth-complete") window.location.reload();
+      });
+    }
+
+    document.querySelectorAll(".view-mode-form").forEach(function (form) {
+      form.addEventListener("submit", function (e) {
+        var btn = e.submitter;
+        if (btn && btn.value === "private" && {{ 'true' if auth_enabled else 'false' }} &&
+            !{{ 'true' if is_logged_in and is_allowlisted else 'false' }}) {
+          e.preventDefault();
+          if (loginBtn) loginBtn.click();
+        }
+      });
+    });
   })();
   </script>
 </body>

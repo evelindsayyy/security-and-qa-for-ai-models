@@ -31,3 +31,7 @@ Postgres is external (`POSTGRES_DSN` on OIT host).
 | `build-pillars.sh` | One-time pillar image builds |
 | `deploy-remote.sh` | VM deploy (git pull + registry pull + compose up) |
 | `compose.deploy.yml` | Use `WEB_IMAGE` from CI instead of local build |
+| `compose.caddy.yml` | Production HTTPS overlay (auto-included when `CADDY_DOMAIN` set) |
+| `Caddyfile` | Caddy TLS + reverse proxy config |
+
+Production HTTPS: [`docs/https-setup.md`](../docs/https-setup.md).

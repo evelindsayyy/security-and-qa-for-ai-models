@@ -343,6 +343,9 @@ class CustomRouteTest(unittest.TestCase):
         import tempfile
         from pathlib import Path
 
+        os.environ["AUTH_ENABLED"] = "0"
+        os.environ["AUTH_DEV_NETID"] = "testuser"
+        os.environ["AUTH_ALLOWED_NETIDS"] = "testuser"
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         for attr in ("CUSTOM_SUITES_DIR",):
@@ -355,7 +358,11 @@ class CustomRouteTest(unittest.TestCase):
         )
         cand.start()
         self.addCleanup(cand.stop)
-        self.client = create_app({"TESTING": True}).test_client()
+        self.app = create_app({"TESTING": True, "SECRET_KEY": "test"})
+        self.client = self.app.test_client()
+        with self.client.session_transaction() as sess:
+            sess["view_mode"] = "private"
+            sess["user"] = {"id": "u-test", "netid": "testuser", "display_name": "Test"}
 
     def test_invalid_questions_rejected(self) -> None:
         r = self.client.post("/eval-run/start-custom", data={

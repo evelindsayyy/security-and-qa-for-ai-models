@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 
 from dbutils import run_lock
 from frontend import docker_launch
-from frontend.log_status import status_message
+from frontend.log_status import run_log_payload
 from frontend.path_safety import is_safe_slug
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -287,6 +287,17 @@ def start_run(
     sample: int | None = None,
     seed: int | None = None,
 ) -> tuple[str, bool]:
+    from frontend.run_launch import build_launch_plan, persist_run_meta_dir, reused_slug
+
+    plan = build_launch_plan(
+        "benchmark",
+        benchmark_key=benchmark_key,
+        model=model,
+    )
+    if plan.reused:
+        stem = reused_slug(plan) or predict_stem(benchmark_key, model)
+        return stem, True
+
     combo = (benchmark_key, model, (base_url or "").strip())
     with _LOCK:
         existing = _INFLIGHT.get(combo)
@@ -300,6 +311,7 @@ def start_run(
         stem = predict_stem(benchmark_key, model)
         lock_file = _run_lock_path(stem)
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        persist_run_meta_dir(RESULTS_DIR / stem, plan)
         log_path = RESULTS_DIR / f"{stem}.log"
         progress_path = RESULTS_DIR / f"{stem}.progress.json"
 
@@ -386,7 +398,9 @@ def is_run_in_progress(slug: str) -> bool:
 
 def _with_log(status: dict, slug: str) -> dict:
     log_path = RESULTS_DIR / f"{slug}.log"
-    status["log"] = status_message(log_path)
+    payload = run_log_payload(log_path)
+    status["log"] = payload["log"]
+    status["log_truncated"] = payload["log_truncated"]
     status["log_path"] = f"benchmarks/results/{slug}.log"
     return status
 

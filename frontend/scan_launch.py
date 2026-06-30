@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 from dbutils import run_lock
 from frontend import docker_launch
-from frontend.log_status import status_message
+from frontend.log_status import run_log_payload, status_message
 from frontend.output_dirs import OutputDirError, ensure_writable_dir, prepare_output_dir
 from frontend.path_safety import is_safe_slug
 from scanner.paths import safe_dir_name
@@ -187,7 +187,22 @@ def start_run(
     skip_deps: bool = False,
     skip_secrets: bool = False,
 ) -> tuple[str, bool]:
+    from frontend.run_launch import build_launch_plan, persist_run_meta_scan, reused_slug
+
     hf_repo = _normalize_hf_repo(hf_repo)
+    plan = build_launch_plan(
+        "scan",
+        hf_repo=hf_repo,
+        skip_modelscan=skip_modelscan,
+        skip_fickling=skip_fickling,
+        skip_modelaudit=skip_modelaudit,
+        skip_deps=skip_deps,
+        skip_secrets=skip_secrets,
+    )
+    if plan.reused:
+        slug = reused_slug(plan) or safe_dir_name(hf_repo)
+        return slug, True
+
     slug = safe_dir_name(hf_repo)
     combo = (
         hf_repo,
@@ -240,6 +255,7 @@ def start_run(
                 "skip_secrets": skip_secrets,
             },
         )
+        persist_run_meta_scan(_output_dir_for_slug(slug), plan)
         with log_path.open("wb") as log_f:
             log_f.write(f"=== command: {cmd_str} ===\n".encode())
             env = os.environ.copy()
@@ -282,15 +298,15 @@ def get_status(slug: str) -> dict:
     if proc is not None and proc.poll() is None:
         return {
             "status": "running",
-            "message": status_message(log_path),
             "log_path": rel_log,
+            **run_log_payload(log_path),
         }
 
     if run_lock.is_active(_run_lock_path(slug)) and not result_path.is_file():
         return {
             "status": "running",
-            "message": status_message(log_path),
             "log_path": rel_log,
+            **run_log_payload(log_path),
         }
 
     if result_path.is_file():

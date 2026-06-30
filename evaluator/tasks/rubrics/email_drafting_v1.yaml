@@ -1,0 +1,129 @@
+# =============================================================================
+# Email-Drafting Evaluation Rubric — v1 (DRAFT — anchors not expert-calibrated)
+# =============================================================================
+# For tasks where a Duke community member asks the model to DRAFT a professional
+# email for a concrete scenario (email a professor, the OIT Service Desk, an
+# advisor, a TA, a teammate). Graded by an LLM-as-judge against a reference
+# email that captures the key points + appropriate register.
+#
+# Distinct from it_support / policy_qa: the deliverable is a *well-formed email*,
+# not a factual answer — so the dimensions weight whether the email says the
+# right things, clearly, in the right tone, in proper form.
+#
+# Design lineage: HELM (task-conditional dimensions), G-Eval (anchored scale +
+# evaluation_steps + JSON output), MT-Bench (cross-family judge, temp 0).
+#
+# Mixes shared-library dimensions (completeness, tone) with two task-specific
+# inline dimensions (clarity, structure).
+#
+# DO NOT EDIT in place after the W7 freeze — copy to v2 and bump the version.
+# =============================================================================
+
+rubric_version: "email_drafting_v1"
+task_type: "email_drafting"
+shared_dimensions_lib: "_shared_dimensions.yaml"
+shared_dimensions_version: "shared_v1"
+
+description: |
+  Evaluation rubric for professional email drafting. Applied by an LLM-as-judge
+  with access to a reference email that captures the required points and the
+  appropriate register for the stated recipient.
+
+
+dimensions:
+
+  completeness:
+    from: shared
+    weight: 0.30
+    task_note: >
+      Does the email include every point the scenario requires — the specific
+      ask/request, the concrete details that make it actionable (course,
+      assignment, date/time, location), and any context the recipient needs to
+      respond? Matches the reference's coverage; a missing date or a vague ask
+      is incomplete.
+
+  clarity:
+    definition: >
+      Is the email's purpose and request unambiguous? After one read, does the
+      recipient know exactly what is being asked and what (if anything) they
+      need to do next? Buried asks, rambling, or an unclear subject lower this.
+    scale: [1, 5]
+    weight: 0.30
+    anchors:
+      1: >
+        Purpose is unclear or no actual request is made; the recipient would
+        have to guess what the sender wants.
+      3: >
+        The request is present but buried, hedged, or mixed with so much
+        preamble that the recipient must work to find it; or the next step is
+        left implicit.
+      5: >
+        Purpose is clear in the first sentence or two, the specific ask is
+        explicit, and any next step (a date to confirm, a document to send) is
+        stated plainly.
+
+  tone:
+    from: shared
+    weight: 0.25
+    task_note: >
+      Professional and appropriate for the STATED recipient — respectful and
+      suitably formal to a professor or advisor; courteous and concise to the
+      OIT Service Desk or a TA; collegial to a teammate. Over-familiar,
+      demanding, or apologetic-to-a-fault registers lose points.
+
+  structure:
+    definition: >
+      Is the email in proper form — an appropriate greeting, an organized body,
+      and a courteous closing / sign-off (and a clear subject line when the
+      scenario asks for one)?
+    scale: [1, 3]
+    weight: 0.15
+    anchors:
+      1: >
+        Missing greeting or sign-off, or a wall of text with no structure —
+        reads like a chat message, not an email.
+      2: >
+        Has the basic parts but one is weak (abrupt opening, no sign-off, or a
+        body that isn't organized into clear points).
+      3: >
+        Appropriate greeting, an organized body, and a courteous closing with a
+        sign-off; subject line present and informative when requested.
+
+
+aggregation:
+  method: "weighted_normalized"
+  weights_sum_to: 1.0
+  display_scale: 5
+  note: |
+    Per HELM, per-dimension scores stay the headline; the weighted overall is
+    for dashboard sortability. completeness + clarity carry the most weight
+    because an email that omits the ask or buries it has failed its job.
+
+
+evaluation_steps:
+  - "If the candidate response is empty, whitespace-only, or a refusal that doesn't draft an email, score 1 on every dimension with rationale 'empty response' or 'refusal without engagement'. Skip the rest."
+  - "Read the scenario and identify (a) the recipient and the right register, (b) the specific request, and (c) the concrete details the email must contain to be actionable."
+  - "Read the reference email and note the points it covers and its tone."
+  - "For COMPLETENESS, check the candidate against the required points + the reference's coverage; a missing date, course, or the actual ask is a gap."
+  - "For CLARITY, decide whether the purpose and request are unambiguous on one read and whether the next step is explicit."
+  - "For TONE, judge the register against the stated recipient (formal to a professor; concise to IT)."
+  - "For STRUCTURE, check greeting + organized body + courteous sign-off (+ subject line if requested)."
+  - "When between anchors, pick the LOWER score and explain why in the rationale."
+  - "Give a one-sentence rationale per dimension, naming the specific aspect that drove the score."
+  - "Output valid JSON matching the schema. No prose outside the JSON. No markdown fences."
+
+
+validation:
+  sample_size_min: 30
+  sample_size_target: 50
+  raters_min: 2
+  metrics_to_report:
+    - "Pearson correlation per dimension (judge vs. human mean)"
+    - "Agreement within one point (|judge - human| <= 1)"
+
+
+limitations:
+  - "Reference-based: assumes one reasonable reference email; very different but equally valid drafts may be under-scored. Pilot before locking."
+  - "Anchors NOT yet expert-calibrated; references are hand-written PLACEHOLDERs, not validated by a Duke communications office."
+  - "Tone (1-3) is the most subjective dimension; expect lower judge-human agreement."
+  - "Judge bias not corrected (same MT-Bench caveats as other rubrics)."

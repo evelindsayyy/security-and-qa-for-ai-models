@@ -1,0 +1,33 @@
+# Production overlay: Caddy terminates TLS and proxies to the web container.
+# Do not use locally — locksmith ACME requires the production domain.
+#
+#   ./docker/run.sh up -d --build          # local (no Caddy)
+#   CADDY_DOMAIN=… ./docker/run.sh up -d   # production with HTTPS
+#
+# Requires in .env: CADDY_DOMAIN, CADDY_EMAIL, CADDY_ACME_HOSTNAME, CADDY_BACKEND_PORT
+
+services:
+  web:
+    ports: !reset []
+    expose:
+      - "5000"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CADDY_DOMAIN: ${CADDY_DOMAIN:?Set CADDY_DOMAIN in .env}
+      CADDY_EMAIL: ${CADDY_EMAIL:?Set CADDY_EMAIL in .env}
+      CADDY_ACME_HOSTNAME: ${CADDY_ACME_HOSTNAME:-locksmith.oit.duke.edu}
+      CADDY_BACKEND_PORT: ${CADDY_BACKEND_PORT:-5000}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+
+volumes:
+  caddy_data:

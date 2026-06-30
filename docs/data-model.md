@@ -16,12 +16,15 @@ Catalog keys: [`gateway-models.md`](gateway-models.md).
 - **UI reads normalized fields;** investigators drill into `tool_results`, `detail`, or `metrics` JSONB.
 
 ```text
+users ── user_run_links
 models ──┬── scans ── findings
          ├── safety_runs ── safety_findings
          ├── eval_runs ── eval_results
          └── benchmark_runs
 task_suites ── eval_runs
 ```
+
+Each pillar run table also has: `visibility` (`public`|`private`), `owner_user_id` → `users`, `config_fingerprint`, `config_json`. DDL: [`db/auth_schema.sql`](../db/auth_schema.sql).
 
 ---
 
