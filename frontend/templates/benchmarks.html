@@ -6,22 +6,30 @@
 {% block content %}
 <div class="eval-comparison">
   <h1>Benchmark results</h1>
-  <p><a class="btn-primary" href="{{ url_for('benchmark_run_new') }}">▶ Start a new run</a></p>
+  <p>
+    <a class="btn-primary" href="{{ url_for('benchmark_run_new') }}">▶ Start a new run</a>
+    {% if has_reference %}
+    · <a href="{{ url_for('benchmark_reference') }}">Reference scores (GPT 4.1 Mini &amp; Llama 3.3)</a>
+    {% endif %}
+  </p>
 
   <section class="key">
     <h2>How to read this</h2>
     <dl class="legend-grid">
       <dt>TruthfulQA / MMLU / QuALITY</dt>
-      <dd>Multiple-choice accuracy — higher is better.</dd>
+      <dd>Multiple-choice accuracy.</dd>
       <dt>IFEval</dt>
       <dd>Share of prompts whose formatting constraints were satisfied.</dd>
       <dt>Consistency</dt>
       <dd>Mean BERTScore F1 across rephrasings of the same question.</dd>
-      <dt>ToMi / MBPP</dt>
-      <dd>Theory-of-mind accuracy; code problems passing unit tests.</dd>
+      <dt>ToMi</dt>
+      <dd>Theory-of-mind accuracy</dd>
+      <dt>MBPP</dt>
+      <dd>Percent of code problems fully passing all unit tests (no partial credit).</dd>
     </dl>
   </section>
 
+  <h2>Your runs</h2>
   {% if not has_runs %}
     <p class="sub empty">
       No benchmark output yet. Use <b>Start a new run</b> above, or from repo root:
@@ -61,10 +69,6 @@
                               'tomi': 'badge-tomi',
                               'mbpp': 'badge-mbpp',
                               'quality': 'badge-quality'}.get(r.kind, 'badge-pilot') %}
-        {% set v = r.headline_value or 0 %}
-        {% if v >= 0.8 %}{% set score_class = 'score-strong' %}
-        {% elif v >= 0.6 %}{% set score_class = 'score-mid' %}
-        {% else %}{% set score_class = 'score-weak' %}{% endif %}
         <tr class="row-link"
             data-href="{{ url_for('benchmark_detail', slug=r.slug) }}"
             tabindex="0"
@@ -74,11 +78,18 @@
             data-model="{{ r.model }}">
           <td class="col-nowrap"><span class="badge {{ badge_class }}">{{ r.kind_label }}</span></td>
           <td><span class="model">{{ r.model }}</span></td>
-          <td class="num overall {{ score_class }}">
+          <td class="num overall {{ r.score_class }}">
             {{ r.headline_display }}
             <span class="dim"> {{ r.headline_metric }}</span>
           </td>
-          <td class="num">{{ r.n }}</td>
+          <td class="num">
+            {{ r.coverage.n_display }}
+            {% if r.coverage.partial %}
+            <span class="coverage-partial-badge" title="{{ coverage_skip_explanation }}">
+              {{ r.coverage.failed }} skipped
+            </span>
+            {% endif %}
+          </td>
           <td class="col-nowrap dim">{{ r.timestamp }}</td>
           <td class="col-long">{{ expandable(r.filename, clamp=1) }}</td>
           <td class="col-actions" onclick="event.stopPropagation()">

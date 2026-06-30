@@ -42,11 +42,24 @@ docker compose --env-file .env -f benchmarks/docker/compose.yml run --rm benchma
 uv run python -m gateway
 {%- endmacro %}
 
+{% macro benchmark_item_status(r) %}
+  {% if r.answered is defined and not r.answered %}
+    <span class="status-skip">SKIP</span>
+  {% elif r.judge is defined %}
+    {% if r.judge.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+  {% elif r.passed is defined %}
+    {% if r.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+  {% else %}
+    <span class="status-fail">FAIL</span>
+  {% endif %}
+{% endmacro %}
+
 {% macro progress_terminal(poll_url, interval, hint='', show_retry=false, retry_url='', initial_status='running', initial_message='') %}
 <div class="progress-card progress-card--wide">
   <p class="progress-meta">status: <b id="prog-state">{{ initial_status }}</b></p>
+  <p id="prog-truncated" class="log-terminal-hint" style="display: none;"></p>
   <p id="prog-alert" class="form-warning" style="display: none;" role="alert"></p>
-  <pre class="log-terminal" id="prog-log" aria-live="polite">{{ initial_message }}</pre>
+  <pre class="log-terminal log-terminal--run" id="prog-log" aria-live="polite">{{ initial_message }}</pre>
   {% if hint %}
   <p class="log-terminal-hint">{{ hint }}</p>
   {% endif %}
@@ -63,18 +76,18 @@ uv run python -m gateway
   const logEl = document.getElementById("prog-log");
   const stateEl = document.getElementById("prog-state");
   const alertEl = document.getElementById("prog-alert");
+  const truncatedEl = document.getElementById("prog-truncated");
   const retryEl = document.getElementById("prog-retry");
-  let userScrolledUp = false;
-
-  logEl.addEventListener("scroll", function () {
-    userScrolledUp = logEl.scrollTop + logEl.clientHeight < logEl.scrollHeight - 40;
-  });
 
   function updateLog(text) {
-    if (!text) return;
+    if (typeof text !== "string" || text === logEl.textContent) return;
+    const atBottom = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 48;
+    const prevTop = logEl.scrollTop;
     logEl.textContent = text;
-    if (!userScrolledUp) {
+    if (atBottom) {
       logEl.scrollTop = logEl.scrollHeight;
+    } else {
+      logEl.scrollTop = prevTop;
     }
   }
 
@@ -84,28 +97,39 @@ uv run python -m gateway
     alertEl.style.display = "block";
   }
 
-  function poll() {
-    fetch(pollUrl).then(function (r) { return r.json(); }).then(function (s) {
-      if (s.alert) {
-        stateEl.textContent = "running (suite failed)";
-        showAlert(s.alert);
-      } else if (s.warnings && s.warnings.length) {
-        const msg = s.warnings.map(function (w) {
-          return w.toLowerCase().indexOf("partial") >= 0 ? w : w + " did not run.";
-        }).join("; ");
-        showAlert(msg);
+  function applyStatus(s) {
+    if (s.alert) {
+      stateEl.textContent = "running (suite failed)";
+      showAlert(s.alert);
+    } else if (s.warnings && s.warnings.length) {
+      const msg = s.warnings.map(function (w) {
+        return w.toLowerCase().indexOf("partial") >= 0 ? w : w + " did not run.";
+      }).join("; ");
+      showAlert(msg);
+    } else {
+      stateEl.textContent = s.status;
+      if (alertEl) alertEl.style.display = "none";
+    }
+    if (truncatedEl) {
+      if (s.log_truncated) {
+        truncatedEl.textContent = "Log is very large — showing the most recent portion. See the run log file on disk for the full history.";
+        truncatedEl.style.display = "block";
       } else {
-        stateEl.textContent = s.status;
-        if (alertEl) alertEl.style.display = "none";
+        truncatedEl.style.display = "none";
       }
-      if (s.message) updateLog(s.message);
-      if (s.status === "complete" || s.status === "partial") {
-        window.location = window.location.pathname;
-      } else if (s.status === "failed") {
-        stateEl.textContent = "failed";
-        if (retryEl) retryEl.style.display = "block";
-      }
-    }).catch(function () {});
+    }
+    const logText = s.message || s.log;
+    if (logText) updateLog(logText);
+    if (s.status === "complete" || s.status === "partial") {
+      window.location = window.location.pathname;
+    } else if (s.status === "failed") {
+      stateEl.textContent = "failed";
+      if (retryEl) retryEl.style.display = "block";
+    }
+  }
+
+  function poll() {
+    fetch(pollUrl).then(function (r) { return r.json(); }).then(applyStatus).catch(function () {});
   }
 
   poll();

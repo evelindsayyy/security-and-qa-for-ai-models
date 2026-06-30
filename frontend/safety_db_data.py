@@ -12,6 +12,7 @@ import time
 
 from dbutils import load_repo_env, resolve_dsn
 
+from frontend.path_safety import is_safe_slug
 from frontend.safety_data import (
     OUTPUT_DIR,
     _build_safety_detail,
@@ -257,6 +258,36 @@ def get_safety_detail_db(slug: str, profile: str = "base") -> dict | None:
 
     data = _run_tuple_to_data(run_row, findings_json)
     return _build_safety_detail(slug, data, profile)
+
+
+def resolve_delete_keys(gateway_model_id: str) -> tuple[str, str] | None:
+    """Map UI slug to ``(gateway_model_id, completed_at)`` for the latest Postgres row."""
+    if not is_safe_slug(gateway_model_id):
+        return None
+
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(_DETAIL_RUN_SQL, {"gateway_model_id": gateway_model_id})
+            run_row = cur.fetchone()
+            if run_row is None:
+                return None
+            model_id = run_row[1]
+            completed_at = run_row[14]
+            if not model_id or completed_at is None:
+                return None
+            if hasattr(completed_at, "isoformat"):
+                completed_at = completed_at.isoformat()
+            else:
+                completed_at = str(completed_at)
+            return model_id, completed_at
+
+
+def delete_run_by_slug(gateway_model_id: str) -> bool:
+    """Delete the latest Postgres safety row for a gateway model slug."""
+    keys = resolve_delete_keys(gateway_model_id)
+    if keys is None:
+        return False
+    return delete_run(*keys)
 
 
 def delete_run(gateway_model_id: str, completed_at: str) -> bool:

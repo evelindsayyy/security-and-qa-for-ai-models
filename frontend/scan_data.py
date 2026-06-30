@@ -488,14 +488,16 @@ def delete_scan(slug: str) -> str | None:
         wipe_dir(scan_dir)
 
     removed_db = False
-    if db_keys:
-        try:
-            from frontend import scan_db_data
+    try:
+        from frontend import scan_db_data
 
-            if scan_db_data.available():
+        if scan_db_data.available():
+            if db_keys:
                 removed_db = scan_db_data.delete_run(*db_keys)
-        except Exception:
-            pass
+            if not removed_db:
+                removed_db = scan_db_data.delete_run_by_slug(slug)
+    except Exception:
+        pass
 
     if not removed_disk and not removed_db:
         return f"no scan result found for slug {slug!r}"

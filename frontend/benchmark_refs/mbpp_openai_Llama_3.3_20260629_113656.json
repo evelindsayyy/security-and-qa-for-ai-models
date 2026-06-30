@@ -1,0 +1,1380 @@
+{
+  "model": "openai/Llama 3.3",
+  "timestamp": "2026-06-29T15:36:56.113031+00:00",
+  "summary": {
+    "attempted": 50,
+    "scored": 50,
+    "failed": 0,
+    "coverage": 1.0,
+    "correct": 34,
+    "accuracy": 0.68,
+    "total_evaluated": 50,
+    "total": 50,
+    "run_stats": {
+      "api_calls": 50,
+      "api_calls_failed": 0,
+      "latency_ms": {
+        "mean": 937.5,
+        "p50": 756.0,
+        "p95": 1274.6
+      },
+      "tokens": {
+        "prompt": 8581,
+        "completion": 2750,
+        "total": 11331
+      }
+    }
+  },
+  "results": [
+    {
+      "task_id": 484,
+      "problem": "Write a function to remove the matching tuples from the given two tuples.",
+      "generated_code": "def remove_matching_tuple(tuple1, tuple2):\n    for t in tuple2:\n        if t in tuple1:\n            tuple1 = list(tuple1)\n            tuple1.remove(t)\n            tuple1 = tuple(tuple1)\n    return tuple1",
+      "passed": false,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 1,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert remove_matching_tuple([('Hello', 'dude'), ('How', 'are'), ('you', '?')], [('Hello', 'dude'), ('How', 'are')]) == [('you', '?')]",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 8, in <module>\n    assert remove_matching_tuple([('Hello', 'dude'), ('How', 'are'), ('you', '?')], [('Hello', 'dude'), ('How', 'are')]) == [('you', '?')]\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        },
+        {
+          "test": "assert remove_matching_tuple([('Part', 'of'), ('the', 'journey'), ('is ', 'end')], [('Journey', 'the'), ('is', 'end')]) == [('Part', 'of'), ('the', 'journey'), ('is ', 'end')]",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert remove_matching_tuple([('Its', 'been'), ('a', 'long'), ('day', 'without')], [('a', 'long'), ('my', 'friend')]) == [('Its', 'been'), ('day', 'without')]",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 8, in <module>\n    assert remove_matching_tuple([('Its', 'been'), ('a', 'long'), ('day', 'without')], [('a', 'long'), ('my', 'friend')]) == [('Its', 'been'), ('day', 'without')]\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        }
+      ]
+    },
+    {
+      "task_id": 143,
+      "problem": "Write a function to find number of lists present in the given tuple.",
+      "generated_code": "def find_lists(t):\n    count = 0\n    for i in t:\n        if isinstance(i, list):\n            count += 1\n    return count",
+      "passed": false,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 2,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert find_lists(([1, 2, 3, 4], [5, 6, 7, 8])) == 2",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert find_lists(([1, 2], [3, 4], [5, 6]))  == 3",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert find_lists(([9, 8, 7, 6, 5, 4, 3, 2, 1])) == 1",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 7, in <module>\n    assert find_lists(([9, 8, 7, 6, 5, 4, 3, 2, 1])) == 1\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        }
+      ]
+    },
+    {
+      "task_id": 483,
+      "problem": "Write a python function to find the first natural number whose factorial is divisible by x.",
+      "generated_code": "def first_Factorial_Divisible_Number(x):\n    i = 1\n    while True:\n        factorial = 1\n        for j in range(1, i + 1):\n            factorial *= j\n        if factorial % x == 0:\n            return i\n        i += 1",
+      "passed": false,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 2,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert first_Factorial_Divisible_Number(10) == 5",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert first_Factorial_Divisible_Number(15) == 5",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert first_Factorial_Divisible_Number(5) == 4",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 10, in <module>\n    assert first_Factorial_Divisible_Number(5) == 4\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        }
+      ]
+    },
+    {
+      "task_id": 57,
+      "problem": "Write a python function to find the largest number that can be formed with the given digits.",
+      "generated_code": "def find_Max_Num(arr, n):\n    arr = list(map(str, arr))\n    arr.sort(reverse=True)\n    return int(''.join(arr))",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert find_Max_Num([1,2,3],3) == 321",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert find_Max_Num([4,5,6,1],4) == 6541",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert find_Max_Num([1,2,3,9],4) == 9321",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 51,
+      "problem": "Write a function to print check if the triangle is equilateral or not.",
+      "generated_code": "def check_equilateral(a, b, c):\n    if a == b == c:\n        return True\n    else:\n        return False",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert check_equilateral(6,8,12)==False ",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert check_equilateral(6,6,12)==False",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert check_equilateral(6,6,6)==True",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 243,
+      "problem": "Write a function to sort the given list based on the occurrence of first element of tuples.",
+      "generated_code": "def sort_on_occurence(lst):\n    count_dict = {}\n    for tup in lst:\n        if tup[0] in count_dict:\n            count_dict[tup[0]].append(tup[1])\n        else:\n            count_dict[tup[0]] = [tup[1]]\n    \n    result = []\n    for key, value in count_dict.items():\n        result.append((key, *value, len(value)))\n    \n    return result",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert sort_on_occurence([(1, 'Jake'), (2, 'Bob'), (1, 'Cara')]) == [(1, 'Jake', 'Cara', 2), (2, 'Bob', 1)]",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert sort_on_occurence([('b', 'ball'), ('a', 'arm'), ('b', 'b'), ('a', 'ant')]) == [('b', 'ball', 'b', 2), ('a', 'arm', 'ant', 2)]",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert sort_on_occurence([(2, 'Mark'), (3, 'Maze'), (2, 'Sara')]) == [(2, 'Mark', 'Sara', 2), (3, 'Maze', 1)]",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 56,
+      "problem": "Write a python function to check if a given number is one less than twice its reverse.",
+      "generated_code": "def check(n):\n    reversed_num = int(str(n)[::-1])\n    return n == 2 * reversed_num - 1",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert check(70) == False",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert check(23) == False",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert check(73) == True",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 439,
+      "problem": "Write a function to convert a list of multiple integers into a single integer.",
+      "generated_code": "def multiple_to_single(nums):\n    result = 0\n    for num in nums:\n        result = result * 10**len(str(abs(num))) + num\n    return result",
+      "passed": false,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 2,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert multiple_to_single([11, 33, 50])==113350",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert multiple_to_single([-1,2,3,4,5,6])==-123456",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 6, in <module>\n    assert multiple_to_single([-1,2,3,4,5,6])==-123456\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        },
+        {
+          "test": "assert multiple_to_single([10,15,20,25])==10152025",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 337,
+      "problem": "Write a function that matches a word at the end of a string, with optional punctuation.",
+      "generated_code": "import re\n\ndef text_match_word(text):\n    pattern = r'python[\\.!?]*$'\n    if re.search(pattern, text):\n        return 'Found a match!'\n    else:\n        return 'Not matched!'",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert text_match_word(\"python.\")==('Found a match!')",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert text_match_word(\"python.\")==('Found a match!')",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert text_match_word(\"  lang  .\")==('Not matched!')",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 170,
+      "problem": "Write a function to find sum of the numbers in a list between the indices of a specified range.",
+      "generated_code": "def sum_range_list(numbers, start, end):\n    return sum(numbers[start:end+1])",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert sum_range_list( [2,1,5,6,8,3,4,9,10,11,8,12],8,10)==29",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert sum_range_list( [2,1,5,6,8,3,4,9,10,11,8,12],5,7)==16",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert sum_range_list( [2,1,5,6,8,3,4,9,10,11,8,12],7,10)==38",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 302,
+      "problem": "Write a python function to find the most significant bit number which is also a set bit.",
+      "generated_code": "def set_Bit_Number(n):\n    i = 1\n    pos = 0\n    while i * 2 <= n:\n        i *= 2\n        pos += 1\n    return i",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert set_Bit_Number(6) == 4",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert set_Bit_Number(10) == 8",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert set_Bit_Number(18) == 16",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 246,
+      "problem": "Write a function for computing square roots using the babylonian method.",
+      "generated_code": "def babylonian_squareroot(n, precision=0.00001):\n    x = n / 2\n    y = (x + n / x) / 2\n    while abs(y - x) > precision:\n        x = y\n        y = (x + n / x) / 2\n    return y",
+      "passed": false,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 2,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert babylonian_squareroot(10)==3.162277660168379",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert babylonian_squareroot(2)==1.414213562373095",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 8, in <module>\n    assert babylonian_squareroot(2)==1.414213562373095\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        },
+        {
+          "test": "assert babylonian_squareroot(9)==3.0",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 464,
+      "problem": "Write a function to check if all values are same in a dictionary.",
+      "generated_code": "def check_value(dict, val):\n    for k in dict:\n        if dict[k] != val:\n            return False\n    return True",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert check_value({'Cierra Vega': 12, 'Alden Cantrell': 12, 'Kierra Gentry': 12, 'Pierre Cox': 12},10)==False",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert check_value({'Cierra Vega': 12, 'Alden Cantrell': 12, 'Kierra Gentry': 12, 'Pierre Cox': 12},12)==True",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert check_value({'Cierra Vega': 12, 'Alden Cantrell': 12, 'Kierra Gentry': 12, 'Pierre Cox': 12},5)==False",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 118,
+      "problem": "[link text](https:// [link text](https:// [link text](https://)))write a function to convert a string to a list.",
+      "generated_code": "def string_to_list(s):\n    return s.split()",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert string_to_list(\"python programming\")==['python','programming']",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert string_to_list(\"lists tuples strings\")==['lists','tuples','strings']",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert string_to_list(\"write a program\")==['write','a','program']",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 378,
+      "problem": "Write a python function to shift last element to first position in the given list.",
+      "generated_code": "def move_first(lst):\n    if len(lst) == 0:\n        return lst\n    return [lst[-1]] + lst[:-1]",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert move_first([1,2,3,4]) == [4,1,2,3]",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert move_first([0,1,2,3]) == [3,0,1,2]",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert move_first([9,8,7,1]) == [1,9,8,7]",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 126,
+      "problem": "Write a python function to find the sum of common divisors of two given numbers.",
+      "generated_code": "def sum(a, b):\n    common_divisors = [i for i in range(1, min(a, b) + 1) if a % i == 0 and b % i == 0]\n    return sum(common_divisors)",
+      "passed": false,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 0,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert sum(10,15) == 6",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 4, in <module>\n    assert sum(10,15) == 6\n           ~~~^^^^^^^\n  File \"<string>\", line 3, in sum\n    return sum(common_divisors)\nTypeError: sum() missing 1 required positional argument: 'b'"
+        },
+        {
+          "test": "assert sum(100,150) == 93",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 4, in <module>\n    assert sum(100,150) == 93\n           ~~~^^^^^^^^^\n  File \"<string>\", line 3, in sum\n    return sum(common_divisors)\nTypeError: sum() missing 1 required positional argument: 'b'"
+        },
+        {
+          "test": "assert sum(4,6) == 3",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 4, in <module>\n    assert sum(4,6) == 3\n           ~~~^^^^^\n  File \"<string>\", line 3, in sum\n    return sum(common_divisors)\nTypeError: sum() missing 1 required positional argument: 'b'"
+        }
+      ]
+    },
+    {
+      "task_id": 291,
+      "problem": "Write a function to find out the number of ways of painting the fence such that at most 2 adjacent posts have the same color for the given fence with n posts and k colors.",
+      "generated_code": "def count_no_of_ways(n, k):\n    if n == 1:\n        return k\n    if n == 2:\n        return k * k\n    same, diff = k, k * (k - 1)\n    for _ in range(2, n):\n        same, diff = diff, (same + diff) * (k - 1)\n    return same + diff",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert count_no_of_ways(2, 4) == 16",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert count_no_of_ways(3, 2) == 6",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert count_no_of_ways(4, 4) == 228",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 368,
+      "problem": "Write a function to repeat the given tuple n times.",
+      "generated_code": "def repeat_tuples(t, n):\n    return (t,) * n",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert repeat_tuples((1, 3), 4) == ((1, 3), (1, 3), (1, 3), (1, 3))",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert repeat_tuples((1, 2), 3) == ((1, 2), (1, 2), (1, 2))",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert repeat_tuples((3, 4), 5) == ((3, 4), (3, 4), (3, 4), (3, 4), (3, 4))",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 196,
+      "problem": "Write a function to remove all the tuples with length k.",
+      "generated_code": "def remove_tuples(tuples, k):\n    return [t for t in tuples if len(t) != k]",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert remove_tuples([(4, 5), (4, ), (8, 6, 7), (1, ), (3, 4, 6, 7)] , 1) == [(4, 5), (8, 6, 7), (3, 4, 6, 7)]",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert remove_tuples([(4, 5), (4,5), (6, 7), (1, 2, 3), (3, 4, 6, 7)] ,2) == [(1, 2, 3), (3, 4, 6, 7)]",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert remove_tuples([(1, 4, 4), (4, 3), (8, 6, 7), (1, ), (3, 6, 7)] , 3) == [(4, 3), (1,)]",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 338,
+      "problem": "Write a python function to count the number of substrings with same first and last characters.",
+      "generated_code": "def count_Substring_With_Equal_Ends(s):\n    count = 0\n    for i in range(len(s)):\n        for j in range(i+1, len(s)+1):\n            if s[i] == s[j-1]:\n                count += 1\n    return count",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert count_Substring_With_Equal_Ends('aba') == 4",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert count_Substring_With_Equal_Ends('abcab') == 7",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert count_Substring_With_Equal_Ends('abc') == 3",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 64,
+      "problem": "Write a function to sort a list of tuples using lambda.",
+      "generated_code": "def subject_marks(subjects):\n    return sorted(subjects, key=lambda x: x[1])",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert subject_marks([('English', 88), ('Science', 90), ('Maths', 97), ('Social sciences', 82)])==[('Social sciences', 82), ('English', 88), ('Science', 90), ('Maths', 97)]",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert subject_marks([('Telugu',49),('Hindhi',54),('Social',33)])==([('Social',33),('Telugu',49),('Hindhi',54)])",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert subject_marks([('Physics',96),('Chemistry',97),('Biology',45)])==([('Biology',45),('Physics',96),('Chemistry',97)])",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 228,
+      "problem": "Write a python function to check whether all the bits are unset in the given range or not.",
+      "generated_code": "def all_Bits_Set_In_The_Given_Range(n, l, r):\n    mask = ((1 << (r - l + 1)) - 1) << (l - 1)\n    return (n & mask) == mask",
+      "passed": false,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 1,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert all_Bits_Set_In_The_Given_Range(4,1,2) == True",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 4, in <module>\n    assert all_Bits_Set_In_The_Given_Range(4,1,2) == True\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        },
+        {
+          "test": "assert all_Bits_Set_In_The_Given_Range(17,2,4) == True",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 4, in <module>\n    assert all_Bits_Set_In_The_Given_Range(17,2,4) == True\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        },
+        {
+          "test": "assert all_Bits_Set_In_The_Given_Range(39,4,6) == False",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 497,
+      "problem": "Write a function to find the surface area of a cone.",
+      "generated_code": "import math\n\ndef surfacearea_cone(radius, height):\n    slant_height = math.sqrt(radius**2 + height**2)\n    return math.pi * radius * (radius + slant_height)",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert surfacearea_cone(5,12)==282.7433388230814",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert surfacearea_cone(10,15)==880.5179353159282",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert surfacearea_cone(19,17)==2655.923961165254",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 62,
+      "problem": "Write a python function to find smallest number in a list.",
+      "generated_code": "def smallest_num(nums):\n    return min(nums)",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert smallest_num([10, 20, 1, 45, 99]) == 1",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert smallest_num([1, 2, 3]) == 1",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert smallest_num([45, 46, 50, 60]) == 45",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 351,
+      "problem": "Write a python function to find the first element occurring k times in a given array.",
+      "generated_code": "def first_Element(arr, n, k):\n    count_dict = {}\n    for i in range(n):\n        if arr[i] in count_dict:\n            count_dict[arr[i]] += 1\n        else:\n            count_dict[arr[i]] = 1\n        if count_dict[arr[i]] == k:\n            return arr[i]\n    return -1",
+      "passed": false,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 2,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert first_Element([0,1,2,3,4,5],6,1) == 0",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert first_Element([1,2,1,3,4],5,2) == 1",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert first_Element([2,3,4,3,5,7,1,2,3,5],10,2) == 2",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 11, in <module>\n    assert first_Element([2,3,4,3,5,7,1,2,3,5],10,2) == 2\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        }
+      ]
+    },
+    {
+      "task_id": 107,
+      "problem": "Write a python function to count hexadecimal numbers for a given range.",
+      "generated_code": "def count_Hexadecimal(start, end):\n    count = 0\n    for num in range(start, end + 1):\n        if all(c in '0123456789ABCDEFabcdef' for c in hex(num)[2:]):\n            count += 1\n    return count",
+      "passed": false,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 1,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert count_Hexadecimal(10,15) == 6",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert count_Hexadecimal(2,4) == 0",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 7, in <module>\n    assert count_Hexadecimal(2,4) == 0\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        },
+        {
+          "test": "assert count_Hexadecimal(15,16) == 1",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 7, in <module>\n    assert count_Hexadecimal(15,16) == 1\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        }
+      ]
+    },
+    {
+      "task_id": 387,
+      "problem": "Write a python function to check whether the hexadecimal number is even or odd.",
+      "generated_code": "def even_or_odd(hex_num):\n    dec_num = int(hex_num, 16)\n    if dec_num % 2 == 0:\n        return \"Even\"\n    else:\n        return \"Odd\"",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert even_or_odd(\"AB3454D\") ==\"Odd\"",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert even_or_odd(\"ABC\") == \"Even\"",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert even_or_odd(\"AAD\") == \"Odd\"",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 457,
+      "problem": "Write a python function to find the sublist having minimum length.",
+      "generated_code": "def Find_Min(lists):\n    min_len = min(len(lst) for lst in lists)\n    for lst in lists:\n        if len(lst) == min_len:\n            return lst",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert Find_Min([[1],[1,2],[1,2,3]]) == [1]",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert Find_Min([[1,1],[1,1,1],[1,2,7,8]]) == [1,1]",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert Find_Min([['x'],['x','y'],['x','y','z']]) == ['x']",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 208,
+      "problem": "Write a function to check the given decimal with a precision of 2 by using regex.",
+      "generated_code": "import re\n\ndef is_decimal(s):\n    pattern = re.compile(r'^\\d+(\\.\\d{2})?$')\n    return bool(pattern.match(s))",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert is_decimal('123.11') == True",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert is_decimal('0.21') == True",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert is_decimal('123.1214') == False",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 256,
+      "problem": "Write a python function to count the number of prime numbers less than a given non-negative number.",
+      "generated_code": "def count_Primes_nums(n):\n    def is_prime(num):\n        if num < 2:\n            return False\n        for i in range(2, int(num**0.5) + 1):\n            if num % i == 0:\n                return False\n        return True\n\n    count = 0\n    for i in range(2, n):\n        if is_prime(i):\n            count += 1\n    return count",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert count_Primes_nums(5) == 2",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert count_Primes_nums(10) == 4",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert count_Primes_nums(100) == 25",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 236,
+      "problem": "Write a python function to count the maximum number of equilateral triangles that can be formed within a given equilateral triangle.",
+      "generated_code": "def No_of_Triangle(side, size):\n    if size > side:\n        return -1\n    return (side // size) * ((side // size) - 1) * ((side // size) - 2) // 6 + (side // size) * ((side // size) - 1) // 2 + (side // size)",
+      "passed": false,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 1,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert No_of_Triangle(4,2) == 7",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 5, in <module>\n    assert No_of_Triangle(4,2) == 7\n           ^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        },
+        {
+          "test": "assert No_of_Triangle(4,3) == 3",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 5, in <module>\n    assert No_of_Triangle(4,3) == 3\n           ^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        },
+        {
+          "test": "assert No_of_Triangle(1,3) == -1",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 11,
+      "problem": "Write a python function to remove first and last occurrence of a given character from the string.",
+      "generated_code": "def remove_Occ(s, c):\n    first_occ = s.find(c)\n    last_occ = s.rfind(c)\n    return s[:first_occ] + s[first_occ+1:last_occ] + s[last_occ+1:]",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert remove_Occ(\"hello\",\"l\") == \"heo\"",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert remove_Occ(\"abcda\",\"a\") == \"bcd\"",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert remove_Occ(\"PHP\",\"P\") == \"H\"",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 260,
+      "problem": "Write a function to find the nth newman–shanks–williams prime number.",
+      "generated_code": "def is_prime(n):\n    if n < 2:\n        return False\n    for i in range(2, int(n**0.5) + 1):\n        if n % i == 0:\n            return False\n    return True\n\ndef is_newman_shanks_williams_prime(n):\n    return is_prime(n) and is_prime((n**2 + 1) // 2)\n\ndef newman_prime(n):\n    count = 0\n    num = 1\n    while True:\n        num += 1\n        if is_newman_shanks_williams_prime(num):\n            count += 1\n            if count == n:\n                return num",
+      "passed": false,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 0,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert newman_prime(3) == 7 ",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 21, in <module>\n    assert newman_prime(3) == 7\n           ^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        },
+        {
+          "test": "assert newman_prime(4) == 17",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 21, in <module>\n    assert newman_prime(4) == 17\n           ^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        },
+        {
+          "test": "assert newman_prime(5) == 41",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 21, in <module>\n    assert newman_prime(5) == 41\n           ^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        }
+      ]
+    },
+    {
+      "task_id": 401,
+      "problem": "Write a function to perform index wise addition of tuple elements in the given two nested tuples.",
+      "generated_code": "def add_nested_tuples(tuple1, tuple2):\n    result = []\n    for i in range(len(tuple1)):\n        temp = []\n        for j in range(len(tuple1[i])):\n            temp.append(tuple1[i][j] + tuple2[i][j])\n        result.append(tuple(temp))\n    return tuple(result)",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert add_nested_tuples(((1, 3), (4, 5), (2, 9), (1, 10)), ((6, 7), (3, 9), (1, 1), (7, 3))) == ((7, 10), (7, 14), (3, 10), (8, 13))",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert add_nested_tuples(((2, 4), (5, 6), (3, 10), (2, 11)), ((7, 8), (4, 10), (2, 2), (8, 4))) == ((9, 12), (9, 16), (5, 12), (10, 15))",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert add_nested_tuples(((3, 5), (6, 7), (4, 11), (3, 12)), ((8, 9), (5, 11), (3, 3), (9, 5))) == ((11, 14), (11, 18), (7, 14), (12, 17))",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 202,
+      "problem": "Write a function to remove even characters in a string.",
+      "generated_code": "def remove_even(s):\n    return s[::2]",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert remove_even(\"python\")==(\"pto\")",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert remove_even(\"program\")==(\"porm\")",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert remove_even(\"language\")==(\"lnug\")",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 475,
+      "problem": "Write a function to sort counter by value.",
+      "generated_code": "def sort_counter(counter):\n    return sorted(counter.items(), key=lambda x: x[1], reverse=True)",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert sort_counter({'Math':81, 'Physics':83, 'Chemistry':87})==[('Chemistry', 87), ('Physics', 83), ('Math', 81)]",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert sort_counter({'Math':400, 'Physics':300, 'Chemistry':250})==[('Math', 400), ('Physics', 300), ('Chemistry', 250)]",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert sort_counter({'Math':900, 'Physics':1000, 'Chemistry':1250})==[('Chemistry', 1250), ('Physics', 1000), ('Math', 900)]",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 91,
+      "problem": "Write a function to check if a substring is present in a given list of string values.",
+      "generated_code": "def find_substring(lst, sub):\n    for string in lst:\n        if sub in string:\n            return True\n    return False",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert find_substring([\"red\", \"black\", \"white\", \"green\", \"orange\"],\"ack\")==True",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert find_substring([\"red\", \"black\", \"white\", \"green\", \"orange\"],\"abc\")==False",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert find_substring([\"red\", \"black\", \"white\", \"green\", \"orange\"],\"ange\")==True",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 250,
+      "problem": "Write a python function to count the occcurences of an element in a tuple.",
+      "generated_code": "def count_X(tup, x):\n    return tup.count(x)",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert count_X((10, 8, 5, 2, 10, 15, 10, 8, 5, 8, 8, 2),4) == 0",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert count_X((10, 8, 5, 2, 10, 15, 10, 8, 5, 8, 8, 2),10) == 3",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert count_X((10, 8, 5, 2, 10, 15, 10, 8, 5, 8, 8, 2),8) == 4",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 66,
+      "problem": "Write a python function to count positive numbers in a list.",
+      "generated_code": "def pos_count(lst):\n    count = 0\n    for num in lst:\n        if num > 0:\n            count += 1\n    return count",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert pos_count([1,-2,3,-4]) == 2",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert pos_count([3,4,5,-1]) == 3",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert pos_count([1,2,3,4]) == 4",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 445,
+      "problem": "Write a function to perform index wise multiplication of tuple elements in the given two tuples.",
+      "generated_code": "def index_multiplication(tuple1, tuple2):\n    return tuple((a[0]*b[0], a[1]*b[1]) for a, b in zip(tuple1, tuple2))",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert index_multiplication(((1, 3), (4, 5), (2, 9), (1, 10)),((6, 7), (3, 9), (1, 1), (7, 3)) ) == ((6, 21), (12, 45), (2, 9), (7, 30))",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert index_multiplication(((2, 4), (5, 6), (3, 10), (2, 11)),((7, 8), (4, 10), (2, 2), (8, 4)) ) == ((14, 32), (20, 60), (6, 20), (16, 44))",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert index_multiplication(((3, 5), (6, 7), (4, 11), (3, 12)),((8, 9), (5, 11), (3, 3), (9, 5)) ) == ((24, 45), (30, 77), (12, 33), (27, 60))",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 480,
+      "problem": "Write a python function to find the maximum occurring character in a given string.",
+      "generated_code": "def get_max_occuring_char(str):\n    str = str.replace(\" \", \"\").lower()\n    char_count = {}\n    for char in str:\n        if char in char_count:\n            char_count[char] += 1\n        else:\n            char_count[char] = 1\n    max_count = max(char_count.values())\n    for char, count in char_count.items():\n        if count == max_count:\n            return char",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert get_max_occuring_char(\"data\") == \"a\"",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert get_max_occuring_char(\"create\") == \"e\"",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert get_max_occuring_char(\"brilliant girl\") == \"i\"",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 389,
+      "problem": "Write a function to find the n'th lucas number.",
+      "generated_code": "def find_lucas(n):\n    if n == 0:\n        return 2\n    if n == 1:\n        return 1\n    a, b = 2, 1\n    for _ in range(2, n + 1):\n        a, b = b, a + b\n    return b",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert find_lucas(9) == 76",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert find_lucas(4) == 7",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert find_lucas(3) == 4",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 306,
+      "problem": "Write a function to find the maximum sum of increasing subsequence from prefix till ith index and also including a given kth element which is after i, i.e., k > i .",
+      "generated_code": "def max_sum_increasing_subseq(arr, n, i, k):\n    max_sum = 0\n    for j in range(i + 1, n):\n        if arr[j] > arr[i] and j <= k:\n            curr_sum = arr[i] + arr[j]\n            max_sum = max(max_sum, curr_sum)\n            for l in range(j + 1, n):\n                if arr[l] > arr[j] and l <= k:\n                    curr_sum += arr[l]\n                    max_sum = max(max_sum, curr_sum)\n    return max_sum",
+      "passed": false,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 0,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert max_sum_increasing_subseq([1, 101, 2, 3, 100, 4, 5 ], 7, 4, 6) == 11",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 12, in <module>\n    assert max_sum_increasing_subseq([1, 101, 2, 3, 100, 4, 5 ], 7, 4, 6) == 11\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        },
+        {
+          "test": "assert max_sum_increasing_subseq([1, 101, 2, 3, 100, 4, 5 ], 7, 2, 5) == 7",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 12, in <module>\n    assert max_sum_increasing_subseq([1, 101, 2, 3, 100, 4, 5 ], 7, 2, 5) == 7\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        },
+        {
+          "test": "assert max_sum_increasing_subseq([11, 15, 19, 21, 26, 28, 31], 7, 2, 4) == 71",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 12, in <module>\n    assert max_sum_increasing_subseq([11, 15, 19, 21, 26, 28, 31], 7, 2, 4) == 71\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        }
+      ]
+    },
+    {
+      "task_id": 182,
+      "problem": "Write a function to find uppercase, lowercase, special character and numeric values using regex.",
+      "generated_code": "def find_character(s):\n    uppercase = [char for char in s if char.isupper()]\n    lowercase = [char for char in s if char.islower()]\n    numeric = [char for char in s if char.isdigit()]\n    special_char = [char for char in s if not char.isalnum()]\n    return uppercase, lowercase, special_char, numeric",
+      "passed": false,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 1,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert find_character(\"ThisIsGeeksforGeeks\") == (['T', 'I', 'G', 'G'], ['h', 'i', 's', 's', 'e', 'e', 'k', 's', 'f', 'o', 'r', 'e', 'e', 'k', 's'], [], [])",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert find_character(\"Hithere2\") == (['H'], ['i', 't', 'h', 'e', 'r', 'e'], ['2'], [])",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 7, in <module>\n    assert find_character(\"Hithere2\") == (['H'], ['i', 't', 'h', 'e', 'r', 'e'], ['2'], [])\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        },
+        {
+          "test": "assert find_character(\"HeyFolks32\") == (['H', 'F'], ['e', 'y', 'o', 'l', 'k', 's'], ['3', '2'], [])",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 7, in <module>\n    assert find_character(\"HeyFolks32\") == (['H', 'F'], ['e', 'y', 'o', 'l', 'k', 's'], ['3', '2'], [])\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        }
+      ]
+    },
+    {
+      "task_id": 31,
+      "problem": "Write a function to find the top k integers that occur most frequently from given lists of sorted and distinct integers using heap queue algorithm.",
+      "generated_code": "from collections import Counter\nimport heapq\n\ndef func(nums, k):\n    count = Counter(num for lst in nums for num in lst)\n    return heapq.nlargest(k, count, key=count.get)",
+      "passed": false,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 1,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert func([[1, 2, 6], [1, 3, 4, 5, 7, 8], [1, 3, 5, 6, 8, 9], [2, 5, 7, 11], [1, 4, 7, 8, 12]],3)==[5, 7, 1]",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 7, in <module>\n    assert func([[1, 2, 6], [1, 3, 4, 5, 7, 8], [1, 3, 5, 6, 8, 9], [2, 5, 7, 11], [1, 4, 7, 8, 12]],3)==[5, 7, 1]\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        },
+        {
+          "test": "assert func([[1, 2, 6], [1, 3, 4, 5, 7, 8], [1, 3, 5, 6, 8, 9], [2, 5, 7, 11], [1, 4, 7, 8, 12]],1)==[1]",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert func([[1, 2, 6], [1, 3, 4, 5, 7, 8], [1, 3, 5, 6, 8, 9], [2, 5, 7, 11], [1, 4, 7, 8, 12]],5)==[6, 5, 7, 8, 1]",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 7, in <module>\n    assert func([[1, 2, 6], [1, 3, 4, 5, 7, 8], [1, 3, 5, 6, 8, 9], [2, 5, 7, 11], [1, 4, 7, 8, 12]],5)==[6, 5, 7, 8, 1]\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        }
+      ]
+    },
+    {
+      "task_id": 477,
+      "problem": "Write a python function to convert the given string to lower case.",
+      "generated_code": "def is_lower(s):\n    return s.lower()",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert is_lower(\"InValid\") == \"invalid\"",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert is_lower(\"TruE\") == \"true\"",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert is_lower(\"SenTenCE\") == \"sentence\"",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 408,
+      "problem": "Write a function to find k number of pairs which consist of one element from the first array and one element from the second array.",
+      "generated_code": "def k_smallest_pairs(nums1, nums2, k):\n    queue = []\n    def push(i, j):\n        if i < len(nums1) and j < len(nums2):\n            heapq.heappush(queue, [nums1[i] + nums2[j], i, j])\n    push(0, 0)\n    pair = []\n    while queue and len(pair) < k:\n        _, i, j = heapq.heappop(queue)\n        pair.append([nums1[i], nums2[j]])\n        push(i, j + 1)\n        if j == 0:\n            push(i + 1, 0)\n    return pair",
+      "passed": false,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 0,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert k_smallest_pairs([1,3,7],[2,4,6],2)==[[1, 2], [1, 4]]",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 15, in <module>\n    assert k_smallest_pairs([1,3,7],[2,4,6],2)==[[1, 2], [1, 4]]\n           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"<string>\", line 6, in k_smallest_pairs\n    push(0, 0)\n    ~~~~^^^^^^\n  File \"<string>\", line 5, in push\n    heapq.heappush(queue, [nums1[i] + nums2[j], i, j])\n    ^^^^^\nNameError: name 'heapq' is not defined. Did you mean: 'help'? Or did you forget to import 'heapq'?"
+        },
+        {
+          "test": "assert k_smallest_pairs([1,3,7],[2,4,6],1)==[[1, 2]]",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 15, in <module>\n    assert k_smallest_pairs([1,3,7],[2,4,6],1)==[[1, 2]]\n           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"<string>\", line 6, in k_smallest_pairs\n    push(0, 0)\n    ~~~~^^^^^^\n  File \"<string>\", line 5, in push\n    heapq.heappush(queue, [nums1[i] + nums2[j], i, j])\n    ^^^^^\nNameError: name 'heapq' is not defined. Did you mean: 'help'? Or did you forget to import 'heapq'?"
+        },
+        {
+          "test": "assert k_smallest_pairs([1,3,7],[2,4,6],7)==[[1, 2], [1, 4], [3, 2], [1, 6], [3, 4], [3, 6], [7, 2]]",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 15, in <module>\n    assert k_smallest_pairs([1,3,7],[2,4,6],7)==[[1, 2], [1, 4], [3, 2], [1, 6], [3, 4], [3, 6], [7, 2]]\n           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"<string>\", line 6, in k_smallest_pairs\n    push(0, 0)\n    ~~~~^^^^^^\n  File \"<string>\", line 5, in push\n    heapq.heappush(queue, [nums1[i] + nums2[j], i, j])\n    ^^^^^\nNameError: name 'heapq' is not defined. Did you mean: 'help'? Or did you forget to import 'heapq'?"
+        }
+      ]
+    },
+    {
+      "task_id": 507,
+      "problem": "Write a function to remove specific words from a given list.",
+      "generated_code": "def remove_words(word_list, words_to_remove):\n    for word in words_to_remove:\n        if word in word_list:\n            word_list.remove(word)\n    return word_list",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert remove_words(['red', 'green', 'blue', 'white', 'black', 'orange'],['white', 'orange'])==['red', 'green', 'blue', 'black']",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert remove_words(['red', 'green', 'blue', 'white', 'black', 'orange'],['black', 'orange'])==['red', 'green', 'blue', 'white']",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert remove_words(['red', 'green', 'blue', 'white', 'black', 'orange'],['blue', 'white'])==['red', 'green', 'black', 'orange']",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 375,
+      "problem": "Write a function to round the given number to the nearest multiple of a specific number.",
+      "generated_code": "def round_num(num, multiple):\n    remainder = num % multiple\n    if remainder <= multiple / 2:\n        return num - remainder\n    else:\n        return num + (multiple - remainder)",
+      "passed": true,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert round_num(4722,10)==4720",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert round_num(1111,5)==1110",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert round_num(219,2)==218",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "task_id": 177,
+      "problem": "Write a python function to find two distinct numbers such that their lcm lies within the given range.",
+      "generated_code": "def gcd(a, b):\n    while b:\n        a, b = b, a % b\n    return a\n\ndef lcm(a, b):\n    return a * b // gcd(a, b)\n\ndef answer(start, end):\n    for i in range(start, end + 1):\n        for j in range(i + 1, end + 1):\n            if start <= lcm(i, j) <= end:\n                return (i, j)",
+      "passed": false,
+      "answered": true,
+      "api_answered": true,
+      "tests_passed": 2,
+      "tests_total": 3,
+      "test_results": [
+        {
+          "test": "assert answer(3,8) == (3,6)",
+          "passed": true,
+          "error": ""
+        },
+        {
+          "test": "assert answer(2,6) == (2,4)",
+          "passed": false,
+          "error": "Traceback (most recent call last):\n  File \"<string>\", line 14, in <module>\n    assert answer(2,6) == (2,4)\n           ^^^^^^^^^^^^^^^^^^^^\nAssertionError"
+        },
+        {
+          "test": "assert answer(1,3) == (1,2)",
+          "passed": true,
+          "error": ""
+        }
+      ]
+    }
+  ]
+}

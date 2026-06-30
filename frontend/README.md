@@ -82,6 +82,7 @@ python3 main.py --host
   ```
 
 - **`db_available: false`** — check `POSTGRES_DSN`, schema apply, and network ([`docs/cli.md`](../docs/cli.md)).
+- **“Docker is required for browser-launched … runs”** — usually a transient daemon check or a stale web process after deploy. Deploys force-recreate the web container; for a one-off fix: `./docker/run.sh up -d --build`. If it keeps happening, verify socket access: `stat -c '%g' /var/run/docker.sock` should match the web container `group_add` (`DOCKER_GID` from `./docker/run.sh`).
 - **Skip Docker for jobs** — `FRONTEND_LAUNCH_MODE=host` in `.env` (legacy; safety may still use nested Docker).
 
 ## See also

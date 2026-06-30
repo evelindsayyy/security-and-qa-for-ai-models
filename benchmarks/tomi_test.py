@@ -52,8 +52,8 @@ API_KEY = os.getenv("LITELLM_API_KEY") or os.getenv("DUKE_GATEWAY_KEY") or os.ge
 MODEL = os.getenv("TOMI_MODEL", "openai/gpt-5.4")
 HERE = Path(__file__).resolve().parent
 OUTPUT_DIR = os.getenv("TOMI_OUTPUT", str(HERE / "results"))
-TOMI_FILE = os.getenv("TOMI_FILE", "tomi_questions.txt")
-SAMPLE_LIMIT = int(os.getenv("TOMI_LIMIT", "10"))  # 0 = no limit
+TOMI_FILE = os.getenv("TOMI_FILE", HERE / "tomi_questions.txt")
+SAMPLE_LIMIT = int(os.getenv("TOMI_LIMIT", "20"))  # 0 = no limit
 
 
 # ============================================================================

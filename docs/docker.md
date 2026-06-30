@@ -59,8 +59,10 @@ registry. No gateway secrets are required.
 
 **Deploy (manual by default on `main`):** after lint, tests, and `build-web-image`,
 the **`deploy`** job SSHs to the application VM, runs `git pull`, logs into the
-registry, pulls the tagged web image, and restarts the stack. Click **Play** in
-GitLab, or set CI/CD variable **`DEPLOY_AUTO=true`** for automatic deploy. See
+registry, pulls the tagged web image, and **recreates** the web container
+(`--force-recreate`) so Flask reloads bind-mounted code and refreshes
+`HOST_UID` / `DOCKER_GID`. Click **Play** in GitLab, or set CI/CD variable
+**`DEPLOY_AUTO=true`** for automatic deploy. See
 [`.gitlab/README.md`](../.gitlab/README.md) for CI/CD variables.
 
 Postgres is external (`POSTGRES_DSN` on OIT host). End-to-end flow diagram: [`architecture.md`](architecture.md#how-a-run-flows).

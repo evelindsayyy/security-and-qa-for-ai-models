@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 
 from dbutils import run_lock
 from frontend import docker_launch
-from frontend.log_status import status_message
+from frontend.log_status import run_log_payload
 from frontend.path_safety import is_safe_slug
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -398,7 +398,9 @@ def is_run_in_progress(slug: str) -> bool:
 
 def _with_log(status: dict, slug: str) -> dict:
     log_path = RESULTS_DIR / f"{slug}.log"
-    status["log"] = status_message(log_path)
+    payload = run_log_payload(log_path)
+    status["log"] = payload["log"]
+    status["log_truncated"] = payload["log_truncated"]
     status["log_path"] = f"benchmarks/results/{slug}.log"
     return status
 

@@ -24,7 +24,7 @@ import time
 from pathlib import Path
 
 from frontend import docker_launch
-from frontend.log_status import status_message
+from frontend.log_status import run_log_payload, status_message
 from frontend.path_safety import is_safe_slug
 
 ROOT = Path(__file__).parent.parent
@@ -387,8 +387,8 @@ def get_status(slug: str) -> dict:
             "status": "running",
             "progress": progress,
             "total": total,
-            "message": status_message(log_path),
             "log_path": rel_log,
+            **run_log_payload(log_path),
         }
     if proc is not None:  # exited without a complete file
         return {
