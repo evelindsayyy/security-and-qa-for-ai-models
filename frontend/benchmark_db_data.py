@@ -232,7 +232,7 @@ def get_benchmarks_data_db() -> dict:
             if path.stem in seen_slugs:
                 continue
             meta = read_run_meta(PRIMARY_DIR / path.stem)
-            if meta and not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
+            if not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
                 continue
             row = _summarize_file(path)
             if row is not None:

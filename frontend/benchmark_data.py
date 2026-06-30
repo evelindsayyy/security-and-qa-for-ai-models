@@ -664,6 +664,8 @@ def _result_dirs() -> list[Path]:
 
 
 def _get_benchmarks_data_files() -> dict:
+    from frontend.read_context import artifact_path_visible
+
     dirs = _candidate_dirs()
     if not dirs:
         return {
@@ -678,6 +680,8 @@ def _get_benchmarks_data_files() -> dict:
     for d in dirs:
         for path in sorted(list(d.glob("*.json")) + list(d.glob("*.jsonl"))):
             if path.stem in seen:
+                continue
+            if not artifact_path_visible(d / path.stem):
                 continue
             row = _summarize_file(path)
             if row:
