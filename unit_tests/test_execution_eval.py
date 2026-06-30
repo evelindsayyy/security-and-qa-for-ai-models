@@ -142,9 +142,102 @@ class ScoreResultsFileTest(unittest.TestCase):
         self.assertEqual(out["n"], 0)
 
 
+class CheckJsonTest(unittest.TestCase):
+    """Structured-output checker: parse candidate JSON, compare to expected.
+    Object key order doesn't matter (dict equality); array order does."""
+
+    def _run(self, response, expected):
+        return ex._check_json(response, {"expected": expected})
+
+    def test_exact_object_match(self) -> None:
+        ok, err = self._run('{"code": "CS 201", "credits": 3}',
+                            {"code": "CS 201", "credits": 3})
+        self.assertTrue(ok)
+        self.assertIsNone(err)
+
+    def test_object_key_order_insensitive(self) -> None:
+        ok, _ = self._run('{"credits": 3, "code": "CS 201"}',
+                          {"code": "CS 201", "credits": 3})
+        self.assertTrue(ok)
+
+    def test_fenced_json_parses(self) -> None:
+        ok, _ = self._run('```json\n{"a": 1}\n```', {"a": 1})
+        self.assertTrue(ok)
+
+    def test_int_float_equivalence(self) -> None:
+        ok, _ = self._run('{"x": 1.0}', {"x": 1})
+        self.assertTrue(ok)
+
+    def test_nested_match(self) -> None:
+        ok, _ = self._run('{"a": {"b": [1, 2]}}', {"a": {"b": [1, 2]}})
+        self.assertTrue(ok)
+
+    def test_array_order_matters(self) -> None:
+        ok, _ = self._run('[2, 1]', [1, 2])
+        self.assertFalse(ok)
+
+    def test_value_mismatch_fails(self) -> None:
+        ok, _ = self._run('{"credits": 4}', {"credits": 3})
+        self.assertFalse(ok)
+
+    def test_invalid_json_fails_cleanly(self) -> None:
+        ok, err = self._run("not json at all", {"a": 1})
+        self.assertFalse(ok)
+        self.assertIn("JSON", err)
+
+    def test_empty_response_fails(self) -> None:
+        ok, err = self._run("", {"a": 1})
+        self.assertFalse(ok)
+        self.assertTrue(err)
+
+
+class CheckNumericTest(unittest.TestCase):
+    """Numeric checker: extract a number from the response, tolerance-compare."""
+
+    def _run(self, response, expected, **task):
+        return ex._check_numeric(response, {"expected": expected, **task})
+
+    def test_plain_integer(self) -> None:
+        ok, err = self._run("42", 42)
+        self.assertTrue(ok)
+        self.assertIsNone(err)
+
+    def test_number_in_a_sentence(self) -> None:
+        self.assertTrue(self._run("The answer is 42.", 42)[0])
+
+    def test_int_float_equivalence(self) -> None:
+        self.assertTrue(self._run("42.0", 42)[0])
+
+    def test_commas_and_currency_stripped(self) -> None:
+        self.assertTrue(self._run("$1,234.56", 1234.56)[0])
+
+    def test_negative_and_scientific(self) -> None:
+        self.assertTrue(self._run("-5", -5)[0])
+        self.assertTrue(self._run("1.2e3", 1200)[0])
+
+    def test_within_tolerance_passes(self) -> None:
+        self.assertTrue(self._run("3.1416", 3.14, tolerance=0.01)[0])
+
+    def test_outside_tolerance_fails(self) -> None:
+        self.assertFalse(self._run("3.20", 3.14, tolerance=0.01)[0])
+
+    def test_default_is_near_exact(self) -> None:
+        # no tolerance given -> off-by-a-bit fails
+        self.assertFalse(self._run("5.01", 5)[0])
+
+    def test_no_number_fails_cleanly(self) -> None:
+        ok, err = self._run("I don't know", 42)
+        self.assertFalse(ok)
+        self.assertIn("number", err)
+
+
 class CheckerRegistryTest(unittest.TestCase):
     def test_sql_checker_registered(self) -> None:
         self.assertIn("sql", ex.CHECKERS)
+
+    def test_json_and_numeric_checkers_registered(self) -> None:
+        self.assertIn("json", ex.CHECKERS)
+        self.assertIn("numeric", ex.CHECKERS)
 
     def test_check_type_defaults_to_sql(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
