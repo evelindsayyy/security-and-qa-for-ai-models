@@ -29,8 +29,7 @@ def visibility_clause(
         """
     return (
         f"""(
-            {table_alias}.visibility = 'public'
-            OR ({table_alias}.visibility = 'private' AND {table_alias}.owner_user_id = %(uid)s)
+            ({table_alias}.visibility = 'private' AND {table_alias}.owner_user_id = %(uid)s)
             {link_exists}
         )""",
         params,
@@ -45,9 +44,9 @@ def artifact_visible(
 ) -> bool:
     """Filter on-disk artifacts by run_meta visibility."""
     visibility = meta.get("visibility", "public")
-    if visibility == "public":
-        return True
     if view_mode != "private" or not user_id:
+        return visibility == "public"
+    if visibility != "private":
         return False
     owner = meta.get("owner_user_id")
     return owner == user_id

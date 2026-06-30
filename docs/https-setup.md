@@ -159,7 +159,7 @@ If login fails with **redirect_uri mismatch**, compare Duke registration charact
 
 ## Local development
 
-Do **not** run Caddy locally. Use:
+Do **not** run Caddy locally. Full pre-VM checklist: [`local-testing.md`](local-testing.md).
 
 ```bash
 uv run python main.py --host

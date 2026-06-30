@@ -22,7 +22,7 @@ Automated **nutrition labels** for Duke AI Gateway models: **security** (artifac
 | **Docker model** (UI + pillar jobs) | [`docs/docker.md`](docs/docker.md) · [`docker/`](docker/) |
 | **Understand the system** (VM, Postgres, background jobs) | [`docs/architecture.md`](docs/architecture.md) |
 | **Postgres schema and ingest** | [`docs/data-model.md`](docs/data-model.md) · [`dbutils/README.md`](dbutils/README.md) |
-| **Authentication (OIDC, public/private views)** | [`docs/auth-setup.md`](docs/auth-setup.md) · [`auth/README.md`](auth/README.md) |
+| **Authentication (OIDC, public/private views)** | [`docs/auth-setup.md`](docs/auth-setup.md) · [`auth/README.md`](auth/README.md) · [`docs/local-testing.md`](docs/local-testing.md) |
 | **HTTPS / TLS (production Caddy)** | [`docs/https-setup.md`](docs/https-setup.md) |
 | **Track A** (scanning + safety) | [`docs/track-a-framework.md`](docs/track-a-framework.md) |
 | **Track B** (evaluator + benchmarks) | [`docs/track-b-framework.md`](docs/track-b-framework.md) |
@@ -98,7 +98,7 @@ For UI-only iteration without containerizing the app (pillar jobs still use Dock
 ```bash
 uv sync --group dev
 cp .env.example .env
-python3 main.py --host           # or: uv run flask --app frontend:create_app run --debug --port 5001
+uv run python main.py --host           # dev Flask on APP_PORT (default 5000)
 ```
 
 See [`frontend/README.md`](frontend/README.md) for API curl examples.

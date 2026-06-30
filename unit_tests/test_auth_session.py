@@ -21,12 +21,37 @@ class TestAuthSession(unittest.TestCase):
 
     def test_public_view_default(self):
         with self.app.test_request_context("/"):
-            from auth.session import get_view_mode, effective_user
+            from auth.session import effective_user, get_view_mode
 
             self.assertEqual(get_view_mode(), "public")
-            user = effective_user()
-            self.assertIsNotNone(user)
-            self.assertEqual(user["netid"], "testuser")
+            self.assertIsNone(effective_user())
+
+    def test_dev_user_in_private_mode(self):
+        with self.client.session_transaction() as sess:
+            sess["view_mode"] = "private"
+        rv = self.client.get("/auth/me")
+        data = rv.get_json()
+        self.assertTrue(data["authenticated"])
+        self.assertEqual(data["view_mode"], "private")
+        self.assertEqual(data["user"]["netid"], "testuser")
+
+    def test_logout_clears_dev_user(self):
+        with self.client.session_transaction() as sess:
+            sess["view_mode"] = "private"
+        rv = self.client.post("/auth/logout")
+        self.assertEqual(rv.status_code, 302)
+        rv = self.client.get("/auth/me")
+        data = rv.get_json()
+        self.assertEqual(data["view_mode"], "public")
+        self.assertFalse(data["authenticated"])
+
+    def test_private_view_after_logout_reactivates_dev_user(self):
+        self.client.post("/auth/logout")
+        self.client.post("/auth/view-mode", data={"mode": "private"})
+        rv = self.client.get("/auth/me")
+        data = rv.get_json()
+        self.assertEqual(data["view_mode"], "private")
+        self.assertTrue(data["authenticated"])
 
     def test_allowlist_when_auth_disabled(self):
         with self.app.test_request_context("/"):

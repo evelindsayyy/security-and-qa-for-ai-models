@@ -15,6 +15,7 @@ Project guides & info. **GitLab:** [`.gitlab/README.md`](../.gitlab/README.md).
 | [`data-model.md`](data-model.md) | Postgres schema — tables, columns, JSON → DB mapping |
 | [`auth-setup.md`](auth-setup.md) | Duke OIDC registration and VM rollout (step-by-step) |
 | [`https-setup.md`](https-setup.md) | Production HTTPS (Caddy + Duke ACME) and OIDC enablement |
+| [`local-testing.md`](local-testing.md) | Test auth/HTTPS locally before VM deploy |
 | [`../auth/README.md`](../auth/README.md) | Auth module — routes, env, behavior |
 | [`../db/README.md`](../db/README.md) | Auth DDL and migration script |
 | [`../dbutils/README.md`](../dbutils/README.md) | Shared Postgres ingest helpers |

@@ -191,10 +191,23 @@ def view_mode():
     if mode not in ("public", "private"):
         return jsonify({"ok": False, "error": "mode must be public or private"}), 400
     if mode == "private":
+        if not auth_enabled():
+            import os
+
+            from dbutils.env import load_repo_env
+
+            load_repo_env()
+            if os.environ.get("AUTH_DEV_NETID", "").strip():
+                session.pop("dev_logged_out", None)
+        set_view_mode("private")
         user = effective_user()
         if not user or not is_allowlisted(user):
-            return jsonify({"ok": False, "error": "login required for private view"}), 403
-    set_view_mode(mode)
+            set_view_mode("public")
+            if request.headers.get("Accept", "").startswith("application/json"):
+                return jsonify({"ok": False, "error": "login required for private view"}), 403
+            return redirect(request.referrer or url_for("index"))
+    else:
+        set_view_mode(mode)
     if request.headers.get("Accept", "").startswith("application/json"):
         return jsonify({"ok": True, "view_mode": mode})
     return redirect(request.referrer or url_for("index"))

@@ -1,12 +1,12 @@
 """
 Default entry: containerized UI (same as ./docker/run.sh).
 
-    python3 main.py                  # foreground: up --build
-    python3 main.py up -d --build    # pass through any docker compose args
-    python3 main.py down
-    python3 main.py --host           # dev Flask only (PORT env, default 5000)
+    uv run python main.py                  # foreground: up --build
+    uv run python main.py up -d --build    # pass through any docker compose args
+    uv run python main.py down
+    uv run python main.py --host           # dev Flask (PORT or APP_PORT, default 5000)
 
-See docs/cli.md.
+See docs/cli.md and docs/local-testing.md.
 """
 
 from __future__ import annotations
@@ -26,7 +26,10 @@ def _usage() -> None:
 
 
 def _run_host_flask() -> int:
-    port = int(os.environ.get("PORT", "5001"))
+    from dbutils.env import load_repo_env
+
+    load_repo_env()
+    port = int(os.environ.get("PORT", os.environ.get("APP_PORT", "5000")))
     from frontend import create_app
 
     create_app().run(debug=True, host="0.0.0.0", port=port)
@@ -41,7 +44,10 @@ def _run_containerized(argv: list[str]) -> int:
         print(f"Missing launcher: {RUN_SH}", file=sys.stderr)
         return 1
     if shutil.which("docker") is None:
-        print("Docker not found on PATH — install Docker or use: python main.py --host", file=sys.stderr)
+        print(
+            "Docker not found on PATH — install Docker or use: uv run python main.py --host",
+            file=sys.stderr,
+        )
         return 1
 
     compose_args = argv if argv else ["up", "--build"]

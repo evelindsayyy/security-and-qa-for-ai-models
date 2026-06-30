@@ -104,7 +104,8 @@
     document.querySelectorAll(".view-mode-form").forEach(function (form) {
       form.addEventListener("submit", function (e) {
         var btn = e.submitter;
-        if (btn && btn.value === "private" && !{{ 'true' if is_logged_in and is_allowlisted else 'false' }}) {
+        if (btn && btn.value === "private" && {{ 'true' if auth_enabled else 'false' }} &&
+            !{{ 'true' if is_logged_in and is_allowlisted else 'false' }}) {
           e.preventDefault();
           if (loginBtn) loginBtn.click();
         }
