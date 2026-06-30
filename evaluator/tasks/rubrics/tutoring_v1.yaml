@@ -1,0 +1,144 @@
+# =============================================================================
+# Tutoring Evaluation Rubric — v1 (DRAFT — anchors not expert-calibrated)
+# =============================================================================
+# For tasks where a confused or stuck student asks for help with a concept or a
+# homework-style problem, and the model gives a TUTORING response. Graded by an
+# LLM-as-judge against a reference tutoring answer.
+#
+# The distinguishing idea: good tutoring is not just a correct answer — it
+# TEACHES. So `pedagogy` (explains the reasoning, not just the result) carries
+# the most weight. A response that blurts the right answer with no explanation
+# is a poor tutor even when it's correct.
+#
+# Mostly task-specific inline dimensions (correctness, pedagogy, completeness)
+# plus the shared `tone` dimension (reframed for a student audience).
+#
+# Design lineage: HELM (task-conditional dims), G-Eval (anchored scale +
+# evaluation_steps + JSON), MT-Bench (cross-family judge, temp 0).
+#
+# DO NOT EDIT in place after the W7 freeze — copy to v2 and bump the version.
+# =============================================================================
+
+rubric_version: "tutoring_v1"
+task_type: "tutoring"
+shared_dimensions_lib: "_shared_dimensions.yaml"
+shared_dimensions_version: "shared_v1"
+
+description: |
+  Evaluation rubric for tutoring responses (concept help and homework-style
+  walkthroughs). Applied by an LLM-as-judge with access to a reference tutoring
+  answer. Rewards explanations that build understanding, not just correct
+  final answers.
+
+
+dimensions:
+
+  correctness:
+    definition: >
+      Is the technical/conceptual content correct — the right method, the right
+      definition, and the right final answer if one is given? Teaching the
+      student something false is the worst failure here.
+    scale: [1, 5]
+    weight: 0.30
+    anchors:
+      1: >
+        Contains a clear technical or conceptual error that would mislead the
+        student — wrong method, wrong definition, or a wrong final answer.
+      3: >
+        Mostly correct but with an imprecision or a small slip (right idea but
+        loose terminology, or an off-by-one / arithmetic slip in a worked step).
+      5: >
+        Fully correct: right concept, right method, and the right final answer
+        where one is given; nothing that would teach the student something false.
+
+  pedagogy:
+    definition: >
+      Does the response TEACH rather than just answer? Does it explain the
+      reasoning and the steps (the "why", not only the "what"), pitch the
+      explanation at the student's apparent level, and use a concrete example or
+      analogy where it helps the student understand and generalize?
+    scale: [1, 5]
+    weight: 0.35
+    anchors:
+      1: >
+        Just states the answer or a bare definition with no explanation of the
+        reasoning — the student gets the result but learns nothing transferable.
+      3: >
+        Explains some reasoning but skips steps, or pitches it at the wrong
+        level (too advanced or too shallow) for the student's stated confusion.
+      5: >
+        Walks through the reasoning step by step, explains the "why", and uses a
+        concrete example or analogy where useful — the student could apply the
+        idea to a similar problem afterward.
+
+  completeness:
+    definition: >
+      Does the response cover the steps and concepts the student needs to
+      understand and (where applicable) solve the problem, including the
+      relevant caveat or common-mistake note? Simplicity is fine, but not at the
+      cost of leaving a gap that blocks understanding.
+    scale: [1, 5]
+    weight: 0.20
+    anchors:
+      1: >
+        Omits a step or concept the student needs — following the response, they
+        still could not understand or solve it.
+      3: >
+        Covers the main idea but skips a supporting step, an edge case, or a
+        check the student would realistically need.
+      5: >
+        Covers every step/concept needed to understand and solve it, including a
+        relevant caveat or common-mistake note where appropriate.
+
+  tone:
+    from: shared
+    weight: 0.15
+    task_note: >
+      The audience is a student who is confused or stuck. Target tone is
+      encouraging and patient — never condescending ("obviously, you just..."),
+      dismissive, or impatient. Warmth that keeps the student engaged scores high.
+
+
+aggregation:
+  method: "weighted_normalized"
+  weights_sum_to: 1.0
+  display_scale: 5
+  note: |
+    Per HELM, per-dimension scores stay the headline. pedagogy carries the most
+    weight (0.35) because the task is teaching, not answer-dumping; correctness
+    is second — a well-explained but wrong explanation still misleads.
+
+
+evaluation_steps:
+  - "If the candidate response is empty, whitespace-only, or a refusal that doesn't help the student, score 1 on every dimension with rationale 'empty response' or 'refusal without engagement'. Skip the rest."
+  - "Read the student's question and identify (a) the concept or skill involved and (b) where the student seems confused or stuck."
+  - "Read the reference tutoring answer to see the correct content and how it teaches."
+  - "Read the candidate response."
+  - "For CORRECTNESS, check the method, definitions, and any final answer against the reference; flag anything that would teach the student something false."
+  - "For PEDAGOGY, judge whether it explains the reasoning step by step at the right level (not just states the answer), and whether an example/analogy aids understanding."
+  - "For COMPLETENESS, check that no needed step, concept, or common-mistake caveat is missing."
+  - "For TONE, judge whether it reads as encouraging and patient for a stuck student, not condescending or curt."
+  - "When between anchors, pick the LOWER score and explain why in the rationale."
+  - "Give a one-sentence rationale per dimension, naming the specific aspect that drove the score."
+  - "Output valid JSON matching the schema. No prose outside the JSON. No markdown fences."
+
+
+validation:
+  sample_size_min: 30
+  sample_size_target: 50
+  raters_min: 2
+  metrics_to_report:
+    - "Pearson correlation per dimension (judge vs. human mean)"
+    - "Agreement within one point (|judge - human| <= 1)"
+  expected_outcome_note: |
+    pedagogy is expected to be the discriminating dimension and the one raters
+    disagree on most; if so, the anchors need a more concrete cue for
+    "explains the reasoning" (e.g., names the steps, justifies each one).
+
+
+limitations:
+  - "Reference-based: many good tutoring answers exist; a very different but equally helpful explanation may be under-scored. Pilot before locking."
+  - "Anchors NOT yet expert-calibrated; references are hand-written PLACEHOLDERs, not validated by Duke instructors or learning specialists."
+  - "Single-turn only: real tutoring is a back-and-forth (check understanding, adapt). This rubric scores one response, not a dialogue."
+  - "pedagogy and tone are the most subjective dimensions; expect lower judge-human agreement."
+  - "Judge bias not corrected (same MT-Bench caveats as other rubrics)."

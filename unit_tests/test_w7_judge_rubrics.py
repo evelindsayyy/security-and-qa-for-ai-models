@@ -66,13 +66,32 @@ class W7JudgeRubricsTest(unittest.TestCase):
         }
         self.assertAlmostEqual(runner._weighted_overall(scores, r), 5.0)
 
+    def test_tutoring_resolves_with_expected_dims(self) -> None:
+        r = self._resolve("tutoring_v1")
+        self.assertEqual(r["rubric_version"], "tutoring_v1")
+        dims = r["dimensions"]
+        for d in ("correctness", "pedagogy", "completeness", "tone"):
+            self.assertIn(d, dims)
+        self.assertIn("anchors", dims["tone"])  # shared dim inlined
+        # pedagogy carries the most weight (teaching, not answer-dumping)
+        self.assertEqual(max(dims, key=lambda k: dims[k]["weight"]), "pedagogy")
+        self.assertAlmostEqual(sum(d["weight"] for d in dims.values()), 1.0)
+
+    def test_tutoring_aggregates_to_display_scale(self) -> None:
+        r = self._resolve("tutoring_v1")
+        scores = {
+            "correctness": DimensionScore(5, "x"), "pedagogy": DimensionScore(5, "x"),
+            "completeness": DimensionScore(5, "x"), "tone": DimensionScore(3, "x"),
+        }
+        self.assertAlmostEqual(runner._weighted_overall(scores, r), 5.0)
+
     def test_missing_dimension_yields_none(self) -> None:
         r = self._resolve("email_drafting_v1")
         partial = {"completeness": DimensionScore(4, "x")}
         self.assertIsNone(runner._weighted_overall(partial, r))
 
     def test_suites_have_question_and_reference(self) -> None:
-        for name in ("email_drafting_v1", "plain_language_v1"):
+        for name in ("email_drafting_v1", "plain_language_v1", "tutoring_v1"):
             rows = [json.loads(line) for line in
                     (TASKS / f"{name}.jsonl").read_text(encoding="utf-8").splitlines()
                     if line.strip()]
