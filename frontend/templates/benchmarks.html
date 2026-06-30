@@ -9,25 +9,9 @@
   <p>
     <a class="btn-primary" href="{{ url_for('benchmark_run_new') }}">▶ Start a new run</a>
     {% if has_reference %}
-    · <a href="{{ url_for('benchmark_reference') }}">Reference scores (GPT 4.1 Mini &amp; Llama 3.3)</a>
+    · <a href="{{ url_for('benchmark_reference') }}">Guide</a>
     {% endif %}
   </p>
-
-  <section class="key">
-    <h2>How to read this</h2>
-    <dl class="legend-grid">
-      <dt>TruthfulQA / MMLU / QuALITY</dt>
-      <dd>Multiple-choice accuracy.</dd>
-      <dt>IFEval</dt>
-      <dd>Share of prompts whose formatting constraints were satisfied.</dd>
-      <dt>Consistency</dt>
-      <dd>Mean BERTScore F1 across rephrasings of the same question.</dd>
-      <dt>ToMi</dt>
-      <dd>Theory-of-mind accuracy</dd>
-      <dt>MBPP</dt>
-      <dd>Percent of code problems fully passing all unit tests (no partial credit).</dd>
-    </dl>
-  </section>
 
   <h2>Your runs</h2>
   {% if not has_runs %}

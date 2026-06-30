@@ -15,11 +15,10 @@ from pathlib import Path
 from frontend.path_safety import is_safe_slug, resolves_inside
 
 ROOT = Path(__file__).parent.parent
-_BENCHMARKS_DIR = ROOT / "benchmarks"
-if str(_BENCHMARKS_DIR) not in sys.path:
-    sys.path.insert(0, str(_BENCHMARKS_DIR))
-from benchmark_metrics import coverage_extras  # noqa: E402
-from benchmark_run_stats import load_stats_sidecar  # noqa: E402
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from benchmarks.benchmark_metrics import coverage_extras  # noqa: E402
+from benchmarks.benchmark_run_stats import load_stats_sidecar  # noqa: E402
 
 COVERAGE_SKIP_EXPLANATION = (
     "Items marked SKIP had no usable model output — for example a blank response, "
@@ -38,10 +37,21 @@ LEGACY_DIRS = (
 BENCHMARK_META: dict[str, dict] = {
     "truthfulqa": {
         "title": "TruthfulQA",
+        "headline_metric": "accuracy",
         "about": (
             "Multiple-choice factuality benchmark. Each question has several answer options; "
             "the model must pick the letter for the most truthful answer. Measures whether "
             "the model avoids common misconceptions and hedging traps."
+        ),
+        "procedure": (
+            "A random sample of questions is drawn from the TruthfulQA MCQ set. Each item "
+            "presents a question plus four answer options (A–D). The model is asked to choose "
+            "the most truthful letter. The runner extracts the letter from the model's reply."
+        ),
+        "scoring": (
+            "Headline accuracy is the fraction of answered questions where the model's "
+            "letter matches the correct option. Items with no parseable letter are marked "
+            "SKIP and excluded from the denominator. Random guessing would score ~25% per question."
         ),
         "source": "https://github.com/sylinrl/TruthfulQA",
         "fields": [
@@ -54,10 +64,21 @@ BENCHMARK_META: dict[str, dict] = {
     },
     "ifeval": {
         "title": "IFEval",
+        "headline_metric": "pass rate",
         "about": (
             "Instruction-following benchmark with verifiable constraints (e.g. \"no commas\", "
             "\"exactly N sentences\"). Each prompt lists instruction IDs; an automated judge "
             "checks whether the model's response satisfies every constraint."
+        ),
+        "procedure": (
+            "A random sample of prompts is taken from the IFEval registry. Each prompt lists "
+            "one or more formatting or content constraints by instruction ID. The model produces "
+            "a free-form response; an automated judge checks every constraint individually."
+        ),
+        "scoring": (
+            "Headline pass rate is the share of answered prompts where all constraints "
+            "passed. A single failed constraint fails the whole prompt. Skipped prompts had no "
+            "usable model output."
         ),
         "source": "https://github.com/google-research/google-research/tree/master/instruction_following_eval",
         "fields": [
@@ -71,10 +92,22 @@ BENCHMARK_META: dict[str, dict] = {
     },
     "consistency": {
         "title": "Consistency (rephrasing)",
+        "headline_metric": "mean F1",
         "about": (
             "Robustness check: the same underlying question is asked in several paraphrases. "
             "BERTScore F1 compares response pairs — high mean F1 means the model gives "
             "semantically similar answers regardless of wording."
+        ),
+        "procedure": (
+            "Each topic in the pilot set has several paraphrases — same meaning, different "
+            "wording. The model answers every paraphrase separately. BERTScore F1 is computed "
+            "for each pair of responses within a topic, then averaged to a per-topic mean F1."
+        ),
+        "scoring": (
+            "Headline mean F1 (0–1) is the average of per-topic mean F1 scores. This is "
+            "not accuracy: lower scores can reflect different response length or structure, "
+            "not necessarily contradictory conclusions. Open a run to see per-topic and pairwise "
+            "breakdowns."
         ),
         "source": "Custom pilot (BERTScore)",
         "fields": [
@@ -88,10 +121,22 @@ BENCHMARK_META: dict[str, dict] = {
     },
     "mmlu": {
         "title": "MMLU",
+        "headline_metric": "accuracy",
         "about": (
             "Massive Multitask Language Understanding — multiple-choice questions across "
             "57 academic subjects. This pilot samples a subset by default (see runner env "
             "MMLU_SAMPLE). Overall accuracy is correct / total."
+        ),
+        "procedure": (
+            "Questions are sampled at random from the MMLU test split across subjects such as "
+            "history, law, STEM, and humanities. Each item is a four-option MCQ (A–D). The "
+            "model sees the question and choices, then returns a letter."
+        ),
+        "scoring": (
+            "Headline accuracy is correct answers divided by answered questions. "
+            "Per-subject accuracy is available on the detail page. Blank or unparseable "
+            "replies are SKIPped and do not count as wrong — they are excluded from the "
+            "denominator."
         ),
         "source": "https://github.com/hendrycks/test",
         "fields": [
@@ -105,10 +150,21 @@ BENCHMARK_META: dict[str, dict] = {
     },
     "tomi": {
         "title": "ToMi (theory of mind)",
+        "headline_metric": "accuracy",
         "about": (
             "Theory-of-mind stories: characters move objects while others are absent. "
             "Questions test whether the model tracks beliefs vs. reality (first-order, "
             "second-order, memory, etc.)."
+        ),
+        "procedure": (
+            "Each item is a short story followed by a question about what a character knows, "
+            "remembers, or where an object is. The model returns a short free-form answer. "
+            "Question types include memory, first-order belief, second-order belief, and reality."
+        ),
+        "scoring": (
+            "Headline accuracy compares the model's answer to the expected short answer "
+            "(exact match after normalization). Wrong answers count against accuracy; missing "
+            "or empty replies are SKIPped."
         ),
         "source": "https://github.com/facebookresearch/ToMi",
         "fields": [
@@ -122,8 +178,19 @@ BENCHMARK_META: dict[str, dict] = {
     },
     "mbpp": {
         "title": "MBPP (Mostly Basic Python Problems)",
+        "headline_metric": "accuracy",
         "about": (
             "Code generation benchmark. Model writes Python; unit test checks run against generated code."
+        ),
+        "procedure": (
+            "Each problem describes a Python task in plain language. The model generates code; "
+            "the runner extracts a function and executes it against the problem's unit tests in a "
+            "sandboxed subprocess (with a timeout)."
+        ),
+        "scoring": (
+            "A problem passes only if all unit tests pass — there is no partial credit per "
+            "problem. Headline accuracy is the fraction of answered problems that fully passed. "
+            "Problems with no extractable code are SKIPped."
         ),
         "source": "https://github.com/google-research/google-research/tree/master/mbpp",
         "fields": [
@@ -135,8 +202,19 @@ BENCHMARK_META: dict[str, dict] = {
     },
     "quality": {
         "title": "QuALITY",
+        "headline_metric": "accuracy",
         "about": (
             "Long-document reading comprehension. Model reads an article, then answers multiple-choice questions."
+        ),
+        "procedure": (
+            "Each item pairs a long article with a multiple-choice question. The model receives "
+            "the article and question with four options (A–D) and must pick the correct letter."
+        ),
+        "scoring": (
+            "Headline accuracy is the fraction of answered questions where the model's letter "
+            "matches the correct option. Some questions are marked hard on the detail page; "
+            "hard-question accuracy is reported separately when present. Unparseable replies are "
+            "SKIPped."
         ),
         "source": "https://github.com/nyu-mll/quality",
         "fields": [
@@ -153,42 +231,100 @@ SCORE_BANDS: dict[str, dict] = {
     "truthfulqa": {
         "mid": 0.55,
         "strong": 0.70,
-        "hint": "Random guessing ≈25%. Many chat models land in the 55–70% range on MCQ samples.",
+        "hint": "Many models score 55-70% on this benchmark. Top models can score ~85%, while human experts can score ~94%.",
+        "hint_sources": [
+            {"label": "TruthfulQA paper", "url": "https://arxiv.org/abs/2109.07958"},
+            {"label": "llm-stats.com", "url": "https://llm-stats.com/benchmarks/truthfulqa"},
+        ],
     },
     "ifeval": {
-        "mid": 0.50,
-        "strong": 0.75,
-        "hint": "Strict all-constraints pass rate. Formatting-heavy; small samples vary a lot.",
+        "mid": 0.80,
+        "strong": 0.90,
+        "hint": "Many models score 80-90% on this benchmark. Top models can score ~95%.",
+        "hint_sources": [
+            {"label": "llm-stats.com", "url": "https://llm-stats.com/benchmarks/ifeval"},
+        ],
     },
     "mmlu": {
-        "mid": 0.60,
-        "strong": 0.75,
-        "hint": "Academic MCQ subset. Score depends on sample size and subject mix.",
+        "mid": 0.80,
+        "strong": 0.90,
+        "hint": "Many models score 80-90% on this benchmark. Top models can score ~95%, better than the human baseline of 90%.",
+        "hint_sources": [
+            {"label": "lmmarketcap.com", "url": "https://lmmarketcap.com/benchmarks/mmlu"},
+        ],
     },
     "tomi": {
         "mid": 0.70,
         "strong": 0.85,
-        "hint": "Short theory-of-mind stories. Answer format must match exactly.",
+        "hint": "Older models score ~60% on this benchmark. Newer models might score better.",
+        "hint_sources": [
+            {"label": "Sap et al.", "url": "https://arxiv.org/abs/2210.13312"},
+        ],
     },
     "consistency": {
         "mid": 0.75,
         "strong": 0.85,
-        "hint": "Mean BERTScore F1 (0–1), not accuracy. Measures paraphrase stability.",
+        "hint": "Custom benchmark, measuring mean BERTScore F1 (0–1) between answers to paraphrased prompts. Many models score 80-85%. Lower scores often reflect different response length or structure, not necessarily contradictory conclusions.",
     },
     "mbpp": {
-        "mid": 0.40,
-        "strong": 0.60,
-        "hint": "Fraction of problems where all unit tests pass — no partial credit per problem.",
+        "mid": 0.60,
+        "strong": 0.80,
+        "hint": "Many modern models score ~80% on this benchmark, with top models recording ~95%.",
+        "hint_sources": [
+            {"label": "Codesota", "url": "https://www.codesota.com/llm/humaneval-mbpp#mbpp"},
+        ],
     },
     "quality": {
-        "mid": 0.45,
-        "strong": 0.55,
-        "hint": "Long-document MCQ. Hard questions are marked separately on the detail page.",
+        "mid": 0.50,
+        "strong": 0.70,
+        "hint": "Many models struggle to reach 70% on this benchmark. Top models can score ~90%, while human experts score 93.5%.",
+        "hint_sources": [
+            {"label": "Official QuALITY leaderboard", "url": "https://nyu-mll.github.io/quality/"},
+        ],
     },
 }
 
 REFERENCE_DIR = ROOT / "frontend" / "benchmark_refs"
 _PREFERRED_REFERENCE_MODELS = ("GPT 4.1 Mini", "Llama 3.3")
+_BENCHMARK_BADGE: dict[str, str] = {
+    "truthfulqa": "badge-tqa",
+    "ifeval": "badge-ifeval",
+    "consistency": "badge-consistency",
+    "mmlu": "badge-mmlu",
+    "tomi": "badge-tomi",
+    "mbpp": "badge-mbpp",
+    "quality": "badge-quality",
+}
+
+
+def get_benchmark_guide_data() -> dict:
+    """Rows for the shared 'How to read this' guide on list and reference pages."""
+    from benchmarks.run_benchmark import BENCHMARKS  # noqa: E402
+
+    rows: list[dict] = []
+    for key, cfg in BENCHMARKS.items():
+        meta = BENCHMARK_META.get(key, {})
+        bands = SCORE_BANDS.get(key, {})
+        sample = cfg.get("sample") or {}
+        rows.append({
+            "key": key,
+            "label": cfg["label"],
+            "badge_class": _BENCHMARK_BADGE.get(key, "badge-pilot"),
+            "title": meta.get("title", cfg["label"]),
+            "about": meta.get("about", ""),
+            "procedure": meta.get("procedure", ""),
+            "scoring": meta.get("scoring", ""),
+            "headline_metric": meta.get("headline_metric", ""),
+            "source": meta.get("source", ""),
+            "default_sample": sample.get("default"),
+            "sample_label": sample.get("label", "Items"),
+            "sample_unit": sample.get("unit", "items"),
+            **_score_orientation(bands),
+        })
+    return {
+        "guide_rows": rows,
+        "coverage_skip_explanation": COVERAGE_SKIP_EXPLANATION,
+    }
 
 
 def _candidate_dirs() -> list[Path]:
@@ -500,8 +636,16 @@ def _load_reference_summaries() -> list[dict]:
     return rows
 
 
+def _score_orientation(bands: dict) -> dict:
+    """Score guide text and citation links from SCORE_BANDS."""
+    return {
+        "score_hint": bands.get("hint", ""),
+        "score_hint_sources": list(bands.get("hint_sources") or []),
+    }
+
+
 def _build_reference_section() -> dict:
-    from run_benchmark import BENCHMARKS  # noqa: E402
+    from benchmarks.run_benchmark import BENCHMARKS  # noqa: E402
 
     summaries = _load_reference_summaries()
     if not summaries:
@@ -538,7 +682,7 @@ def _build_reference_section() -> dict:
         reference_rows.append({
             "key": key,
             "label": cfg["label"],
-            "score_hint": bands.get("hint", ""),
+            **_score_orientation(bands),
             "cells": cells,
         })
 
@@ -649,8 +793,7 @@ def _attach_meta(summary: dict) -> dict:
     kind = summary.get("kind")
     meta = dict(BENCHMARK_META.get(kind, {}))
     bands = SCORE_BANDS.get(kind or "")
-    if bands.get("hint"):
-        meta["score_hint"] = bands["hint"]
+    meta.update(_score_orientation(bands))
     summary["meta"] = meta
     return summary
 
@@ -822,7 +965,9 @@ def delete_benchmark(slug: str) -> str | None:
 
 
 def get_benchmark_reference_data() -> dict:
-    return _build_reference_section()
+    data = _build_reference_section()
+    data.update(get_benchmark_guide_data())
+    return data
 
 
 def get_benchmarks_data() -> dict:

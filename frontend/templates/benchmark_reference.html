@@ -1,15 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}Reference benchmark scores{% endblock %}
+{% block title %}Guide{% endblock %}
 
 {% block content %}
 <div class="eval-comparison">
   <p class="back"><a href="{{ url_for('benchmarks') }}">← your benchmark runs</a></p>
-  <h1>Reference benchmark scores</h1>
+  <h1>Guide</h1>
   <p class="sub">
-    Sample runs on default pilot sizes via the Duke gateway
-    ({% for m in reference_models %}{{ m }}{% if not loop.last %} · {% endif %}{% endfor %}).
-    Use these as orientation — your runs may use different sample sizes or models.
+    Sample reference scores for
+    {% for m in reference_models %}{{ m }}{% if not loop.last %} · {% endif %}{% endfor %}
+    on default pilot sizes via the Duke gateway, 
+    as well as explanations of what each benchmark measures and how scores are computed.
   </p>
 
   <div class="table-wrap">
@@ -34,8 +35,10 @@
       <tr>
         <td class="reference-benchmark-cell">
           <span class="badge {{ badge_class }}">{{ row.label }}</span>
-          {% if row.score_hint %}
-          <p class="form-hint reference-score-hint">{{ row.score_hint }}</p>
+          {% if row.score_hint or row.score_hint_sources %}
+          {% with hint=row.score_hint, sources=row.score_hint_sources, reference=true %}
+          {% include '_benchmark_score_hint.html' %}
+          {% endwith %}
           {% endif %}
         </td>
         {% for m in reference_models %}
@@ -62,30 +65,8 @@
   </table>
   </div>
 
-  <section class="key">
-    <h2>Skipped items</h2>
-    <p class="sub">{{ coverage_skip_explanation }}</p>
-    <p class="form-hint">
-      When a run shows <span class="coverage-partial-badge">N skipped</span> or
-      <code>n=99/100</code>, open the run to see which items were marked
-      <span class="status-skip">SKIP</span> in the per-question list.
-    </p>
-  </section>
-
-  <section class="key">
-    <h2>How to read scores</h2>
-    <dl class="legend-grid">
-      <dt>TruthfulQA / MMLU / QuALITY</dt>
-      <dd>Multiple-choice accuracy (over answered items only when skips occurred).</dd>
-      <dt>IFEval</dt>
-      <dd>Share of prompts whose formatting constraints were satisfied.</dd>
-      <dt>Consistency</dt>
-      <dd>Mean BERTScore F1 across rephrasings of the same question.</dd>
-      <dt>ToMi</dt>
-      <dd>Theory-of-mind accuracy.</dd>
-      <dt>MBPP</dt>
-      <dd>Percent of code problems fully passing all unit tests (no partial credit).</dd>
-    </dl>
-  </section>
+  {% with title="How each benchmark works", intro="Reference scores below use default pilot sample sizes via the Duke gateway. This section explains what each benchmark measures and how scores are computed." %}
+  {% include '_benchmark_guide.html' %}
+  {% endwith %}
 </div>
 {% endblock %}

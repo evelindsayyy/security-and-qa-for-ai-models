@@ -126,8 +126,10 @@
     <details class="tool-panel" open>
       <summary>About {{ meta.title or kind_label }}</summary>
       <p>{{ meta.about }}</p>
-      {% if meta.score_hint %}
-        <p class="form-hint"><strong>Score guide:</strong> {{ meta.score_hint }}</p>
+      {% if meta.score_hint or meta.score_hint_sources %}
+      {% with hint=meta.score_hint, sources=meta.score_hint_sources, show_label=true %}
+      {% include '_benchmark_score_hint.html' %}
+      {% endwith %}
       {% endif %}
       {% if meta.source %}
         <p class="dim">Source:
