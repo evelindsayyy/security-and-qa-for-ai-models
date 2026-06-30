@@ -12,7 +12,7 @@ from pathlib import Path
 
 from dbutils import run_lock
 from frontend import docker_launch
-from frontend.log_status import status_message
+from frontend.log_status import run_log_payload, status_message
 from frontend.output_dirs import OutputDirError, prepare_output_dir
 from frontend.path_safety import is_safe_slug
 from safety.gateway_ids import normalize_gateway_model_id
@@ -161,8 +161,8 @@ def _merged_warnings(merged: Path) -> list[str]:
 def _running_payload(log_path: Path, rel_log: str) -> dict:
     payload = {
         "status": "running",
-        "message": status_message(log_path),
         "log_path": rel_log,
+        **run_log_payload(log_path),
     }
     alert = _log_alert(log_path)
     if alert:

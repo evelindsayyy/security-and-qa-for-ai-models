@@ -13,10 +13,10 @@
   {% elif running %}
     <p class="back"><a href="{{ url_for('scans') }}">← all scans</a></p>
     <h1>Scan in progress</h1>
-    <p class="sub">slug <code>{{ slug }}</code> · live log updates every 3 seconds</p>
+    <p class="sub">slug <code>{{ slug }}</code> · live log updates every 5 seconds</p>
     {{ progress_terminal(
          url_for('scan_run_status', slug=slug),
-         3000,
+         5000,
          hint='Run continues in the background if you switch tabs. Full log: scanner/output/' ~ slug ~ '/scan_run.log',
          show_retry=true,
          retry_url=url_for('scan_run_new'),
