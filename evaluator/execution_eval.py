@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sqlite3
 import threading
@@ -45,13 +46,19 @@ _FORBIDDEN = re.compile(r"\b(attach|detach)\b", re.IGNORECASE)
 # ---------------------------------------------------------------------------
 
 
-def strip_sql(text: str) -> str:
-    """Pull SQL out of a model response — drop ```sql fences and surrounding prose."""
+def _strip_fence(text: str) -> str:
+    """Drop a leading ```lang fence and trailing ``` (plus surrounding whitespace).
+    Shared by every checker — models wrap SQL, JSON, and numbers in fences alike."""
     t = (text or "").strip()
     if t.startswith("```"):
         t = re.sub(r"^```[a-zA-Z]*\n?", "", t)
         t = re.sub(r"\n?```\s*$", "", t).strip()
     return t
+
+
+def strip_sql(text: str) -> str:
+    """Pull SQL out of a model response — drop ```sql fences and surrounding prose."""
+    return _strip_fence(text)
 
 
 def run_sql(candidate_sql: str, setup: str) -> tuple[list | None, str | None]:
@@ -134,9 +141,9 @@ def suite_check_type(suite_version: str) -> str:
 
 # ---------------------------------------------------------------------------
 # Checker registry — one entry per execution task type. A checker takes the
-# candidate's response + the task dict and returns (passed, error). SQL is the
-# only checker today; structured-output / numeric checkers plug in HERE, without
-# touching the runner (the suite's `check` field selects which one runs).
+# candidate's response + the task dict and returns (passed, error). A suite's
+# `check` metadata field selects which one runs; new task types plug in HERE
+# without touching the runner or the schema.
 # ---------------------------------------------------------------------------
 
 
@@ -148,8 +155,63 @@ def _check_sql(candidate_response: str, task: dict) -> tuple[bool, str | None]:
     return passed(rows, task["expected"]), None
 
 
+def _check_json(candidate_response: str, task: dict) -> tuple[bool, str | None]:
+    """Parse the candidate's response as JSON and compare to `expected`.
+
+    Object key order is irrelevant (Python dict equality); array order IS
+    significant; numbers compare by value (1 == 1.0). Unparseable input fails
+    cleanly rather than crashing the scorer."""
+    raw = _strip_fence(candidate_response)
+    if not raw:
+        return False, "empty response"
+    try:
+        got = json.loads(raw)
+    except (json.JSONDecodeError, ValueError) as e:
+        return False, f"invalid JSON: {e}"
+    return got == task["expected"], None
+
+
+_NUMBER_RE = re.compile(r"-?\d[\d,]*(?:\.\d+)?(?:[eE][-+]?\d+)?")
+
+
+def _extract_number(text: str) -> float | None:
+    """Best-effort single number from a model response. Tries the whole string
+    first (after stripping a fence, `$`, thousands commas, and a trailing `%`),
+    else falls back to the LAST number-looking token (answers usually end with
+    it). Returns None when there's no number to parse."""
+    t = _strip_fence(text)
+    cleaned = t.strip().lstrip("$").rstrip("%").replace(",", "").strip()
+    try:
+        return float(cleaned)
+    except ValueError:
+        pass
+    nums = _NUMBER_RE.findall(t)
+    if not nums:
+        return None
+    try:
+        return float(nums[-1].replace(",", ""))
+    except ValueError:
+        return None
+
+
+def _check_numeric(candidate_response: str, task: dict) -> tuple[bool, str | None]:
+    """Extract a number from the response and compare to `expected` within an
+    optional absolute `tolerance` (default near-exact; `rel_tol` guards float
+    representation so 42.0 matches 42)."""
+    got = _extract_number(candidate_response)
+    if got is None:
+        return False, "no number found in response"
+    expected = float(task["expected"])
+    tol = float(task.get("tolerance", 0.0))
+    if math.isclose(got, expected, rel_tol=1e-9, abs_tol=tol):
+        return True, None
+    return False, f"got {got}, expected {expected} (tol {tol})"
+
+
 CHECKERS: dict[str, Callable[[str, dict], tuple]] = {
     "sql": _check_sql,
+    "json": _check_json,
+    "numeric": _check_numeric,
 }
 
 
