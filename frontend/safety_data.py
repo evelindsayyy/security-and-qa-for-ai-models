@@ -257,6 +257,8 @@ def _build_safety_detail(slug: str, data: dict, profile: str = "base") -> dict:
 
 def _get_safety_data_files() -> dict:
     """List every merged_safety_result.json under safety/output/<slug>/<profile>/."""
+    from frontend.read_context import artifact_path_visible
+
     if not OUTPUT_DIR.exists():
         return {
             "has_safety": False,
@@ -266,6 +268,8 @@ def _get_safety_data_files() -> dict:
 
     rows: list[dict] = []
     for path, slug, profile in iter_merged_result_paths(OUTPUT_DIR):
+        if not artifact_path_visible(path.parent):
+            continue
         row = _summarize_merged(path, slug, profile)
         if row:
             rows.append(row)

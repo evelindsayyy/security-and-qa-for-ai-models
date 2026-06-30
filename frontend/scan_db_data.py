@@ -229,7 +229,7 @@ def get_scans_data_db() -> dict:
             if slug in seen_slugs:
                 continue
             meta = read_run_meta(path.parent)
-            if meta and not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
+            if not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
                 continue
             row = _summarize_scan(path, slug)
             if row is not None:

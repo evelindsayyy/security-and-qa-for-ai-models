@@ -6,10 +6,20 @@ from __future__ import annotations
 def read_context() -> tuple[str, str | None]:
     """Return (view_mode, user_id) for data layer queries."""
     try:
-        from auth.session import effective_user, get_view_mode
+        from auth.session import current_user, get_view_mode
 
-        user = effective_user()
+        user = current_user()
         uid = user.get("id") if user else None
         return get_view_mode(), uid
     except Exception:
         return "public", None
+
+
+def artifact_path_visible(directory) -> bool:
+    """Whether an on-disk run directory should appear in the current view."""
+    from dbutils.run_meta import read_run_meta
+    from dbutils.visibility import artifact_visible
+
+    view_mode, user_id = read_context()
+    meta = read_run_meta(directory)
+    return artifact_visible(meta, view_mode=view_mode, user_id=user_id)

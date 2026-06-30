@@ -78,8 +78,8 @@ def logout_user() -> None:
     set_view_mode("public")
 
 
-def dev_user_if_enabled() -> dict[str, Any] | None:
-    """When AUTH_ENABLED=0, optional AUTH_DEV_NETID for private-mode local testing."""
+def dev_user_from_env() -> dict[str, Any] | None:
+    """When AUTH_ENABLED=0, build a dev user from AUTH_DEV_NETID (login route only)."""
     import os
     import uuid
 
@@ -89,8 +89,6 @@ def dev_user_if_enabled() -> dict[str, Any] | None:
     if auth_enabled():
         return None
     if session.get("dev_logged_out"):
-        return None
-    if get_view_mode() != "private":
         return None
     netid = os.environ.get("AUTH_DEV_NETID", "").strip().lower()
     if not netid:
@@ -103,8 +101,20 @@ def dev_user_if_enabled() -> dict[str, Any] | None:
     }
 
 
+def dev_login_available() -> bool:
+    return not auth_enabled() and dev_user_from_env() is not None
+
+
 def effective_user() -> dict[str, Any] | None:
-    return current_user() or dev_user_if_enabled()
+    return current_user()
+
+
+def sync_session_for_auth() -> None:
+    """Logged-out users always see the public catalog."""
+    if not has_request_context():
+        return
+    if not is_logged_in() and get_view_mode() != "public":
+        set_view_mode("public")
 
 
 def require_private_access() -> tuple[dict[str, Any] | None, str | None]:
@@ -120,14 +130,12 @@ def require_private_access() -> tuple[dict[str, Any] | None, str | None]:
 
 
 def auth_context_for_template() -> dict[str, Any]:
-    real_user = current_user()
-    dev_user = dev_user_if_enabled()
-    display_user = real_user or dev_user
-    is_logged_in_display = real_user is not None or dev_user is not None
+    user = current_user()
     return {
         "auth_enabled": auth_enabled(),
+        "dev_login_available": dev_login_available(),
         "view_mode": get_view_mode(),
-        "current_user": display_user,
-        "is_logged_in": is_logged_in_display,
-        "is_allowlisted": is_allowlisted(display_user) if display_user else False,
+        "current_user": user,
+        "is_logged_in": user is not None,
+        "is_allowlisted": is_allowlisted(user) if user else False,
     }

@@ -379,6 +379,8 @@ def _get_scans_data_files() -> dict:
 
     surfaces the malicious poc at the top for stakeholder demos when present.
     """
+    from frontend.read_context import artifact_path_visible
+
     if not OUTPUT_DIR.exists():
         return {
             "has_scans": False,
@@ -390,6 +392,8 @@ def _get_scans_data_files() -> dict:
     rows: list[dict] = []
     for path in sorted(OUTPUT_DIR.glob("*/scan_result.json")):
         slug = path.parent.name
+        if not artifact_path_visible(path.parent):
+            continue
         row = _summarize_scan(path, slug)
         if row:
             rows.append(row)

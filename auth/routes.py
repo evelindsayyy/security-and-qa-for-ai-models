@@ -10,11 +10,13 @@ from auth.oidc import init_oauth, oauth, redirect_uri
 from auth.session import (
     auth_enabled,
     auth_context_for_template,
-    effective_user,
+    current_user,
+    dev_user_from_env,
     is_allowlisted,
     login_user,
     logout_user,
     set_view_mode,
+    sync_session_for_auth,
 )
 from dbutils.run_access import upsert_user
 
@@ -43,17 +45,24 @@ def register_auth(app) -> None:
     app.add_url_rule("/login", view_func=oauth_callback, methods=["GET"])
     app.context_processor(lambda: auth_context_for_template())
 
+    @app.before_request
+    def _sync_auth_session():
+        sync_session_for_auth()
+
 
 @bp.route("/login")
 def login():
     if not auth_enabled():
-        dev = effective_user()
-        if dev:
-            login_user(dev)
-            return _finish_login(popup=request.args.get("popup") == "1")
-        return "AUTH_ENABLED=0 — set AUTH_DEV_NETID for local login.", 400
+        dev = dev_user_from_env()
+        if not dev:
+            return "AUTH_ENABLED=0 — set AUTH_DEV_NETID for local login.", 400
+        if not is_allowlisted(dev):
+            return "Your NetID is not authorized for this application.", 403
+        login_user(dev)
+        return _finish_login(popup=request.args.get("popup") == "1")
 
-    if effective_user() and is_allowlisted(effective_user()):
+    user = current_user()
+    if user and is_allowlisted(user):
         return _finish_login(popup=request.args.get("popup") == "1")
 
     client = oauth.create_client("duke")
@@ -170,7 +179,7 @@ def logout():
 
 @bp.route("/me")
 def me():
-    user = effective_user()
+    user = current_user()
     return jsonify(
         {
             "ok": True,
@@ -191,16 +200,8 @@ def view_mode():
     if mode not in ("public", "private"):
         return jsonify({"ok": False, "error": "mode must be public or private"}), 400
     if mode == "private":
-        if not auth_enabled():
-            import os
-
-            from dbutils.env import load_repo_env
-
-            load_repo_env()
-            if os.environ.get("AUTH_DEV_NETID", "").strip():
-                session.pop("dev_logged_out", None)
         set_view_mode("private")
-        user = effective_user()
+        user = current_user()
         if not user or not is_allowlisted(user):
             set_view_mode("public")
             if request.headers.get("Accept", "").startswith("application/json"):

@@ -224,7 +224,7 @@ def get_safety_data_db() -> dict:
             if (slug, profile) in seen_keys:
                 continue
             meta = read_run_meta(path.parent)
-            if meta and not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
+            if not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
                 continue
             row = _summarize_merged(path, slug, profile)
             if row is not None:

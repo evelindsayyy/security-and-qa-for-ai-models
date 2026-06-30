@@ -13,25 +13,14 @@ def visibility_clause(
     links_alias: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Return (SQL fragment, params) for filtering runs by view mode."""
+    del links_alias  # user_run_links are for dedup only, not private catalog reads
     params: dict[str, Any] = {}
     if view_mode != "private" or not user_id:
         return f"{table_alias}.visibility = 'public'", params
 
     params["uid"] = user_id
-    link_exists = ""
-    if links_alias:
-        link_exists = f"""
-            OR EXISTS (
-                SELECT 1 FROM public.user_run_links url
-                WHERE url.user_id = %(uid)s
-                  AND url.run_id = {table_alias}.id
-            )
-        """
     return (
-        f"""(
-            ({table_alias}.visibility = 'private' AND {table_alias}.owner_user_id = %(uid)s)
-            {link_exists}
-        )""",
+        f"({table_alias}.visibility = 'private' AND {table_alias}.owner_user_id = %(uid)s)",
         params,
     )
 
@@ -43,7 +32,7 @@ def artifact_visible(
     user_id: str | None,
 ) -> bool:
     """Filter on-disk artifacts by run_meta visibility."""
-    visibility = meta.get("visibility", "public")
+    visibility = (meta or {}).get("visibility", "public")
     if view_mode != "private" or not user_id:
         return visibility == "public"
     if visibility != "private":
