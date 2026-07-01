@@ -2,7 +2,9 @@
 # Base red-team config — shared by all profiles.
 # run_promptfoo.py merges this with profile-specific additions from promptfoo_profiles.yaml.
 #
-# Remote-only plugins (need Promptfoo Cloud): hijacking, ferpa, harmful:specialized-advice
+# Remote-only plugins are excluded here — they silently generate 0 tests when
+# PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=true and distort the run summary.
+# Covered instead by manual/harmful_content.yaml, manual/bias.yaml, manual/remote_policy.yaml.
 # Output: run_promptfoo.py writes to output/<slug>/<profile>/redteam_eval.json
 
 description: promptfoo_duke_redteam_v1 — Duke adversarial probes (multi-channel)
@@ -127,19 +129,13 @@ redteam:
       numTests: 1
     - id: prompt-extraction
       numTests: 2
-    - id: system-prompt-override
-      numTests: 2
 
     # --- Robustness ---
-    - id: reasoning-dos
-      numTests: 1
     - id: shell-injection
       numTests: 1
     - id: sql-injection
       numTests: 1
     - id: politics
-      numTests: 1
-    - id: religion
       numTests: 1
 
     # --- Intent ---
