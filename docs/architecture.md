@@ -148,7 +148,7 @@ Long scans and evals take minutes to hours. Start routes return immediately; the
 | Same scan slug or safety `(slug, profile)` | Blocked by `run.lock` under the output dir (UI + CLI); second start returns existing job or exit **2** |
 | Benchmark re-click same combo | Deduped in-memory; lock file is `benchmarks/results/<stem>.run.lock` |
 | Multiple Flask workers | **Not supported** — `_RUNNING` is per-process |
-| Auth | Duke OIDC optional (`AUTH_ENABLED`); public read open; private mode + custom runs require allowlisted NetID — [`auth-setup.md`](auth-setup.md) |
+| Auth | Duke OIDC optional (`AUTH_ENABLED`); public read open; private mode + custom runs require allowlisted NetID — [`../auth/README.md`](../auth/README.md) |
 
 While a job runs, status routes return a log tail (`message` or `log` field) for progress pages.
 
@@ -224,6 +224,6 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 ## Open questions
 
 - Frontend stack — Flask now; possibly Next.js + Tailwind later.
-- Auth — Duke OIDC (Shibboleth login screen) via [`auth/`](../auth/) and [`docs/auth-setup.md`](auth-setup.md). Public view requires no login; private mode uses netID allowlist.
+- Auth — Duke OIDC (Shibboleth login screen) via [`auth/`](../auth/) and [`auth/README.md`](../auth/README.md). Public view requires no login; private mode uses netID allowlist.
 - LiteLLM guardrail hooks — integration path TBD.
 - Benchmark catalog — which pilots become standing suites.

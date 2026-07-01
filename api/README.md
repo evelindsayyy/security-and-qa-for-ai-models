@@ -7,7 +7,7 @@ Thin handlers over `frontend/*_data.py` (reads) and `frontend/*_launch.py`
 (writes). Same payloads as the dashboard; envelope in `api/responses.py`.
 Bulk Postgres ingest is CLI-only: `python -m api.ingest` (see [`docs/cli.md`](../docs/cli.md)).
 
-**Auth:** List/detail reads respect session view mode (public vs private). Custom eval POST requires private mode + allowlisted session. See [`docs/auth-setup.md`](../docs/auth-setup.md).
+**Auth:** List/detail reads respect session view mode (public vs private). Custom eval POST requires private mode + allowlisted session. See [`auth/README.md`](../auth/README.md).
 
 ## Mounted routes
 

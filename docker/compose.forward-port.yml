@@ -1,0 +1,7 @@
+# Optional local-only overlay for IDE/browser port-forward aliases.
+# Enabled by docker/run.sh only when APP_FORWARD_PORT is set in .env.
+
+services:
+  web:
+    ports:
+      - "${APP_FORWARD_PORT}:5000"

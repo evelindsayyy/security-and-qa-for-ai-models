@@ -2,7 +2,7 @@
 
 Nutrition-label **UI and JSON API** (one Flask process). Browser **Start** buttons and `POST /api/*` spawn pillar jobs in Docker via [`docker_launch.py`](docker_launch.py). Reads use Postgres when configured, else on-disk JSON.
 
-**Auth:** Public view (default) needs no login. Private view and custom runs require an allowlisted Duke netID — [`docs/auth-setup.md`](../docs/auth-setup.md) · [`../auth/README.md`](../auth/README.md).
+**Auth:** Public view (default) needs no login. Private view and custom runs require an allowlisted Duke netID — [`../auth/README.md`](../auth/README.md).
 
 ## Quick start
 
@@ -87,4 +87,4 @@ python3 main.py --host
 
 ## See also
 
-- [`../README.md`](../README.md) · [`docs/cli.md`](../docs/cli.md) · [`docs/auth-setup.md`](../docs/auth-setup.md) · [`docs/docker.md`](../docs/docker.md) · [`../api/README.md`](../api/README.md)
+- [`../README.md`](../README.md) · [`docs/cli.md`](../docs/cli.md) · [`docs/docker.md`](../docs/docker.md) · [`../api/README.md`](../api/README.md)

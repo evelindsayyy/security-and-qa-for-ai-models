@@ -9,7 +9,7 @@ Duke **OIDC** login for the nutrition-label UI. Users see the standard Duke Shib
 | **Public** (default) | Not required | Public catalog runs | Default configs; reuses matching DB rows |
 | **Private** | Allowlisted NetID | Public + own private runs | Custom eval, non-base safety profiles, etc. |
 
-Session state: Flask cookie (`user`, `view_mode`). Run ownership and dedup live in Postgres — see [`docs/auth-setup.md`](../docs/auth-setup.md).
+Session state: Flask cookie (`user`, `view_mode`). Run ownership and dedup live in Postgres.
 
 ## Modules
 
@@ -29,7 +29,7 @@ Registered from `frontend/create_app()` via `register_auth(app)`.
 | `AUTH_ENABLED` | `1` = real OIDC; `0` = dev bypass |
 | `SECRET_KEY` | Flask session signing (required in production) |
 | `DUKE_OIDC_CLIENT_ID` / `DUKE_OIDC_CLIENT_SECRET` | From Duke Authentication Manager |
-| `DUKE_OIDC_REDIRECT_URI` | Must match registered redirect exactly (`https://…/login` in production) |
+| `DUKE_OIDC_REDIRECT_URI` | Optional explicit callback; leave blank to infer `CADDY_DOMAIN` in production or the current loopback host in local dev |
 | `AUTH_ALLOWED_NETIDS` | Comma-separated netIDs for private mode |
 | `AUTH_DEV_NETID` | Optional fake user when `AUTH_ENABLED=0` |
 
@@ -48,11 +48,10 @@ curl -s -X POST http://127.0.0.1:5000/auth/logout
 
 Login is browser-only: header **Sign in with Duke NetID** opens `/auth/login?popup=1` → Duke OIDC → `/login` (or `/auth/callback`).
 
-Production HTTPS and OIDC rollout: [`docs/https-setup.md`](../docs/https-setup.md) then [`docs/auth-setup.md`](../docs/auth-setup.md).
+Production HTTPS runs through the Caddy compose overlay in [`docker/`](../docker/).
 
 ## Related code
 
 - Run fingerprints: [`dbutils/run_fingerprint.py`](../dbutils/run_fingerprint.py)
 - Launch reuse: [`frontend/run_launch.py`](../frontend/run_launch.py)
 - DDL: [`db/auth_schema.sql`](../db/auth_schema.sql)
-- Operator guide: [`docs/auth-setup.md`](../docs/auth-setup.md)
