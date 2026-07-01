@@ -79,7 +79,7 @@ def start_scan():
         return validation_or_launch_error(launch_err)
 
     try:
-        slug, already = scan_launch.start_run(
+        slug, already, _visibility = scan_launch.start_run(
             hf_repo,
             skip_modelscan=skip_modelscan,
             skip_fickling=skip_fickling,

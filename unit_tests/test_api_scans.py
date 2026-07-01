@@ -84,7 +84,7 @@ class StartScanTest(unittest.TestCase):
         with mock.patch.object(api_scans.scan_launch, "validate_launch",
                                return_value=None), \
              mock.patch.object(api_scans.scan_launch, "start_run",
-                               return_value=("gpt2", False)):
+                               return_value=("gpt2", False, "public")):
             resp = _client().post(
                 "/api/scans",
                 data=json.dumps({"hf_repo": "gpt2"}),

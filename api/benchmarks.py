@@ -65,7 +65,7 @@ def start_benchmark():
     if launch_err is not None:
         return validation_error(launch_err)
 
-    slug, already = benchmark_launch.start_run(benchmark_key, model)
+    slug, already, _visibility = benchmark_launch.start_run(benchmark_key, model)
     return accepted(
         slug,
         url_for("benchmarks_api.benchmark_status", slug=slug),
