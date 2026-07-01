@@ -6,9 +6,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "frontend"))
 
 from benchmark_data import (  # noqa: E402
     REFERENCE_DIR,
+    _attach_reference_comparison,
     _build_reference_section,
     _coverage_info,
+    _format_reference_delta,
     _load_reference_summaries,
+    _reference_by_kind_model,
     _score_class,
     get_benchmark_detail,
     get_benchmark_guide_data,
@@ -33,10 +36,6 @@ class TestBenchmarkReference(unittest.TestCase):
         self.assertIn("mmlu", keys)
         self.assertIn("ifeval", keys)
         self.assertEqual(len(section["reference_rows"]), 7)
-        tqa = next(r for r in section["reference_rows"] if r["key"] == "truthfulqa")
-        self.assertTrue(tqa["score_hint"])
-        self.assertGreaterEqual(len(tqa["score_hint_sources"]), 1)
-        self.assertIn("url", tqa["score_hint_sources"][0])
 
     def test_reference_page_data(self) -> None:
         data = get_benchmark_reference_data()
@@ -52,6 +51,7 @@ class TestBenchmarkReference(unittest.TestCase):
         self.assertTrue(tqa["scoring"])
         self.assertEqual(tqa["headline_metric"], "accuracy")
         self.assertEqual(tqa["default_sample"], 50)
+        self.assertNotIn("score_hint", tqa)
 
     def test_mmlu_reference_shows_partial_coverage(self) -> None:
         section = _build_reference_section()
@@ -73,6 +73,56 @@ class TestBenchmarkReference(unittest.TestCase):
         self.assertFalse(cov["partial"])
         self.assertEqual(cov["n_display"], "100")
 
+    def test_format_reference_delta(self) -> None:
+        self.assertEqual(_format_reference_delta("mmlu", 0.055), "+5.5 pp")
+        self.assertEqual(_format_reference_delta("consistency", 0.032), "+0.032")
+
+    def test_reference_comparison_for_user_run(self) -> None:
+        ref = _reference_by_kind_model()["mmlu"]["GPT 4.1 Mini"]
+        user = {
+            "kind": "mmlu",
+            "model": "openai/GPT 4.1 Mini",
+            "headline_value": ref["headline_value"] + 0.05,
+            "headline_metric": "accuracy",
+        }
+        out = _attach_reference_comparison(user)
+        comparisons = out["reference_comparisons"]
+        self.assertEqual(len(comparisons), 1)
+        cmp = comparisons[0]
+        self.assertTrue(cmp["exact_match"])
+        self.assertAlmostEqual(cmp["delta_value"], 0.05)
+        self.assertEqual(cmp["delta_display"], "+5.0 pp")
+        self.assertEqual(cmp["slug"], ref["slug"])
+        self.assertEqual(cmp["delta_class"], "ref-delta-up")
+
+    def test_reference_comparison_for_other_model(self) -> None:
+        ref = _reference_by_kind_model()["consistency"]["GPT 4.1 Mini"]
+        user = {
+            "kind": "consistency",
+            "model": "gpt-5-codex",
+            "headline_value": 0.817,
+            "headline_metric": "mean F1",
+        }
+        out = _attach_reference_comparison(user)
+        comparisons = out["reference_comparisons"]
+        self.assertGreaterEqual(len(comparisons), 1)
+        cmp = comparisons[0]
+        self.assertFalse(cmp["exact_match"])
+        self.assertEqual(cmp["model"], "GPT 4.1 Mini")
+        self.assertAlmostEqual(cmp["delta_value"], 0.817 - ref["headline_value"])
+
+    def test_reference_comparison_omitted_for_reference_run(self) -> None:
+        section = _build_reference_section()
+        mmlu_cell = next(
+            row["cells"]["GPT 4.1 Mini"]
+            for row in section["reference_rows"]
+            if row["key"] == "mmlu"
+        )
+        detail = get_benchmark_detail(mmlu_cell["slug"])
+        self.assertIsNotNone(detail)
+        assert detail is not None
+        self.assertNotIn("reference_comparisons", detail)
+
     def test_reference_detail_loads_with_coverage(self) -> None:
         section = _build_reference_section()
         mmlu_cell = next(
@@ -91,18 +141,6 @@ class TestBenchmarkReference(unittest.TestCase):
         self.assertEqual(detail["coverage"]["failed"], 1)
         skipped = [r for r in detail["results"] if not r.get("answered")]
         self.assertEqual(len(skipped), 1)
-
-    def test_reference_detail_includes_score_hint_sources(self) -> None:
-        section = _build_reference_section()
-        tqa_cell = next(
-            row["cells"]["GPT 4.1 Mini"]
-            for row in section["reference_rows"]
-            if row["key"] == "truthfulqa"
-        )
-        detail = get_benchmark_detail(tqa_cell["slug"])
-        self.assertIsNotNone(detail)
-        assert detail is not None
-        self.assertGreaterEqual(len(detail["meta"].get("score_hint_sources") or []), 1)
 
 
 if __name__ == "__main__":

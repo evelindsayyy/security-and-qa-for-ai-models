@@ -114,6 +114,22 @@
         <span class="summary-score {{ score_class }}">
           {{ headline_metric }} <b>{{ headline_display }}</b>
         </span>
+        {% if reference_comparisons %}
+        <details class="reference-delta-panel">
+          <summary class="reference-delta-summary">Compare to reference</summary>
+          {% for cmp in reference_comparisons %}
+          <div class="reference-delta-row">
+            <span class="reference-delta {{ cmp.delta_class }}"
+                  title="Compared to the committed reference run for {{ cmp.model }} on {{ kind_label }}">
+              {% if cmp.exact_match %}vs reference{% else %}vs {{ cmp.model }}{% endif %}:
+              <a href="{{ url_for('benchmark_detail', slug=cmp.slug) }}"
+                 class="reference-delta-link">{{ cmp.delta_display }}</a>
+              <span class="dim">(ref {{ cmp.headline_display }}, n={{ cmp.n_display }})</span>
+            </span>
+          </div>
+          {% endfor %}
+        </details>
+        {% endif %}
         <span class="dim">n = {{ n_display or n }}</span>
         {% if coverage and coverage.partial %}
         <span class="coverage-partial-badge" title="{{ coverage_skip_explanation }}">
@@ -137,11 +153,6 @@
     <details class="tool-panel" open>
       <summary>About {{ meta.title or kind_label }}</summary>
       <p>{{ meta.about }}</p>
-      {% if meta.score_hint or meta.score_hint_sources %}
-      {% with hint=meta.score_hint, sources=meta.score_hint_sources, show_label=true %}
-      {% include '_benchmark_score_hint.html' %}
-      {% endwith %}
-      {% endif %}
       {% if meta.source %}
         <p class="dim">Source:
           {% if meta.source.startswith('http') %}

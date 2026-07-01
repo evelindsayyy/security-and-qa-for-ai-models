@@ -5,14 +5,18 @@
 {% block content %}
 <div class="eval-comparison">
   <p class="back"><a href="{{ url_for('benchmarks') }}">← your benchmark runs</a></p>
-  <h1>Guide</h1>
+  <h1>Reference</h1>
   <p class="sub">
     Sample reference scores for
     {% for m in reference_models %}{{ m }}{% if not loop.last %} · {% endif %}{% endfor %}
-    on default pilot sizes via the Duke gateway, 
-    as well as explanations of what each benchmark measures and how scores are computed.
+    on default pilot sizes via the Duke gateway.
   </p>
 
+  {% with title="How each benchmark works", intro="What each benchmark measures and how scores are computed on this site." %}
+  {% include '_benchmark_guide.html' %}
+  {% endwith %}
+
+  <h2 class="reference-scores-heading">Reference scores</h2>
   <div class="table-wrap">
   <table class="run-table reference-table">
     <thead>
@@ -35,11 +39,6 @@
       <tr>
         <td class="reference-benchmark-cell">
           <span class="badge {{ badge_class }}">{{ row.label }}</span>
-          {% if row.score_hint or row.score_hint_sources %}
-          {% with hint=row.score_hint, sources=row.score_hint_sources, reference=true %}
-          {% include '_benchmark_score_hint.html' %}
-          {% endwith %}
-          {% endif %}
         </td>
         {% for m in reference_models %}
         {% set cell = row.cells.get(m) %}
@@ -64,9 +63,5 @@
     </tbody>
   </table>
   </div>
-
-  {% with title="How each benchmark works", intro="Reference scores below use default pilot sample sizes via the Duke gateway. This section explains what each benchmark measures and how scores are computed." %}
-  {% include '_benchmark_guide.html' %}
-  {% endwith %}
 </div>
 {% endblock %}

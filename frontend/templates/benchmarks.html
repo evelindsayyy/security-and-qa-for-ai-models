@@ -9,7 +9,7 @@
   <p>
     <a class="btn-primary" href="{{ url_for('benchmark_run_new') }}">▶ Start a new run</a>
     {% if has_reference %}
-    · <a href="{{ url_for('benchmark_reference') }}">Guide</a>
+    · <a href="{{ url_for('benchmark_reference') }}">Reference</a>
     {% endif %}
   </p>
 
@@ -21,14 +21,22 @@
     </p>
   {% else %}
     <p class="sub">
-      {{ runs|length }} result{{ "" if runs|length == 1 else "s" }} ·
-      {{ kinds|join(" · ") }}
+      {% if all_run_count > run_count %}
+      <b>{{ run_count }}</b> latest per model &amp; benchmark
+      · {{ all_run_count }} total run{{ "" if all_run_count == 1 else "s" }} on disk
+      {% else %}
+      {{ run_count }} result{{ "" if run_count == 1 else "s" }}
+      {% endif %}
+      · {{ kinds|join(" · ") }}
     </p>
 
     <div class="table-controls">
       <label>Benchmark <select id="f-kind"><option value="">all</option></select></label>
       <label>Model <select id="f-model"><option value="">all</option></select></label>
-      <span class="controls-hint">click a row for per-question detail</span>
+      <label class="checkbox-inline">
+        <input type="checkbox" id="f-all"> Show all runs
+      </label>
+      <span class="controls-hint">click Score / When headers to sort · click a row for detail</span>
     </div>
 
     <div class="table-wrap">
@@ -37,15 +45,15 @@
         <tr>
           <th class="col-nowrap">Benchmark</th>
           <th>Model</th>
-          <th class="num">Headline metric</th>
+          <th class="num sortable" data-sort="score">Score <span class="s-ind">▼</span></th>
           <th class="num">n</th>
-          <th class="col-nowrap">When</th>
+          <th class="num sortable" data-sort="when">When <span class="s-ind"></span></th>
           <th>File</th>
           <th class="col-actions">Actions</th>
         </tr>
       </thead>
       <tbody>
-        {% for r in runs %}
+        {% for r in all_runs %}
         {% set badge_class = {'truthfulqa': 'badge-tqa',
                               'ifeval': 'badge-ifeval',
                               'consistency': 'badge-consistency',
@@ -53,15 +61,27 @@
                               'tomi': 'badge-tomi',
                               'mbpp': 'badge-mbpp',
                               'quality': 'badge-quality'}.get(r.kind, 'badge-pilot') %}
-        <tr class="row-link"
+        <tr class="row-link{% if not r.is_latest %} run-superseded{% endif %}"
             data-href="{{ url_for('benchmark_detail', slug=r.slug) }}"
             tabindex="0"
             role="link"
             aria-label="Open {{ r.kind_label }} results for {{ r.model }}"
             data-kind="{{ r.kind_label }}"
-            data-model="{{ r.model }}">
+            data-model="{{ r.model }}"
+            data-latest="{{ 'true' if r.is_latest else 'false' }}"
+            data-score="{{ r.headline_value if r.headline_value is not none else '' }}"
+            data-when="{{ r.timestamp_raw or '' }}">
           <td class="col-nowrap"><span class="badge {{ badge_class }}">{{ r.kind_label }}</span></td>
-          <td><span class="model">{{ r.model }}</span></td>
+          <td>
+            <span class="model">{{ r.model }}</span>
+            {% if r.is_latest and r.older_run_count %}
+            <span class="dim bench-older-hint" title="Older runs hidden — enable Show all runs to see them">
+              +{{ r.older_run_count }} older
+            </span>
+            {% elif not r.is_latest %}
+            <span class="badge badge-pilot bench-superseded-badge">superseded</span>
+            {% endif %}
+          </td>
           <td class="num overall {{ r.score_class }}">
             {{ r.headline_display }}
             <span class="dim"> {{ r.headline_metric }}</span>
@@ -88,8 +108,11 @@
 
     <script>
       (function () {
-        const tbody = document.querySelector("#bench-table tbody");
+        const table = document.getElementById("bench-table");
+        const tbody = table.querySelector("tbody");
         const rows = Array.from(tbody.querySelectorAll("tr"));
+        let sortKey = "score", sortDir = -1;
+
         for (const [id, key] of [["f-kind", "kind"], ["f-model", "model"]]) {
           const sel = document.getElementById(id);
           [...new Set(rows.map(r => r.dataset[key]))].sort().forEach(v => {
@@ -99,15 +122,49 @@
           });
           sel.addEventListener("change", render);
         }
+        document.getElementById("f-all").addEventListener("change", render);
+
+        document.querySelectorAll("#bench-table th.sortable").forEach(th => {
+          th.addEventListener("click", () => {
+            const key = th.dataset.sort;
+            sortDir = (key === sortKey) ? -sortDir : (key === "score" ? -1 : -1);
+            sortKey = key;
+            document.querySelectorAll("#bench-table .s-ind").forEach(s => s.textContent = "");
+            th.querySelector(".s-ind").textContent = sortDir === -1 ? "▼" : "▲";
+            render();
+          });
+        });
+
+        function num(row, key) {
+          const v = parseFloat(row.dataset[key]);
+          return isNaN(v) ? -Infinity : v;
+        }
+
         function render() {
           const fk = document.getElementById("f-kind").value;
           const fm = document.getElementById("f-model").value;
-          tbody.innerHTML = "";
-          rows.filter(r =>
+          const showAll = document.getElementById("f-all").checked;
+          table.classList.toggle("show-all-runs", showAll);
+
+          let visible = rows.filter(r =>
+            (showAll || r.dataset.latest === "true") &&
             (!fk || r.dataset.kind === fk) &&
-            (!fm || r.dataset.model === fm)
-          ).forEach(r => tbody.appendChild(r));
+            (!fm || r.dataset.model === fm));
+
+          visible.sort((a, b) => {
+            if (sortKey === "when") {
+              const av = a.dataset.when || "";
+              const bv = b.dataset.when || "";
+              return sortDir * av.localeCompare(bv);
+            }
+            return sortDir * (num(a, "score") - num(b, "score"));
+          });
+
+          tbody.innerHTML = "";
+          visible.forEach(r => tbody.appendChild(r));
         }
+
+        render();
       })();
     </script>
   {% endif %}

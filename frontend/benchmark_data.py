@@ -304,7 +304,6 @@ def get_benchmark_guide_data() -> dict:
     rows: list[dict] = []
     for key, cfg in BENCHMARKS.items():
         meta = BENCHMARK_META.get(key, {})
-        bands = SCORE_BANDS.get(key, {})
         sample = cfg.get("sample") or {}
         rows.append({
             "key": key,
@@ -319,7 +318,6 @@ def get_benchmark_guide_data() -> dict:
             "default_sample": sample.get("default"),
             "sample_label": sample.get("label", "Items"),
             "sample_unit": sample.get("unit", "items"),
-            **_score_orientation(bands),
         })
     return {
         "guide_rows": rows,
@@ -636,12 +634,85 @@ def _load_reference_summaries() -> list[dict]:
     return rows
 
 
-def _score_orientation(bands: dict) -> dict:
-    """Score guide text and citation links from SCORE_BANDS."""
+def _reference_by_kind_model() -> dict[str, dict[str, dict]]:
+    """Index of committed reference runs keyed by benchmark kind and model name."""
+    by_kind_model: dict[str, dict[str, dict]] = {}
+    for row in _load_reference_summaries():
+        kind = row.get("kind")
+        model = row.get("model")
+        if kind and model and model != "—":
+            by_kind_model.setdefault(kind, {})[model] = row
+    return by_kind_model
+
+
+def _format_reference_delta(kind: str, delta: float) -> str:
+    if kind == "consistency":
+        return f"{delta:+.3f}"
+    return f"{delta * 100:+.1f} pp"
+
+
+def _reference_comparison_entry(
+    kind: str,
+    your_value: float,
+    ref: dict,
+    *,
+    exact_match: bool,
+) -> dict | None:
+    ref_value = ref.get("headline_value")
+    if ref_value is None:
+        return None
+    delta = your_value - ref_value
+    if delta > 1e-9:
+        delta_class = "ref-delta-up"
+    elif delta < -1e-9:
+        delta_class = "ref-delta-down"
+    else:
+        delta_class = "ref-delta-flat"
     return {
-        "score_hint": bands.get("hint", ""),
-        "score_hint_sources": list(bands.get("hint_sources") or []),
+        "model": ref.get("model"),
+        "exact_match": exact_match,
+        "slug": ref["slug"],
+        "headline_metric": ref.get("headline_metric"),
+        "headline_display": ref["headline_display"],
+        "headline_value": ref_value,
+        "n_display": _coverage_info(ref)["n_display"],
+        "delta_value": delta,
+        "delta_display": _format_reference_delta(kind, delta),
+        "delta_class": delta_class,
     }
+
+
+def _attach_reference_comparison(summary: dict) -> dict:
+    """Attach delta vs reference baseline(s) for user runs."""
+    if summary.get("is_reference"):
+        return summary
+    kind = summary.get("kind")
+    model = _normalize_model_name(summary.get("model") or "—")
+    your_value = summary.get("headline_value")
+    if not kind or model == "—" or your_value is None:
+        return summary
+    by_kind = _reference_by_kind_model().get(kind, {})
+    if not by_kind:
+        return summary
+
+    if model in by_kind:
+        ref_targets = [(by_kind[model], True)]
+    else:
+        available = set(by_kind)
+        ordered = [m for m in _PREFERRED_REFERENCE_MODELS if m in available]
+        ordered.extend(sorted(available - set(ordered)))
+        ref_targets = [(by_kind[m], False) for m in ordered]
+
+    entries: list[dict] = []
+    for ref, exact_match in ref_targets:
+        entry = _reference_comparison_entry(
+            kind, your_value, ref, exact_match=exact_match,
+        )
+        if entry:
+            entries.append(entry)
+    if entries:
+        summary["reference_comparisons"] = entries
+    return summary
 
 
 def _build_reference_section() -> dict:
@@ -665,7 +736,6 @@ def _build_reference_section() -> dict:
 
     reference_rows: list[dict] = []
     for key, cfg in BENCHMARKS.items():
-        bands = SCORE_BANDS.get(key, {})
         cells: dict[str, dict] = {}
         for model in reference_models:
             cell = by_kind_model.get(key, {}).get(model)
@@ -682,7 +752,6 @@ def _build_reference_section() -> dict:
         reference_rows.append({
             "key": key,
             "label": cfg["label"],
-            **_score_orientation(bands),
             "cells": cells,
         })
 
@@ -792,8 +861,6 @@ def _attach_meta(summary: dict) -> dict:
     """Add benchmark context block for the detail template."""
     kind = summary.get("kind")
     meta = dict(BENCHMARK_META.get(kind, {}))
-    bands = SCORE_BANDS.get(kind or "")
-    meta.update(_score_orientation(bands))
     summary["meta"] = meta
     return summary
 
@@ -804,6 +871,66 @@ def _result_dirs() -> list[Path]:
     if ref is not None:
         dirs.append(ref)
     return dirs
+
+
+def _dedupe_key(row: dict) -> tuple[str, str] | None:
+    kind = row.get("kind")
+    model = _normalize_model_name(row.get("model") or "—")
+    if not kind or model == "—":
+        return None
+    return (model, kind)
+
+
+def _postprocess_benchmark_runs(runs: list[dict]) -> dict:
+    """Keep the latest run per (model, benchmark); sort best score first."""
+    all_runs = list(runs)
+    latest: dict[tuple[str, str], dict] = {}
+    for r in sorted(
+        all_runs,
+        key=lambda row: (row.get("timestamp_raw") or "", row.get("filename") or ""),
+    ):
+        key = _dedupe_key(r)
+        if key is not None:
+            latest[key] = r
+
+    key_counts: dict[tuple[str, str], int] = {}
+    for r in all_runs:
+        key = _dedupe_key(r)
+        if key is not None:
+            key_counts[key] = key_counts.get(key, 0) + 1
+
+    for r in all_runs:
+        key = _dedupe_key(r)
+        if key is None:
+            r["is_latest"] = True
+            r["older_run_count"] = 0
+        else:
+            r["is_latest"] = latest.get(key) is r
+            r["older_run_count"] = max(key_counts.get(key, 1) - 1, 0)
+
+    deduped = list(latest.values())
+    deduped.sort(
+        key=lambda r: (
+            r.get("headline_value") if r.get("headline_value") is not None else -1.0,
+            r.get("timestamp_raw") or "",
+        ),
+        reverse=True,
+    )
+    all_runs.sort(key=lambda r: r.get("timestamp_raw") or "", reverse=True)
+
+    kinds = sorted({r["kind_label"] for r in deduped})
+    models = sorted({
+        r["model"] for r in deduped
+        if r.get("model") and not str(r["model"]).startswith("—")
+    })
+    return {
+        "runs": deduped,
+        "all_runs": all_runs,
+        "run_count": len(deduped),
+        "all_run_count": len(all_runs),
+        "kinds": kinds,
+        "models": models,
+    }
 
 
 def _get_benchmarks_data_files() -> dict:
@@ -987,7 +1114,9 @@ def get_benchmarks_data() -> dict:
     ref = _build_reference_section()
     data["has_reference"] = ref.get("has_reference", False)
     data["coverage_skip_explanation"] = COVERAGE_SKIP_EXPLANATION
-    for row in data.get("runs", []):
+    raw_runs = data.pop("runs", [])
+    data.update(_postprocess_benchmark_runs(raw_runs))
+    for row in data.get("all_runs", []):
         row["score_class"] = _score_class(row.get("kind"), row.get("headline_value"))
         row["coverage"] = _coverage_info(row)
     return data
@@ -1013,4 +1142,5 @@ def get_benchmark_detail(slug: str) -> dict | None:
     if detail is not None:
         detail["score_class"] = _score_class(detail.get("kind"), detail.get("headline_value"))
         _attach_coverage(detail)
+        _attach_reference_comparison(detail)
     return detail
