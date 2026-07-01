@@ -19,6 +19,25 @@ from frontend import create_app  # noqa: E402
 from frontend import safety_launch  # noqa: E402
 
 
+def _isolate_safety_output(test_case: unittest.TestCase) -> Path:
+    """Redirect safety_launch's ROOT-derived output paths to a scratch
+    tempdir and reset its in-memory run registries — see
+    test_scan_launch._isolate_scan_output for why this matters (a mocked
+    launch still writes real state under safety/output/<slug>/... and
+    safety_launch._RUNNING/_INFLIGHT otherwise, which a background thread
+    cleans up on an unsynchronized timer, racing later tests in this file
+    that check "is <slug> already running")."""
+    tmp = tempfile.TemporaryDirectory()
+    test_case.addCleanup(tmp.cleanup)
+    root = Path(tmp.name)
+    patcher = mock.patch.object(safety_launch, "ROOT", root)
+    patcher.start()
+    test_case.addCleanup(patcher.stop)
+    test_case.addCleanup(safety_launch._RUNNING.clear)
+    test_case.addCleanup(safety_launch._INFLIGHT.clear)
+    return root
+
+
 class ValidateLaunchTest(unittest.TestCase):
     def setUp(self) -> None:
         patcher = mock.patch.object(
@@ -178,6 +197,7 @@ class GetStatusTest(unittest.TestCase):
 
 class LaunchRoutesTest(unittest.TestCase):
     def setUp(self) -> None:
+        _isolate_safety_output(self)
         patcher = mock.patch.object(
             safety_launch,
             "_eligible_gateway_models",

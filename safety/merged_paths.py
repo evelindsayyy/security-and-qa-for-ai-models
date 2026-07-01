@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
-from frontend.run_paths import PRIVATE_SEGMENT
+from dbutils.run_paths import PRIVATE_SEGMENT
 
 
 def merged_result_path(
@@ -44,7 +44,7 @@ def iter_merged_result_paths(
 
     ``owner_user_id=<uid>``: private results for that owner only —
     ``<slug>/.private/<uid>/<profile>/merged_safety_result.json`` (see
-    frontend.run_paths for why private lives nested one level inside the
+    dbutils.run_paths for why private lives nested one level inside the
     slug dir here, unlike scanner's sibling-of-everything layout).
     """
     if not output_dir.is_dir():

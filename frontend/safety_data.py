@@ -257,8 +257,10 @@ def _build_safety_detail(slug: str, data: dict, profile: str = "base") -> dict:
 
 
 def _get_safety_data_files() -> dict:
-    """List every merged_safety_result.json under safety/output/<slug>/<profile>/."""
-    from frontend.read_context import artifact_path_visible
+    """List every merged_safety_result.json visible in the current view —
+    the public catalog under safety/output/<slug>/<profile>/, plus this
+    owner's own private runs when in private mode."""
+    from frontend.read_context import artifact_path_visible, read_context
 
     if not OUTPUT_DIR.exists():
         return {
@@ -267,13 +269,26 @@ def _get_safety_data_files() -> dict:
             "models": [],
         }
 
+    view_mode, user_id = read_context()
+    seen: set[tuple[str, str]] = set()
     rows: list[dict] = []
-    for path, slug, profile in iter_merged_result_paths(OUTPUT_DIR):
-        if not artifact_path_visible(path.parent, pillar="safety"):
-            continue
-        row = _summarize_merged(path, slug, profile)
-        if row:
-            rows.append(row)
+    # Private first when in private mode: if this owner has both a public
+    # and a private run for the same (slug, profile), the private-mode list
+    # must show (and link to) their own private copy, not the public one.
+    sources = []
+    if view_mode == "private" and user_id:
+        sources.append(iter_merged_result_paths(OUTPUT_DIR, owner_user_id=user_id))
+    sources.append(iter_merged_result_paths(OUTPUT_DIR))
+    for source in sources:
+        for path, slug, profile in source:
+            if (slug, profile) in seen:
+                continue
+            seen.add((slug, profile))
+            if not artifact_path_visible(path.parent, pillar="safety"):
+                continue
+            row = _summarize_merged(path, slug, profile)
+            if row:
+                rows.append(row)
 
     rows.sort(key=lambda r: (r["composite_score"], r["summary_pass_rate"]))
 

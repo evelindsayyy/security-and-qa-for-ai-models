@@ -20,6 +20,36 @@ from frontend import run_paths  # noqa: E402
 from frontend import scan_launch  # noqa: E402
 
 
+def _isolate_scan_output(test_case: unittest.TestCase) -> Path:
+    """Redirect scan_launch's module-level output paths to a scratch tempdir
+    and reset its in-memory run registries, for any test that exercises the
+    real (unmocked) launch path — i.e. hits ``/scans/start`` with only
+    ``subprocess.Popen`` mocked out.
+
+    Without this, a "launch" still writes a real run.lock under the repo's
+    own scanner/output/<slug>/ and sets scan_launch._RUNNING[<slug>] for
+    real. Both are module-global state shared by every test in the process,
+    and start_run()'s cleanup of them runs on an unsynchronized background
+    thread — so a later test that checks "is <slug> already running" can
+    intermittently see this test's mock process as still in flight (this
+    caused a real, intermittent CI failure).
+    """
+    tmp = tempfile.TemporaryDirectory()
+    test_case.addCleanup(tmp.cleanup)
+    root = Path(tmp.name)
+    for attr, value in (
+        ("ROOT", root),
+        ("SCAN_OUTPUT", root / "scanner" / "output"),
+        ("DOCKER_COMPOSE_FILE", root / "scanner" / "docker" / "compose.yml"),
+    ):
+        patcher = mock.patch.object(scan_launch, attr, value)
+        patcher.start()
+        test_case.addCleanup(patcher.stop)
+    test_case.addCleanup(scan_launch._RUNNING.clear)
+    test_case.addCleanup(scan_launch._INFLIGHT.clear)
+    return root
+
+
 class ValidateLaunchTest(unittest.TestCase):
     def test_valid_repo_passes(self) -> None:
         self.assertIsNone(scan_launch.validate_launch("gpt2"))
@@ -122,6 +152,7 @@ class GetStatusTest(unittest.TestCase):
 
 class LaunchRoutesTest(unittest.TestCase):
     def setUp(self) -> None:
+        _isolate_scan_output(self)
         # /scans/new and /scans/start require a signed-in, allowlisted user —
         # force the dev-auth bypass on regardless of the real .env AUTH_ENABLED.
         env_patch = mock.patch.dict(os.environ, {"AUTH_ENABLED": "0"})
@@ -266,6 +297,7 @@ class PrivateRouteTest(unittest.TestCase):
     public one — the second half of the reported bug."""
 
     def setUp(self) -> None:
+        _isolate_scan_output(self)
         env_patch = mock.patch.dict(os.environ, {"AUTH_ENABLED": "0"})
         env_patch.start()
         self.addCleanup(env_patch.stop)

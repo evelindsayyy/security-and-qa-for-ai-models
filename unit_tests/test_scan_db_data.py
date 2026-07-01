@@ -124,5 +124,68 @@ class AvailabilityTest(unittest.TestCase):
         self.assertIn("has_scans", data)
 
 
+def _fake_empty_connection():
+    """A connection whose scans query always returns zero rows, so
+    get_scans_data_db() falls all the way through to its file-merge branch."""
+    conn = mock.MagicMock()
+    conn.__enter__.return_value = conn
+    cur = conn.cursor.return_value.__enter__.return_value
+    cur.fetchall.return_value = []
+    return conn
+
+
+class GetScansDataDbFileFallbackTest(unittest.TestCase):
+    """Regression coverage: get_scans_data_db()'s file-merge branch must use
+    the pillar-aware read_run_meta_for_pillar (scan's auth fields live in
+    scan_meta.json, not run_meta.json) — using the generic reader here
+    always saw an empty sidecar for scan artifacts and silently dropped
+    every not-yet-ingested private scan from the list page."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.out = Path(self._tmp.name)
+        patcher = mock.patch.object(scan_db_data, "OUTPUT_DIR", self.out)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        connect_patcher = mock.patch.object(
+            scan_db_data, "_connect", side_effect=_fake_empty_connection
+        )
+        connect_patcher.start()
+        self.addCleanup(connect_patcher.stop)
+
+    def _write_private_scan(self, owner_user_id: str) -> None:
+        scan_dir = self.out / ".private" / owner_user_id / "gpt2"
+        scan_dir.mkdir(parents=True)
+        (scan_dir / "scan_result.json").write_text(
+            json.dumps(_scan_data_dict()), encoding="utf-8"
+        )
+        (scan_dir / "scan_meta.json").write_text(
+            json.dumps({"visibility": "private", "owner_user_id": owner_user_id}),
+            encoding="utf-8",
+        )
+
+    def test_not_yet_ingested_private_scan_appears_for_its_owner(self) -> None:
+        self._write_private_scan("owner-a")
+        from frontend import read_context as read_context_module
+
+        with mock.patch.object(
+            read_context_module, "read_context", return_value=("private", "owner-a")
+        ):
+            data = scan_db_data.get_scans_data_db()
+        self.assertTrue(data["has_scans"])
+        self.assertEqual([r["slug"] for r in data["scans"]], ["gpt2"])
+
+    def test_not_yet_ingested_private_scan_hidden_from_a_different_owner(self) -> None:
+        self._write_private_scan("owner-a")
+        from frontend import read_context as read_context_module
+
+        with mock.patch.object(
+            read_context_module, "read_context", return_value=("private", "owner-b")
+        ):
+            data = scan_db_data.get_scans_data_db()
+        self.assertFalse(data["has_scans"])
+
+
 if __name__ == "__main__":
     unittest.main()

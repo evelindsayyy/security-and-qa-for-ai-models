@@ -475,10 +475,21 @@ def get_status(
             **meta,
         }, slug)
     if _progress_path(slug).is_file() and progress < total:
-        # Flask restarted mid-run but the runner is still writing progress.
+        # Flask restarted mid-run (no _RUNNING entry survives that) — the
+        # lock is the only remaining signal of whether the runner is still
+        # actually alive. Active lock: still running, resume reporting
+        # progress. Inactive lock with progress never having reached total:
+        # the process died without finishing (crash, OOM, restart-killed) —
+        # report failed with the log attached instead of "running" forever,
+        # which otherwise looks identical to a live run from the UI's side.
         if run_lock.is_active(_run_lock_path(slug)):
             return _with_log(_status_from_progress(slug, prog), slug)
-        return _status_from_progress(slug, prog)
+        return _with_log({
+            "status": "failed",
+            "progress": progress,
+            "total": total,
+            **meta,
+        }, slug)
     if (RESULTS_DIR / f"{slug}.log").is_file():
         return _with_log({
             "status": "failed",

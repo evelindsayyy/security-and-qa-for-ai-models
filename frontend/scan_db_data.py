@@ -209,8 +209,9 @@ def _visibility_params(
 
 def get_scans_data_db() -> dict:
     """DB-preferred merge of every known scan (DB rows + not-yet-loaded files)."""
-    from dbutils.run_meta import read_run_meta
+    from dbutils.run_meta import read_run_meta_for_pillar
     from dbutils.visibility import artifact_visible
+    from frontend import run_paths
     from frontend.read_context import read_context
     from frontend.scan_data import _summarize_scan
 
@@ -230,17 +231,19 @@ def get_scans_data_db() -> dict:
 
     seen_slugs = {r["slug"] for r in db_rows}
     file_rows: list[dict] = []
-    if OUTPUT_DIR.exists():
-        for path in sorted(OUTPUT_DIR.glob("*/scan_result.json")):
-            slug = path.parent.name
-            if slug in seen_slugs:
-                continue
-            meta = read_run_meta(path.parent)
-            if not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
-                continue
-            row = _summarize_scan(path, slug)
-            if row is not None:
-                file_rows.append(row)
+    for slug_dir in run_paths.iter_visible_slug_dirs(
+        OUTPUT_DIR, view_mode=view_mode, owner_user_id=user_id
+    ):
+        path = slug_dir / "scan_result.json"
+        slug = slug_dir.name
+        if not path.is_file() or slug in seen_slugs:
+            continue
+        meta = read_run_meta_for_pillar(slug_dir, pillar="scan")
+        if not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
+            continue
+        row = _summarize_scan(path, slug)
+        if row is not None:
+            file_rows.append(row)
 
     rows = db_rows + file_rows
     rows.sort(key=lambda r: r["overall_risk_score"], reverse=True)

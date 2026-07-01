@@ -375,11 +375,14 @@ def _build_scan_detail(slug: str, data: dict) -> dict:
 
 def _get_scans_data_files() -> dict:
     """
-    list every scan_result.json under scanner/output/, sorted highest risk first.
+    list every scan_result.json visible in the current view (public catalog,
+    plus this owner's own private scans when in private mode), sorted
+    highest risk first.
 
     surfaces the malicious poc at the top for stakeholder demos when present.
     """
-    from frontend.read_context import artifact_path_visible
+    from frontend import run_paths
+    from frontend.read_context import artifact_path_visible, read_context
 
     if not OUTPUT_DIR.exists():
         return {
@@ -389,12 +392,17 @@ def _get_scans_data_files() -> dict:
             "tier_summary": "",
         }
 
+    view_mode, user_id = read_context()
     rows: list[dict] = []
-    for path in sorted(OUTPUT_DIR.glob("*/scan_result.json")):
-        slug = path.parent.name
-        if not artifact_path_visible(path.parent, pillar="scan"):
+    for slug_dir in run_paths.iter_visible_slug_dirs(
+        OUTPUT_DIR, view_mode=view_mode, owner_user_id=user_id
+    ):
+        path = slug_dir / "scan_result.json"
+        if not path.is_file():
             continue
-        row = _summarize_scan(path, slug)
+        if not artifact_path_visible(slug_dir, pillar="scan"):
+            continue
+        row = _summarize_scan(path, slug_dir.name)
         if row:
             rows.append(row)
 

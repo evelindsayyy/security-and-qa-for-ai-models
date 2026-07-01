@@ -30,11 +30,10 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from dbutils import apply_loader, iter_files, jsonb_param, load_repo_env, read_json
+from dbutils import apply_loader, iter_files, jsonb_param, load_repo_env, read_json, run_paths
 from dbutils.auth_columns import apply_auth_defaults, auth_fields_from_artifact
 from dbutils.cli import add_ingest_arguments
 from dbutils.ingest import exit_if_apply_without_dsn, print_dry_run_hint
-from frontend import run_paths
 from scanner.paths import safe_dir_name
 from scanner.schemas import ScanResult
 

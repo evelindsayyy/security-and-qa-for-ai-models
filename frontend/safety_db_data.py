@@ -231,15 +231,20 @@ def get_safety_data_db() -> dict:
     seen_keys = {(r["slug"], r["profile"]) for r in db_rows}
     file_rows: list[dict] = []
     if OUTPUT_DIR.exists():
-        for path, slug, profile in iter_merged_result_paths(OUTPUT_DIR):
-            if (slug, profile) in seen_keys:
-                continue
-            meta = read_run_meta(path.parent)
-            if not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
-                continue
-            row = _summarize_merged(path, slug, profile)
-            if row is not None:
-                file_rows.append(row)
+        sources = [iter_merged_result_paths(OUTPUT_DIR)]
+        if view_mode == "private" and user_id:
+            sources.append(iter_merged_result_paths(OUTPUT_DIR, owner_user_id=user_id))
+        for source in sources:
+            for path, slug, profile in source:
+                if (slug, profile) in seen_keys:
+                    continue
+                seen_keys.add((slug, profile))
+                meta = read_run_meta(path.parent)
+                if not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
+                    continue
+                row = _summarize_merged(path, slug, profile)
+                if row is not None:
+                    file_rows.append(row)
 
     rows = db_rows + file_rows
     rows.sort(key=lambda r: (r["composite_score"], r["summary_pass_rate"]))

@@ -17,11 +17,30 @@ import os
 os.environ.setdefault("FRONTEND_LAUNCH_MODE", "host")
 
 import re
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from frontend import create_app
 from frontend import eval_launch
+
+
+def _isolate_eval_output(test_case: unittest.TestCase) -> Path:
+    """Redirect eval_launch.RESULTS_DIR to a scratch tempdir and reset its
+    in-memory run registry — see test_scan_launch._isolate_scan_output for
+    why (a real, unmocked launch path writes real files under
+    evaluator/results/ and populates eval_launch._RUNNING/_INFLIGHT for
+    real, cleaned up on an unsynchronized background thread)."""
+    tmp = tempfile.TemporaryDirectory()
+    test_case.addCleanup(tmp.cleanup)
+    root = Path(tmp.name)
+    patcher = mock.patch.object(eval_launch, "RESULTS_DIR", root)
+    patcher.start()
+    test_case.addCleanup(patcher.stop)
+    test_case.addCleanup(eval_launch._RUNNING.clear)
+    test_case.addCleanup(eval_launch._INFLIGHT.clear)
+    return root
 
 
 class ValidateLaunchTest(unittest.TestCase):
@@ -189,6 +208,7 @@ class GetStatusTest(unittest.TestCase):
 
 class LaunchRoutesTest(unittest.TestCase):
     def setUp(self) -> None:
+        _isolate_eval_output(self)
         # Offline + deterministic candidate allowlist (see ValidateLaunchTest).
         # Also avoids the OpenAI client's platform/uname subprocess, which
         # would otherwise inflate the patched global subprocess.Popen count.
@@ -367,6 +387,7 @@ class CustomRouteTest(unittest.TestCase):
         os.environ["AUTH_ENABLED"] = "0"
         os.environ["AUTH_DEV_NETID"] = "testuser"
         os.environ["AUTH_ALLOWED_NETIDS"] = "testuser"
+        _isolate_eval_output(self)
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         for attr in ("CUSTOM_SUITES_DIR",):
