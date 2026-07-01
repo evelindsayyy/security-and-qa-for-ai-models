@@ -167,14 +167,19 @@ def _get_run_detail_files(slug: str) -> dict | None:
     """Full payload for one results JSONL — per-question rows with rationales.
 
     Slug is the JSONL filename without the .jsonl extension. Returns None
-    if the file is missing or unreadable.
+    if the file is missing or unreadable, or the run isn't visible in the
+    current view (private + not the owner).
     """
+    from frontend.read_context import artifact_path_visible
+
     # slug comes straight from the URL — refuse anything that could
     # traverse outside RESULTS_DIR before touching the filesystem.
     if not is_safe_slug(slug):
         return None
     path = RESULTS_DIR / f"{slug}.jsonl"
     if not resolves_inside(RESULTS_DIR, path) or not path.is_file():
+        return None
+    if not artifact_path_visible(RESULTS_DIR / slug, pillar="eval"):
         return None
     try:
         with path.open("r", encoding="utf-8") as f:
@@ -310,9 +315,12 @@ def _postprocess_runs(runs: list[dict]) -> dict:
 
 def _get_runs_data_files() -> dict:
     """Comparison data: aggregate every results JSONL in the evaluator output dir."""
+    from frontend.read_context import artifact_path_visible
+
     if not RESULTS_DIR.exists():
         return {"has_runs": False, "results_dir": str(RESULTS_DIR), "runs": []}
     files = [p for p in RESULTS_DIR.glob("*.jsonl") if "_trace" not in p.name]
+    files = [p for p in files if artifact_path_visible(RESULTS_DIR / p.stem, pillar="eval")]
     runs = [r for r in (_aggregate_file(p) for p in files) if r is not None]
     return _postprocess_runs(runs)
 

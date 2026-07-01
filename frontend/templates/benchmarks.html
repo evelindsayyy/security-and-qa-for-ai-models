@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_benchmark_docker %}
+{% from '_macros.html' import expandable, cli_benchmark_docker, start_button with context %}
 
 {% block title %}Benchmark results{% endblock %}
 
@@ -7,7 +7,7 @@
 <div class="eval-comparison">
   <h1>Benchmark results</h1>
   <p>
-    <a class="btn-primary" href="{{ url_for('benchmark_run_new') }}">▶ Start a new run</a>
+    {{ start_button(url_for('benchmark_run_new'), '▶ Start a new run') }}
     {% if has_reference %}
     · <a href="{{ url_for('benchmark_reference') }}">Reference scores (GPT 4.1 Mini &amp; Llama 3.3)</a>
     {% endif %}

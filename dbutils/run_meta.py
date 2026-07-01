@@ -59,3 +59,28 @@ def merge_into_scan_meta(scan_dir: Path, run_meta: dict[str, Any]) -> None:
             base = {}
     base.update(run_meta)
     meta_path.write_text(json.dumps(base, indent=2), encoding="utf-8")
+
+
+def read_run_meta_for_pillar(directory: Path, *, pillar: str) -> dict[str, Any]:
+    """Auth/visibility sidecar for *directory*, pillar-aware.
+
+    Every pillar except ``scan`` writes ``run_meta.json`` straight into the
+    artifact directory (``write_run_meta``), so ``read_run_meta`` alone is
+    enough. Scan writes its auth fields into ``scan_meta.json`` instead
+    (``merge_into_scan_meta``) since that sidecar already existed — merge it
+    in here so every pillar's file-fallback read path (visibility filtering,
+    ingest) sees the same auth fields regardless of which file they live in.
+    """
+    meta = read_run_meta(directory)
+    if pillar == "scan":
+        scan_meta_path = directory / "scan_meta.json"
+        if scan_meta_path.is_file():
+            try:
+                scan_meta = json.loads(scan_meta_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                scan_meta = {}
+            if isinstance(scan_meta, dict):
+                for key in ("visibility", "config_fingerprint", "config_json", "owner_user_id", "owner_netid"):
+                    if key in scan_meta and key not in meta:
+                        meta[key] = scan_meta[key]
+    return meta

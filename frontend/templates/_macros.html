@@ -9,6 +9,17 @@
 {% endif %}
 {% endmacro %}
 
+{# Login-gated "Start …" link — starting a run always requires sign-in.
+   Renders a live link when signed in, a disabled look-alike otherwise so
+   the rest of the page stays read-only without a dead click. #}
+{% macro start_button(url, label, classes='btn-primary') %}
+{% if is_logged_in %}
+<a class="{{ classes }}" href="{{ url }}">{{ label }}</a>
+{% else %}
+<span class="{{ classes }} is-disabled" aria-disabled="true" title="Sign in with your Duke NetID to start a run">{{ label }}</span>
+{% endif %}
+{% endmacro %}
+
 {% macro tier_label(level) %}
 <span class="tier tier-{{ level }}">{{ level }}</span>
 {% endmacro %}

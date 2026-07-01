@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from flask import render_template
 
+from auth.decorators import require_login
 from gateway.catalog import get_gateway_catalog
 
 
@@ -105,12 +106,14 @@ def register_routes(app):
         return render_template("scans.html", **get_scans_data())
 
     @app.route("/scans/new")
+    @require_login()
     def scan_run_new():
         from frontend.scan_launch import get_launch_options
 
         return render_template("scan_run_new.html", **get_launch_options())
 
     @app.route("/scans/start", methods=["POST"])
+    @require_login()
     def scan_run_start():
         from flask import redirect, request, url_for
 
@@ -207,12 +210,14 @@ def register_routes(app):
         return render_template("eval_run.html", **get_runs_data())
 
     @app.route("/eval-run/new")
+    @require_login()
     def eval_run_new():
         from frontend.eval_launch import get_launch_options
 
         return render_template("eval_run_new.html", **get_launch_options())
 
     @app.route("/eval-run/start", methods=["POST"])
+    @require_login()
     def eval_run_start():
         from flask import redirect, request, url_for
 
@@ -377,12 +382,14 @@ def register_routes(app):
         return render_template("benchmark_reference.html", **data)
 
     @app.route("/benchmarks/new")
+    @require_login()
     def benchmark_run_new():
         from frontend.benchmark_launch import get_launch_options
 
         return render_template("benchmark_run_new.html", **get_launch_options())
 
     @app.route("/benchmarks/start", methods=["POST"])
+    @require_login()
     def benchmark_run_start():
         from flask import redirect, request, url_for
 
@@ -502,12 +509,14 @@ def register_routes(app):
         return render_template("safety.html", **get_safety_data())
 
     @app.route("/safety/new")
+    @require_login()
     def safety_run_new():
         from frontend.safety_launch import get_launch_options
 
         return render_template("safety_run_new.html", **get_launch_options())
 
     @app.route("/safety/start", methods=["POST"])
+    @require_login()
     def safety_run_start():
         from flask import redirect, request, url_for
 

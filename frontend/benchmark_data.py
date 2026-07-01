@@ -681,7 +681,7 @@ def _get_benchmarks_data_files() -> dict:
         for path in sorted(list(d.glob("*.json")) + list(d.glob("*.jsonl"))):
             if path.stem in seen:
                 continue
-            if not artifact_path_visible(d / path.stem):
+            if not artifact_path_visible(d / path.stem, pillar="benchmark"):
                 continue
             row = _summarize_file(path)
             if row:
@@ -700,9 +700,15 @@ def _get_benchmarks_data_files() -> dict:
 
 
 def _get_benchmark_detail_files(slug: str) -> dict | None:
+    from frontend.read_context import artifact_path_visible
+
     if not is_safe_slug(slug):
         return None
+    ref = _reference_dir()
     for d in _result_dirs():
+        # Reference runs are canonical baselines, not user-owned — always visible.
+        if d != ref and not artifact_path_visible(d / slug, pillar="benchmark"):
+            continue
         candidate_paths = [d / f"{slug}.json", d / f"{slug}.jsonl"]
         for path in candidate_paths:
             if path.is_file():

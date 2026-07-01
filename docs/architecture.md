@@ -148,7 +148,7 @@ Long scans and evals take minutes to hours. Start routes return immediately; the
 | Same scan slug or safety `(slug, profile)` | Blocked by `run.lock` under the output dir (UI + CLI); second start returns existing job or exit **2** |
 | Benchmark re-click same combo | Deduped in-memory; lock file is `benchmarks/results/<stem>.run.lock` |
 | Multiple Flask workers | **Not supported** — `_RUNNING` is per-process |
-| Auth | Duke OIDC optional (`AUTH_ENABLED`); public read open; private mode + custom runs require allowlisted NetID — [`../auth/README.md`](../auth/README.md) |
+| Auth | Duke OIDC optional (`AUTH_ENABLED`); public read open; starting any run requires an allowlisted NetID; private mode + custom runs add the private-view check on top — [`../auth/README.md`](../auth/README.md) |
 
 While a job runs, status routes return a log tail (`message` or `log` field) for progress pages.
 

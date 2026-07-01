@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_scan_docker %}
+{% from '_macros.html' import expandable, cli_scan_docker, start_button with context %}
 
 {% block title %}HF artifact scans{% endblock %}
 
 {% block content %}
 <div class="eval-comparison">
   <h1>HF artifact scans</h1>
-  <p><a class="btn-primary" href="{{ url_for('scan_run_new') }}">▶ Start a new scan</a></p>
+  <p>{{ start_button(url_for('scan_run_new'), '▶ Start a new scan') }}</p>
 
   <section class="key">
     <h2>How to read this</h2>

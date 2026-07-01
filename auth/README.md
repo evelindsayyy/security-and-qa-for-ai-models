@@ -6,8 +6,16 @@ Duke **OIDC** login for the nutrition-label UI. Users see the standard Duke Shib
 
 | Mode | Login | Browse | Start runs |
 |------|-------|--------|------------|
-| **Public** (default) | Not required | Public catalog runs | Default configs; reuses matching DB rows |
-| **Private** | Allowlisted NetID | Public + own private runs | Custom eval, non-base safety profiles, etc. |
+| **Public** (default) | Not required | Public catalog runs | Requires login. Default configs; reuses matching DB rows |
+| **Private** | Allowlisted NetID | Public + own private runs | Requires login + allowlist. Custom eval, non-base safety profiles, etc. |
+
+Browsing is always open — anyone can read the public catalog without signing in.
+Starting a run (any pillar, any config) requires a signed-in, allowlisted
+NetID; the "Start …" buttons render disabled for signed-out visitors and the
+`/…/start` and `/…/new` routes redirect to login (`@require_login`) if hit
+directly. Private-mode-only actions (custom eval questions, non-base safety
+profiles) add the private-view + allowlist check on top via
+`@require_private_login` / `require_private_access()`.
 
 Session state: Flask cookie (`user`, `view_mode`). Run ownership and dedup live in Postgres.
 
