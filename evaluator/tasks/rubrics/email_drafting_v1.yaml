@@ -16,6 +16,12 @@
 # Mixes shared-library dimensions (completeness, tone) with two task-specific
 # inline dimensions (clarity, structure).
 #
+# W7 Day-3 (pre-freeze): anchors tightened for discrimination after the live-
+# validation ceiling finding (a strong model scored ~5.0 across the board) —
+# added explicit "4" anchors (very good but not excellent) and hardened every
+# "5"/"3" with a concrete, checkable bar. The shared dims (completeness, tone)
+# override the shared anchors inline; weights/scales/dimensions are unchanged.
+#
 # DO NOT EDIT in place after the W7 freeze — copy to v2 and bump the version.
 # =============================================================================
 
@@ -41,6 +47,24 @@ dimensions:
       assignment, date/time, location), and any context the recipient needs to
       respond? Matches the reference's coverage; a missing date or a vague ask
       is incomplete.
+    anchors:   # tightened for this task (overrides the shared 1/3/5)
+      1: >
+        Missing the actual ask OR a detail that makes it un-actionable (no
+        date, no course, no location) — the recipient could not act on it.
+      3: >
+        States the ask but omits one concrete actionable detail the scenario
+        calls for (e.g., asks for an extension but not how long; reports an
+        issue but not what was already tried).
+      4: >
+        Covers the ask and every required actionable detail, but misses one
+        helpful element the reference includes (e.g., doesn't propose specific
+        times, doesn't proactively offer documentation, or drops the requested
+        subject line).
+      5: >
+        Every required point AND every actionable detail AND the niceties the
+        reference includes — subject line when asked, an offer of documentation
+        where relevant, specific proposed times — matched point-for-point.
+        Nothing a thoughtful sender would add is missing.
 
   clarity:
     definition: >
@@ -57,10 +81,15 @@ dimensions:
         The request is present but buried, hedged, or mixed with so much
         preamble that the recipient must work to find it; or the next step is
         left implicit.
+      4: >
+        Purpose and ask are clear, but the ask isn't in the opening (the
+        recipient reaches the second paragraph to find it) OR the next step is
+        implied rather than stated.
       5: >
-        Purpose is clear in the first sentence or two, the specific ask is
-        explicit, and any next step (a date to confirm, a document to send) is
-        stated plainly.
+        Purpose is clear in the first sentence, the specific ask is explicit
+        and singular (not tangled with secondary asks), and the concrete next
+        step (a date to confirm, a document to send) is stated plainly — no
+        re-reading required.
 
   tone:
     from: shared
@@ -70,6 +99,19 @@ dimensions:
       suitably formal to a professor or advisor; courteous and concise to the
       OIT Service Desk or a TA; collegial to a teammate. Over-familiar,
       demanding, or apologetic-to-a-fault registers lose points.
+    anchors:   # tightened for this task (overrides the shared 1-3)
+      1: >
+        Off-register for the stated recipient — over-familiar, demanding,
+        curt, or unprofessional.
+      2: >
+        Professional but generic — the same register regardless of recipient
+        (as formal to a teammate as to a professor), or slightly stiff or
+        over-apologetic.
+      3: >
+        Register precisely fits the stated recipient (suitably formal to a
+        professor/advisor; warm-but-concise to a TA or teammate;
+        courteous-and-efficient to IT), respectful and natural — reads like a
+        thoughtful person wrote it for that specific person.
 
   structure:
     definition: >
@@ -83,11 +125,13 @@ dimensions:
         Missing greeting or sign-off, or a wall of text with no structure —
         reads like a chat message, not an email.
       2: >
-        Has the basic parts but one is weak (abrupt opening, no sign-off, or a
-        body that isn't organized into clear points).
+        Has the basic parts but one is weak — abrupt opening, perfunctory or
+        missing sign-off, a body not broken into clear points, or a missing
+        subject line when the scenario asked for one.
       3: >
-        Appropriate greeting, an organized body, and a courteous closing with a
-        sign-off; subject line present and informative when requested.
+        Appropriate greeting, a body organized into clear points, and a
+        courteous closing WITH a sign-off — and an informative subject line
+        when the scenario requests one. Nothing perfunctory.
 
 
 aggregation:
@@ -108,6 +152,7 @@ evaluation_steps:
   - "For CLARITY, decide whether the purpose and request are unambiguous on one read and whether the next step is explicit."
   - "For TONE, judge the register against the stated recipient (formal to a professor; concise to IT)."
   - "For STRUCTURE, check greeting + organized body + courteous sign-off (+ subject line if requested)."
+  - "A 5 requires meeting the FULL top-anchor bar. When a response is clearly strong but not flawless — it misses one nicety, buries the ask slightly, or is a touch generic — score 4, not 5. Reserve 5 for responses nothing could reasonably be added to."
   - "When between anchors, pick the LOWER score and explain why in the rationale."
   - "Give a one-sentence rationale per dimension, naming the specific aspect that drove the score."
   - "Output valid JSON matching the schema. No prose outside the JSON. No markdown fences."

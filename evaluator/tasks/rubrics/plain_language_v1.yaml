@@ -14,6 +14,13 @@
 # Mixes shared-library dimensions (faithfulness, completeness, tone) with one
 # task-specific inline dimension (simplicity).
 #
+# W7 Day-3 (pre-freeze): anchors tightened for discrimination after the live-
+# validation ceiling finding (a strong model scored ~4.9 across the board) —
+# added explicit "4" anchors (very good but not excellent), gave simplicity a
+# concrete readability cue, and hardened every "5"/"3". The shared dims
+# (faithfulness, completeness, tone) override the shared anchors inline;
+# weights/scales/dimensions are unchanged.
+#
 # DO NOT EDIT in place after the W7 freeze — copy to v2 and bump the version.
 # =============================================================================
 
@@ -39,6 +46,22 @@ dimensions:
       claim that isn't in the source. Dropping a qualifier ("only full-time
       students") or softening a hard requirement counts as unfaithful even if
       the result reads nicely.
+    anchors:   # tightened for this task (overrides the shared 1/3/5)
+      1: >
+        Drops or distorts a load-bearing fact (a condition, number, deadline,
+        actor, or exception), or adds a claim not in the source.
+      3: >
+        Preserves the main point but softens or blurs one qualifier (e.g.,
+        "students" where the source says "full-time students"; "soon" where
+        the source gives a specific deadline).
+      4: >
+        Preserves every fact and qualifier, but states one slightly less
+        precisely than the source (rounds a number, generalizes a named actor)
+        without changing what the reader would do.
+      5: >
+        Every condition, number, deadline, actor, exception, and consequence is
+        carried over exactly and unambiguously; nothing added, nothing softened.
+        A reader would act identically from the rewrite or the original.
 
   simplicity:
     definition: >
@@ -54,11 +77,16 @@ dimensions:
         bureaucratic phrasing of the original; a general reader is no better off.
       3: >
         Somewhat simpler (a few terms explained or sentences split) but still
-        contains avoidable jargon or long, winding sentences.
+        contains avoidable jargon or at least one long, winding sentence.
+      4: >
+        Clearly simpler — mostly short, active sentences and everyday words —
+        but one piece of jargon is left unexplained or one sentence still runs
+        long or complex.
       5: >
-        Markedly easier to read: short active sentences, everyday words, jargon
-        removed or explained in passing; a general Duke reader understands it on
-        one read.
+        Markedly easier: short, mostly active sentences (roughly 20 words or
+        fewer), everyday words throughout, every piece of jargon removed or
+        explained in passing — a general Duke reader understands it on one read
+        with nothing to look up.
 
   completeness:
     from: shared
@@ -68,6 +96,19 @@ dimensions:
       does NOT over-simplify away a required condition, deadline, or
       consequence. Simplicity must not come at the cost of leaving the reader
       unable to act correctly.
+    anchors:   # tightened for this task (overrides the shared 1/3/5)
+      1: >
+        Over-simplifies away a required condition, deadline, or consequence —
+        the reader could not act correctly from the rewrite alone.
+      3: >
+        Keeps the headline instruction but drops one supporting condition or
+        the consequence of not acting.
+      4: >
+        Keeps every required condition, deadline, and consequence, but omits a
+        minor clarifying detail the reference keeps.
+      5: >
+        Every required condition, deadline, consequence, and action survives —
+        the reader has everything the original gave them, just in plainer form.
 
   tone:
     from: shared
@@ -76,6 +117,16 @@ dimensions:
       Friendly, respectful, and plain — appropriate for a general Duke audience.
       Not condescending ("obviously, you just..."), not stiff. The target is
       "a helpful person explaining it to a peer."
+    anchors:   # tightened for this task (overrides the shared 1-3)
+      1: >
+        Condescending ("obviously, you just...") or stiff and bureaucratic —
+        wrong for a general reader.
+      2: >
+        Neutral and readable but flat, or mildly stiff — doesn't feel like a
+        helpful person explaining it.
+      3: >
+        Warm, plain, and respectful — reads like a helpful person explaining it
+        to a peer, never talking down.
 
 
 aggregation:
@@ -98,6 +149,7 @@ evaluation_steps:
   - "For SIMPLICITY, judge whether a general reader would find it markedly easier than the original: sentence length, word choice, jargon, active vs. passive."
   - "For COMPLETENESS, check that no required condition/deadline/consequence was simplified away."
   - "For TONE, judge whether it reads as plain and respectful, not condescending or stiff."
+  - "A 5 requires meeting the FULL top-anchor bar. When a rewrite is clearly good but not flawless — one qualifier slightly blurred, one sentence still long — score 4, not 5. Reserve 5 for a rewrite that is both fully faithful and markedly simpler."
   - "When between anchors, pick the LOWER score and explain why in the rationale."
   - "Give a one-sentence rationale per dimension, naming the specific phrase that drove the score."
   - "Output valid JSON matching the schema. No prose outside the JSON. No markdown fences."
