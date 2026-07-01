@@ -1,9 +1,14 @@
+import os
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+os.environ.setdefault("FRONTEND_LAUNCH_MODE", "host")
+
+from frontend import create_app  # noqa: E402
 from frontend.benchmark_launch import (  # noqa: E402
     HF_INFERENCE_BASE_URL,
     HOSTED_SAMPLE_MAX,
@@ -16,6 +21,23 @@ from frontend.benchmark_launch import (  # noqa: E402
     validate_hosted_model,
     validate_run_options,
 )
+
+
+class DeleteRouteLoginGateTest(unittest.TestCase):
+    def setUp(self) -> None:
+        env_patch = mock.patch.dict(os.environ, {"AUTH_ENABLED": "0"})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        self.client = create_app({"TESTING": True}).test_client()
+
+    def test_delete_requires_login(self) -> None:
+        r = self.client.get("/benchmarks/nonexistent-slug/delete")
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("/auth/login", r.headers["Location"])
+
+    def test_private_detail_requires_login(self) -> None:
+        r = self.client.get("/benchmarks/nonexistent-slug/private")
+        self.assertIn(r.status_code, (302, 401, 403))
 
 
 class TestRunLockPath(unittest.TestCase):

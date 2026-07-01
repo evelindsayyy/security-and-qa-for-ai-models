@@ -265,6 +265,19 @@ class LaunchRoutesTest(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.get_json()["status"], "not_found")
 
+    def test_delete_requires_login(self) -> None:
+        with self.client.session_transaction() as sess:
+            sess.pop("user", None)
+        r = self.client.get("/eval-run/nonexistent-slug/delete")
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("/auth/login", r.headers["Location"])
+
+    def test_private_detail_requires_login(self) -> None:
+        with self.client.session_transaction() as sess:
+            sess.pop("user", None)
+        r = self.client.get("/eval-run/nonexistent-slug/private")
+        self.assertIn(r.status_code, (302, 401, 403))
+
 
 class CustomQuestionsTest(unittest.TestCase):
     """Custom 'bring your own' question sets — validation, suite writing,

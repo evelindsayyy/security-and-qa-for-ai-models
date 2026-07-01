@@ -116,10 +116,11 @@ def run_row(rows: list[dict], source_file: str) -> dict:
         "source_file": source_file,
         "started_at": rows[0]["timestamp"],
         "completed_at": rows[-1]["timestamp"],
-        "visibility": "public",
-        "owner_user_id": None,
-        "config_fingerprint": None,
-        "config_json": {},
+        # visibility/owner_user_id/config_fingerprint/config_json intentionally
+        # absent — apply_auth_defaults() fills them in from the run's actual
+        # run_meta.json sidecar via dict.setdefault(). Pre-populating them
+        # here would make that setdefault() a silent no-op (see the matching
+        # comment in scanner/db/load_scans.py::scan_row for the full story).
     }
 
 

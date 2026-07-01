@@ -136,7 +136,7 @@ class CustomHfLaunchTest(_Base):
     def test_post_custom_gateway_still_starts_a_run(self) -> None:
         # Regression: the gateway custom path is unchanged by the HF branch.
         with mock.patch.object(eval_launch, "start_run",
-                               return_value=("slug123", False)) as sr, \
+                               return_value=("slug123", False, "public")) as sr, \
              mock.patch.object(eval_launch, "write_custom_suite",
                                return_value="custom_x"), \
              mock.patch.object(eval_launch, "validate_launch", return_value=None):

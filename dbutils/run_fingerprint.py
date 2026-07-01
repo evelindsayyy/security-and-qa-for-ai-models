@@ -167,9 +167,13 @@ def resolve_visibility(
     private_mode: bool,
     force_private: bool = False,
 ) -> str:
-    """Return ``public`` or ``private`` for a launch request."""
-    if force_private or not is_public_default(pillar, config):
-        return "private"
-    if private_mode:
-        return "public"
-    return "public"
+    """Return ``public`` or ``private`` for a launch request.
+
+    Visibility is the view-mode toggle at launch time, full stop — not
+    whether the config happens to match "default" params (that's a
+    separate, additional gate applied by build_launch_plan, which can
+    downgrade an already-"public" result but never overrides this).
+    ``pillar``/``config`` are accepted for a stable call-site signature even
+    though the body no longer inspects them.
+    """
+    return "private" if (force_private or private_mode) else "public"

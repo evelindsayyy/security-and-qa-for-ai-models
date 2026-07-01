@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_eval_docker, start_button with context %}
+{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button with context %}
 
 {% block title %}{% if missing %}Run not found{% else %}{{ candidate_model }} — run{% endif %}{% endblock %}
 
@@ -30,7 +30,7 @@
       </p>
       {% if run_status.status == 'failed' %}
       <p class="detail-delete-form">
-        <a href="{{ url_for('eval_run_delete', slug=slug) }}" class="btn-danger">Delete failed run</a>
+        {{ delete_button(url_for('eval_run_delete_private' if is_private else 'eval_run_delete', slug=slug), 'Delete failed run') }}
       </p>
       {% endif %}
     </div>
@@ -46,7 +46,7 @@
           logEl.scrollTop = atBottom ? logEl.scrollHeight : prevTop;
         }
         const poll = setInterval(async () => {
-          const r = await fetch("{{ url_for('eval_run_status', slug=slug) }}");
+          const r = await fetch("{{ url_for('eval_run_status_private' if is_private else 'eval_run_status', slug=slug) }}");
           if (!r.ok) return;
           const s = await r.json();
           if (s.total) {
@@ -74,7 +74,7 @@
     </script>
   {% else %}
     <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
-    <h1>{{ candidate_model }}</h1>
+    <h1>{{ candidate_model }}{% if is_private %} <span class="badge badge-private" title="Only visible to you">private</span>{% endif %}</h1>
     <p class="sub">
       slug <code>{{ slug }}</code> ·
       run <code>{{ run_id }}</code> ·
@@ -82,7 +82,7 @@
     </p>
 
     <p class="detail-delete-form">
-      <a href="{{ url_for('eval_run_delete', slug=slug) }}" class="btn-danger">Delete result</a>
+      {{ delete_button(url_for('eval_run_delete_private' if is_private else 'eval_run_delete', slug=slug)) }}
     </p>
 
     <div class="summary-row">

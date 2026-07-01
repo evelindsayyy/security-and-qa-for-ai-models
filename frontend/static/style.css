@@ -694,6 +694,7 @@ header nav a:hover {
 .badge-candidate { background: #dff1df; color: #1f6b1f; }
 .badge-smoke { background: #fff3cd; color: #856404; }
 .badge-pilot { background: #f0f0f0; color: #555; }
+.badge-private { background: #fdecec; color: #842029; }
 
 /* eval comparison page extras */
 .eval-comparison .key,

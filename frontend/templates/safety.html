@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import cli_safety_docker, cli_safety_host, start_button with context %}
+{% from '_macros.html' import cli_safety_docker, cli_safety_host, start_button, delete_button with context %}
 
 {% block title %}Safety red-team{% endblock %}
 
@@ -51,7 +51,7 @@
       <tbody>
         {% for m in models %}
         <tr class="row-link {% if m.tier in ('critical', 'high') %}row-warn{% endif %}"
-            data-href="{{ url_for('safety_detail', slug=m.slug, profile=m.profile) }}"
+            data-href="{{ url_for('safety_detail_private' if view_mode == 'private' else 'safety_detail', slug=m.slug, profile=m.profile) }}"
             tabindex="0"
             role="link"
             aria-label="Open safety results for {{ m.gateway_model_id }} ({{ m.profile }})">
@@ -65,8 +65,7 @@
           <td class="num dim">{{ m.n_failed }}</td>
           <td class="col-nowrap dim">{{ m.completed_at[:10] if m.completed_at != "—" else "—" }}</td>
           <td class="col-actions" onclick="event.stopPropagation()">
-            <a href="{{ url_for('safety_delete', slug=m.slug, profile=m.profile) }}"
-               class="btn-danger btn-sm" title="Delete result">Delete</a>
+            {{ delete_button(url_for('safety_delete_private' if view_mode == 'private' else 'safety_delete', slug=m.slug, profile=m.profile), 'Delete', classes='btn-danger btn-sm') }}
           </td>
         </tr>
         {% endfor %}

@@ -163,14 +163,19 @@ def _load_suite_questions(suite_version: str) -> dict[str, str]:
     return questions
 
 
-def _get_run_detail_files(slug: str) -> dict | None:
+def _get_run_detail_files(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
     """Full payload for one results JSONL — per-question rows with rationales.
 
-    Slug is the JSONL filename without the .jsonl extension. Returns None
-    if the file is missing or unreadable, or the run isn't visible in the
-    current view (private + not the owner).
+    Slug is the JSONL filename without the .jsonl extension (globally unique
+    regardless of visibility — eval never nests private output under a
+    different directory). Returns None if the file is missing/unreadable, or
+    the run's own recorded visibility doesn't match the requested scope
+    (the URL the caller resolved to, not the viewer's ambient session).
     """
-    from frontend.read_context import artifact_path_visible
+    from dbutils.run_meta import read_run_meta_for_pillar
+    from dbutils.visibility import artifact_visible
 
     # slug comes straight from the URL — refuse anything that could
     # traverse outside RESULTS_DIR before touching the filesystem.
@@ -179,7 +184,8 @@ def _get_run_detail_files(slug: str) -> dict | None:
     path = RESULTS_DIR / f"{slug}.jsonl"
     if not resolves_inside(RESULTS_DIR, path) or not path.is_file():
         return None
-    if not artifact_path_visible(RESULTS_DIR / slug, pillar="eval"):
+    meta = read_run_meta_for_pillar(RESULTS_DIR / slug, pillar="eval")
+    if not artifact_visible(meta, view_mode=visibility, user_id=owner_user_id):
         return None
     try:
         with path.open("r", encoding="utf-8") as f:
@@ -431,19 +437,25 @@ def get_runs_data() -> dict:
     return attach_cost_perf(_get_runs_data_files())
 
 
-def get_run_detail(slug: str) -> dict | None:
+def get_run_detail(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
+    """Detail payload for one eval run. Defaults to the public catalog; pass
+    ``visibility="private", owner_user_id=...`` for a signed-in user's own copy."""
     try:
         from frontend import eval_db_data
 
         if eval_db_data.available():
-            detail = eval_db_data.get_run_detail_db(slug)
+            detail = eval_db_data.get_run_detail_db(
+                slug, visibility=visibility, owner_user_id=owner_user_id
+            )
             if detail is not None:
                 return detail
             # slug not loaded into the DB yet (e.g. a just-finished run) —
             # fall through to the file.
     except Exception:
         pass
-    return _get_run_detail_files(slug)
+    return _get_run_detail_files(slug, visibility=visibility, owner_user_id=owner_user_id)
 
 
 _EVAL_ARTIFACT_SUFFIXES = (".jsonl", ".log", "_trace.jsonl")
@@ -455,12 +467,23 @@ def delete_eval_run_paths(slug: str) -> list[str]:
     return [f"evaluator/results/{slug}{suffix}" for suffix in _EVAL_ARTIFACT_SUFFIXES]
 
 
-def delete_eval_run(slug: str) -> str | None:
-    """Remove eval run artifacts (and DB row when configured). Returns error or None."""
+def delete_eval_run(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> str | None:
+    """Remove eval run artifacts (and DB row when configured). Returns error or None.
+
+    ``visibility``/``owner_user_id`` must match the run's own recorded scope —
+    a public-mode delete can't remove another user's private run and vice versa.
+    """
+    from dbutils.run_meta import read_run_meta_for_pillar
+    from dbutils.visibility import artifact_visible
     from frontend.eval_launch import is_eval_run_in_progress
 
     if not is_safe_slug(slug):
         return f"invalid slug: {slug!r}"
+    meta = read_run_meta_for_pillar(RESULTS_DIR / slug, pillar="eval")
+    if not artifact_visible(meta, view_mode=visibility, user_id=owner_user_id):
+        return f"no eval run found for slug {slug!r}"
     if is_eval_run_in_progress(slug):
         return "cannot delete while the run is still in progress"
 
@@ -479,7 +502,9 @@ def delete_eval_run(slug: str) -> str | None:
         from frontend import eval_db_data
 
         if eval_db_data.available():
-            removed_db = eval_db_data.delete_run(slug)
+            removed_db = eval_db_data.delete_run(
+                slug, visibility=visibility, owner_user_id=owner_user_id
+            )
     except Exception:
         pass
 

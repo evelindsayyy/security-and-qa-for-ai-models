@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_scan_docker, start_button with context %}
+{% from '_macros.html' import expandable, cli_scan_docker, start_button, delete_button with context %}
 
 {% block title %}HF artifact scans{% endblock %}
 
@@ -47,7 +47,7 @@
       <tbody>
         {% for s in scans %}
         <tr class="row-link {% if s.severity_tier in ('critical', 'high') %}row-warn{% endif %}"
-            data-href="{{ url_for('scan_detail', slug=s.slug) }}"
+            data-href="{{ url_for('scan_detail_private' if view_mode == 'private' else 'scan_detail', slug=s.slug) }}"
             tabindex="0"
             role="link"
             aria-label="Open scan for {{ s.model_id }}">
@@ -58,8 +58,7 @@
           <td class="col-long dim">{{ expandable(s.severity_summary, clamp=1) }}</td>
           <td class="col-nowrap dim">{{ s.scanned_at[:10] if s.scanned_at != "—" else "—" }}</td>
           <td class="col-actions" onclick="event.stopPropagation()">
-            <a href="{{ url_for('scan_delete', slug=s.slug) }}"
-               class="btn-danger btn-sm" title="Delete result">Delete</a>
+            {{ delete_button(url_for('scan_delete_private' if view_mode == 'private' else 'scan_delete', slug=s.slug), 'Delete', classes='btn-danger btn-sm') }}
           </td>
         </tr>
         {% endfor %}

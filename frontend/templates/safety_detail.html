@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_safety_docker, progress_terminal, start_button with context %}
+{% from '_macros.html' import expandable, cli_safety_docker, progress_terminal, start_button, delete_button with context %}
 
 {% block title %}{% if missing %}Safety not found{% else %}{{ gateway_model_id }} — safety{% endif %}{% endblock %}
 
@@ -15,7 +15,7 @@
     <h1>Safety run in progress</h1>
     <p class="sub"><code>{{ slug }}</code> · profile <span class="badge">{{ profile }}</span> · live log every 5 seconds</p>
     {{ progress_terminal(
-         url_for('safety_run_status', slug=slug, profile=profile),
+         url_for('safety_run_status_private' if is_private else 'safety_run_status', slug=slug, profile=profile),
          5000,
          hint='Full runs may take 30–90 min. Run continues if you leave this tab. Log: safety/output/' ~ slug ~ '/' ~ profile ~ '/run.log',
          initial_status=run_status.status,
@@ -23,12 +23,12 @@
        ) }}
     {% if run_status.status == 'failed' %}
     <p class="detail-delete-form">
-      <a href="{{ url_for('safety_delete', slug=slug, profile=profile) }}" class="btn-danger">Delete failed run</a>
+      {{ delete_button(url_for('safety_delete_private' if is_private else 'safety_delete', slug=slug, profile=profile), 'Delete failed run') }}
     </p>
     {% endif %}
   {% else %}
     <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
-    <h1><span class="model">{{ gateway_model_id }}</span> <span class="badge">{{ profile }}</span></h1>
+    <h1><span class="model">{{ gateway_model_id }}</span> <span class="badge">{{ profile }}</span>{% if is_private %} <span class="badge badge-private" title="Only visible to you">private</span>{% endif %}</h1>
     <p class="sub">
       <span class="tier tier-{{ tier }}">{{ tier }}</span> ·
       <span class="{{ pass_rate_class }}">{{ pass_rate_display }}</span> pass rate ·
@@ -43,7 +43,7 @@
     {% endif %}
 
     <p class="detail-delete-form">
-      <a href="{{ url_for('safety_delete', slug=slug, profile=profile) }}" class="btn-danger">Delete result</a>
+      {{ delete_button(url_for('safety_delete_private' if is_private else 'safety_delete', slug=slug, profile=profile)) }}
     </p>
 
     <h2>Probe findings ({{ n_findings }})</h2>

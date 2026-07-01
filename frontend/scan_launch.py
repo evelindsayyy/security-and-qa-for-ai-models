@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -14,7 +15,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from dbutils import run_lock
-from frontend import docker_launch
+from frontend import docker_launch, run_paths
 from frontend.log_status import run_log_payload, status_message
 from frontend.output_dirs import OutputDirError, ensure_writable_dir, prepare_output_dir
 from frontend.path_safety import is_safe_slug
@@ -45,7 +46,34 @@ _HF_REPO_RE = re.compile(r"^(?:[a-zA-Z0-9][a-zA-Z0-9._-]*/)?[a-zA-Z0-9][a-zA-Z0-
 
 
 def _output_dir_for_slug(slug: str) -> Path:
+    """The shared staging directory every scan of *slug* writes to while
+    running, regardless of visibility — see frontend.run_paths for why
+    private results are relocated out of here only *after* completion."""
     return SCAN_OUTPUT / slug
+
+
+def _private_scan_dir(slug: str, owner_user_id: str) -> Path:
+    return run_paths.scoped_dir(
+        _output_dir_for_slug(slug), visibility="private", owner_user_id=owner_user_id
+    )
+
+
+def _finalize_private_scan(slug: str, owner_user_id: str) -> Path:
+    """Move a just-completed staging result into its private location.
+
+    Idempotent — safe to call repeatedly (e.g. from concurrent status polls).
+    """
+    staging = _output_dir_for_slug(slug)
+    private_dir = _private_scan_dir(slug, owner_user_id)
+    with _LOCK:
+        if (private_dir / "scan_result.json").is_file() or not (staging / "scan_result.json").is_file():
+            return private_dir
+        private_dir.mkdir(parents=True, exist_ok=True)
+        for name in ("scan_result.json", "scan_run.log", "scan_meta.json", "run_meta.json"):
+            src = staging / name
+            if src.is_file():
+                shutil.move(str(src), str(private_dir / name))
+    return private_dir
 
 
 def _run_lock_path(slug: str) -> Path:
@@ -76,12 +104,25 @@ def _write_scan_meta(slug: str, hf_repo: str, *, options: dict) -> None:
     )
 
 
-def _existing_scan_slugs() -> set[str]:
+def _existing_scan_slugs(*, visibility: str = "public", owner_user_id: str | None = None) -> set[str]:
+    """Slugs with a completed result **in the given scope only** — the
+    public catalog, or this one owner's private record. Never both."""
+    if visibility == "private":
+        if not owner_user_id or not SCAN_OUTPUT.is_dir():
+            return set()
+        private_root = SCAN_OUTPUT / run_paths.PRIVATE_SEGMENT / owner_user_id
+        if not private_root.is_dir():
+            return set()
+        return {
+            p.name
+            for p in private_root.iterdir()
+            if p.is_dir() and (p / "scan_result.json").is_file()
+        }
     if not SCAN_OUTPUT.is_dir():
         return set()
     slugs: set[str] = set()
     for p in SCAN_OUTPUT.iterdir():
-        if not p.is_dir():
+        if not p.is_dir() or p.name == run_paths.PRIVATE_SEGMENT:
             continue
         if (p / "scan_result.json").is_file() or (p / "scan_run.log").is_file():
             slugs.add(p.name)
@@ -89,11 +130,18 @@ def _existing_scan_slugs() -> set[str]:
 
 
 def inflight_scan_slugs() -> set[str]:
-    """Slugs with an active run.lock or in-memory subprocess."""
+    """Slugs with an active run.lock or in-memory subprocess.
+
+    A scan's staging directory is shared regardless of visibility — only one
+    scan of a given model can physically run at a time, public or private —
+    so this check is intentionally scope-agnostic.
+    """
     slugs: set[str] = set()
     if SCAN_OUTPUT.is_dir():
         for p in SCAN_OUTPUT.iterdir():
-            if p.is_dir() and run_lock.is_active(run_lock.lock_path(p)):
+            if not p.is_dir() or p.name == run_paths.PRIVATE_SEGMENT:
+                continue
+            if run_lock.is_active(run_lock.lock_path(p)):
                 slugs.add(p.name)
     with _LOCK:
         for slug, proc in _RUNNING.items():
@@ -186,7 +234,9 @@ def start_run(
     skip_modelaudit: bool = False,
     skip_deps: bool = False,
     skip_secrets: bool = False,
-) -> tuple[str, bool]:
+) -> tuple[str, bool, str]:
+    """Returns (slug, already_running, visibility) — callers need visibility
+    to redirect to the correctly-scoped URL, even while still in progress."""
     from frontend.run_launch import build_launch_plan, persist_run_meta_scan, reused_slug
 
     hf_repo = _normalize_hf_repo(hf_repo)
@@ -201,7 +251,7 @@ def start_run(
     )
     if plan.reused:
         slug = reused_slug(plan) or safe_dir_name(hf_repo)
-        return slug, True
+        return slug, True, plan.visibility
 
     slug = safe_dir_name(hf_repo)
     combo = (
@@ -216,11 +266,11 @@ def start_run(
 
     with _LOCK:
         if is_scan_inflight(hf_repo):
-            return slug, True
+            return slug, True, plan.visibility
 
         existing = _INFLIGHT.get(combo)
         if existing and _RUNNING.get(existing) is not None and _RUNNING[existing].poll() is None:
-            return existing, True
+            return existing, True, plan.visibility
 
         _clear_registry_for_slug(slug)
         try:
@@ -275,7 +325,7 @@ def start_run(
             source=run_lock.FRONTEND_SOURCE,
         ):
             proc.terminate()
-            return slug, True
+            return slug, True, plan.visibility
         _RUNNING[slug] = proc
         _INFLIGHT[combo] = slug
         threading.Thread(
@@ -283,51 +333,68 @@ def start_run(
             args=(slug, proc, lock_file),
             daemon=True,
         ).start()
-        return slug, False
+        return slug, False, plan.visibility
 
 
-def get_status(slug: str) -> dict:
+def get_status(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict:
     if not is_safe_slug(slug):
         return {"status": "not_found", "message": ""}
 
-    result_path = ROOT / "scanner" / "output" / slug / "scan_result.json"
-    log_path = ROOT / "scanner" / "output" / slug / "scan_run.log"
-    rel_log = f"scanner/output/{slug}/scan_run.log"
+    staging_dir = _output_dir_for_slug(slug)
+    staging_result = staging_dir / "scan_result.json"
+    staging_log = staging_dir / "scan_run.log"
+    staging_rel_log = f"scanner/output/{slug}/scan_run.log"
 
     proc = _RUNNING.get(slug)
     if proc is not None and proc.poll() is None:
         return {
             "status": "running",
-            "log_path": rel_log,
-            **run_log_payload(log_path),
+            "log_path": staging_rel_log,
+            **run_log_payload(staging_log),
         }
 
-    if run_lock.is_active(_run_lock_path(slug)) and not result_path.is_file():
+    if run_lock.is_active(_run_lock_path(slug)) and not staging_result.is_file():
         return {
             "status": "running",
-            "log_path": rel_log,
-            **run_log_payload(log_path),
+            "log_path": staging_rel_log,
+            **run_log_payload(staging_log),
         }
 
+    # A completed run's result may still be sitting in staging (not yet
+    # moved) or may already be at its final scoped location — resolve that
+    # here so "complete" always reports from wherever it actually lives.
+    if visibility == "private" and owner_user_id:
+        active_dir = (
+            _finalize_private_scan(slug, owner_user_id)
+            if staging_result.is_file()
+            else _private_scan_dir(slug, owner_user_id)
+        )
+    else:
+        active_dir = staging_dir
+
+    result_path = active_dir / "scan_result.json"
     if result_path.is_file():
+        rel_log = str((active_dir / "scan_run.log").relative_to(ROOT))
         return {"status": "complete", "message": "", "log_path": rel_log}
 
     if proc is not None and proc.poll() is not None:
         return {
             "status": "failed",
-            "message": status_message(log_path, failed=True),
+            "message": status_message(staging_log, failed=True),
             "hf_repo": _read_hf_repo(slug),
-            "log_path": rel_log,
+            "log_path": staging_rel_log,
         }
 
-    if log_path.is_file() and not result_path.is_file():
-        msg = status_message(log_path, failed=True)
+    if staging_log.is_file() and not staging_result.is_file():
+        msg = status_message(staging_log, failed=True)
         if msg.strip():
             return {
                 "status": "failed",
                 "message": msg,
                 "hf_repo": _read_hf_repo(slug),
-                "log_path": rel_log,
+                "log_path": staging_rel_log,
             }
 
     return {"status": "not_found", "message": ""}
@@ -344,9 +411,14 @@ def _read_hf_repo(slug: str) -> str | None:
 
 
 def get_launch_options() -> dict:
+    from frontend.read_context import read_context
+
+    view_mode, user_id = read_context()
     return {
         "suggested_hf_repos": list(SUGGESTED_HF_REPOS),
-        "existing_scan_slugs": sorted(_existing_scan_slugs()),
+        "existing_scan_slugs": sorted(
+            _existing_scan_slugs(visibility=view_mode, owner_user_id=user_id)
+        ),
         "inflight_scan_slugs": sorted(inflight_scan_slugs()),
         "launch_mode": "docker" if docker_launch.use_docker() else "host",
         "docker_available": docker_launch.docker_available(),

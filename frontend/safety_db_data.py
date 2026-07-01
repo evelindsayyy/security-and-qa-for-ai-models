@@ -190,12 +190,19 @@ def _fetch_findings_by_run_id(conn, run_ids: list[str]) -> dict[str, list[dict]]
     return grouped
 
 
-def _visibility_params() -> tuple[str, dict]:
+def _visibility_params(
+    *, visibility: str | None = None, owner_user_id: str | None = None
+) -> tuple[str, dict]:
+    """SQL visibility clause. Explicit ``visibility``/``owner_user_id`` (the
+    resolved route scope) take precedence over the ambient session — omit
+    both only for the list page, which still tracks the current toggle."""
     from dbutils.visibility import visibility_clause
-    from frontend.read_context import read_context
 
-    view_mode, user_id = read_context()
-    clause, params = visibility_clause("s", view_mode=view_mode, user_id=user_id, links_alias=True)
+    if visibility is None:
+        from frontend.read_context import read_context
+
+        visibility, owner_user_id = read_context()
+    clause, params = visibility_clause("s", view_mode=visibility, user_id=owner_user_id, links_alias=True)
     return clause, params
 
 
@@ -245,9 +252,15 @@ def get_safety_data_db() -> dict:
     }
 
 
-def get_safety_detail_db(slug: str, profile: str = "base") -> dict | None:
+def get_safety_detail_db(
+    slug: str,
+    profile: str = "base",
+    *,
+    visibility: str | None = None,
+    owner_user_id: str | None = None,
+) -> dict | None:
     """Detail-page payload from Postgres; None if slug isn't loaded."""
-    vis_clause, vis_params = _visibility_params()
+    vis_clause, vis_params = _visibility_params(visibility=visibility, owner_user_id=owner_user_id)
 
     with _connect() as conn:
         with conn.cursor() as cur:
@@ -264,14 +277,20 @@ def get_safety_detail_db(slug: str, profile: str = "base") -> dict | None:
     return _build_safety_detail(slug, data, profile)
 
 
-def resolve_delete_keys(gateway_model_id: str) -> tuple[str, str] | None:
-    """Map UI slug to ``(gateway_model_id, completed_at)`` for the latest Postgres row."""
+def resolve_delete_keys(
+    gateway_model_id: str, *, visibility: str | None = None, owner_user_id: str | None = None
+) -> tuple[str, str] | None:
+    """Map UI slug to ``(gateway_model_id, completed_at)`` for the latest Postgres row
+    matching ``visibility``/``owner_user_id`` (defaults to the ambient session's scope)."""
     if not is_safe_slug(gateway_model_id):
         return None
 
+    vis_clause, vis_params = _visibility_params(visibility=visibility, owner_user_id=owner_user_id)
+    sql = _DETAIL_RUN_SQL.format(visibility_filter=vis_clause)
+
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(_DETAIL_RUN_SQL, {"gateway_model_id": gateway_model_id})
+            cur.execute(sql, {"gateway_model_id": gateway_model_id, **vis_params})
             run_row = cur.fetchone()
             if run_row is None:
                 return None
@@ -286,9 +305,12 @@ def resolve_delete_keys(gateway_model_id: str) -> tuple[str, str] | None:
             return model_id, completed_at
 
 
-def delete_run_by_slug(gateway_model_id: str) -> bool:
-    """Delete the latest Postgres safety row for a gateway model slug."""
-    keys = resolve_delete_keys(gateway_model_id)
+def delete_run_by_slug(
+    gateway_model_id: str, *, visibility: str | None = None, owner_user_id: str | None = None
+) -> bool:
+    """Delete the latest Postgres safety row for a gateway model slug (scoped
+    to ``visibility``/``owner_user_id`` — see scan_db_data.delete_run_by_slug)."""
+    keys = resolve_delete_keys(gateway_model_id, visibility=visibility, owner_user_id=owner_user_id)
     if keys is None:
         return False
     return delete_run(*keys)

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_scan_docker, progress_terminal, start_button with context %}
+{% from '_macros.html' import expandable, cli_scan_docker, progress_terminal, start_button, delete_button with context %}
 
 {% block title %}{% if missing %}Scan not found{% else %}{{ model_id }} — scan{% endif %}{% endblock %}
 
@@ -15,7 +15,7 @@
     <h1>Scan in progress</h1>
     <p class="sub">slug <code>{{ slug }}</code> · live log updates every 5 seconds</p>
     {{ progress_terminal(
-         url_for('scan_run_status', slug=slug),
+         url_for('scan_run_status_private' if is_private else 'scan_run_status', slug=slug),
          5000,
          hint='Run continues in the background if you switch tabs. Full log: scanner/output/' ~ slug ~ '/scan_run.log',
          show_retry=true,
@@ -25,12 +25,12 @@
        ) }}
     {% if run_status.status == 'failed' %}
     <p class="detail-delete-form">
-      <a href="{{ url_for('scan_delete', slug=slug) }}" class="btn-danger">Delete failed run</a>
+      {{ delete_button(url_for('scan_delete_private' if is_private else 'scan_delete', slug=slug), 'Delete failed run') }}
     </p>
     {% endif %}
   {% else %}
     <p class="back"><a href="{{ url_for('scans') }}">← all scans</a></p>
-    <h1><span class="model">{{ model_id }}</span></h1>
+    <h1><span class="model">{{ model_id }}</span>{% if is_private %} <span class="badge badge-private" title="Only visible to you">private</span>{% endif %}</h1>
     <p class="sub">
       <span class="tier tier-{{ severity_tier }}">{{ severity_tier }}</span>
       · risk {{ overall_risk_score }} · {{ n_findings }} finding{{ "" if n_findings == 1 else "s" }} ·
@@ -38,7 +38,7 @@
     </p>
 
     <p class="detail-delete-form">
-      <a href="{{ url_for('scan_delete', slug=slug) }}" class="btn-danger">Delete result</a>
+      {{ delete_button(url_for('scan_delete_private' if is_private else 'scan_delete', slug=slug)) }}
     </p>
 
     <h2>Findings ({{ n_findings }})</h2>

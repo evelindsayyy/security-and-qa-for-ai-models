@@ -44,6 +44,29 @@ class DeleteScanTest(unittest.TestCase):
                 self.assertIsNone(delete_scan(slug))
                 self.assertFalse(scan_dir.exists())
 
+    def test_public_delete_does_not_touch_private_copy(self) -> None:
+        # Regression: a public-mode delete for a model must never remove
+        # another user's private scan of the same model, and vice versa.
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            slug = "test-model"
+            result = json.dumps(
+                {"model_id": "org/model", "scan_metadata": {"scanned_at": "2026-01-01T00:00:00Z"}}
+            )
+            public_dir = out / slug
+            public_dir.mkdir()
+            (public_dir / "scan_result.json").write_text(result, encoding="utf-8")
+            private_dir = out / ".private" / "user-a" / slug
+            private_dir.mkdir(parents=True)
+            (private_dir / "scan_result.json").write_text(result, encoding="utf-8")
+
+            with mock.patch("frontend.scan_data.OUTPUT_DIR", out), mock.patch(
+                "frontend.scan_launch.inflight_scan_slugs", return_value=set()
+            ), mock.patch("frontend.scan_db_data.available", return_value=False):
+                self.assertIsNone(delete_scan(slug))
+                self.assertFalse(public_dir.exists())
+                self.assertTrue(private_dir.exists())
+
     def test_deletes_postgres_only_scan(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
@@ -54,7 +77,7 @@ class DeleteScanTest(unittest.TestCase):
                 "frontend.scan_db_data.delete_run_by_slug", return_value=True
             ) as db_del:
                 self.assertIsNone(delete_scan(slug))
-            db_del.assert_called_once_with(slug)
+            db_del.assert_called_once_with(slug, visibility="public", owner_user_id=None)
 
 
 class DeleteSafetyTest(unittest.TestCase):
@@ -93,7 +116,7 @@ class DeleteSafetyTest(unittest.TestCase):
                 "frontend.safety_db_data.available", return_value=True
             ), mock.patch("frontend.safety_db_data.delete_run_by_slug", return_value=True) as db_del:
                 self.assertIsNone(delete_safety(slug, profile))
-            db_del.assert_called_once_with(slug)
+            db_del.assert_called_once_with(slug, visibility="public", owner_user_id=None)
 
     def test_deletes_legacy_merged_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

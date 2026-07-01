@@ -191,12 +191,19 @@ def _hf_repo_candidates(slug: str) -> list[str]:
     return candidates
 
 
-def _visibility_params() -> tuple[str, dict]:
+def _visibility_params(
+    *, visibility: str | None = None, owner_user_id: str | None = None
+) -> tuple[str, dict]:
+    """SQL visibility clause. Explicit ``visibility``/``owner_user_id`` (the
+    resolved route scope) take precedence over the ambient session — omit
+    both only for the list page, which still tracks the current toggle."""
     from dbutils.visibility import visibility_clause
-    from frontend.read_context import read_context
 
-    view_mode, user_id = read_context()
-    clause, params = visibility_clause("s", view_mode=view_mode, user_id=user_id, links_alias=True)
+    if visibility is None:
+        from frontend.read_context import read_context
+
+        visibility, owner_user_id = read_context()
+    clause, params = visibility_clause("s", view_mode=visibility, user_id=owner_user_id, links_alias=True)
     return clause, params
 
 
@@ -248,12 +255,14 @@ def get_scans_data_db() -> dict:
     }
 
 
-def get_scan_detail_db(slug: str) -> dict | None:
+def get_scan_detail_db(
+    slug: str, *, visibility: str | None = None, owner_user_id: str | None = None
+) -> dict | None:
     """Detail-page payload from Postgres; None if slug isn't loaded."""
     if not is_safe_slug(slug):
         return None
 
-    vis_clause, vis_params = _visibility_params()
+    vis_clause, vis_params = _visibility_params(visibility=visibility, owner_user_id=owner_user_id)
 
     with _connect() as conn:
         with conn.cursor() as cur:
@@ -275,16 +284,23 @@ def get_scan_detail_db(slug: str) -> dict | None:
     return _build_scan_detail(detail_slug, data)
 
 
-def resolve_delete_keys(slug: str) -> tuple[str, str] | None:
-    """Map UI slug to ``(hf_repo, completed_at)`` for the latest Postgres row."""
+def resolve_delete_keys(
+    slug: str, *, visibility: str | None = None, owner_user_id: str | None = None
+) -> tuple[str, str] | None:
+    """Map UI slug to ``(hf_repo, completed_at)`` for the latest Postgres row
+    matching ``visibility``/``owner_user_id`` (defaults to the ambient session's
+    scope, same as the detail read path)."""
     if not is_safe_slug(slug):
         return None
+
+    vis_clause, vis_params = _visibility_params(visibility=visibility, owner_user_id=owner_user_id)
+    sql = _DETAIL_SCAN_SQL.format(visibility_filter=vis_clause)
 
     with _connect() as conn:
         with conn.cursor() as cur:
             scan_row = None
             for hf_repo in _hf_repo_candidates(slug):
-                cur.execute(_DETAIL_SCAN_SQL, {"hf_repo": hf_repo})
+                cur.execute(sql, {"hf_repo": hf_repo, **vis_params})
                 scan_row = cur.fetchone()
                 if scan_row is not None:
                     break
@@ -301,9 +317,13 @@ def resolve_delete_keys(slug: str) -> tuple[str, str] | None:
             return repo, completed_at
 
 
-def delete_run_by_slug(slug: str) -> bool:
-    """Delete the latest Postgres scan row for a UI slug."""
-    keys = resolve_delete_keys(slug)
+def delete_run_by_slug(
+    slug: str, *, visibility: str | None = None, owner_user_id: str | None = None
+) -> bool:
+    """Delete the latest Postgres scan row for a UI slug (scoped to
+    ``visibility``/``owner_user_id`` so a public delete can never remove
+    someone else's private row for the same model, or vice versa)."""
+    keys = resolve_delete_keys(slug, visibility=visibility, owner_user_id=owner_user_id)
     if keys is None:
         return False
     return delete_run(*keys)
