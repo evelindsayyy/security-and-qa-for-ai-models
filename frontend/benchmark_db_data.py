@@ -201,12 +201,19 @@ def _build_detail_db(row: tuple) -> dict:
     return _attach_meta(detail)
 
 
-def _visibility_params() -> tuple[str, dict]:
+def _visibility_params(
+    *, visibility: str | None = None, owner_user_id: str | None = None
+) -> tuple[str, dict]:
+    """SQL visibility clause. Explicit ``visibility``/``owner_user_id`` (the
+    resolved route scope) take precedence over the ambient session — omit
+    both only for the list page, which still tracks the current toggle."""
     from dbutils.visibility import visibility_clause
-    from frontend.read_context import read_context
 
-    view_mode, user_id = read_context()
-    clause, params = visibility_clause("b", view_mode=view_mode, user_id=user_id, links_alias=True)
+    if visibility is None:
+        from frontend.read_context import read_context
+
+        visibility, owner_user_id = read_context()
+    clause, params = visibility_clause("b", view_mode=visibility, user_id=owner_user_id, links_alias=True)
     return clause, params
 
 
@@ -251,9 +258,11 @@ def get_benchmarks_data_db() -> dict:
     }
 
 
-def get_benchmark_detail_db(slug: str) -> dict | None:
+def get_benchmark_detail_db(
+    slug: str, *, visibility: str | None = None, owner_user_id: str | None = None
+) -> dict | None:
     """Detail-page payload from Postgres; None if slug isn't loaded."""
-    vis_clause, vis_params = _visibility_params()
+    vis_clause, vis_params = _visibility_params(visibility=visibility, owner_user_id=owner_user_id)
 
     with _connect() as conn:
         with conn.cursor() as cur:
@@ -265,13 +274,20 @@ def get_benchmark_detail_db(slug: str) -> dict | None:
     return _build_detail_db(row)
 
 
-def delete_run(slug: str) -> bool:
-    """Delete one row from ``benchmark_runs``. Returns True if a row was removed."""
+def delete_run(
+    slug: str, *, visibility: str | None = None, owner_user_id: str | None = None
+) -> bool:
+    """Delete one row from ``benchmark_runs``. Returns True if a row was removed.
+
+    Scoped by ``visibility``/``owner_user_id`` so a public delete can never
+    remove someone else's private row for the same slug, or vice versa.
+    """
+    vis_clause, vis_params = _visibility_params(visibility=visibility, owner_user_id=owner_user_id)
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "DELETE FROM public.benchmark_runs WHERE output_slug = %(slug)s",
-                {"slug": slug},
+                f"DELETE FROM public.benchmark_runs AS b WHERE output_slug = %(slug)s AND ({vis_clause})",
+                {"slug": slug, **vis_params},
             )
             deleted = cur.rowcount > 0
         conn.commit()

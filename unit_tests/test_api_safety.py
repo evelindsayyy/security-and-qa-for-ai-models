@@ -63,7 +63,7 @@ class StartSafetyTest(unittest.TestCase):
         with mock.patch.object(api_safety.safety_launch, "validate_launch",
                                return_value=None), \
              mock.patch.object(api_safety.safety_launch, "start_run",
-                               return_value=("gpt-4.1-mini/base", False)):
+                               return_value=("gpt-4.1-mini/base", False, "public")):
             resp = _client().post(
                 "/api/safety",
                 data=json.dumps({"model": "GPT 4.1 Mini", "run_garak": False}),

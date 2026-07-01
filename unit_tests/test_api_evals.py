@@ -105,7 +105,7 @@ class StartEvalTest(unittest.TestCase):
         with mock.patch.object(api_evals.eval_launch, "validate_launch",
                                return_value=None), \
              mock.patch.object(api_evals.eval_launch, "start_run",
-                               return_value=("run-slug", False)):
+                               return_value=("run-slug", False, "public")):
             resp = _client().post(
                 "/api/evals",
                 data='{"candidate":"gpt-5-chat","judge":"Llama 4 Maverick","suite":"it_support_v1"}',

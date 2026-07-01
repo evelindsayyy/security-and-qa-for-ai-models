@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_eval_docker, start_button with context %}
+{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button with context %}
 
 {% block title %}Model comparison{% endblock %}
 
@@ -82,7 +82,7 @@
       <tbody>
         {% for r in runs %}
         <tr class="row-link {% if r.is_best %}row-best{% endif %}{% if r.note %}row-warn{% endif %}"
-            data-href="{{ url_for('eval_run_detail', slug=r.slug) }}"
+            data-href="{{ url_for('eval_run_detail_private' if view_mode == 'private' else 'eval_run_detail', slug=r.slug) }}"
             tabindex="0"
             role="link"
             aria-label="Open eval run for {{ r.candidate_model }}"
@@ -124,8 +124,7 @@
             {% endif %}
           </td>
           <td class="col-actions" onclick="event.stopPropagation()">
-            <a href="{{ url_for('eval_run_delete', slug=r.slug) }}"
-               class="btn-danger btn-sm" title="Delete result">Delete</a>
+            {{ delete_button(url_for('eval_run_delete_private' if view_mode == 'private' else 'eval_run_delete', slug=r.slug), 'Delete', classes='btn-danger btn-sm') }}
           </td>
         </tr>
         {% endfor %}

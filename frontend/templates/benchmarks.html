@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_benchmark_docker, start_button with context %}
+{% from '_macros.html' import expandable, cli_benchmark_docker, start_button, delete_button with context %}
 
 {% block title %}Benchmark results{% endblock %}
 
@@ -62,7 +62,7 @@
                               'mbpp': 'badge-mbpp',
                               'quality': 'badge-quality'}.get(r.kind, 'badge-pilot') %}
         <tr class="row-link{% if not r.is_latest %} run-superseded{% endif %}"
-            data-href="{{ url_for('benchmark_detail', slug=r.slug) }}"
+            data-href="{{ url_for('benchmark_detail_private' if view_mode == 'private' else 'benchmark_detail', slug=r.slug) }}"
             tabindex="0"
             role="link"
             aria-label="Open {{ r.kind_label }} results for {{ r.model }}"
@@ -97,8 +97,7 @@
           <td class="col-nowrap dim">{{ r.timestamp }}</td>
           <td class="col-long">{{ expandable(r.filename, clamp=1) }}</td>
           <td class="col-actions" onclick="event.stopPropagation()">
-            <a href="{{ url_for('benchmark_delete', slug=r.slug) }}"
-               class="btn-danger btn-sm" title="Delete result">Delete</a>
+            {{ delete_button(url_for('benchmark_delete_private' if view_mode == 'private' else 'benchmark_delete', slug=r.slug), 'Delete', classes='btn-danger btn-sm') }}
           </td>
         </tr>
         {% endfor %}

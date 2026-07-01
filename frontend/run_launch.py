@@ -20,7 +20,6 @@ class LaunchPlan:
     owner_user_id: str | None
     owner_netid: str | None
     reused: ReusableRun | None
-    is_public_default: bool
 
 
 def build_launch_plan(
@@ -40,13 +39,21 @@ def build_launch_plan(
         private_mode=private_mode,
         force_private=force_private,
     )
+    # A non-default config can never land in the shared public catalog, even
+    # in public view mode — this is the only thing that can downgrade an
+    # already-"public" result; it never overrides an explicit private choice.
+    if visibility == "public" and not is_public_default(pillar, config):
+        visibility = "private"
+
     user = effective_user()
     user_id = user.get("id") if user else None
     netid = user.get("netid") if user else None
 
     if visibility == "private" and not user_id:
-        user_id = None
-        netid = None
+        # No one to own a private artifact — an ownerless private row is
+        # permanently invisible to everyone, including whoever launched it
+        # (artifact_visible() requires an owner match). Fall back to public.
+        visibility = "public"
 
     reused = try_lookup_reusable(
         pillar,
@@ -65,7 +72,6 @@ def build_launch_plan(
         owner_user_id=user_id if visibility == "private" else None,
         owner_netid=netid if visibility == "private" else None,
         reused=reused,
-        is_public_default=is_public_default(pillar, config),
     )
 
 

@@ -47,7 +47,7 @@ class StartBenchmarkTest(unittest.TestCase):
         with mock.patch.object(api_benchmarks.benchmark_launch, "validate_launch",
                                return_value=None), \
              mock.patch.object(api_benchmarks.benchmark_launch, "start_run",
-                               return_value=("truthfulqa-gpt-4.1-mini", True)):
+                               return_value=("truthfulqa-gpt-4.1-mini", True, "public")):
             resp = _client().post(
                 "/api/benchmarks",
                 data=json.dumps({"benchmark": "truthfulqa", "model": "GPT 4.1 Mini"}),

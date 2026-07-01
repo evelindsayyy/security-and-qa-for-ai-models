@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_benchmark_docker, benchmark_item_status, start_button with context %}
+{% from '_macros.html' import expandable, cli_benchmark_docker, benchmark_item_status, start_button, delete_button with context %}
 
 {% block title %}{% if missing %}Benchmark not found{% else %}{{ kind_label }} — {{ model }}{% endif %}{% endblock %}
 
@@ -37,7 +37,7 @@
       </p>
       {% if run_status.status == 'failed' %}
       <p class="detail-delete-form">
-        <a href="{{ url_for('benchmark_delete', slug=slug) }}" class="btn-danger">Delete failed run</a>
+        {{ delete_button(url_for('benchmark_delete_private' if is_private else 'benchmark_delete', slug=slug), 'Delete failed run') }}
       </p>
       {% endif %}
     </div>
@@ -53,7 +53,7 @@
           logEl.scrollTop = atBottom ? logEl.scrollHeight : prevTop;
         }
         const poll = setInterval(async () => {
-          const r = await fetch("{{ url_for('benchmark_run_status', slug=slug) }}");
+          const r = await fetch("{{ url_for('benchmark_run_status_private' if is_private else 'benchmark_run_status', slug=slug) }}");
           if (!r.ok) return;
           const s = await r.json();
           if (s.total) {
@@ -92,7 +92,7 @@
     </script>
   {% else %}
     <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
-    <h1>{{ kind_label }} — {{ model }}{% if is_reference %} <span class="badge badge-pilot">Reference</span>{% endif %}</h1>
+    <h1>{{ kind_label }} — {{ model }}{% if is_reference %} <span class="badge badge-pilot">Reference</span>{% endif %}{% if is_private %} <span class="badge badge-private" title="Only visible to you">private</span>{% endif %}</h1>
     <p class="sub">
       slug <code>{{ slug }}</code> ·
       file <code>{{ filename }}</code> ·
@@ -100,12 +100,18 @@
     </p>
 
     {% if not is_reference %}
-    <form method="post" action="{{ url_for('benchmark_delete', slug=slug) }}"
+    {% if is_logged_in %}
+    <form method="post" action="{{ url_for('benchmark_delete_private' if is_private else 'benchmark_delete', slug=slug) }}"
           class="detail-delete-form"
           onsubmit="return confirm('Delete this benchmark result? This cannot be undone.');">
       <input type="hidden" name="confirm" value="1">
       <button type="submit" class="btn-danger">Delete result</button>
     </form>
+    {% else %}
+    <p class="detail-delete-form">
+      {{ delete_button('#') }}
+    </p>
+    {% endif %}
     {% endif %}
 
     <div class="summary-row">

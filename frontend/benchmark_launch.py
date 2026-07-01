@@ -63,7 +63,7 @@ HF_INFERENCE_BASE_URL = "https://router.huggingface.co/v1"
 _PUBLIC_HOST_ALLOWLIST = ("router.huggingface.co",)
 
 _RUNNING: dict[str, subprocess.Popen] = {}
-_INFLIGHT: dict[tuple[str, str, str], str] = {}
+_INFLIGHT: dict[tuple, str] = {}
 _LOCK = threading.Lock()
 
 
@@ -286,8 +286,10 @@ def start_run(
     api_key: str | None = None,
     sample: int | None = None,
     seed: int | None = None,
-) -> tuple[str, bool]:
+) -> tuple[str, bool, str]:
+    """Returns (stem, was_already_running, visibility)."""
     from frontend.run_launch import build_launch_plan, persist_run_meta_dir, reused_slug
+    from frontend.run_paths import inflight_scope_key
 
     plan = build_launch_plan(
         "benchmark",
@@ -296,14 +298,17 @@ def start_run(
     )
     if plan.reused:
         stem = reused_slug(plan) or predict_stem(benchmark_key, model)
-        return stem, True
+        return stem, True, plan.visibility
 
-    combo = (benchmark_key, model, (base_url or "").strip())
+    combo = (
+        benchmark_key, model, (base_url or "").strip(),
+        *inflight_scope_key(plan.visibility, plan.owner_user_id),
+    )
     with _LOCK:
         existing = _INFLIGHT.get(combo)
         if existing and _RUNNING.get(existing) is not None \
                 and _RUNNING[existing].poll() is None:
-            return existing, True
+            return existing, True, plan.visibility
 
         if docker_launch.use_docker():
             docker_launch.ensure_stack("benchmarks")
@@ -361,7 +366,7 @@ def start_run(
             source=run_lock.FRONTEND_SOURCE,
         ):
             proc.terminate()
-            return stem, True
+            return stem, True, plan.visibility
         _RUNNING[stem] = proc
         _INFLIGHT[combo] = stem
         threading.Thread(
@@ -369,7 +374,7 @@ def start_run(
             args=(stem, proc, lock_file),
             daemon=True,
         ).start()
-        return stem, False
+        return stem, False, plan.visibility
 
 
 def _output_path(stem: str) -> Path | None:
@@ -420,7 +425,14 @@ def _status_from_progress(slug: str, prog: dict) -> dict:
     }
 
 
-def get_status(slug: str) -> dict:
+def get_status(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict:
+    """``visibility``/``owner_user_id`` are accepted for signature parity with
+    the other three pillars (routes.py calls all four the same way) —
+    benchmark's result path is a globally-unique timestamped stem regardless
+    of visibility, so there's no separate location to resolve."""
+    del visibility, owner_user_id
     if not is_safe_slug(slug):
         return {"status": "not_found", "progress": 0, "total": 0, "unit": "items", "message": ""}
 
@@ -463,10 +475,21 @@ def get_status(slug: str) -> dict:
             **meta,
         }, slug)
     if _progress_path(slug).is_file() and progress < total:
-        # Flask restarted mid-run but the runner is still writing progress.
+        # Flask restarted mid-run (no _RUNNING entry survives that) — the
+        # lock is the only remaining signal of whether the runner is still
+        # actually alive. Active lock: still running, resume reporting
+        # progress. Inactive lock with progress never having reached total:
+        # the process died without finishing (crash, OOM, restart-killed) —
+        # report failed with the log attached instead of "running" forever,
+        # which otherwise looks identical to a live run from the UI's side.
         if run_lock.is_active(_run_lock_path(slug)):
             return _with_log(_status_from_progress(slug, prog), slug)
-        return _status_from_progress(slug, prog)
+        return _with_log({
+            "status": "failed",
+            "progress": progress,
+            "total": total,
+            **meta,
+        }, slug)
     if (RESULTS_DIR / f"{slug}.log").is_file():
         return _with_log({
             "status": "failed",

@@ -98,7 +98,7 @@ def start_eval():
     if launch_err is not None:
         return validation_error(launch_err)
 
-    slug, already = eval_launch.start_run(candidate, judge, suite, max_tokens)
+    slug, already, _visibility = eval_launch.start_run(candidate, judge, suite, max_tokens)
     return accepted(
         slug,
         url_for("evals_api.eval_status", slug=slug),

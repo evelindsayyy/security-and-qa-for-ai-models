@@ -20,6 +20,17 @@
 {% endif %}
 {% endmacro %}
 
+{# Login-gated "Delete" link — deleting a result always requires sign-in.
+   Renders a live link when signed in, a disabled look-alike otherwise so
+   signed-out visitors can view results but never remove them. #}
+{% macro delete_button(url, label='Delete result', classes='btn-danger') %}
+{% if is_logged_in %}
+<a class="{{ classes }}" href="{{ url }}">{{ label }}</a>
+{% else %}
+<span class="{{ classes }} is-disabled" aria-disabled="true" title="Sign in with your Duke NetID to delete a run">{{ label }}</span>
+{% endif %}
+{% endmacro %}
+
 {% macro tier_label(level) %}
 <span class="tier tier-{{ level }}">{{ level }}</span>
 {% endmacro %}

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from frontend import run_paths
 from frontend.path_safety import is_safe_slug
 from safety.merged_paths import iter_merged_result_paths, merged_result_path
 
@@ -256,8 +257,10 @@ def _build_safety_detail(slug: str, data: dict, profile: str = "base") -> dict:
 
 
 def _get_safety_data_files() -> dict:
-    """List every merged_safety_result.json under safety/output/<slug>/<profile>/."""
-    from frontend.read_context import artifact_path_visible
+    """List every merged_safety_result.json visible in the current view —
+    the public catalog under safety/output/<slug>/<profile>/, plus this
+    owner's own private runs when in private mode."""
+    from frontend.read_context import artifact_path_visible, read_context
 
     if not OUTPUT_DIR.exists():
         return {
@@ -266,13 +269,26 @@ def _get_safety_data_files() -> dict:
             "models": [],
         }
 
+    view_mode, user_id = read_context()
+    seen: set[tuple[str, str]] = set()
     rows: list[dict] = []
-    for path, slug, profile in iter_merged_result_paths(OUTPUT_DIR):
-        if not artifact_path_visible(path.parent, pillar="safety"):
-            continue
-        row = _summarize_merged(path, slug, profile)
-        if row:
-            rows.append(row)
+    # Private first when in private mode: if this owner has both a public
+    # and a private run for the same (slug, profile), the private-mode list
+    # must show (and link to) their own private copy, not the public one.
+    sources = []
+    if view_mode == "private" and user_id:
+        sources.append(iter_merged_result_paths(OUTPUT_DIR, owner_user_id=user_id))
+    sources.append(iter_merged_result_paths(OUTPUT_DIR))
+    for source in sources:
+        for path, slug, profile in source:
+            if (slug, profile) in seen:
+                continue
+            seen.add((slug, profile))
+            if not artifact_path_visible(path.parent, pillar="safety"):
+                continue
+            row = _summarize_merged(path, slug, profile)
+            if row:
+                rows.append(row)
 
     rows.sort(key=lambda r: (r["composite_score"], r["summary_pass_rate"]))
 
@@ -284,14 +300,25 @@ def _get_safety_data_files() -> dict:
     }
 
 
-def _get_safety_detail_files(slug: str, profile: str = "base") -> dict | None:
-    """Structured safety payload for one (slug, profile) pair, read from disk."""
-    from frontend.read_context import artifact_path_visible
+def _get_safety_detail_files(
+    slug: str,
+    profile: str = "base",
+    *,
+    visibility: str = "public",
+    owner_user_id: str | None = None,
+) -> dict | None:
+    """Structured safety payload for one (slug, profile) pair, read from disk.
 
-    path = merged_result_path(OUTPUT_DIR, slug, profile)
-    if not path.is_file():
+    ``visibility``/``owner_user_id`` pick the exact on-disk copy — the URL
+    the caller resolved to, not the viewer's ambient session.
+    """
+    if visibility == "private" and not owner_user_id:
         return None
-    if not artifact_path_visible(path.parent, pillar="safety"):
+
+    path = merged_result_path(
+        OUTPUT_DIR, slug, profile, owner_user_id=owner_user_id if visibility == "private" else None
+    )
+    if not path.is_file():
         return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -314,22 +341,41 @@ def get_safety_data() -> dict:
     return _get_safety_data_files()
 
 
-def get_safety_detail(slug: str, profile: str = "base") -> dict | None:
+def get_safety_detail(
+    slug: str,
+    profile: str = "base",
+    *,
+    visibility: str = "public",
+    owner_user_id: str | None = None,
+) -> dict | None:
+    """Detail payload for one safety run. Defaults to the public catalog; pass
+    ``visibility="private", owner_user_id=...`` for a signed-in user's own copy."""
     try:
         from frontend import safety_db_data
 
         if safety_db_data.available():
-            detail = safety_db_data.get_safety_detail_db(slug, profile)
+            detail = safety_db_data.get_safety_detail_db(
+                slug, profile, visibility=visibility, owner_user_id=owner_user_id
+            )
             if detail is not None:
                 return detail
     except Exception:
         pass
-    return _get_safety_detail_files(slug, profile)
+    return _get_safety_detail_files(
+        slug, profile, visibility=visibility, owner_user_id=owner_user_id
+    )
 
 
-def delete_safety_paths(slug: str, profile: str) -> list[str]:
+def delete_safety_paths(
+    slug: str, profile: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> list[str]:
     if not is_safe_slug(slug) or not is_safe_slug(profile):
         return []
+    if visibility == "private" and owner_user_id:
+        return [
+            f"safety/output/{slug}/{run_paths.PRIVATE_SEGMENT}/{owner_user_id}/{profile}/",
+            f"safety/promptfoo/output/{slug}/{run_paths.PRIVATE_SEGMENT}/{owner_user_id}/{profile}/",
+        ]
     paths = [
         f"safety/output/{slug}/{profile}/",
         f"safety/promptfoo/output/{slug}/{profile}/",
@@ -343,17 +389,35 @@ def delete_safety_paths(slug: str, profile: str) -> list[str]:
     return paths
 
 
-def delete_safety(slug: str, profile: str = "base") -> str | None:
+def delete_safety(
+    slug: str,
+    profile: str = "base",
+    *,
+    visibility: str = "public",
+    owner_user_id: str | None = None,
+) -> str | None:
     """Remove one safety merge (and DB row when configured). Returns error or None."""
     from frontend.output_dirs import wipe_dir
     from frontend.safety_launch import inflight_safety_keys
 
     if not is_safe_slug(slug) or not is_safe_slug(profile):
         return f"invalid slug/profile: {slug!r}/{profile!r}"
+    if visibility == "private" and not owner_user_id:
+        return f"no safety result found for {slug!r}/{profile!r}"
     if f"{slug}/{profile}" in inflight_safety_keys():
         return "cannot delete while the run is still in progress"
 
-    merged_path = merged_result_path(OUTPUT_DIR, slug, profile)
+    private = visibility == "private" and owner_user_id
+    owner_scope = owner_user_id if private else None
+    merged_dir = run_paths.scoped_dir(
+        OUTPUT_DIR / slug / profile, visibility=visibility, owner_user_id=owner_user_id
+    )
+    promptfoo_dir = run_paths.scoped_dir(
+        ROOT / "safety" / "promptfoo" / "output" / slug / profile,
+        visibility=visibility,
+        owner_user_id=owner_user_id,
+    )
+    merged_path = merged_result_path(OUTPUT_DIR, slug, profile, owner_user_id=owner_scope)
     db_keys: tuple[str, str] | None = None
     if merged_path.is_file():
         try:
@@ -366,30 +430,39 @@ def delete_safety(slug: str, profile: str = "base") -> str | None:
             pass
 
     removed_disk = False
-    if merged_path.is_file():
+    # Legacy (pre-profile) layout: merged_path is a bare file directly under
+    # OUTPUT_DIR/slug/, not inside merged_dir — remove it explicitly.
+    if merged_path.is_file() and merged_path.parent != merged_dir:
         try:
             merged_path.unlink()
             removed_disk = True
         except OSError:
             pass
 
-    for rel in (
-        OUTPUT_DIR / slug / profile,
-        ROOT / "safety" / "promptfoo" / "output" / slug / profile,
-    ):
+    for rel in (merged_dir, promptfoo_dir):
         if rel.is_dir():
             wipe_dir(rel)
             removed_disk = True
 
-    remaining = any(
-        prof != profile
-        for _path, s, prof in iter_merged_result_paths(OUTPUT_DIR)
-        if s == slug
-    )
-    garak_dir = ROOT / "safety" / "garak" / "output" / slug
-    if not remaining and garak_dir.is_dir():
-        wipe_dir(garak_dir)
-        removed_disk = True
+    if not private:
+        remaining = any(
+            prof != profile
+            for _path, s, prof in iter_merged_result_paths(OUTPUT_DIR)
+            if s == slug
+        )
+        garak_dir = ROOT / "safety" / "garak" / "output" / slug
+        if not remaining and garak_dir.is_dir():
+            wipe_dir(garak_dir)
+            removed_disk = True
+    else:
+        garak_dir = run_paths.scoped_dir(
+            ROOT / "safety" / "garak" / "output" / slug,
+            visibility=visibility,
+            owner_user_id=owner_user_id,
+        )
+        if garak_dir.is_dir():
+            wipe_dir(garak_dir)
+            removed_disk = True
 
     removed_db = False
     try:
@@ -399,7 +472,9 @@ def delete_safety(slug: str, profile: str = "base") -> str | None:
             if db_keys:
                 removed_db = safety_db_data.delete_run(*db_keys)
             if not removed_db:
-                removed_db = safety_db_data.delete_run_by_slug(slug)
+                removed_db = safety_db_data.delete_run_by_slug(
+                    slug, visibility=visibility, owner_user_id=owner_user_id
+                )
     except Exception:
         pass
 

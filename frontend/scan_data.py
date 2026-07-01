@@ -375,11 +375,14 @@ def _build_scan_detail(slug: str, data: dict) -> dict:
 
 def _get_scans_data_files() -> dict:
     """
-    list every scan_result.json under scanner/output/, sorted highest risk first.
+    list every scan_result.json visible in the current view (public catalog,
+    plus this owner's own private scans when in private mode), sorted
+    highest risk first.
 
     surfaces the malicious poc at the top for stakeholder demos when present.
     """
-    from frontend.read_context import artifact_path_visible
+    from frontend import run_paths
+    from frontend.read_context import artifact_path_visible, read_context
 
     if not OUTPUT_DIR.exists():
         return {
@@ -389,12 +392,17 @@ def _get_scans_data_files() -> dict:
             "tier_summary": "",
         }
 
+    view_mode, user_id = read_context()
     rows: list[dict] = []
-    for path in sorted(OUTPUT_DIR.glob("*/scan_result.json")):
-        slug = path.parent.name
-        if not artifact_path_visible(path.parent, pillar="scan"):
+    for slug_dir in run_paths.iter_visible_slug_dirs(
+        OUTPUT_DIR, view_mode=view_mode, owner_user_id=user_id
+    ):
+        path = slug_dir / "scan_result.json"
+        if not path.is_file():
             continue
-        row = _summarize_scan(path, slug)
+        if not artifact_path_visible(slug_dir, pillar="scan"):
+            continue
+        row = _summarize_scan(path, slug_dir.name)
         if row:
             rows.append(row)
 
@@ -411,19 +419,24 @@ def _get_scans_data_files() -> dict:
     }
 
 
-def _get_scan_detail_files(slug: str) -> dict | None:
+def _get_scan_detail_files(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
     """
     structured scan payload for one slug — findings, tool panels, coverage stats.
 
-    returns none if the slug dir or scan_result.json is missing, or the run
-    isn't visible in the current view (private + not the owner).
+    ``visibility``/``owner_user_id`` pick the exact on-disk copy to read (the
+    public one, or one owner's private one) — the URL the caller resolved to,
+    not the viewer's ambient session, decides which artifact this returns.
     """
-    from frontend.read_context import artifact_path_visible
+    from frontend import run_paths
 
-    path = OUTPUT_DIR / slug / "scan_result.json"
-    if not path.is_file():
+    if visibility == "private" and not owner_user_id:
         return None
-    if not artifact_path_visible(path.parent, pillar="scan"):
+
+    directory = run_paths.scoped_dir(OUTPUT_DIR / slug, visibility=visibility, owner_user_id=owner_user_id)
+    path = directory / "scan_result.json"
+    if not path.is_file():
         return None
 
     try:
@@ -448,37 +461,52 @@ def get_scans_data() -> dict:
     return _get_scans_data_files()
 
 
-def get_scan_detail(slug: str) -> dict | None:
+def get_scan_detail(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
+    """Detail payload for one scan. Defaults to the public catalog; pass
+    ``visibility="private", owner_user_id=...`` for a signed-in user's own copy."""
     try:
         from frontend import scan_db_data
 
         if scan_db_data.available():
-            detail = scan_db_data.get_scan_detail_db(slug)
+            detail = scan_db_data.get_scan_detail_db(
+                slug, visibility=visibility, owner_user_id=owner_user_id
+            )
             if detail is not None:
                 return detail
     except Exception:
         pass
-    return _get_scan_detail_files(slug)
+    return _get_scan_detail_files(slug, visibility=visibility, owner_user_id=owner_user_id)
 
 
-def delete_scan_paths(slug: str) -> list[str]:
+def delete_scan_paths(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> list[str]:
     """Human-readable paths removed by ``delete_scan``."""
     if not is_safe_slug(slug):
         return []
+    if visibility == "private" and owner_user_id:
+        return [f"scanner/output/.private/{owner_user_id}/{slug}/"]
     return [f"scanner/output/{slug}/"]
 
 
-def delete_scan(slug: str) -> str | None:
+def delete_scan(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> str | None:
     """Remove scan artifacts (and DB row when configured). Returns error or None."""
+    from frontend import run_paths
     from frontend.output_dirs import wipe_dir
     from frontend.scan_launch import inflight_scan_slugs
 
     if not is_safe_slug(slug):
         return f"invalid slug: {slug!r}"
+    if visibility == "private" and not owner_user_id:
+        return f"no scan result found for slug {slug!r}"
     if slug in inflight_scan_slugs():
         return "cannot delete while the scan is still in progress"
 
-    scan_dir = OUTPUT_DIR / slug
+    scan_dir = run_paths.scoped_dir(OUTPUT_DIR / slug, visibility=visibility, owner_user_id=owner_user_id)
     result_path = scan_dir / "scan_result.json"
     db_keys: tuple[str, str] | None = None
     if result_path.is_file():
@@ -504,7 +532,9 @@ def delete_scan(slug: str) -> str | None:
             if db_keys:
                 removed_db = scan_db_data.delete_run(*db_keys)
             if not removed_db:
-                removed_db = scan_db_data.delete_run_by_slug(slug)
+                removed_db = scan_db_data.delete_run_by_slug(
+                    slug, visibility=visibility, owner_user_id=owner_user_id
+                )
     except Exception:
         pass
 

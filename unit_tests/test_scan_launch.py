@@ -6,6 +6,7 @@ Tests for scan browser launch — no subprocess spawn, no HF downloads.
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -15,7 +16,38 @@ from unittest import mock
 os.environ.setdefault("FRONTEND_LAUNCH_MODE", "host")
 
 from frontend import create_app  # noqa: E402
+from frontend import run_paths  # noqa: E402
 from frontend import scan_launch  # noqa: E402
+
+
+def _isolate_scan_output(test_case: unittest.TestCase) -> Path:
+    """Redirect scan_launch's module-level output paths to a scratch tempdir
+    and reset its in-memory run registries, for any test that exercises the
+    real (unmocked) launch path — i.e. hits ``/scans/start`` with only
+    ``subprocess.Popen`` mocked out.
+
+    Without this, a "launch" still writes a real run.lock under the repo's
+    own scanner/output/<slug>/ and sets scan_launch._RUNNING[<slug>] for
+    real. Both are module-global state shared by every test in the process,
+    and start_run()'s cleanup of them runs on an unsynchronized background
+    thread — so a later test that checks "is <slug> already running" can
+    intermittently see this test's mock process as still in flight (this
+    caused a real, intermittent CI failure).
+    """
+    tmp = tempfile.TemporaryDirectory()
+    test_case.addCleanup(tmp.cleanup)
+    root = Path(tmp.name)
+    for attr, value in (
+        ("ROOT", root),
+        ("SCAN_OUTPUT", root / "scanner" / "output"),
+        ("DOCKER_COMPOSE_FILE", root / "scanner" / "docker" / "compose.yml"),
+    ):
+        patcher = mock.patch.object(scan_launch, attr, value)
+        patcher.start()
+        test_case.addCleanup(patcher.stop)
+    test_case.addCleanup(scan_launch._RUNNING.clear)
+    test_case.addCleanup(scan_launch._INFLIGHT.clear)
+    return root
 
 
 class ValidateLaunchTest(unittest.TestCase):
@@ -120,6 +152,7 @@ class GetStatusTest(unittest.TestCase):
 
 class LaunchRoutesTest(unittest.TestCase):
     def setUp(self) -> None:
+        _isolate_scan_output(self)
         # /scans/new and /scans/start require a signed-in, allowlisted user —
         # force the dev-auth bypass on regardless of the real .env AUTH_ENABLED.
         env_patch = mock.patch.dict(os.environ, {"AUTH_ENABLED": "0"})
@@ -168,6 +201,144 @@ class LaunchRoutesTest(unittest.TestCase):
         r = self.client.get("/scans/nonexistent-slug/status")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.get_json()["status"], "not_found")
+
+
+class PrivatePublicIsolationTest(unittest.TestCase):
+    """Regression coverage for the reported bug: a private-mode scan must
+    never see, warn about, or collide with the public catalog's result for
+    the same model (and vice versa)."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        root = Path(self._tmp.name)
+        for attr, value in (
+            ("ROOT", root),
+            ("SCAN_OUTPUT", root / "scanner" / "output"),
+        ):
+            patcher = mock.patch.object(scan_launch, attr, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.out = root / "scanner" / "output"
+
+    def _write_public_result(self, slug: str) -> None:
+        d = self.out / slug
+        d.mkdir(parents=True)
+        (d / "scan_result.json").write_text("{}", encoding="utf-8")
+
+    def test_existing_slugs_scoped_to_public_only(self) -> None:
+        self._write_public_result("gpt2")
+        self.assertIn("gpt2", scan_launch._existing_scan_slugs(visibility="public"))
+
+    def test_existing_slugs_do_not_leak_into_private_scope(self) -> None:
+        # This is the exact reported bug: a public gpt2 scan exists, but a
+        # private-mode user who has never scanned anything should see no
+        # warning that "a scan for gpt2 already exists".
+        self._write_public_result("gpt2")
+        leaked = scan_launch._existing_scan_slugs(visibility="private", owner_user_id="user-a")
+        self.assertNotIn("gpt2", leaked)
+        self.assertEqual(leaked, set())
+
+    def test_private_result_does_not_leak_into_public_scope(self) -> None:
+        private_dir = self.out / run_paths.PRIVATE_SEGMENT / "user-a" / "gpt2"
+        private_dir.mkdir(parents=True)
+        (private_dir / "scan_result.json").write_text("{}", encoding="utf-8")
+        self.assertNotIn("gpt2", scan_launch._existing_scan_slugs(visibility="public"))
+        self.assertIn(
+            "gpt2",
+            scan_launch._existing_scan_slugs(visibility="private", owner_user_id="user-a"),
+        )
+
+    def test_two_users_private_scans_are_independent(self) -> None:
+        for uid in ("user-a", "user-b"):
+            d = self.out / run_paths.PRIVATE_SEGMENT / uid / "gpt2"
+            d.mkdir(parents=True)
+            (d / "scan_result.json").write_text(json.dumps({"owner": uid}), encoding="utf-8")
+        a_dir = scan_launch._private_scan_dir("gpt2", "user-a")
+        b_dir = scan_launch._private_scan_dir("gpt2", "user-b")
+        self.assertNotEqual(a_dir, b_dir)
+        a_data = json.loads((a_dir / "scan_result.json").read_text())
+        b_data = json.loads((b_dir / "scan_result.json").read_text())
+        self.assertEqual(a_data["owner"], "user-a")
+        self.assertEqual(b_data["owner"], "user-b")
+
+    def test_finalize_private_scan_moves_staging_to_owner_dir_and_is_idempotent(self) -> None:
+        staging = scan_launch._output_dir_for_slug("gpt2")
+        staging.mkdir(parents=True)
+        (staging / "scan_result.json").write_text("{}", encoding="utf-8")
+        (staging / "scan_run.log").write_text("log", encoding="utf-8")
+
+        private_dir = scan_launch._finalize_private_scan("gpt2", "user-a")
+        self.assertTrue((private_dir / "scan_result.json").is_file())
+        self.assertTrue((private_dir / "scan_run.log").is_file())
+        self.assertFalse((staging / "scan_result.json").is_file())
+        # Public scope must never see it after the move.
+        self.assertNotIn("gpt2", scan_launch._existing_scan_slugs(visibility="public"))
+
+        # Idempotent: calling again (e.g. a second status poll) is a no-op,
+        # not an error, even though staging is now empty.
+        again = scan_launch._finalize_private_scan("gpt2", "user-a")
+        self.assertEqual(again, private_dir)
+        self.assertTrue((private_dir / "scan_result.json").is_file())
+
+    def test_get_status_reports_complete_from_private_location(self) -> None:
+        staging = scan_launch._output_dir_for_slug("gpt2")
+        staging.mkdir(parents=True)
+        (staging / "scan_result.json").write_text("{}", encoding="utf-8")
+        status = scan_launch.get_status("gpt2", visibility="private", owner_user_id="user-a")
+        self.assertEqual(status["status"], "complete")
+        # And the public read of the same slug sees nothing, since the
+        # result was relocated into user-a's private location.
+        self.assertEqual(scan_launch.get_status("gpt2")["status"], "not_found")
+
+
+class PrivateRouteTest(unittest.TestCase):
+    """A private-mode launch must redirect to the /private URL, never the
+    public one — the second half of the reported bug."""
+
+    def setUp(self) -> None:
+        _isolate_scan_output(self)
+        env_patch = mock.patch.dict(os.environ, {"AUTH_ENABLED": "0"})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        self.client = create_app({"TESTING": True}).test_client()
+        with self.client.session_transaction() as sess:
+            sess["user"] = {"id": "u-test", "netid": "testuser", "display_name": "Test"}
+            sess["view_mode"] = "private"
+
+    def test_private_launch_redirects_to_private_url(self) -> None:
+        fake_proc = mock.Mock()
+        fake_proc.poll.return_value = None
+        fake_proc.pid = 424242
+        data = {
+            "hf_repo": "gpt2",
+            "run_modelscan": "on",
+            "run_fickling": "on",
+            "run_modelaudit": "on",
+            "run_deps": "on",
+            "run_secrets": "on",
+        }
+        with mock.patch("frontend.run_launch.try_lookup_reusable", return_value=None), \
+             mock.patch.object(scan_launch.subprocess, "Popen", return_value=fake_proc):
+            r = self.client.post("/scans/start", data=data)
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("/scans/gpt2/private", r.headers["Location"])
+        self.assertNotIn("/scans/gpt2?", r.headers["Location"])
+
+    def test_private_detail_requires_login(self) -> None:
+        with self.client.session_transaction() as sess:
+            sess.pop("user", None)
+        r = self.client.get("/scans/gpt2/private")
+        self.assertIn(r.status_code, (302, 401, 403))
+
+    def test_delete_requires_login(self) -> None:
+        # Part B: deleting a result (public or private) always requires
+        # sign-in, regardless of view mode.
+        with self.client.session_transaction() as sess:
+            sess.pop("user", None)
+        r = self.client.get("/scans/gpt2/delete")
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("/auth/login", r.headers["Location"])
 
 
 if __name__ == "__main__":

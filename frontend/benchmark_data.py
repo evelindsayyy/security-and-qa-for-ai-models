@@ -969,16 +969,21 @@ def _get_benchmarks_data_files() -> dict:
     }
 
 
-def _get_benchmark_detail_files(slug: str) -> dict | None:
-    from frontend.read_context import artifact_path_visible
+def _get_benchmark_detail_files(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
+    from dbutils.run_meta import read_run_meta_for_pillar
+    from dbutils.visibility import artifact_visible
 
     if not is_safe_slug(slug):
         return None
     ref = _reference_dir()
     for d in _result_dirs():
         # Reference runs are canonical baselines, not user-owned — always visible.
-        if d != ref and not artifact_path_visible(d / slug, pillar="benchmark"):
-            continue
+        if d != ref:
+            meta = read_run_meta_for_pillar(d / slug, pillar="benchmark")
+            if not artifact_visible(meta, view_mode=visibility, user_id=owner_user_id):
+                continue
         candidate_paths = [d / f"{slug}.json", d / f"{slug}.jsonl"]
         for path in candidate_paths:
             if path.is_file():
@@ -1060,16 +1065,27 @@ def _artifact_paths(slug: str) -> list[Path]:
     return found
 
 
-def delete_benchmark(slug: str) -> str | None:
+def delete_benchmark(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> str | None:
     """Remove benchmark artifacts (and DB row when configured).
 
-    Returns an error message, or None on success.
+    Returns an error message, or None on success. ``visibility``/``owner_user_id``
+    must match the run's own recorded scope — a public-mode delete can't
+    remove another user's private run and vice versa.
     """
+    from dbutils.run_meta import read_run_meta_for_pillar
+    from dbutils.visibility import artifact_visible
+
     if not is_safe_slug(slug):
         return f"invalid slug: {slug!r}"
 
     if is_reference_slug(slug):
         return "reference benchmark runs cannot be deleted"
+
+    meta = read_run_meta_for_pillar(PRIMARY_DIR / slug, pillar="benchmark")
+    if not artifact_visible(meta, view_mode=visibility, user_id=owner_user_id):
+        return f"no benchmark result found for slug {slug!r}"
 
     from frontend.benchmark_launch import is_run_in_progress
 
@@ -1089,7 +1105,9 @@ def delete_benchmark(slug: str) -> str | None:
         from frontend import benchmark_db_data
 
         if benchmark_db_data.available():
-            removed_db = benchmark_db_data.delete_run(slug)
+            removed_db = benchmark_db_data.delete_run(
+                slug, visibility=visibility, owner_user_id=owner_user_id
+            )
     except Exception:
         pass
 
@@ -1128,7 +1146,12 @@ def get_benchmarks_data() -> dict:
     return data
 
 
-def get_benchmark_detail(slug: str) -> dict | None:
+def get_benchmark_detail(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
+    """Detail payload for one benchmark run. Defaults to the public catalog;
+    pass ``visibility="private", owner_user_id=...`` for a signed-in user's
+    own copy. Reference baselines are always public regardless of scope."""
     detail: dict | None = None
     if is_reference_slug(slug):
         detail = _get_benchmark_detail_files(slug)
@@ -1140,11 +1163,15 @@ def get_benchmark_detail(slug: str) -> dict | None:
             from frontend import benchmark_db_data
 
             if benchmark_db_data.available():
-                detail = benchmark_db_data.get_benchmark_detail_db(slug)
+                detail = benchmark_db_data.get_benchmark_detail_db(
+                    slug, visibility=visibility, owner_user_id=owner_user_id
+                )
         except Exception:
             pass
         if detail is None:
-            detail = _get_benchmark_detail_files(slug)
+            detail = _get_benchmark_detail_files(
+                slug, visibility=visibility, owner_user_id=owner_user_id
+            )
     if detail is not None:
         detail["score_class"] = _score_class(detail.get("kind"), detail.get("headline_value"))
         _attach_coverage(detail)

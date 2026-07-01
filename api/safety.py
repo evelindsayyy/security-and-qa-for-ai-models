@@ -96,7 +96,7 @@ def start_safety():
         return validation_or_launch_error(launch_err)
 
     try:
-        run_key, already = safety_launch.start_run(
+        run_key, already, _visibility = safety_launch.start_run(
             model,
             redteam_profile=redteam_profile,
             skip_policy=skip_policy,

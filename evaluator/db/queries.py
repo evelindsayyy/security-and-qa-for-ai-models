@@ -82,12 +82,19 @@ def connect():
 # SQL — column order matches the reconstruction tuples below
 # ---------------------------------------------------------------------------
 
-def _run_visibility() -> tuple[str, dict]:
+def _run_visibility(
+    *, visibility: str | None = None, owner_user_id: str | None = None
+) -> tuple[str, dict]:
+    """SQL visibility clause. Explicit ``visibility``/``owner_user_id`` (the
+    resolved route scope) take precedence over the ambient session — omit
+    both only for the list page, which still tracks the current toggle."""
     from dbutils.visibility import visibility_clause
-    from frontend.read_context import read_context
 
-    view_mode, user_id = read_context()
-    clause, params = visibility_clause("r", view_mode=view_mode, user_id=user_id, links_alias=True)
+    if visibility is None:
+        from frontend.read_context import read_context
+
+        visibility, owner_user_id = read_context()
+    clause, params = visibility_clause("r", view_mode=visibility, user_id=owner_user_id, links_alias=True)
     return clause, params
 
 
@@ -170,12 +177,14 @@ def fetch_runs(conn) -> list[dict]:
     ]
 
 
-def fetch_run(conn, source_file: str) -> dict | None:
+def fetch_run(
+    conn, source_file: str, *, visibility: str | None = None, owner_user_id: str | None = None
+) -> dict | None:
     """One run by its source_file as a RunRecord, or None if absent.
 
     Returns the record even when ``results`` is empty; the caller decides
     whether an empty run is meaningful."""
-    vis_clause, vis_params = _run_visibility()
+    vis_clause, vis_params = _run_visibility(visibility=visibility, owner_user_id=owner_user_id)
     with conn.cursor() as cur:
         params = {"source_file": source_file, **vis_params}
         cur.execute(_DETAIL_RUN_SQL.format(visibility_filter=vis_clause), params)

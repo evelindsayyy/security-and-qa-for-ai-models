@@ -30,7 +30,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from dbutils import apply_loader, iter_files, jsonb_param, load_repo_env, read_json
+from dbutils import apply_loader, iter_files, jsonb_param, load_repo_env, read_json, run_paths
 from dbutils.auth_columns import apply_auth_defaults, auth_fields_from_artifact
 from dbutils.cli import add_ingest_arguments
 from dbutils.ingest import exit_if_apply_without_dsn, print_dry_run_hint
@@ -104,10 +104,17 @@ def scan_row(data: dict[str, Any], slug: str, *, scan_dir: Path | None = None) -
         "scan_metadata": meta,
         "started_at": started_at,
         "completed_at": completed_at,
-        "visibility": "public",
-        "owner_user_id": None,
-        "config_fingerprint": None,
-        "config_json": {},
+        # visibility/owner_user_id/config_fingerprint/config_json are NOT
+        # set here — apply_auth_defaults() (called right after this,  in
+        # load_file()) uses dict.setdefault() to fill them in from the run's
+        # actual scan_meta.json/run_meta.json sidecar. Pre-populating them
+        # here would make that setdefault() a silent no-op, which is exactly
+        # what happened before this fix: every scan was permanently written
+        # to Postgres as visibility='public', config_fingerprint=NULL,
+        # regardless of what the sidecar actually said — breaking both
+        # private-run tracking and DB-level reuse/dedup (a NULL
+        # config_fingerprint can never match a WHERE config_fingerprint = …
+        # lookup).
     }
 
 
@@ -251,9 +258,17 @@ def run_ingest(
     dsn: str | None,
     output_dir: Path | None = None,
 ) -> IngestResult:
-    """Collect and optionally load scans. Used by CLI and api.ingest."""
+    """Collect and optionally load scans. Used by CLI and api.ingest.
+
+    Two passes: the public catalog (unchanged, one level deep) and every
+    owner's private scans (``.private/<owner_user_id>/<slug>/``, a single
+    glob covers every owner at once) — without the second pass, private
+    scans would never reach Postgres and the DB-backed reuse/dedup path
+    would never see them.
+    """
     root = output_dir or OUTPUT_DIR
     paths = iter_files(root, "*/scan_result.json")
+    paths += iter_files(root, f"{run_paths.PRIVATE_SEGMENT}/*/*/scan_result.json")
     parsed = [t for t in (load_file(p) for p in paths) if t is not None]
 
     print(f"{len(parsed)} loadable scan(s) in {root}:")

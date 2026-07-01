@@ -11,6 +11,7 @@ from dbutils.run_fingerprint import (
     normalize_safety_config,
     normalize_eval_config,
     normalize_benchmark_config,
+    resolve_visibility,
 )
 
 
@@ -53,6 +54,46 @@ class TestRunFingerprint(unittest.TestCase):
     def test_benchmark_public_default(self):
         cfg = normalize_benchmark_config(benchmark_key="ifeval", model="gpt-5-chat")
         self.assertTrue(is_public_default("benchmark", cfg))
+
+
+class TestResolveVisibility(unittest.TestCase):
+    """Visibility is the view-mode toggle at launch time, full stop — not
+    whether the config happens to match "default" params. This is the
+    direct regression test for the reported bug: a private-mode launch of a
+    default-options config must resolve to "private", not "public"."""
+
+    def setUp(self):
+        self.default_scan = normalize_scan_config(hf_repo="gpt2")
+        self.custom_scan = normalize_scan_config(hf_repo="gpt2", skip_modelscan=True)
+
+    def test_public_mode_default_config_is_public(self):
+        self.assertEqual(
+            resolve_visibility("scan", self.default_scan, private_mode=False), "public"
+        )
+
+    def test_private_mode_default_config_is_private(self):
+        self.assertEqual(
+            resolve_visibility("scan", self.default_scan, private_mode=True), "private"
+        )
+
+    def test_private_mode_nondefault_config_is_private(self):
+        self.assertEqual(
+            resolve_visibility("scan", self.custom_scan, private_mode=True), "private"
+        )
+
+    def test_public_mode_nondefault_config_is_still_public_at_resolver_level(self):
+        # The downgrade for a non-default config in public mode happens one
+        # layer up, in build_launch_plan — resolve_visibility itself only
+        # ever looks at the view-mode toggle.
+        self.assertEqual(
+            resolve_visibility("scan", self.custom_scan, private_mode=False), "public"
+        )
+
+    def test_force_private_overrides_public_mode(self):
+        self.assertEqual(
+            resolve_visibility("scan", self.default_scan, private_mode=False, force_private=True),
+            "private",
+        )
 
 
 if __name__ == "__main__":

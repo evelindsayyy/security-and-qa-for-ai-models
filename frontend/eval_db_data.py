@@ -136,14 +136,18 @@ def get_runs_data_db() -> dict:
     return _postprocess_runs(db_runs + file_runs)
 
 
-def get_run_detail_db(slug: str) -> dict | None:
+def get_run_detail_db(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
     """Detail-page payload from the DB; None if the slug isn't loaded
     (the dispatcher then falls back to the file)."""
     if not is_safe_slug(slug):
         return None
 
     with queries.connect() as conn:
-        rec = queries.fetch_run(conn, f"{slug}.jsonl")
+        rec = queries.fetch_run(
+            conn, f"{slug}.jsonl", visibility=visibility, owner_user_id=owner_user_id
+        )
     if rec is None or not rec["results"]:
         return None
 
@@ -221,19 +225,30 @@ def get_run_detail_db(slug: str) -> dict | None:
     }
 
 
-def delete_run(slug: str) -> bool:
-    """Delete one eval_runs row (results cascade). Returns True if removed."""
+def delete_run(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> bool:
+    """Delete one eval_runs row (results cascade). Returns True if removed.
+
+    Scoped by ``visibility``/``owner_user_id`` so a public delete can never
+    remove someone else's private row for the same slug, or vice versa.
+    """
+    from dbutils.visibility import visibility_clause
+
     if not is_safe_slug(slug):
         return False
     source_file = f"{slug}.jsonl"
+    vis_clause, vis_params = visibility_clause(
+        "public.eval_runs", view_mode=visibility, user_id=owner_user_id, links_alias=True
+    )
     with queries.connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 DELETE FROM public.eval_runs
-                WHERE source_file = %(source_file)s
+                WHERE source_file = %(source_file)s AND ({vis_clause})
                 """,
-                {"source_file": source_file},
+                {"source_file": source_file, **vis_params},
             )
             deleted = cur.rowcount > 0
         conn.commit()

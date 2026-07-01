@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import threading
 import time
 from pathlib import Path
 
 from dbutils import run_lock
-from frontend import docker_launch
+from frontend import docker_launch, run_paths
 from frontend.log_status import run_log_payload, status_message
 from frontend.output_dirs import OutputDirError, prepare_output_dir
 from frontend.path_safety import is_safe_slug
@@ -31,6 +32,8 @@ _VALID_PROFILES = frozenset({"base", "education", "healthcare", "finance", "rag"
 
 
 def _prepare_output_dirs(slug: str, profile: str) -> str | None:
+    """Wipe+recreate the shared staging trees every safety run of (slug,
+    profile) writes to, regardless of visibility — see frontend.run_paths."""
     for base in (ROOT / "safety" / "output", ROOT / "safety" / "promptfoo" / "output"):
         err = prepare_output_dir(base / slug / profile)
         if err:
@@ -43,6 +46,66 @@ def _wipe_outputs(slug: str, profile: str) -> None:
     err = _prepare_output_dirs(slug, profile)
     if err:
         raise OutputDirError(err)
+
+
+def _private_merged_dir(slug: str, profile: str, owner_user_id: str) -> Path:
+    return run_paths.scoped_dir(
+        ROOT / "safety" / "output" / slug / profile,
+        visibility="private",
+        owner_user_id=owner_user_id,
+    )
+
+
+def _private_promptfoo_dir(slug: str, profile: str, owner_user_id: str) -> Path:
+    return run_paths.scoped_dir(
+        ROOT / "safety" / "promptfoo" / "output" / slug / profile,
+        visibility="private",
+        owner_user_id=owner_user_id,
+    )
+
+
+def _private_garak_dir(slug: str, owner_user_id: str) -> Path:
+    # Garak's wipe-on-restart is scoped to the whole <slug>/ tree (no
+    # profile level), so its private data must be a sibling of every slug
+    # directory, not nested inside one — scoped_dir handles this correctly
+    # because it's derived from the same (slug-level, not profile-level)
+    # base path the public garak tree uses.
+    return run_paths.scoped_dir(
+        ROOT / "safety" / "garak" / "output" / slug,
+        visibility="private",
+        owner_user_id=owner_user_id,
+    )
+
+
+def _move_tree(src: Path, dst: Path) -> None:
+    if not src.is_dir():
+        return
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists():
+        shutil.rmtree(dst, ignore_errors=True)
+    shutil.move(str(src), str(dst))
+
+
+def _finalize_private_safety(slug: str, profile: str, owner_user_id: str) -> Path:
+    """Move a just-completed staging merge (+ its promptfoo/garak trees)
+    into this owner's private location. Idempotent."""
+    staging_merged = ROOT / "safety" / "output" / slug / profile
+    private_merged = _private_merged_dir(slug, profile, owner_user_id)
+    with _LOCK:
+        if (private_merged / "merged_safety_result.json").is_file():
+            return private_merged
+        if not (staging_merged / "merged_safety_result.json").is_file():
+            return private_merged
+        _move_tree(staging_merged, private_merged)
+        _move_tree(
+            ROOT / "safety" / "promptfoo" / "output" / slug / profile,
+            _private_promptfoo_dir(slug, profile, owner_user_id),
+        )
+        _move_tree(
+            ROOT / "safety" / "garak" / "output" / slug,
+            _private_garak_dir(slug, owner_user_id),
+        )
+    return private_merged
 
 
 def _run_lock_path(slug: str, profile: str) -> Path:
@@ -187,21 +250,34 @@ def _eligible_gateway_models() -> tuple[str, ...]:
     return tuple(ids) if ids else _GATEWAY_FALLBACK
 
 
-def _existing_safety_slugs() -> set[str]:
+def _existing_safety_slugs(
+    *, visibility: str = "public", owner_user_id: str | None = None
+) -> set[str]:
+    """Slugs with a completed result **in the given scope only**."""
+    if visibility == "private" and not owner_user_id:
+        return set()
     base = ROOT / "safety" / "output"
-    return {slug for _path, slug, _profile in iter_merged_result_paths(base)}
+    owner = owner_user_id if visibility == "private" else None
+    return {slug for _path, slug, _profile in iter_merged_result_paths(base, owner_user_id=owner)}
 
 
 def inflight_safety_keys() -> set[str]:
-    """Active runs as ``slug/profile`` keys."""
+    """Active runs as ``slug/profile`` keys.
+
+    A run's staging directory is shared regardless of visibility — only one
+    safety run of a given (model, profile) can physically run at a time — so
+    this check is intentionally scope-agnostic.
+    """
     keys: set[str] = set()
     base = ROOT / "safety" / "output"
     if base.is_dir():
         for slug_dir in base.iterdir():
-            if not slug_dir.is_dir():
+            if not slug_dir.is_dir() or slug_dir.name == run_paths.PRIVATE_SEGMENT:
                 continue
             for profile_dir in slug_dir.iterdir():
-                if profile_dir.is_dir() and run_lock.is_active(run_lock.lock_path(profile_dir)):
+                if not profile_dir.is_dir() or profile_dir.name == run_paths.PRIVATE_SEGMENT:
+                    continue
+                if run_lock.is_active(run_lock.lock_path(profile_dir)):
                     keys.add(f"{slug_dir.name}/{profile_dir.name}")
     with _LOCK:
         for run_key, proc in _RUNNING.items():
@@ -304,7 +380,8 @@ def start_run(
     skip_garak: bool = False,
     skip_promptfoo: bool = False,
     garak_probes: str | None = None,
-) -> tuple[str, bool]:
+) -> tuple[str, bool, str]:
+    """Returns (run_key, already_running, visibility)."""
     from frontend.run_launch import build_launch_plan, persist_run_meta_dir, reused_run_key
 
     plan = build_launch_plan(
@@ -320,7 +397,7 @@ def start_run(
     )
     if plan.reused:
         run_key = reused_run_key(plan) or f"{normalize_gateway_model_id(model)}/{redteam_profile}"
-        return run_key, True
+        return run_key, True, plan.visibility
 
     slug = normalize_gateway_model_id(model)
     run_key = f"{slug}/{redteam_profile}"
@@ -329,11 +406,11 @@ def start_run(
 
     with _LOCK:
         if is_safety_inflight(model, redteam_profile):
-            return run_key, True
+            return run_key, True, plan.visibility
 
         existing = _INFLIGHT.get(combo)
         if existing and _RUNNING.get(existing) is not None and _RUNNING[existing].poll() is None:
-            return existing, True
+            return existing, True, plan.visibility
 
         _wipe_outputs(slug, redteam_profile)
 
@@ -373,7 +450,7 @@ def start_run(
             source=run_lock.FRONTEND_SOURCE,
         ):
             proc.terminate()
-            return run_key, True
+            return run_key, True, plan.visibility
         _RUNNING[run_key] = proc
         _INFLIGHT[combo] = run_key
         threading.Thread(
@@ -381,15 +458,21 @@ def start_run(
             args=(run_key, proc, lock_file),
             daemon=True,
         ).start()
-        return run_key, False
+        return run_key, False, plan.visibility
 
 
-def get_status(slug: str, profile: str = "base") -> dict:
+def get_status(
+    slug: str,
+    profile: str = "base",
+    *,
+    visibility: str = "public",
+    owner_user_id: str | None = None,
+) -> dict:
     if not is_safe_slug(slug) or not is_safe_slug(profile):
         return {"status": "not_found", "message": ""}
 
     run_key = f"{slug}/{profile}"
-    merged = merged_result_path(ROOT / "safety" / "output", slug, profile)
+    staging_merged = merged_result_path(ROOT / "safety" / "output", slug, profile)
     log_path = ROOT / "safety" / "output" / slug / profile / "run.log"
     rel_log = f"safety/output/{slug}/{profile}/run.log"
     lock_file = _run_lock_path(slug, profile)
@@ -398,23 +481,35 @@ def get_status(slug: str, profile: str = "base") -> dict:
     if proc is not None and proc.poll() is None:
         return _running_payload(log_path, rel_log)
 
-    if run_lock.is_active(lock_file) and not merged.is_file():
+    if run_lock.is_active(lock_file) and not staging_merged.is_file():
         if _is_stale_lock(lock_file, log_path, run_key):
             run_lock.release(lock_file)
             msg = status_message(log_path, failed=True)
             return {"status": "failed", "message": msg, "log_path": rel_log}
         return _running_payload(log_path, rel_log)
 
+    # A completed run's merge may still be sitting in staging (not yet
+    # moved) or may already be at its final scoped location.
+    if visibility == "private" and owner_user_id:
+        if staging_merged.is_file():
+            active_dir = _finalize_private_safety(slug, profile, owner_user_id)
+        else:
+            active_dir = _private_merged_dir(slug, profile, owner_user_id)
+        merged = active_dir / "merged_safety_result.json"
+    else:
+        merged = staging_merged
+
     if merged.is_file():
+        active_rel_log = str(merged.parent.relative_to(ROOT) / "run.log")
         warnings = _merged_warnings(merged)
         if warnings:
             return {
                 "status": "partial",
                 "message": "",
                 "warnings": warnings,
-                "log_path": rel_log,
+                "log_path": active_rel_log,
             }
-        return {"status": "complete", "message": "", "log_path": rel_log}
+        return {"status": "complete", "message": "", "log_path": active_rel_log}
 
     if proc is not None:
         return {
@@ -423,7 +518,7 @@ def get_status(slug: str, profile: str = "base") -> dict:
             "log_path": rel_log,
         }
 
-    if log_path.is_file() and not merged.is_file():
+    if log_path.is_file() and not staging_merged.is_file():
         msg = status_message(log_path, failed=True)
         if "ERROR:" in msg or "failed (exit" in msg:
             return {"status": "failed", "message": msg, "log_path": rel_log}
@@ -432,10 +527,12 @@ def get_status(slug: str, profile: str = "base") -> dict:
 
 
 def get_launch_options() -> dict:
+    from frontend.read_context import read_context
     from gateway.catalog import get_gateway_catalog
 
     gw = get_gateway_catalog()
-    existing = _existing_safety_slugs()
+    view_mode, user_id = read_context()
+    existing = _existing_safety_slugs(visibility=view_mode, owner_user_id=user_id)
     groups: list[dict] = []
 
     for section in gw.get("by_category", []):

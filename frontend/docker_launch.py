@@ -150,12 +150,36 @@ def compose_run_argv(
     for key, val in {
         **_uid_gid_env(),
         **_docker_gid_env(),
+        **_passwdless_uid_env(),
         "HOST_REPO": str(ROOT),
         **(extra_env or {}),
     }.items():
         argv.extend(["-e", f"{key}={val}"])
     argv.extend([service, *inner_cmd])
     return argv
+
+
+def _passwdless_uid_env() -> dict[str, str]:
+    """Every pillar container runs as ``${UID}:${GID}`` (see each
+    ``docker/compose.yml``) — the host user's arbitrary numeric UID, which
+    has no ``/etc/passwd`` entry inside the container. Anything that calls
+    ``getpass.getuser()`` (torch/transformers/bert_score do, at import
+    time — hit this for real running the consistency benchmark) or writes
+    to ``$HOME`` (matplotlib's config dir) then crashes or warns.
+    ``USER``/``LOGNAME`` short-circuit ``getpass.getuser()`` before it ever
+    falls back to the passwd lookup; ``HOME``/``MPLCONFIGDIR`` point at the
+    always-writable, always-present ``/tmp`` inside the (``--rm``,
+    ephemeral) container instead of the unmapped-uid's nonexistent home.
+    Mirrors ``safety.run.garak_xdg_env``'s fix for the same root cause in
+    garak's nested container — this is the equivalent for the four outer
+    pillar containers ``compose_run_argv`` launches directly.
+    """
+    return {
+        "USER": "runner",
+        "LOGNAME": "runner",
+        "HOME": "/tmp",
+        "MPLCONFIGDIR": "/tmp/mplconfig",
+    }
 
 
 def ensure_stack(stack: str) -> None:
