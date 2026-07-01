@@ -8,12 +8,13 @@
   <h1>Start an HF scan</h1>
   <p class="sub">
     Launches the scanner via Docker Compose
-    (<code>{{ compose_file }}</code>) — same isolated image as the DGX CLI workflow
-    (ModelScan, Fickling, TruffleHog, etc.). Weights are downloaded for the scan and
+    (<code>{{ compose_file }}</code>) — same isolated image as the CLI in <code>docs/cli.md</code>.
+    Weights are downloaded for the scan and
     removed afterward — only <code>scan_result.json</code> is kept under
     <code>scanner/output/</code>.
+    One-time on the host: <code>./docker/build-pillars.sh</code>.
     {% if not docker_available %}
-    <span class="form-warning">Docker Compose is not available on this host — build the image first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>
+    <span class="form-warning">Docker Compose is not available on this host — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>
     {% endif %}
   </p>
 
@@ -32,6 +33,9 @@
     <p id="overwrite-warning" class="form-warning" style="display: none;">
       A scan for this repo already exists — starting again will delete the prior results and replace them.
     </p>
+    <p id="inflight-warning" class="form-warning" style="display: none;">
+      A scan for this repo is already running — open the progress page or wait for it to finish.
+    </p>
 
     <fieldset>
       <legend>Scanners <span class="dim">(all on by default)</span></legend>
@@ -48,6 +52,7 @@
 
 <script>
   const EXISTING_SLUGS = new Set({{ existing_scan_slugs | tojson }});
+  const INFLIGHT_SLUGS = new Set({{ inflight_scan_slugs | tojson }});
 
   function repoSlug(repo) {
     const trimmed = repo.trim();
@@ -55,9 +60,12 @@
   }
 
   function updateWarning() {
-    const repo = document.getElementById("hf_repo").value;
+    const slug = repoSlug(document.getElementById("hf_repo").value);
     document.getElementById("overwrite-warning").style.display =
-      EXISTING_SLUGS.has(repoSlug(repo)) ? "block" : "none";
+      EXISTING_SLUGS.has(slug) && !INFLIGHT_SLUGS.has(slug) ? "block" : "none";
+    const inflight = INFLIGHT_SLUGS.has(slug);
+    document.getElementById("inflight-warning").style.display = inflight ? "block" : "none";
+    document.querySelector(".launch-form button[type=submit]").disabled = inflight;
   }
 
   document.getElementById("hf_repo").addEventListener("input", updateWarning);

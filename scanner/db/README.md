@@ -11,16 +11,17 @@ reads Postgres when `POSTGRES_DSN` is set and reachable, else files (see
 ## One-time setup
 
 ```bash
-uv sync --group db
+uv sync
 cp .env.example .env    # set POSTGRES_DSN (same login as EFFICACY_DB_DSN)
 ```
 
 ## Apply schema (one-time)
 
-Requires ``uv sync --group db`` and a real ``POSTGRES_DSN`` in ``.env`` (include ``?sslmode=require``).
+Requires ``uv sync --group dev`` and a real ``POSTGRES_DSN`` in ``.env`` (include ``?sslmode=require``).
 
 ```bash
-uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql
+./scripts/apply-schemas.sh              # all four pillars
+uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql   # this pillar only
 ```
 
 ## Load scans

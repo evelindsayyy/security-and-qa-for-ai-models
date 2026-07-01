@@ -24,6 +24,7 @@ import time
 from pathlib import Path
 
 from frontend import docker_launch
+from frontend.log_status import run_log_payload, status_message
 from frontend.path_safety import is_safe_slug
 
 ROOT = Path(__file__).parent.parent
@@ -65,23 +66,32 @@ def candidate_models() -> tuple[str, ...]:
 # OpenAI judges re-enabled 2026-06-22: the gateway metadata/store bug that 400'd
 # all OpenAI models was fixed; GPT 4.1 Mini + gpt-5-chat verified to return
 # valid judge JSON (the bar gpt-oss-120b fails ~75% of the time), and both are
-# non-reasoning chat models (no hidden-thinking-token risk). TODO: formalize in
-# docs/judge-selection.md.
+# non-reasoning chat models (no hidden-thinking-token risk). Mentor approved
+# 2026-06-22 for gateway-hosted OpenAI only; recorded in docs/judge-selection.md.
 JUDGE_MODELS: tuple[str, ...] = (
     "Llama 4 Maverick", "GPT 4.1 Mini", "gpt-5-chat", "gpt-oss-120b",
 )
 
-# MT-Bench rule: judge must come from a different model family than the
-# candidate. Family is derived from the Gateway id prefix. Qwen (self-hosted on
-# the DCC) is its own family so an OpenAI judge is allowed to score it; gpt-oss-*
-# stays "openai" (it's an OpenAI model, so self-preference still applies vs gpt-*).
+# MT-Bench rule: the judge must come from a different model family than the
+# candidate. The family is matched by keyword ANYWHERE in the id (case-
+# insensitive), so variants like "meta-llama/Llama-4-Scout" or "Meta-Llama-3.1"
+# classify as meta — not just ids that literally start with "llama" (a naive
+# prefix check let a Llama candidate + Llama judge slip past the cross-family
+# rule when the Gateway returned a Hub-style id). gpt-oss-* stays "openai" (it IS
+# an OpenAI model, so self-preference still applies vs gpt-*).
 def model_family(model: str) -> str:
     m = model.lower()
-    if m.startswith("llama"):
+    if "llama" in m:
         return "meta"
-    if m.startswith("qwen"):
+    if "qwen" in m:
         return "qwen"
-    return "openai"
+    if "mistral" in m or "mixtral" in m:
+        return "mistral"
+    if "gemma" in m:
+        return "google"
+    if "gpt" in m or "openai" in m or m.startswith(("o1", "o3", "o4")):
+        return "openai"
+    return "other"
 
 
 # Suite key -> contract files. Rubric/prompt pairing lives here so the
@@ -189,6 +199,34 @@ def validate_launch(
     return None
 
 
+# Suggested open-weight models for the HF-model launcher field (datalist hints).
+SUGGESTED_HF_REPOS: tuple[str, ...] = (
+    "Qwen/Qwen2.5-7B-Instruct",
+    "mistralai/Mistral-7B-Instruct-v0.3",
+    "meta-llama/Llama-3.2-1B-Instruct",
+    "gpt2",
+)
+
+
+def validate_hf_candidate(repo_id: str) -> dict:
+    """Validate a user-supplied Hugging Face model for evaluation (link path).
+
+    Wraps evaluator/hf_intake — checks the repo exists, is open, is vLLM-servable,
+    and fits the GPU. Shapes the verdict for eval_run_new.html. Serving + running
+    an HF model is the DCC-orchestration milestone; here we validate before it."""
+    from evaluator import hf_intake
+
+    res = hf_intake.validate(repo_id)
+    info = res.info
+    return {
+        "ok": res.ok,
+        "error": res.error,
+        "repo_id": repo_id,
+        "architectures": info.architectures if info else None,
+        "num_params": info.num_params if info else None,
+    }
+
+
 def _container_rel(path: Path) -> str:
     """Path inside the evaluator Docker image (WORKDIR /app/evaluator)."""
     return str(path.relative_to(EVALUATOR)).replace("\\", "/")
@@ -255,6 +293,21 @@ def start_run(
     Caller must have passed validate_launch first; this function assumes
     allowlisted inputs.
     """
+    from frontend.run_launch import build_launch_plan, persist_run_meta_dir, reused_slug
+
+    force_private = suite_key.startswith(CUSTOM_PREFIX)
+    plan = build_launch_plan(
+        "eval",
+        force_private=force_private,
+        candidate=candidate,
+        judge=judge,
+        suite_key=suite_key,
+        max_tokens=max_tokens,
+    )
+    if plan.reused:
+        stem = reused_slug(plan) or predict_stem(suite_key, candidate)
+        return stem, True
+
     combo = (candidate, judge, suite_key, max_tokens)
     with _LOCK:
         existing = _INFLIGHT.get(combo)
@@ -271,6 +324,7 @@ def start_run(
 
         stem = predict_stem(suite_key, candidate)
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        persist_run_meta_dir(RESULTS_DIR / stem, plan)
         log_path = RESULTS_DIR / f"{stem}.log"
         cmd = build_command(candidate, judge, suite_key, max_tokens, stem)
         with log_path.open("wb") as log_f:
@@ -316,17 +370,54 @@ def get_status(slug: str) -> dict:
             progress = sum(1 for line in f if line.strip())
 
     if total and progress >= total:
-        return {"status": "complete", "progress": progress, "total": total}
+        return {
+            "status": "complete",
+            "progress": progress,
+            "total": total,
+            "message": "",
+            "log_path": f"evaluator/results/{slug}.log",
+        }
+
+    log_path = RESULTS_DIR / f"{slug}.log"
+    rel_log = f"evaluator/results/{slug}.log"
 
     proc = _RUNNING.get(slug)
     if proc is not None and proc.poll() is None:
-        return {"status": "running", "progress": progress, "total": total}
+        return {
+            "status": "running",
+            "progress": progress,
+            "total": total,
+            "log_path": rel_log,
+            **run_log_payload(log_path),
+        }
     if proc is not None:  # exited without a complete file
-        return {"status": "failed", "progress": progress, "total": total}
+        return {
+            "status": "failed",
+            "progress": progress,
+            "total": total,
+            "message": status_message(log_path, failed=True),
+            "log_path": rel_log,
+        }
     if path.is_file():
         # partial file, no registered process (e.g. Flask restarted mid-run)
-        return {"status": "failed", "progress": progress, "total": total}
-    return {"status": "not_found", "progress": 0, "total": total}
+        return {
+            "status": "failed",
+            "progress": progress,
+            "total": total,
+            "message": status_message(log_path, failed=True),
+            "log_path": rel_log,
+        }
+    return {"status": "not_found", "progress": 0, "total": 0, "message": ""}
+
+
+def is_eval_run_in_progress(slug: str) -> bool:
+    """True when a registered subprocess for *slug* is still running."""
+    if not is_safe_slug(slug):
+        return False
+    proc = _RUNNING.get(slug)
+    if proc is not None and proc.poll() is None:
+        return True
+    return get_status(slug)["status"] == "running"
 
 
 def validate_custom_questions(
@@ -409,6 +500,7 @@ def get_launch_options() -> dict:
         "pricing_json": json.dumps({m: list(r) for m, r in _COST_PER_M_TOKENS.items()}),
         "max_tokens_min": MAX_TOKENS_MIN,
         "max_tokens_max": MAX_TOKENS_MAX,
+        "suggested_hf_repos": list(SUGGESTED_HF_REPOS),
         "custom_max_questions": CUSTOM_MAX_QUESTIONS,
         "launch_mode": "docker" if docker_launch.use_docker() else "host",
         "docker_available": docker_launch.docker_available(),

@@ -12,12 +12,14 @@ import time
 
 from dbutils import load_repo_env, resolve_dsn
 
+from frontend.path_safety import is_safe_slug
 from frontend.safety_data import (
     OUTPUT_DIR,
     _build_safety_detail,
     _summarize_merged,
     _summarize_merged_data,
 )
+from safety.merged_paths import iter_merged_result_paths
 
 load_repo_env()
 
@@ -63,7 +65,8 @@ SELECT DISTINCT ON (gateway_model_id, redteam_profile)
     id::text, gateway_model_id, redteam_profile, display_name, status, deployment_context,
     summary_pass_rate, safety_tier, adversarial_tier, composite_tier,
     composite_score, missing_suites, runs, tool_results, started_at, completed_at
-FROM public.safety_runs
+FROM public.safety_runs s
+WHERE {visibility_filter}
 ORDER BY gateway_model_id, redteam_profile, completed_at DESC NULLS LAST
 """
 
@@ -71,9 +74,10 @@ _DETAIL_RUN_SQL = """
 SELECT id::text, gateway_model_id, redteam_profile, display_name, status, deployment_context,
        summary_pass_rate, safety_tier, adversarial_tier, composite_tier,
        composite_score, missing_suites, runs, tool_results, started_at, completed_at
-FROM public.safety_runs
+FROM public.safety_runs s
 WHERE gateway_model_id = %(gateway_model_id)s
   AND redteam_profile = %(redteam_profile)s
+  AND ({visibility_filter})
 ORDER BY completed_at DESC NULLS LAST
 LIMIT 1
 """
@@ -186,14 +190,29 @@ def _fetch_findings_by_run_id(conn, run_ids: list[str]) -> dict[str, list[dict]]
     return grouped
 
 
+def _visibility_params() -> tuple[str, dict]:
+    from dbutils.visibility import visibility_clause
+    from frontend.read_context import read_context
+
+    view_mode, user_id = read_context()
+    clause, params = visibility_clause("s", view_mode=view_mode, user_id=user_id, links_alias=True)
+    return clause, params
+
+
 def get_safety_data_db() -> dict:
     """DB-preferred merge of every known safety run (DB rows + not-yet-loaded files)."""
+    from dbutils.run_meta import read_run_meta
+    from dbutils.visibility import artifact_visible
+    from frontend.read_context import read_context
     from frontend.safety_data import _SUITE_ORDER as _SO
     from frontend.safety_data import _suite_label
 
+    vis_clause, vis_params = _visibility_params()
+    view_mode, user_id = read_context()
+
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(_LATEST_RUNS_SQL)
+            cur.execute(_LATEST_RUNS_SQL.format(visibility_filter=vis_clause), vis_params)
             run_rows = cur.fetchall()
         findings_by_run = _fetch_findings_by_run_id(conn, [row[0] for row in run_rows])
         db_rows = [
@@ -202,13 +221,14 @@ def get_safety_data_db() -> dict:
         ]
     db_rows = [r for r in db_rows if r is not None]
 
-    seen_slugs = {r["slug"] for r in db_rows}
+    seen_keys = {(r["slug"], r["profile"]) for r in db_rows}
     file_rows: list[dict] = []
     if OUTPUT_DIR.exists():
-        for path in sorted(OUTPUT_DIR.glob("*/*/merged_safety_result.json")):
-            profile = path.parent.name
-            slug = path.parent.parent.name
-            if slug in seen_slugs:
+        for path, slug, profile in iter_merged_result_paths(OUTPUT_DIR):
+            if (slug, profile) in seen_keys:
+                continue
+            meta = read_run_meta(path.parent)
+            if not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
                 continue
             row = _summarize_merged(path, slug, profile)
             if row is not None:
@@ -227,9 +247,12 @@ def get_safety_data_db() -> dict:
 
 def get_safety_detail_db(slug: str, profile: str = "base") -> dict | None:
     """Detail-page payload from Postgres; None if slug isn't loaded."""
+    vis_clause, vis_params = _visibility_params()
+
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(_DETAIL_RUN_SQL, {"gateway_model_id": slug, "redteam_profile": profile})
+            params = {"gateway_model_id": slug, "redteam_profile": profile, **vis_params}
+            cur.execute(_DETAIL_RUN_SQL.format(visibility_filter=vis_clause), params)
             run_row = cur.fetchone()
             if run_row is None:
                 return None
@@ -239,3 +262,50 @@ def get_safety_detail_db(slug: str, profile: str = "base") -> dict | None:
 
     data = _run_tuple_to_data(run_row, findings_json)
     return _build_safety_detail(slug, data, profile)
+
+
+def resolve_delete_keys(gateway_model_id: str) -> tuple[str, str] | None:
+    """Map UI slug to ``(gateway_model_id, completed_at)`` for the latest Postgres row."""
+    if not is_safe_slug(gateway_model_id):
+        return None
+
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(_DETAIL_RUN_SQL, {"gateway_model_id": gateway_model_id})
+            run_row = cur.fetchone()
+            if run_row is None:
+                return None
+            model_id = run_row[1]
+            completed_at = run_row[14]
+            if not model_id or completed_at is None:
+                return None
+            if hasattr(completed_at, "isoformat"):
+                completed_at = completed_at.isoformat()
+            else:
+                completed_at = str(completed_at)
+            return model_id, completed_at
+
+
+def delete_run_by_slug(gateway_model_id: str) -> bool:
+    """Delete the latest Postgres safety row for a gateway model slug."""
+    keys = resolve_delete_keys(gateway_model_id)
+    if keys is None:
+        return False
+    return delete_run(*keys)
+
+
+def delete_run(gateway_model_id: str, completed_at: str) -> bool:
+    """Delete one safety_runs row (findings cascade). Returns True if removed."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM public.safety_runs
+                WHERE gateway_model_id = %(gateway_model_id)s
+                  AND completed_at = %(completed_at)s::timestamptz
+                """,
+                {"gateway_model_id": gateway_model_id, "completed_at": completed_at},
+            )
+            deleted = cur.rowcount > 0
+        conn.commit()
+    return deleted

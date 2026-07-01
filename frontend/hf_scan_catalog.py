@@ -15,7 +15,7 @@ from frontend.scan_data import OUTPUT_DIR, get_scans_data
 
 # Optional notes for known regression / calibration models (keyed by HF repo id).
 HF_ANNOTATIONS: dict[str, str] = {
-    "gpt2": "calibration baseline — low/18 with benign fickling",
+    "gpt2": "calibration baseline — low/18 with benign fickling (0 if clean)",
     "distilbert-base-uncased": "default scanner regression",
     "BAAI/bge-small-en-v1.5": "safetensors + pickle paths",
     "google/flan-t5-small": "org/model path layout",
@@ -78,7 +78,8 @@ def get_hf_scan_catalog() -> dict[str, Any]:
         "source": "scanner/output/*/scan_result.json",
         "output_dir": data.get("output_dir", str(OUTPUT_DIR)),
         "error": None if models or OUTPUT_DIR.exists() else (
-            f"No scan results yet — run "
-            f"`python -m scanner scan <hf_repo>` (outputs under {OUTPUT_DIR})"
+            "No scan results yet — use Start scan in the UI or from repo root: "
+            "docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner "
+            f"python -m scanner scan <hf_repo> (outputs under {OUTPUT_DIR})"
         ),
     }

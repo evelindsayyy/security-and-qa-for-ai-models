@@ -283,6 +283,19 @@ wheels = [
 ]
 
 [[package]]
+name = "authlib"
+version = "1.7.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+    { name = "joserfc" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/36/98/7d93f30d029643c0275dbc0bd6d5a6f670661ee6c9a94d93af7ab4887600/authlib-1.7.2.tar.gz", hash = "sha256:2cea25fefcd4e7173bdf1372c0afc265c8034b23a8cd5dcb6a9164b826c64231", size = 176511, upload-time = "2026-05-06T08:10:23.116Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fb/95/adcb68e20c34162e9135f370d6e31737719c2b6f94bc953fe7ed1f10fe21/authlib-1.7.2-py2.py3-none-any.whl", hash = "sha256:3e1faedc9d87e7d56a164eca3ccb6ace0d61b94abe83e92242f8dc8bba9b4a9f", size = 259548, upload-time = "2026-05-06T08:10:21.436Z" },
+]
+
+[[package]]
 name = "avidtools"
 version = "0.1.2"
 source = { registry = "https://pypi.org/simple" }
@@ -522,7 +535,7 @@ name = "cffi"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pycparser", marker = "(implementation_name != 'PyPy' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32') or (implementation_name != 'PyPy' and sys_platform == 'darwin' and extra == 'group-29-security-and-qa-for-ai-models-safety') or (implementation_name != 'PyPy' and sys_platform == 'darwin' and extra == 'group-29-security-and-qa-for-ai-models-scanner') or (implementation_name != 'PyPy' and sys_platform == 'win32' and extra == 'group-29-security-and-qa-for-ai-models-safety') or (implementation_name != 'PyPy' and sys_platform == 'win32' and extra == 'group-29-security-and-qa-for-ai-models-scanner') or (implementation_name != 'PyPy' and sys_platform == 'emscripten' and extra != 'group-29-security-and-qa-for-ai-models-benchmarks') or (implementation_name == 'PyPy' and extra == 'group-29-security-and-qa-for-ai-models-benchmarks' and extra == 'group-29-security-and-qa-for-ai-models-safety') or (implementation_name == 'PyPy' and extra == 'group-29-security-and-qa-for-ai-models-benchmarks' and extra == 'group-29-security-and-qa-for-ai-models-scanner') or (implementation_name == 'PyPy' and extra == 'group-29-security-and-qa-for-ai-models-safety' and extra == 'group-29-security-and-qa-for-ai-models-scanner') or (sys_platform == 'emscripten' and extra == 'group-29-security-and-qa-for-ai-models-benchmarks' and extra == 'group-29-security-and-qa-for-ai-models-safety') or (sys_platform == 'emscripten' and extra == 'group-29-security-and-qa-for-ai-models-benchmarks' and extra == 'group-29-security-and-qa-for-ai-models-scanner')" },
+    { name = "pycparser", marker = "implementation_name != 'PyPy' or (extra == 'group-29-security-and-qa-for-ai-models-benchmarks' and extra == 'group-29-security-and-qa-for-ai-models-safety') or (extra == 'group-29-security-and-qa-for-ai-models-benchmarks' and extra == 'group-29-security-and-qa-for-ai-models-scanner') or (extra == 'group-29-security-and-qa-for-ai-models-safety' and extra == 'group-29-security-and-qa-for-ai-models-scanner')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/eb/56/b1ba7935a17738ae8453301356628e8147c79dbb825bcbc73dc7401f9846/cffi-2.0.0.tar.gz", hash = "sha256:44d1b5909021139fe36001ae048dbdde8214afa20200eda0f64c068cac5d5529", size = 523588, upload-time = "2025-09-08T23:24:04.541Z" }
 wheels = [
@@ -779,7 +792,7 @@ name = "cryptography"
 version = "48.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cffi", marker = "(platform_python_implementation != 'PyPy' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32') or (platform_python_implementation != 'PyPy' and sys_platform == 'darwin' and extra == 'group-29-security-and-qa-for-ai-models-safety') or (platform_python_implementation != 'PyPy' and sys_platform == 'darwin' and extra == 'group-29-security-and-qa-for-ai-models-scanner') or (platform_python_implementation != 'PyPy' and sys_platform == 'win32' and extra == 'group-29-security-and-qa-for-ai-models-safety') or (platform_python_implementation != 'PyPy' and sys_platform == 'win32' and extra == 'group-29-security-and-qa-for-ai-models-scanner') or (platform_python_implementation != 'PyPy' and sys_platform == 'emscripten' and extra != 'group-29-security-and-qa-for-ai-models-benchmarks') or (platform_python_implementation == 'PyPy' and extra == 'group-29-security-and-qa-for-ai-models-benchmarks' and extra == 'group-29-security-and-qa-for-ai-models-safety') or (platform_python_implementation == 'PyPy' and extra == 'group-29-security-and-qa-for-ai-models-benchmarks' and extra == 'group-29-security-and-qa-for-ai-models-scanner') or (platform_python_implementation == 'PyPy' and extra == 'group-29-security-and-qa-for-ai-models-safety' and extra == 'group-29-security-and-qa-for-ai-models-scanner') or (sys_platform == 'emscripten' and extra == 'group-29-security-and-qa-for-ai-models-benchmarks' and extra == 'group-29-security-and-qa-for-ai-models-safety') or (sys_platform == 'emscripten' and extra == 'group-29-security-and-qa-for-ai-models-benchmarks' and extra == 'group-29-security-and-qa-for-ai-models-scanner')" },
+    { name = "cffi", marker = "platform_python_implementation != 'PyPy' or (extra == 'group-29-security-and-qa-for-ai-models-benchmarks' and extra == 'group-29-security-and-qa-for-ai-models-safety') or (extra == 'group-29-security-and-qa-for-ai-models-benchmarks' and extra == 'group-29-security-and-qa-for-ai-models-scanner') or (extra == 'group-29-security-and-qa-for-ai-models-safety' and extra == 'group-29-security-and-qa-for-ai-models-scanner')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/12/45/870e7f4bef50e5f53b9f51d4428aee5290eedf58ba443f16b1ebb7ab8e66/cryptography-48.0.1.tar.gz", hash = "sha256:266f4ee051abb2f725b74ef8072b521ce1feacf685a3364fa6a6b45548db791a", size = 832989, upload-time = "2026-06-09T22:32:31.8Z" }
 wheels = [
@@ -2405,6 +2418,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/41/f2/d34e8b3a08a9cc79a50b2208a93dce981fe615b64d5a4d4abee421d898df/joblib-1.5.3.tar.gz", hash = "sha256:8561a3269e6801106863fd0d6d84bb737be9e7631e33aaed3fb9ce5953688da3", size = 331603, upload-time = "2025-12-15T08:41:46.427Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7b/91/984aca2ec129e2757d1e4e3c81c3fcda9d0f85b74670a094cc443d9ee949/joblib-1.5.3-py3-none-any.whl", hash = "sha256:5fc3c5039fc5ca8c0276333a188bbd59d6b7ab37fe6632daa76bc7f9ec18e713", size = 309071, upload-time = "2025-12-15T08:41:44.973Z" },
+]
+
+[[package]]
+name = "joserfc"
+version = "1.7.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/44/90/25cb27518750218e4f850be63d8bbb2343efaad1c01c3571aaa4b3c33bd7/joserfc-1.7.1.tar.gz", hash = "sha256:77d0b76514879c68c6f433bc5b7357a4ab72008ff1e33d8379fd11d72bd8ca81", size = 233181, upload-time = "2026-06-08T07:21:33.412Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b3/00/fa62404c3e347f946faa13aa21085205f9cc06ad17671e37f81a51662ae8/joserfc-1.7.1-py3-none-any.whl", hash = "sha256:b3e3d655612e2e1ef67b2600f2f420e12e537b020208fab1761fad647319c164", size = 70423, upload-time = "2026-06-08T07:21:32.001Z" },
 ]
 
 [[package]]
@@ -5547,9 +5572,11 @@ name = "security-and-qa-for-ai-models"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "authlib" },
     { name = "flask" },
     { name = "litellm" },
     { name = "openai" },
+    { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
@@ -5567,9 +5594,6 @@ benchmarks = [
     { name = "pandas" },
     { name = "requests" },
     { name = "tqdm" },
-]
-db = [
-    { name = "psycopg", extra = ["binary"] },
 ]
 dcc = [
     { name = "vllm", marker = "sys_platform == 'linux' or (extra == 'group-29-security-and-qa-for-ai-models-benchmarks' and extra == 'group-29-security-and-qa-for-ai-models-safety') or (extra == 'group-29-security-and-qa-for-ai-models-benchmarks' and extra == 'group-29-security-and-qa-for-ai-models-scanner') or (extra == 'group-29-security-and-qa-for-ai-models-safety' and extra == 'group-29-security-and-qa-for-ai-models-scanner')" },
@@ -5591,9 +5615,11 @@ scanner = [
 
 [package.metadata]
 requires-dist = [
+    { name = "authlib", specifier = ">=1.6.0" },
     { name = "flask", specifier = ">=3.1.3" },
     { name = "litellm", specifier = ">=1.87.1" },
     { name = "openai", specifier = ">=2.38.0" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0.3" },
@@ -5612,13 +5638,12 @@ benchmarks = [
     { name = "requests", specifier = ">=2.32.0" },
     { name = "tqdm", specifier = ">=4.67.0" },
 ]
-db = [{ name = "psycopg", extras = ["binary"], specifier = ">=3.2" }]
 dcc = [{ name = "vllm", marker = "sys_platform == 'linux'", specifier = ">=0.8" }]
 dev = [
     { name = "pytest", specifier = ">=8.0" },
     { name = "ruff", specifier = ">=0.15.15" },
 ]
-safety = [{ name = "garak", specifier = ">=0.15.0,<0.16" }]
+safety = [{ name = "garak", specifier = ">=0.15.1,<0.16" }]
 scanner = [
     { name = "fickling", specifier = ">=0.1.0" },
     { name = "huggingface-hub", specifier = ">=0.34.0" },

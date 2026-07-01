@@ -1,0 +1,12 @@
+# Production TLS + reverse proxy (Duke ACME via locksmith.oit.duke.edu).
+# Used with docker/compose.caddy.yml — not for local dev.
+#
+# Env vars (from .env): CADDY_DOMAIN, CADDY_EMAIL, CADDY_ACME_HOSTNAME, CADDY_BACKEND_PORT
+
+{$CADDY_DOMAIN} {
+	tls {$CADDY_EMAIL} {
+		ca https://{$CADDY_ACME_HOSTNAME}/acme/v2/directory
+	}
+
+	reverse_proxy web:{$CADDY_BACKEND_PORT}
+}

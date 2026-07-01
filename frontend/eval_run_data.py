@@ -22,6 +22,36 @@ RESULTS_DIR = EVALUATOR / "results"
 sys.path.insert(0, str(EVALUATOR))
 
 from schemas import EvaluationResult  # noqa: E402
+from cost_perf import (  # noqa: E402
+    BALANCED,
+    BUDGET,
+    QUALITY_FIRST,
+    CostPerfWeights,
+    ModelCost,
+    score_cohort,
+)
+
+# The comparison table reads the rubric "overall" as if on a 0–5 display scale.
+# Most dimensions are 1–5 (tone is 1–3) and the overall is a rubric-weighted
+# mean, so 5.0 is the right denominator for normalizing quality on the
+# dashboard. Documented approximation — see metrics.yaml for the real scales.
+QUALITY_SCALE_MAX = 5.0
+
+# Reverse map so the page can name the active weighting (v1 always Balanced;
+# the slider UI in a later week will pass other presets / custom weights).
+# Keyed by the weight *values* (a tuple), not the preset object: evaluator
+# modules get imported both bare (`cost_perf`) and as a package
+# (`evaluator.cost_perf`), which are distinct classes, so identity/`==` across
+# them is unreliable. The value tuple compares cleanly regardless.
+def _weights_key(w: CostPerfWeights) -> tuple[float, float, float]:
+    return (w.w_quality, w.w_cost, w.w_latency)
+
+
+_WEIGHTS_NAME = {
+    _weights_key(w): name
+    for name, w in (("balanced", BALANCED), ("budget", BUDGET),
+                    ("quality_first", QUALITY_FIRST))
+}
 
 
 def _percentile(values: list[float], p: float) -> float:
@@ -85,6 +115,7 @@ def _aggregate_file(path: Path) -> dict | None:
         "suite": first.adaptation.task_suite_version,
         "candidate_model": first.adaptation.candidate_model,
         "judge_model": first.adaptation.judge_model,
+        "inference_backend": first.adaptation.inference_backend,
         "n": n,
         "ok": ok,
         "cand_fail": cand_fail,
@@ -321,6 +352,63 @@ def get_model_detail(slug: str) -> dict | None:
     }
 
 
+def attach_cost_perf(data: dict, weights: CostPerfWeights = BALANCED) -> dict:
+    """Enrich comparison runs with cost-vs-performance metrics, then return data.
+
+    Models are scored *per suite* so the cohort normalization compares
+    like-for-like (an it_support overall isn't normalized against a SQL one).
+    Each scorable run gains a ``cost_perf`` dict (quality-per-$, weighted
+    utility, and the normalized components — never one hidden number); runs with
+    no overall score get ``cost_perf = None``. A page-level ``cost_perf_weights``
+    records the active weighting so the template can show it.
+
+    Works on both run shapes (file + DB) via .get with defaults; mutates in
+    place and returns the same dict for convenient chaining.
+    """
+    runs = data.get("runs", [])
+    by_suite: dict[str, list[dict]] = {}
+    for r in runs:
+        r.setdefault("cost_perf", None)
+        by_suite.setdefault(r.get("suite", ""), []).append(r)
+
+    for group in by_suite.values():
+        cohort: list[ModelCost] = []
+        scorable: list[dict] = []
+        for r in group:
+            overall = r.get("overall")
+            n = r.get("n") or 0
+            if overall is None or n <= 0:
+                continue  # leaves cost_perf = None
+            cohort.append(ModelCost(
+                model=r.get("candidate_model", ""),
+                quality_overall=overall,
+                quality_scale_max=QUALITY_SCALE_MAX,
+                cost_per_response_usd=(r.get("total_cost_usd") or 0.0) / n,
+                latency_ms=r.get("mean_latency_ms") or 0,
+                inference_backend=r.get("inference_backend", "gateway"),
+            ))
+            scorable.append(r)
+
+        for r, s in zip(scorable, score_cohort(cohort, weights)):
+            r["cost_perf"] = {
+                "quality_per_dollar": s.quality_per_dollar,
+                "utility": s.utility,
+                "quality_norm": s.quality_norm,
+                "cost_norm": s.cost_norm,
+                "latency_norm": s.latency_norm,
+                "cost_per_response_usd": s.cost_per_response_usd,
+                "note": s.notes[0] if s.notes else "",
+            }
+
+    data["cost_perf_weights"] = {
+        "preset": _WEIGHTS_NAME.get(_weights_key(weights), "custom"),
+        "w_quality": weights.w_quality,
+        "w_cost": weights.w_cost,
+        "w_latency": weights.w_latency,
+    }
+    return data
+
+
 # Public entry points — Postgres when configured, artifact fallback otherwise.
 
 
@@ -329,10 +417,10 @@ def get_runs_data() -> dict:
         from frontend import eval_db_data
 
         if eval_db_data.available():
-            return eval_db_data.get_runs_data_db()
+            return attach_cost_perf(eval_db_data.get_runs_data_db())
     except Exception:
         pass  # any DB hiccup -> files, never a broken page
-    return _get_runs_data_files()
+    return attach_cost_perf(_get_runs_data_files())
 
 
 def get_run_detail(slug: str) -> dict | None:
@@ -348,3 +436,45 @@ def get_run_detail(slug: str) -> dict | None:
     except Exception:
         pass
     return _get_run_detail_files(slug)
+
+
+_EVAL_ARTIFACT_SUFFIXES = (".jsonl", ".log", "_trace.jsonl")
+
+
+def delete_eval_run_paths(slug: str) -> list[str]:
+    if not is_safe_slug(slug):
+        return []
+    return [f"evaluator/results/{slug}{suffix}" for suffix in _EVAL_ARTIFACT_SUFFIXES]
+
+
+def delete_eval_run(slug: str) -> str | None:
+    """Remove eval run artifacts (and DB row when configured). Returns error or None."""
+    from frontend.eval_launch import is_eval_run_in_progress
+
+    if not is_safe_slug(slug):
+        return f"invalid slug: {slug!r}"
+    if is_eval_run_in_progress(slug):
+        return "cannot delete while the run is still in progress"
+
+    removed_files = 0
+    for suffix in _EVAL_ARTIFACT_SUFFIXES:
+        path = RESULTS_DIR / f"{slug}{suffix}"
+        if path.is_file():
+            try:
+                path.unlink()
+                removed_files += 1
+            except OSError as exc:
+                return f"could not delete {path.name}: {exc}"
+
+    removed_db = False
+    try:
+        from frontend import eval_db_data
+
+        if eval_db_data.available():
+            removed_db = eval_db_data.delete_run(slug)
+    except Exception:
+        pass
+
+    if removed_files == 0 and not removed_db:
+        return f"no eval run found for slug {slug!r}"
+    return None

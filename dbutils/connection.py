@@ -8,12 +8,21 @@ from collections.abc import Callable
 from typing import Any
 
 
+def psycopg_available() -> bool:
+    """True when the optional ``db`` dependency group is installed."""
+    try:
+        import psycopg  # type: ignore[import-untyped]  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 def require_psycopg() -> Any:
     """Import psycopg v3 or exit with install instructions."""
     try:
         import psycopg  # type: ignore[import-untyped]
     except ImportError:
-        sys.exit("psycopg is required:  uv sync --group db")
+        sys.exit("psycopg is required:  re-run uv sync")
     return psycopg
 
 

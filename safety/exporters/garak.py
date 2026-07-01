@@ -19,6 +19,11 @@ from pathlib import Path
 from typing import Any
 
 from safety.gateway_ids import normalize_gateway_model_id
+from safety.garak.report_validation import (
+    DEFAULT_PROBE_SPEC,
+    analyze_report,
+    expected_module_count,
+)
 from safety.schemas import SafetyRunResult
 
 # garak module name → safety_findings.category (extend when probe_spec grows)
@@ -263,6 +268,11 @@ def export_from_garak_report(
                 break
     raw_target = raw_target or "GPT 4.1 Mini"
 
+    analysis = analyze_report(report_path)
+    expected_modules = expected_module_count(DEFAULT_PROBE_SPEC)
+    completed_count = analysis["completed_module_count"]
+    report_complete = analysis["has_completion"] and completed_count >= expected_modules
+
     doc = {
         "gateway_model_id": normalize_gateway_model_id(str(raw_target)),
         "status": "complete",
@@ -278,6 +288,10 @@ def export_from_garak_report(
                 "probe_modules": sorted(
                     {pid.replace("garak.", "") for pid in (f["probe_id"] for f in findings)}
                 ),
+                "expected_modules": expected_modules,
+                "completed_modules": completed_count,
+                "completed_module_names": analysis["completed_modules"],
+                "report_complete": report_complete,
             }
         },
         "started_at": init_row.get("start_time") or _utc_now(),

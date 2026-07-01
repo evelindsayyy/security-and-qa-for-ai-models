@@ -127,7 +127,7 @@ def register_routes(app):
         )
         if error:
             return error, 400
-        slug, _already = start_run(
+        slug, already = start_run(
             hf_repo,
             skip_modelscan=not request.form.get("run_modelscan"),
             skip_fickling=not request.form.get("run_fickling"),
@@ -135,7 +135,8 @@ def register_routes(app):
             skip_deps=not request.form.get("run_deps"),
             skip_secrets=not request.form.get("run_secrets"),
         )
-        return redirect(url_for("scan_detail", slug=slug, status="running"))
+        status = "reused" if already else "running"
+        return redirect(url_for("scan_detail", slug=slug, status=status))
 
     @app.route("/scans/<slug>/status")
     def scan_run_status(slug: str):
@@ -173,6 +174,31 @@ def register_routes(app):
             )
         return render_template("scan_detail.html", missing=False, **detail)
 
+    @app.route("/scans/<slug>/delete", methods=["GET", "POST"])
+    def scan_delete(slug: str):
+        from flask import redirect, render_template, request, url_for
+
+        from frontend.result_delete import scan_delete_context
+        from frontend.scan_data import delete_scan
+
+        if request.method == "GET":
+            ctx = scan_delete_context(slug)
+            if ctx is None:
+                return redirect(url_for("scans"))
+            return render_template("delete_confirm.html", **ctx)
+        if request.form.get("confirm") != "1":
+            ctx = scan_delete_context(slug, error_message="Confirmation required.")
+            if ctx is None:
+                return redirect(url_for("scans"))
+            return render_template("delete_confirm.html", **ctx)
+        error = delete_scan(slug)
+        if error:
+            ctx = scan_delete_context(slug, error_message=error)
+            if ctx is None:
+                return redirect(url_for("scans"))
+            return render_template("delete_confirm.html", **ctx)
+        return redirect(url_for("scans"))
+
     @app.route("/eval-run")
     def eval_run():
         # lazy import — don't load evaluator/openai at app startup
@@ -190,7 +216,19 @@ def register_routes(app):
     def eval_run_start():
         from flask import redirect, request, url_for
 
-        from frontend.eval_launch import start_run, validate_launch
+        from frontend.eval_launch import (
+            get_launch_options,
+            start_run,
+            validate_hf_candidate,
+            validate_launch,
+        )
+
+        # Candidate source: a gateway model (runs now) or a Hugging Face model
+        # (validated now; served on the DCC in a later milestone).
+        if request.form.get("source") == "hf":
+            hf_result = validate_hf_candidate(request.form.get("hf_repo", "").strip())
+            return render_template("eval_run_new.html",
+                                   hf_result=hf_result, **get_launch_options())
 
         candidate = request.form.get("candidate", "")
         judge = request.form.get("judge", "")
@@ -213,12 +251,28 @@ def register_routes(app):
     def eval_run_start_custom():
         from flask import redirect, request, url_for
 
+        from auth.session import require_private_access
         from frontend.eval_launch import (
+            get_launch_options,
             start_run,
             validate_custom_questions,
+            validate_hf_candidate,
             validate_launch,
             write_custom_suite,
         )
+
+        user, auth_err = require_private_access()
+        if auth_err:
+            return auth_err, 403
+
+        # Candidate source mirrors the standard start form: a gateway model runs
+        # now; a Hugging Face model is validated now and served on the DCC in a
+        # later milestone. The HF branch validates the model only (no run yet),
+        # identical to /eval-run/start.
+        if request.form.get("source") == "hf":
+            hf_result = validate_hf_candidate(request.form.get("hf_repo", "").strip())
+            return render_template("eval_run_new.html",
+                                   hf_result=hf_result, **get_launch_options())
 
         candidate = request.form.get("candidate", "")
         judge = request.form.get("judge", "")
@@ -280,11 +334,47 @@ def register_routes(app):
             )
         return render_template("eval_run_detail.html", missing=False, **detail)
 
+    @app.route("/eval-run/<slug>/delete", methods=["GET", "POST"])
+    def eval_run_delete(slug: str):
+        from flask import redirect, render_template, request, url_for
+
+        from frontend.eval_run_data import delete_eval_run
+        from frontend.result_delete import eval_delete_context
+
+        if request.method == "GET":
+            ctx = eval_delete_context(slug)
+            if ctx is None:
+                return redirect(url_for("eval_run"))
+            return render_template("delete_confirm.html", **ctx)
+        if request.form.get("confirm") != "1":
+            ctx = eval_delete_context(slug, error_message="Confirmation required.")
+            if ctx is None:
+                return redirect(url_for("eval_run"))
+            return render_template("delete_confirm.html", **ctx)
+        error = delete_eval_run(slug)
+        if error:
+            ctx = eval_delete_context(slug, error_message=error)
+            if ctx is None:
+                return redirect(url_for("eval_run"))
+            return render_template("delete_confirm.html", **ctx)
+        return redirect(url_for("eval_run"))
+
     @app.route("/benchmarks")
     def benchmarks():
         from frontend.benchmark_data import get_benchmarks_data
 
         return render_template("benchmarks.html", **get_benchmarks_data())
+
+    @app.route("/benchmarks/reference")
+    def benchmark_reference():
+        from flask import redirect, url_for
+
+        from frontend.benchmark_data import get_benchmark_reference_data
+
+        data = get_benchmark_reference_data()
+        if not data.get("has_reference"):
+            return redirect(url_for("benchmarks"))
+        return render_template("benchmark_reference.html", **data)
 
     @app.route("/benchmarks/new")
     def benchmark_run_new():
@@ -296,14 +386,52 @@ def register_routes(app):
     def benchmark_run_start():
         from flask import redirect, request, url_for
 
-        from frontend.benchmark_launch import start_run, validate_launch
+        from frontend.benchmark_launch import (
+            HF_INFERENCE_BASE_URL,
+            start_run,
+            validate_launch,
+        )
 
         benchmark_key = request.form.get("benchmark", "")
-        model = request.form.get("model", "")
-        error = validate_launch(benchmark_key, model)
+        model_source = request.form.get("model_source", "gateway")
+        sample_raw = request.form.get("sample", "").strip()
+        seed_raw = request.form.get("seed", "").strip()
+        try:
+            sample = int(sample_raw) if sample_raw else None
+            seed = int(seed_raw) if seed_raw else None
+        except ValueError:
+            return "sample and seed must be integers", 400
+        if model_source == "custom":
+            model = request.form.get("custom_model", "").strip()
+            base_url = request.form.get("base_url", "").strip()
+            api_key = request.form.get("api_key", "").strip() or None
+        elif model_source == "hosted":
+            model = request.form.get("hosted_model", "").strip()
+            base_url = HF_INFERENCE_BASE_URL
+            api_key = request.form.get("hf_token", "").strip() or None
+            if not api_key:
+                return "enter your Hugging Face token", 400
+        else:
+            model = request.form.get("model", "")
+            base_url = None
+            api_key = None
+        error = validate_launch(
+            benchmark_key,
+            model,
+            base_url=base_url,
+            sample=sample,
+            seed=seed,
+        )
         if error:
             return error, 400
-        slug, _already = start_run(benchmark_key, model)
+        slug, _already = start_run(
+            benchmark_key,
+            model,
+            base_url=base_url,
+            api_key=api_key,
+            sample=sample,
+            seed=seed,
+        )
         return redirect(url_for("benchmark_detail", slug=slug, status="running"))
 
     @app.route("/benchmarks/<slug>/status")
@@ -341,6 +469,31 @@ def register_routes(app):
                 slug=slug,
             )
         return render_template("benchmark_detail.html", missing=False, **detail)
+
+    @app.route("/benchmarks/<slug>/delete", methods=["GET", "POST"])
+    def benchmark_delete(slug: str):
+        from flask import redirect, render_template, request, url_for
+
+        from frontend.benchmark_data import delete_benchmark
+        from frontend.result_delete import benchmark_delete_context
+
+        if request.method == "GET":
+            ctx = benchmark_delete_context(slug)
+            if ctx is None:
+                return redirect(url_for("benchmarks"))
+            return render_template("delete_confirm.html", **ctx)
+        if request.form.get("confirm") != "1":
+            ctx = benchmark_delete_context(slug, error_message="Confirmation required.")
+            if ctx is None:
+                return redirect(url_for("benchmarks"))
+            return render_template("delete_confirm.html", **ctx)
+        error = delete_benchmark(slug)
+        if error:
+            ctx = benchmark_delete_context(slug, error_message=error)
+            if ctx is None:
+                return redirect(url_for("benchmarks"))
+            return render_template("delete_confirm.html", **ctx)
+        return redirect(url_for("benchmarks"))
 
     @app.route("/safety")
     def safety():
@@ -395,6 +548,18 @@ def register_routes(app):
         slug, profile = run_key.split("/", 1)
         return redirect(url_for("safety_detail", slug=slug, profile=profile, status="running"))
 
+    @app.route("/safety/<slug>/status")
+    def safety_run_status_legacy(slug: str):
+        from flask import redirect, url_for
+
+        return redirect(url_for("safety_run_status", slug=slug, profile="base"))
+
+    @app.route("/safety/<slug>")
+    def safety_detail_legacy(slug: str):
+        from flask import redirect, url_for
+
+        return redirect(url_for("safety_detail", slug=slug, profile="base"))
+
     @app.route("/safety/<slug>/<profile>/status")
     def safety_run_status(slug: str, profile: str):
         from flask import jsonify
@@ -431,6 +596,31 @@ def register_routes(app):
                 profile=profile,
             )
         return render_template("safety_detail.html", missing=False, **detail)
+
+    @app.route("/safety/<slug>/<profile>/delete", methods=["GET", "POST"])
+    def safety_delete(slug: str, profile: str):
+        from flask import redirect, render_template, request, url_for
+
+        from frontend.result_delete import safety_delete_context
+        from frontend.safety_data import delete_safety
+
+        if request.method == "GET":
+            ctx = safety_delete_context(slug, profile)
+            if ctx is None:
+                return redirect(url_for("safety"))
+            return render_template("delete_confirm.html", **ctx)
+        if request.form.get("confirm") != "1":
+            ctx = safety_delete_context(slug, profile, error_message="Confirmation required.")
+            if ctx is None:
+                return redirect(url_for("safety"))
+            return render_template("delete_confirm.html", **ctx)
+        error = delete_safety(slug, profile)
+        if error:
+            ctx = safety_delete_context(slug, profile, error_message=error)
+            if ctx is None:
+                return redirect(url_for("safety"))
+            return render_template("delete_confirm.html", **ctx)
+        return redirect(url_for("safety"))
 
     @app.route("/models")
     def models_catalog():

@@ -2,25 +2,34 @@
 
 How the images fit together. For commands, see [`cli.md`](cli.md).
 
+## Recommended local path
+
+```bash
+./docker/build-pillars.sh    # one-time pillar images
+python3 main.py               # containerized UI (default); same as ./docker/run.sh up --build
+```
+
+Production on the application VM uses the same scripts with optional **Caddy HTTPS** when `CADDY_DOMAIN` is set in `.env`. See [`https-setup.md`](https-setup.md). Host Flask (`uv run flask …`) is a development alternative only.
+
 ## Two layers
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| App | `docker/` | Long-lived Flask UI for the application VM |
+| App | `docker/` | Long-lived Flask UI |
 | Job sandboxes | `*/docker/` | One-shot scan / safety / eval / benchmark runs |
 | Safety sub-tools | `safety/promptfoo/docker/`, `safety/garak/docker/` | Nested from the safety orchestrator |
 
-Dependencies live in [`pyproject.toml`](../pyproject.toml) + [`uv.lock`](../uv.lock). Optional groups: `dev` (pytest, ruff), `db` (psycopg), `scanner`, `safety`, `benchmarks`.
+Dependencies live in [`pyproject.toml`](../pyproject.toml) + [`uv.lock`](../uv.lock). Core deps include **psycopg**; optional groups: `dev` (pytest, ruff), and **one of** `scanner`, `safety`, or `benchmarks` (mutually exclusive — baked into pillar images instead).
 
 ## When Docker is used
 
 | Task | Docker? |
 |------|---------|
-| Unit tests, local UI dev | No (`uv run …`) |
+| Unit tests | No (`uv run …`) |
+| **UI (default)** | Yes — `./docker/run.sh` |
 | Browser "Start" buttons | Yes (default) |
 | HF scanning (untrusted files) | Yes |
 | Safety / eval / benchmark jobs from the UI | Yes |
-| Production UI on the VM | Yes — `docker/run.sh` |
 
 Set `FRONTEND_LAUNCH_MODE=host` to run pillar jobs as host Python instead of Docker.
 
@@ -46,6 +55,24 @@ GitLab runs lint and unit tests on Duke **shared runners**. On `main`, the
 `build-web-image` job uses the dedicated `oit-shared-buildah` runner to build
 `docker/Dockerfile` without a Docker socket or DinD, then pushes
 `${CI_REGISTRY_IMAGE}/web:${CI_COMMIT_SHORT_SHA}` to the GitLab container
-registry. No gateway secrets are required. See [`.gitlab-ci.yml`](../.gitlab-ci.yml).
+registry. No gateway secrets are required.
 
-Postgres is external (`POSTGRES_DSN` on OIT host). Deploy topology: [`architecture.md`](architecture.md#deployment-and-hosts).
+**Deploy (manual by default on `main`):** after lint, tests, and `build-web-image`,
+the **`deploy`** job SSHs to the application VM, runs `git pull`, logs into the
+registry, pulls the tagged web image, and **recreates** the web container
+(`--force-recreate`) so Flask reloads bind-mounted code and refreshes
+`HOST_UID` / `DOCKER_GID`. Click **Play** in GitLab, or set CI/CD variable
+**`DEPLOY_AUTO=true`** for automatic deploy. See
+[`.gitlab/README.md`](../.gitlab/README.md) for CI/CD variables.
+
+Postgres is external (`POSTGRES_DSN` on OIT host). End-to-end flow diagram: [`architecture.md`](architecture.md#how-a-run-flows).
+
+## Production HTTPS (Caddy)
+
+On the application VM, set `CADDY_DOMAIN` in `.env`. [`docker/run.sh`](../docker/run.sh) automatically adds [`compose.caddy.yml`](../docker/compose.caddy.yml):
+
+- **Caddy** listens on ports 80/443 with Duke Locksmith ACME (`locksmith.oit.duke.edu`)
+- **web** is reachable only inside the Docker network (not published on `:5000`)
+- Set `TRUST_PROXY=1` so Flask trusts `X-Forwarded-Proto`
+
+Full operator steps: [`https-setup.md`](https-setup.md). Do not run Caddy locally.

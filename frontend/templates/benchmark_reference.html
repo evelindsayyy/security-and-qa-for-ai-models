@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Guide{% endblock %}
+
+{% block content %}
+<div class="eval-comparison">
+  <p class="back"><a href="{{ url_for('benchmarks') }}">← your benchmark runs</a></p>
+  <h1>Guide</h1>
+  <p class="sub">
+    Sample reference scores for
+    {% for m in reference_models %}{{ m }}{% if not loop.last %} · {% endif %}{% endfor %}
+    on default pilot sizes via the Duke gateway, 
+    as well as explanations of what each benchmark measures and how scores are computed.
+  </p>
+
+  <div class="table-wrap">
+  <table class="run-table reference-table">
+    <thead>
+      <tr>
+        <th>Benchmark</th>
+        {% for m in reference_models %}
+        <th class="num">{{ m }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in reference_rows %}
+      {% set badge_class = {'truthfulqa': 'badge-tqa',
+                            'ifeval': 'badge-ifeval',
+                            'consistency': 'badge-consistency',
+                            'mmlu': 'badge-mmlu',
+                            'tomi': 'badge-tomi',
+                            'mbpp': 'badge-mbpp',
+                            'quality': 'badge-quality'}.get(row.key, 'badge-pilot') %}
+      <tr>
+        <td class="reference-benchmark-cell">
+          <span class="badge {{ badge_class }}">{{ row.label }}</span>
+          {% if row.score_hint or row.score_hint_sources %}
+          {% with hint=row.score_hint, sources=row.score_hint_sources, reference=true %}
+          {% include '_benchmark_score_hint.html' %}
+          {% endwith %}
+          {% endif %}
+        </td>
+        {% for m in reference_models %}
+        {% set cell = row.cells.get(m) %}
+        <td class="num">
+          {% if cell %}
+          <a href="{{ url_for('benchmark_detail', slug=cell.slug) }}"
+             class="reference-score-link {{ cell.score_class }}">{{ cell.headline_display }}</a>
+          <span class="dim"> {{ cell.headline_metric }}</span>
+          <span class="dim"> · n={{ cell.coverage.n_display }}</span>
+          {% if cell.coverage.partial %}
+          <span class="coverage-partial-badge" title="{{ coverage_skip_explanation }}">
+            {{ cell.coverage.failed }} skipped
+          </span>
+          {% endif %}
+          {% else %}
+          <span class="dim">—</span>
+          {% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  {% with title="How each benchmark works", intro="Reference scores below use default pilot sample sizes via the Duke gateway. This section explains what each benchmark measures and how scores are computed." %}
+  {% include '_benchmark_guide.html' %}
+  {% endwith %}
+</div>
+{% endblock %}

@@ -1,17 +1,23 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable %}
+{% from '_macros.html' import expandable, cli_benchmark_docker %}
 
 {% block title %}Benchmark results{% endblock %}
 
 {% block content %}
 <div class="eval-comparison">
   <h1>Benchmark results</h1>
-  <p><a class="btn-primary" href="{{ url_for('benchmark_run_new') }}">▶ Start a new run</a></p>
+  <p>
+    <a class="btn-primary" href="{{ url_for('benchmark_run_new') }}">▶ Start a new run</a>
+    {% if has_reference %}
+    · <a href="{{ url_for('benchmark_reference') }}">Guide</a>
+    {% endif %}
+  </p>
 
+  <h2>Your runs</h2>
   {% if not has_runs %}
     <p class="sub empty">
-      No benchmark output yet. Use <b>Start a new run</b> above, or run from CLI:
-      <code>python benchmarks/run_benchmark.py --benchmark truthfulqa --model "GPT 4.1 Mini"</code>
+      No benchmark output yet. Use <b>Start a new run</b> above, or from repo root:
+      <code>{{ cli_benchmark_docker() }}</code>
     </p>
   {% else %}
     <p class="sub">
@@ -35,6 +41,7 @@
           <th class="num">n</th>
           <th class="col-nowrap">When</th>
           <th>File</th>
+          <th class="col-actions">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -46,10 +53,6 @@
                               'tomi': 'badge-tomi',
                               'mbpp': 'badge-mbpp',
                               'quality': 'badge-quality'}.get(r.kind, 'badge-pilot') %}
-        {% set v = r.headline_value or 0 %}
-        {% if v >= 0.8 %}{% set score_class = 'score-strong' %}
-        {% elif v >= 0.6 %}{% set score_class = 'score-mid' %}
-        {% else %}{% set score_class = 'score-weak' %}{% endif %}
         <tr class="row-link"
             data-href="{{ url_for('benchmark_detail', slug=r.slug) }}"
             tabindex="0"
@@ -59,13 +62,24 @@
             data-model="{{ r.model }}">
           <td class="col-nowrap"><span class="badge {{ badge_class }}">{{ r.kind_label }}</span></td>
           <td><span class="model">{{ r.model }}</span></td>
-          <td class="num overall {{ score_class }}">
+          <td class="num overall {{ r.score_class }}">
             {{ r.headline_display }}
             <span class="dim"> {{ r.headline_metric }}</span>
           </td>
-          <td class="num">{{ r.n }}</td>
+          <td class="num">
+            {{ r.coverage.n_display }}
+            {% if r.coverage.partial %}
+            <span class="coverage-partial-badge" title="{{ coverage_skip_explanation }}">
+              {{ r.coverage.failed }} skipped
+            </span>
+            {% endif %}
+          </td>
           <td class="col-nowrap dim">{{ r.timestamp }}</td>
           <td class="col-long">{{ expandable(r.filename, clamp=1) }}</td>
+          <td class="col-actions" onclick="event.stopPropagation()">
+            <a href="{{ url_for('benchmark_delete', slug=r.slug) }}"
+               class="btn-danger btn-sm" title="Delete result">Delete</a>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -96,26 +110,6 @@
         }
       })();
     </script>
-
-    <section class="key">
-      <h2>How to read this table</h2>
-      <dl class="legend-grid">
-        <dt>TruthfulQA</dt>
-        <dd>Multiple-choice accuracy — higher means the model picks the truthful answer more often.</dd>
-        <dt>IFEval</dt>
-        <dd>Fraction of prompts whose constraints the response satisfied.</dd>
-        <dt>Consistency</dt>
-        <dd>Mean BERTScore F1 between responses to rephrasings of the same question.</dd>
-        <dt>MMLU</dt>
-        <dd>Multiple-choice accuracy across academic subjects (sampled subset by default).</dd>
-        <dt>ToMi</dt>
-        <dd>Theory-of-mind accuracy on belief-tracking stories.</dd>
-        <dt>MBPP</dt>
-        <dd>Fraction of code generation problems where all unit tests passed.</dd>
-        <dt>QuALITY</dt>
-        <dd>Long-document reading comprehension accuracy</dd>
-      </dl>
-    </section>
   {% endif %}
 </div>
 {% endblock %}

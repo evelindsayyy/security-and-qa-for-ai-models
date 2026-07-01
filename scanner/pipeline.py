@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from dbutils import run_lock
 from scanner import __version__
 from scanner.download import download_model
 from scanner.format_detector import FileFormatSummary, summarize as format_summarize
@@ -191,6 +192,42 @@ def scan_model(
         Writes ``modelscan_report.json``, ``modelaudit_report.json`` when applicable,
         and populates ``tool_results`` / ``scan_metadata.coverage`` for reviewers.
     """
+    out = output_dir(hf_repo)
+    lock_file = run_lock.lock_path(out)
+    if run_lock.should_skip_cli_acquire(lock_file):
+        pass
+    elif not run_lock.try_acquire(lock_file, command=f"scan {hf_repo}", source="cli"):
+        raise run_lock.RunLockError(
+            f"scan already in progress for {hf_repo!r} — see {lock_file}"
+        )
+
+    try:
+        return _scan_model_impl(
+            hf_repo,
+            auto_download=auto_download,
+            write_combined=write_combined,
+            run_modelscan=run_modelscan,
+            run_fickling=run_fickling,
+            run_modelaudit=run_modelaudit,
+            run_dependencies=run_dependencies,
+            run_secrets=run_secrets,
+        )
+    finally:
+        if not run_lock.should_skip_cli_acquire(lock_file):
+            run_lock.release(lock_file)
+
+
+def _scan_model_impl(
+    hf_repo: str,
+    *,
+    auto_download: bool = True,
+    write_combined: bool = True,
+    run_modelscan: bool = True,
+    run_fickling: bool = True,
+    run_modelaudit: bool = True,
+    run_dependencies: bool = True,
+    run_secrets: bool = True,
+) -> ScanResult:
     mdir = model_dir(hf_repo)
     if not mdir.exists() and auto_download:
         download_model(hf_repo)

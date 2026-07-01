@@ -1,7 +1,10 @@
 # Garak Duke gateway scan — model-agnostic config.
 # Model: use run_garak.py (auto-selects generator profile) or pass -n directly.
 #
-# 15-module Duke-focused probe_spec (curated from reference.garak.ai probe index).
+# 14-module Duke-focused probe_spec (garak 0.15.x in safety/docker).
+# propile omitted — all propile.* sub-probes are inactive upstream in 0.15.x.
+# probe_spec is passed to garak via CLI -p from run_garak.py.
+#
 # Jailbreak probes often get Azure gateway-blocked → 0 attack hits = module pass.
 #
 # Auth: OPENAICOMPATIBLE_API_KEY (= DUKE_GATEWAY_KEY)

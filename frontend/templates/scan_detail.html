@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable %}
+{% from '_macros.html' import expandable, cli_scan_docker, progress_terminal %}
 
 {% block title %}{% if missing %}Scan not found{% else %}{{ model_id }} — scan{% endif %}{% endblock %}
 
@@ -8,35 +8,26 @@
   {% if missing %}
     <h1>Scan not found</h1>
     <p class="sub empty">no <code>scan_result.json</code> for slug <code>{{ slug }}</code>.</p>
+    <p class="form-hint"><a href="{{ url_for('scan_run_new') }}">Start a scan</a> or CLI: <code>{{ cli_scan_docker() }}</code></p>
     <p><a href="{{ url_for('scans') }}">← all scans</a></p>
   {% elif running %}
     <p class="back"><a href="{{ url_for('scans') }}">← all scans</a></p>
     <h1>Scan in progress</h1>
-    <p class="sub">slug <code>{{ slug }}</code> · updates every 5 seconds</p>
-    <div class="progress-card">
-      <p class="progress-meta">status: <b id="prog-state">{{ run_status.status }}</b></p>
-      <pre class="log-snippet" id="prog-log">{{ run_status.message }}</pre>
-      <p id="prog-retry" class="sub" style="display: none;">
-        <a href="{{ url_for('scan_run_new') }}" id="prog-retry-link">Start a new scan →</a>
-      </p>
-    </div>
-    <script>
-      (function () {
-        const slug = {{ slug | tojson }};
-        function poll() {
-          fetch("/scans/" + slug + "/status").then(r => r.json()).then(function (s) {
-            document.getElementById("prog-state").textContent = s.status;
-            if (s.message) document.getElementById("prog-log").textContent = s.message;
-            if (s.status === "complete") window.location = "/scans/" + slug;
-            else if (s.status === "failed") {
-              document.getElementById("prog-state").textContent = "failed";
-              document.getElementById("prog-retry").style.display = "block";
-            }
-          });
-        }
-        setInterval(poll, 5000);
-      })();
-    </script>
+    <p class="sub">slug <code>{{ slug }}</code> · live log updates every 5 seconds</p>
+    {{ progress_terminal(
+         url_for('scan_run_status', slug=slug),
+         5000,
+         hint='Run continues in the background if you switch tabs. Full log: scanner/output/' ~ slug ~ '/scan_run.log',
+         show_retry=true,
+         retry_url=url_for('scan_run_new'),
+         initial_status=run_status.status,
+         initial_message=run_status.message
+       ) }}
+    {% if run_status.status == 'failed' %}
+    <p class="detail-delete-form">
+      <a href="{{ url_for('scan_delete', slug=slug) }}" class="btn-danger">Delete failed run</a>
+    </p>
+    {% endif %}
   {% else %}
     <p class="back"><a href="{{ url_for('scans') }}">← all scans</a></p>
     <h1><span class="model">{{ model_id }}</span></h1>
@@ -44,6 +35,10 @@
       <span class="tier tier-{{ severity_tier }}">{{ severity_tier }}</span>
       · risk {{ overall_risk_score }} · {{ n_findings }} finding{{ "" if n_findings == 1 else "s" }} ·
       scanned {{ scanned_at[:10] if scanned_at != "—" else "—" }}
+    </p>
+
+    <p class="detail-delete-form">
+      <a href="{{ url_for('scan_delete', slug=slug) }}" class="btn-danger">Delete result</a>
     </p>
 
     <h2>Findings ({{ n_findings }})</h2>

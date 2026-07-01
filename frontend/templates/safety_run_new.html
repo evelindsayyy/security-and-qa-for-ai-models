@@ -7,8 +7,12 @@
   <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
   <h1>Start a safety run</h1>
   <p class="sub">
-    Launches <code>safety/run_safety.sh</code> on the server.
+    Launches <code>safety.run</code> via Docker Compose (default) — Promptfoo, Garak, and merge.
     Full runs can take 30–90 minutes per model.
+    Host fallback: <code>uv run python -m safety.run "&lt;model&gt;"</code>.
+    {% if not docker_available %}
+    <span class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>
+    {% endif %}
   </p>
 
   {% if gateway_error %}
@@ -16,8 +20,6 @@
   {% endif %}
 
   <form method="post" action="{{ url_for('safety_run_start') }}" class="launch-form" id="safety-form">
-
-    <!-- Step 1: Model -->
     <label>Gateway model
       <select name="gateway_model" id="gateway_model">
         {% for group in gateway_groups %}
@@ -28,62 +30,36 @@
         </optgroup>
         {% endfor %}
       </select>
-      <span class="form-hint">chat-capable models from the gateway catalog — ids are case-sensitive</span>
+      <span class="form-hint">chat-capable gateway ids — case-sensitive</span>
     </label>
 
     <p id="overwrite-warning" class="form-warning" style="display: none;">
-      This model already has safety results — starting a new run will delete the prior outputs and replace them.
+      This model already has safety results — starting again will delete the prior outputs and replace them.
+    </p>
+    <p id="inflight-warning" class="form-warning" style="display: none;">
+      A safety run for this model and profile is already in progress.
     </p>
 
-    <!-- Step 2: Suite selection -->
-    <fieldset id="suite-fieldset">
-      <legend>Test suites</legend>
-      <p class="form-hint" style="margin-bottom: 0.75rem;">Select which suites to run. Each suite tests a different attack surface.</p>
-
-      <label class="suite-option">
-        <input type="checkbox" name="run_policy" id="run_policy" value="1" checked>
-        <span class="suite-option-label">
-          <b>Promptfoo policy</b>
-          <span class="dim">Hand-written Duke policy probes — credentials, FERPA/PHI, academic integrity, impersonation</span>
-        </span>
-      </label>
-
-      <label class="suite-option">
-        <input type="checkbox" name="run_redteam" id="run_redteam" value="1" checked>
-        <span class="suite-option-label">
-          <b>Promptfoo red-team</b>
-          <span class="dim">AI-generated adversarial attacks — PII extraction, jailbreaks, excessive agency, prompt injection</span>
-        </span>
-      </label>
-
-      <label class="suite-option">
-        <input type="checkbox" name="run_garak" id="run_garak" value="1" checked>
-        <span class="suite-option-label">
-          <b>Garak</b>
-          <span class="dim">Automated vulnerability scanner — encoding attacks, DAN, package hallucination, prompt injection modules</span>
-        </span>
-      </label>
+    <fieldset>
+      <legend>Test suites <span class="dim">(all on by default)</span></legend>
+      <label><input type="checkbox" name="run_policy" id="run_policy" value="1" checked> Promptfoo policy</label>
+      <label><input type="checkbox" name="run_redteam" id="run_redteam" value="1" checked> Promptfoo red-team</label>
+      <label><input type="checkbox" name="run_garak" id="run_garak" value="1" checked> Garak</label>
     </fieldset>
 
-    <!-- Step 3a: Red-team sub-options (shown only when red-team is checked) -->
-    <div id="redteam-options" class="suite-suboptions">
-      <label>Red-team profile
-        <select name="redteam_profile" id="redteam_profile">
-          {% for p in profiles %}
-          <option value="{{ p.value }}" {% if p.value == 'base' %}selected{% endif %}>{{ p.label }}</option>
-          {% endfor %}
-        </select>
-        <span class="form-hint">selects which attack plugins to include — base covers all general-purpose deployments</span>
-      </label>
-    </div>
+    <label id="redteam-profile-row">Red-team profile
+      <select name="redteam_profile" id="redteam_profile">
+        {% for p in profiles %}
+        <option value="{{ p.value }}" {% if p.value == 'base' %}selected{% endif %}>{{ p.label }}</option>
+        {% endfor %}
+      </select>
+      <span class="form-hint">attack plugins for the red-team suite — base is the general-purpose default</span>
+    </label>
 
-    <!-- Step 3b: Garak sub-options (shown only when garak is checked) -->
-    <div id="garak-options" class="suite-suboptions">
-      <label>Garak probe subset <span class="dim">(optional)</span>
-        <input type="text" name="garak_probes" id="garak_probes" placeholder="encoding,promptinject,dan.Dan_11_0">
-        <span class="form-hint">comma-separated module list; leave blank to run the full default Duke set</span>
-      </label>
-    </div>
+    <label id="garak-probes-row">Garak probe subset <span class="dim">(optional)</span>
+      <input type="text" name="garak_probes" id="garak_probes" placeholder="encoding,promptinject">
+      <span class="form-hint">comma-separated modules; leave blank for the full default Duke set</span>
+    </label>
 
     <button type="submit" class="btn-primary" id="submit-btn">▶ Start safety run</button>
   </form>
@@ -92,31 +68,40 @@
 <script>
 (function () {
   const HAS_RESULTS = {{ model_has_results | tojson }};
+  const MODEL_SLUGS = {{ model_slugs | tojson }};
+  const INFLIGHT = new Set({{ inflight_safety_keys | tojson }});
 
   const modelSel   = document.getElementById("gateway_model");
+  const profileSel = document.getElementById("redteam_profile");
   const policyBox  = document.getElementById("run_policy");
   const redteamBox = document.getElementById("run_redteam");
   const garakBox   = document.getElementById("run_garak");
-  const rtOptions  = document.getElementById("redteam-options");
-  const gkOptions  = document.getElementById("garak-options");
+  const rtRow      = document.getElementById("redteam-profile-row");
+  const gkRow      = document.getElementById("garak-probes-row");
   const submitBtn  = document.getElementById("submit-btn");
   const warning    = document.getElementById("overwrite-warning");
+  const inflightWarning = document.getElementById("inflight-warning");
+
+  function inflightKey() {
+    const slug = MODEL_SLUGS[modelSel.value] || modelSel.value;
+    return slug + "/" + profileSel.value;
+  }
 
   function updateUI() {
-    // Show/hide sub-options based on checked suites
-    rtOptions.style.display = redteamBox.checked ? "" : "none";
-    gkOptions.style.display = garakBox.checked  ? "" : "none";
+    rtRow.style.display = redteamBox.checked ? "" : "none";
+    gkRow.style.display = garakBox.checked ? "" : "none";
 
-    // Warn if overwriting
-    warning.style.display = HAS_RESULTS[modelSel.value] ? "block" : "none";
+    const inflight = INFLIGHT.has(inflightKey());
+    warning.style.display = HAS_RESULTS[modelSel.value] && !inflight ? "block" : "none";
+    inflightWarning.style.display = inflight ? "block" : "none";
 
-    // Disable submit if nothing is checked
     const anyChecked = policyBox.checked || redteamBox.checked || garakBox.checked;
-    submitBtn.disabled = !anyChecked;
-    submitBtn.title = anyChecked ? "" : "Select at least one suite to run";
+    submitBtn.disabled = !anyChecked || inflight;
+    submitBtn.title = inflight ? "Run already in progress" : (anyChecked ? "" : "Select at least one suite to run");
   }
 
   modelSel.addEventListener("change", updateUI);
+  profileSel.addEventListener("change", updateUI);
   policyBox.addEventListener("change", updateUI);
   redteamBox.addEventListener("change", updateUI);
   garakBox.addEventListener("change", updateUI);
@@ -124,32 +109,4 @@
   updateUI();
 })();
 </script>
-
-<style>
-.suite-option {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
-  padding: 0.6rem 0;
-  cursor: pointer;
-}
-.suite-option input[type="checkbox"] {
-  margin-top: 0.2rem;
-  flex-shrink: 0;
-}
-.suite-option-label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-.suite-option-label .dim {
-  font-size: 0.85em;
-}
-.suite-suboptions {
-  margin-left: 1.5rem;
-  padding: 0.5rem 0 0.5rem 1rem;
-  border-left: 2px solid var(--border, #ddd);
-  margin-bottom: 0.5rem;
-}
-</style>
 {% endblock %}

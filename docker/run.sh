@@ -12,19 +12,21 @@
 #   ./docker/run.sh up -d --build   # start (background)
 #   ./docker/run.sh down            # stop
 #   ./docker/run.sh logs -f web     # logs
+#
+# Production HTTPS: set CADDY_DOMAIN in .env — run.sh auto-includes compose.caddy.yml
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-
-export HOST_REPO="$(pwd)"
-export HOST_UID="$(id -u)"
-export HOST_GID="$(id -g)"
-if [ -S /var/run/docker.sock ]; then
-  export DOCKER_GID="$(stat -c '%g' /var/run/docker.sock)"
-fi
+# shellcheck source=docker/host-env.sh
+source docker/host-env.sh
 
 ENV_ARGS=()
 [ -f .env ] && ENV_ARGS=(--env-file .env)
 
+COMPOSE_FILES=(-f docker/compose.yml)
+if [ -f .env ] && grep -qE '^CADDY_DOMAIN=.+' .env 2>/dev/null; then
+  COMPOSE_FILES+=(-f docker/compose.caddy.yml)
+fi
+
 exec docker compose --project-name qa-ai-models "${ENV_ARGS[@]}" \
-  -f docker/compose.yml "$@"
+  "${COMPOSE_FILES[@]}" "$@"

@@ -1,10 +1,10 @@
-# Orchestrates safety/run_safety.sh (Promptfoo + Garak docker sub-stacks + merge).
+# Orchestrates python -m safety.run (Promptfoo + Garak docker sub-stacks + merge).
 # Browser launches call ensure_stack("safety") then compose run this service.
 # Secrets come from the repo-root .env (see .env.example). Run from the repo root:
 #
 #   docker compose --env-file .env \
 #     -f safety/docker/compose.yml run --rm safety \
-#     ./safety/run_safety.sh "GPT 4.1 Mini"
+#     python -m safety.run "GPT 4.1 Mini"
 
 services:
   safety:
@@ -26,7 +26,11 @@ services:
       - HOST_REPO=${HOST_REPO:-}
       - OPENAICOMPATIBLE_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - POSTGRES_DSN=${POSTGRES_DSN:-}
+      - EFFICACY_DB_DSN=${EFFICACY_DB_DSN:-}
+      - DATABASE_URL=${DATABASE_URL:-}
       - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
       - HOME=/app/safety/garak/output/.garak-home
       - XDG_DATA_HOME=/app/safety/garak/output/.garak-data
       - XDG_CACHE_HOME=/app/safety/garak/output/.garak-cache

@@ -7,6 +7,7 @@ Tests for safety browser launch — no subprocess spawn, no gateway calls.
 from __future__ import annotations
 
 import os
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -60,7 +61,7 @@ class BuildCommandTest(unittest.TestCase):
     def test_command_is_argv_list(self) -> None:
         cmd = safety_launch.build_command("gpt-5.5")
         self.assertIsInstance(cmd, list)
-        self.assertIn("run_safety.sh", " ".join(cmd))
+        self.assertIn("safety.run", " ".join(cmd))
         self.assertIn("gpt-5.5", cmd)
 
     def test_garak_probes_forwarded(self) -> None:
@@ -92,6 +93,88 @@ class GetStatusTest(unittest.TestCase):
         (self.out / slug / "base" / "merged_safety_result.json").write_text("{}", encoding="utf-8")
         self.assertEqual(safety_launch.get_status(slug, "base")["status"], "complete")
 
+    def test_partial_when_missing_suites(self) -> None:
+        slug = "gpt-5.5"
+        (self.out / slug / "base").mkdir(parents=True)
+        merged = self.out / slug / "base" / "merged_safety_result.json"
+        merged.write_text(
+            '{"missing_suites": ["garak_subset_v1"]}',
+            encoding="utf-8",
+        )
+        status = safety_launch.get_status(slug, "base")
+        self.assertEqual(status["status"], "partial")
+        self.assertIn("Garak", status["warnings"])
+
+    def test_running_alert_when_garak_failed_in_log(self) -> None:
+        slug = "gpt-5.5"
+        profile = "base"
+        (self.out / slug / profile).mkdir(parents=True)
+        log_path = self.out / slug / profile / "run.log"
+        log_path.write_text(
+            "ERROR: Garak finished (exit 0) but no report in safety/garak/output\n",
+            encoding="utf-8",
+        )
+        fake_proc = mock.Mock()
+        fake_proc.poll.return_value = None
+        safety_launch._RUNNING[f"{slug}/{profile}"] = fake_proc
+        self.addCleanup(lambda: safety_launch._RUNNING.pop(f"{slug}/{profile}", None))
+        status = safety_launch.get_status(slug, profile)
+        self.assertEqual(status["status"], "running")
+        self.assertIn("alert", status)
+        self.assertIn("Garak failed", status["alert"])
+
+    def test_complete_when_merged_exists_despite_failed_proc(self) -> None:
+        slug = "gpt-4.1-mini"
+        (self.out / slug / "base").mkdir(parents=True)
+        (self.out / slug / "base" / "merged_safety_result.json").write_text("{}", encoding="utf-8")
+        fake_proc = mock.Mock()
+        fake_proc.poll.return_value = 1
+        fake_proc.returncode = 1
+        safety_launch._RUNNING[f"{slug}/base"] = fake_proc
+        self.addCleanup(lambda: safety_launch._RUNNING.pop(f"{slug}/base", None))
+        self.assertEqual(safety_launch.get_status(slug, "base")["status"], "complete")
+
+    def test_stale_lock_with_complete_log_returns_failed(self) -> None:
+        slug = "llama-3.3"
+        profile = "base"
+        run_dir = self.out / slug / profile
+        run_dir.mkdir(parents=True)
+        log_path = run_dir / "run.log"
+        log_path.write_text("--- Merge ---\nComplete: safety/output/llama-3.3/base/merged.json\n")
+        lock_path = run_dir / "run.lock"
+        lock_path.write_text(
+            '{"pid": 1, "source": "cli", "started_at": "2025-06-29T00:00:00Z"}',
+            encoding="utf-8",
+        )
+        status = safety_launch.get_status(slug, profile)
+        self.assertEqual(status["status"], "failed")
+        self.assertFalse(lock_path.is_file())
+
+    def test_partial_when_garak_incomplete_in_merged(self) -> None:
+        slug = "gpt-4.1-mini"
+        (self.out / slug / "base").mkdir(parents=True)
+        merged = self.out / slug / "base" / "merged_safety_result.json"
+        merged.write_text(
+            json.dumps(
+                {
+                    "missing_suites": [],
+                    "tool_results": {
+                        "garak_subset_v1": {
+                            "garak": {
+                                "expected_modules": 13,
+                                "completed_modules": 6,
+                                "report_complete": False,
+                            }
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        status = safety_launch.get_status(slug, "base")
+        self.assertEqual(status["status"], "partial")
+        self.assertTrue(any("partial" in w.lower() for w in status["warnings"]))
+
 
 class LaunchRoutesTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -116,6 +199,7 @@ class LaunchRoutesTest(unittest.TestCase):
     def test_start_valid_spawns_and_redirects(self) -> None:
         fake_proc = mock.Mock()
         fake_proc.poll.return_value = None
+        fake_proc.pid = 424242
         with mock.patch.object(
             safety_launch.subprocess, "Popen", return_value=fake_proc
         ) as popen:

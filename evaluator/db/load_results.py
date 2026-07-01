@@ -24,19 +24,18 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import statistics
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dbutils.env import load_repo_env, resolve_dsn
+from dbutils.auth_columns import apply_auth_defaults, auth_fields_from_artifact
+
+load_repo_env()
 
 EVALUATOR = Path(__file__).resolve().parent.parent
 RESULTS_DIR = EVALUATOR / "results"
-
-# Repo convention: one root .env, shell-exported vars take precedence.
-load_dotenv(EVALUATOR.parent / ".env", override=False)
 
 
 @dataclass
@@ -117,6 +116,10 @@ def run_row(rows: list[dict], source_file: str) -> dict:
         "source_file": source_file,
         "started_at": rows[0]["timestamp"],
         "completed_at": rows[-1]["timestamp"],
+        "visibility": "public",
+        "owner_user_id": None,
+        "config_fingerprint": None,
+        "config_json": {},
     }
 
 
@@ -161,7 +164,10 @@ def load_file(path: Path) -> tuple[dict, dict, list[dict]] | None:
         return None
     if not rows:
         return None
-    return suite_row(rows), run_row(rows, path.name), result_rows(rows)
+    suite = suite_row(rows)
+    run = run_row(rows, path.name)
+    apply_auth_defaults(run, auth_fields_from_artifact(path, pillar="eval"))
+    return suite, run, result_rows(rows)
 
 
 # ---------------------------------------------------------------------------
@@ -182,12 +188,14 @@ _RUN_INSERT = """
 INSERT INTO public.eval_runs (
     id, suite_id, gateway_model_id, judge_model, status, aggregate_score,
     latency_p50_ms, latency_p95_ms, tokens_in_total, tokens_out_total,
-    cost_usd_total, adaptation, source_file, started_at, completed_at)
+    cost_usd_total, adaptation, source_file, started_at, completed_at,
+    visibility, owner_user_id, config_fingerprint, config_json)
 VALUES (
     %(id)s, %(suite_id)s, %(gateway_model_id)s, %(judge_model)s, %(status)s,
     %(aggregate_score)s, %(latency_p50_ms)s, %(latency_p95_ms)s,
     %(tokens_in_total)s, %(tokens_out_total)s, %(cost_usd_total)s,
-    %(adaptation)s::jsonb, %(source_file)s, %(started_at)s, %(completed_at)s)
+    %(adaptation)s::jsonb, %(source_file)s, %(started_at)s, %(completed_at)s,
+    %(visibility)s, %(owner_user_id)s, %(config_fingerprint)s, %(config_json)s::jsonb)
 ON CONFLICT (id) DO NOTHING
 """
 
@@ -213,8 +221,12 @@ def load_into(conn, parsed: list[tuple[dict, dict, list[dict]]]) -> None:
             cur.execute(_SUITE_SELECT, suite)
             suite_id = cur.fetchone()[0]
 
-            run_params = {**run, "suite_id": suite_id,
-                          "adaptation": json.dumps(run["adaptation"])}
+            run_params = {
+                **run,
+                "suite_id": suite_id,
+                "adaptation": json.dumps(run["adaptation"]),
+                "config_json": json.dumps(run.get("config_json") or {}),
+            }
             cur.execute(_RUN_INSERT, run_params)
 
             for res in results:
@@ -229,7 +241,7 @@ def apply_to_db(dsn: str, parsed: list[tuple[dict, dict, list[dict]]]) -> None:
         import psycopg
     except ImportError:
         sys.exit(
-            "psycopg is required for --apply:  uv sync --group db"
+            "psycopg is required for --apply:  re-run uv sync"
         )
 
     with psycopg.connect(dsn) as conn:
@@ -281,7 +293,7 @@ def run_ingest(
         return IngestResult(count=len(parsed))
 
     if not dsn:
-        sys.exit("--apply needs a DSN: pass --dsn or set EFFICACY_DB_DSN / DATABASE_URL")
+        sys.exit("--apply needs a DSN: pass --dsn or set EFFICACY_DB_DSN / POSTGRES_DSN / DATABASE_URL")
     apply_to_db(dsn, parsed)
     return IngestResult(count=len(parsed))
 
@@ -291,9 +303,8 @@ def main() -> int:
     ap.add_argument("--results-dir", type=Path, default=RESULTS_DIR)
     ap.add_argument("--apply", action="store_true",
                     help="actually write to the database (default: dry run)")
-    ap.add_argument("--dsn", default=os.environ.get("EFFICACY_DB_DSN")
-                    or os.environ.get("DATABASE_URL"),
-                    help="Postgres DSN (or set EFFICACY_DB_DSN / DATABASE_URL)")
+    ap.add_argument("--dsn", default=resolve_dsn("EFFICACY_DB_DSN", "POSTGRES_DSN", "DATABASE_URL"),
+                    help="Postgres DSN (or set EFFICACY_DB_DSN / POSTGRES_DSN / DATABASE_URL)")
     args = ap.parse_args()
     run_ingest(apply=args.apply, dsn=args.dsn, results_dir=args.results_dir)
     return 0

@@ -1,0 +1,7 @@
+{"_metadata": "Numeric-answer execution suite (numeric_duke_v1, 6 questions). Each question has a single numeric answer; scored by execution_eval._check_numeric (extract a number from the response, then tolerance-compare; the optional per-task \"tolerance\" is an absolute tolerance, default near-exact). Illustrative Duke-flavored word problems, NOT real figures. New questions go in a new version file.", "task_suite_version": "numeric_duke_v1", "scoring": "execution", "check": "numeric", "schema": "{id, question, expected, tolerance?, tags}"}
+{"id": "num-001", "question": "A Duke course meets 3 times a week for a 15-week semester. How many class meetings are there in total? Answer with only the number.", "expected": 45, "tags": ["arithmetic"]}
+{"id": "num-002", "question": "A dataset has 1,250 rows and 250 of them are duplicates. How many unique rows remain? Answer with only the number.", "expected": 1000, "tags": ["arithmetic"]}
+{"id": "num-003", "question": "What is 12% of 350? Answer with only the number.", "expected": 42, "tags": ["percent"]}
+{"id": "num-004", "question": "A GPU lab has 8 nodes and 3 are in use. What fraction of the nodes are free? Answer as a decimal.", "expected": 0.625, "tolerance": 0.001, "tags": ["fraction", "decimal"]}
+{"id": "num-005", "question": "Round 3.14159 to two decimal places. Answer with only the number.", "expected": 3.14, "tolerance": 0.001, "tags": ["rounding"]}
+{"id": "num-006", "question": "What is 144 divided by 12? Answer with only the number.", "expected": 12, "tags": ["arithmetic"]}

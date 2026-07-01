@@ -3,7 +3,7 @@ FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project --group db --group benchmarks
+RUN uv sync --frozen --no-dev --no-install-project --group benchmarks
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH=/app

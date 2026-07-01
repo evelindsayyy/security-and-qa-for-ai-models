@@ -1,9 +1,12 @@
-from pathlib import Path
+"""Garak XDG env is set per slug in safety.run."""
+
+from safety.run import garak_xdg_env
 
 
-def test_garak_run_uses_per_slug_xdg_dirs() -> None:
-    script = Path("safety/run_safety.sh").read_text(encoding="utf-8")
-
-    assert 'GARAK_XDG_BASE="${ROOT}/safety/garak/output/${SLUG}"' in script
-    assert 'export XDG_DATA_HOME="${GARAK_XDG_BASE}/.garak-data"' in script
-    assert 'mkdir -p "${HOME}" "${XDG_DATA_HOME}/garak"' in script
+def test_garak_xdg_env_sets_home_and_cache() -> None:
+    env = garak_xdg_env("unit-test-slug")
+    assert "HOME" in env
+    assert "XDG_CACHE_HOME" in env
+    assert "unit-test-slug" in env["HOME"]
+    assert env["USER"] == "garak"
+    assert env["LOGNAME"] == "garak"

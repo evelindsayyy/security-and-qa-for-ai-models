@@ -16,12 +16,15 @@ Catalog keys: [`gateway-models.md`](gateway-models.md).
 - **UI reads normalized fields;** investigators drill into `tool_results`, `detail`, or `metrics` JSONB.
 
 ```text
+users ── user_run_links
 models ──┬── scans ── findings
          ├── safety_runs ── safety_findings
          ├── eval_runs ── eval_results
          └── benchmark_runs
 task_suites ── eval_runs
 ```
+
+Each pillar run table also has: `visibility` (`public`|`private`), `owner_user_id` → `users`, `config_fingerprint`, `config_json`. DDL: [`db/auth_schema.sql`](../db/auth_schema.sql).
 
 ---
 
@@ -162,10 +165,10 @@ Pydantic types: `safety/schemas.py` (`MergedSafetyResult`, `SafetyFinding`, `Saf
 |--------|---------|
 | `id` | UUID (= `evaluation_run_id` from the JSONL) |
 | `suite_id` | FK → `task_suites` |
-| `gateway_model_id` | `gpt-4.1-mini` |
-| `judge_model` | `Llama 4 Maverick` (LLM-as-judge — postdates the original sketch) |
-| `inference_backend` | *planned* — `gateway` \| `dcc` (open weights on the cluster) |
-| `hf_repo` | *planned*, nullable — open-weight model served on DCC |
+| `gateway_model_id` | `gpt-4.1-mini` | |
+| `judge_model` | `Llama 4 Maverick` | LLM-as-judge |
+| `inference_backend` | `gateway` \| `dcc` | In JSONL `adaptation` today (CLI sets `dcc`); Postgres column *planned* |
+| `hf_repo` | nullable | Open-weight HF id when `inference_backend=dcc` |
 | `status` | `complete` |
 | `aggregate_score` | float — mean of per-question `overall` |
 | `latency_p50_ms` / `latency_p95_ms` | int |
@@ -214,7 +217,7 @@ One shared table — each benchmark produces the same run envelope (`frontend/be
 | `model_id` | FK → `models` | |
 | `gateway_model_id` | string | `gpt-4.1-mini` |
 | `benchmark_key` | string | `ifeval` \| `truthfulqa` \| `mmlu` \| `tomi` \| `consistency` |
-| `inference_backend` | string | `gateway` \| `dcc` |
+| `inference_backend` | string | `gateway` (default) \| `dcc` — column in DDL; DCC pillar wiring planned |
 | `status` | string | `complete` |
 | `headline_metric` | string | `pass_rate` \| `accuracy` \| `mean_f1` |
 | `headline_value` | float | `0.83` |

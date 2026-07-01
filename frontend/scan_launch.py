@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import threading
@@ -14,7 +13,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from dbutils import run_lock
 from frontend import docker_launch
+from frontend.log_status import run_log_payload, status_message
+from frontend.output_dirs import OutputDirError, ensure_writable_dir, prepare_output_dir
 from frontend.path_safety import is_safe_slug
 from scanner.paths import safe_dir_name
 
@@ -42,10 +44,12 @@ SUGGESTED_HF_REPOS: tuple[str, ...] = (
 _HF_REPO_RE = re.compile(r"^(?:[a-zA-Z0-9][a-zA-Z0-9._-]*/)?[a-zA-Z0-9][a-zA-Z0-9._-]+$")
 
 
-def _wipe_outputs(slug: str) -> None:
-    target = SCAN_OUTPUT / slug
-    if target.is_dir():
-        shutil.rmtree(target, ignore_errors=True)
+def _output_dir_for_slug(slug: str) -> Path:
+    return SCAN_OUTPUT / slug
+
+
+def _run_lock_path(slug: str) -> Path:
+    return run_lock.lock_path(_output_dir_for_slug(slug))
 
 
 def _clear_registry_for_slug(slug: str) -> None:
@@ -84,8 +88,30 @@ def _existing_scan_slugs() -> set[str]:
     return slugs
 
 
+def inflight_scan_slugs() -> set[str]:
+    """Slugs with an active run.lock or in-memory subprocess."""
+    slugs: set[str] = set()
+    if SCAN_OUTPUT.is_dir():
+        for p in SCAN_OUTPUT.iterdir():
+            if p.is_dir() and run_lock.is_active(run_lock.lock_path(p)):
+                slugs.add(p.name)
+    with _LOCK:
+        for slug, proc in _RUNNING.items():
+            if proc.poll() is None:
+                slugs.add(slug)
+    return slugs
+
+
 def _normalize_hf_repo(hf_repo: str) -> str:
     return hf_repo.strip()
+
+
+def is_scan_inflight(hf_repo: str) -> bool:
+    slug = safe_dir_name(_normalize_hf_repo(hf_repo))
+    if run_lock.is_active(_run_lock_path(slug)):
+        return True
+    proc = _RUNNING.get(slug)
+    return proc is not None and proc.poll() is None
 
 
 def validate_launch(
@@ -108,7 +134,10 @@ def validate_launch(
         return "at least one scanner must be enabled"
     if docker_launch.use_docker() and not docker_launch.docker_available():
         return docker_launch.docker_required_message("scanner")
-    return None
+    slug = safe_dir_name(hf_repo)
+    if is_scan_inflight(hf_repo):
+        return f"a scan for {hf_repo!r} is already running — wait for it to finish or open the progress page"
+    return prepare_output_dir(_output_dir_for_slug(slug))
 
 
 def build_command(
@@ -141,6 +170,14 @@ def build_command(
     )
 
 
+def _watch_process(slug: str, proc: subprocess.Popen, lock_path: Path) -> None:
+    proc.wait()
+    run_lock.release(lock_path)
+    with _LOCK:
+        if _RUNNING.get(slug) is proc:
+            _RUNNING.pop(slug, None)
+
+
 def start_run(
     hf_repo: str,
     *,
@@ -150,7 +187,22 @@ def start_run(
     skip_deps: bool = False,
     skip_secrets: bool = False,
 ) -> tuple[str, bool]:
+    from frontend.run_launch import build_launch_plan, persist_run_meta_scan, reused_slug
+
     hf_repo = _normalize_hf_repo(hf_repo)
+    plan = build_launch_plan(
+        "scan",
+        hf_repo=hf_repo,
+        skip_modelscan=skip_modelscan,
+        skip_fickling=skip_fickling,
+        skip_modelaudit=skip_modelaudit,
+        skip_deps=skip_deps,
+        skip_secrets=skip_secrets,
+    )
+    if plan.reused:
+        slug = reused_slug(plan) or safe_dir_name(hf_repo)
+        return slug, True
+
     slug = safe_dir_name(hf_repo)
     combo = (
         hf_repo,
@@ -160,19 +212,37 @@ def start_run(
         skip_deps,
         skip_secrets,
     )
+    lock_file = _run_lock_path(slug)
+
     with _LOCK:
+        if is_scan_inflight(hf_repo):
+            return slug, True
+
         existing = _INFLIGHT.get(combo)
         if existing and _RUNNING.get(existing) is not None and _RUNNING[existing].poll() is None:
             return existing, True
 
         _clear_registry_for_slug(slug)
-        _wipe_outputs(slug)
+        try:
+            ensure_writable_dir(_output_dir_for_slug(slug))
+        except OutputDirError:
+            raise
 
         if docker_launch.use_docker():
             docker_launch.ensure_stack("scanner")
 
         log_path = ROOT / "scanner" / "output" / slug / "scan_run.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        cmd = build_command(
+            hf_repo,
+            skip_modelscan=skip_modelscan,
+            skip_fickling=skip_fickling,
+            skip_modelaudit=skip_modelaudit,
+            skip_deps=skip_deps,
+            skip_secrets=skip_secrets,
+        )
+        cmd_str = " ".join(cmd)
+
         _write_scan_meta(
             slug,
             hf_repo,
@@ -185,25 +255,34 @@ def start_run(
                 "skip_secrets": skip_secrets,
             },
         )
-        cmd = build_command(
-            hf_repo,
-            skip_modelscan=skip_modelscan,
-            skip_fickling=skip_fickling,
-            skip_modelaudit=skip_modelaudit,
-            skip_deps=skip_deps,
-            skip_secrets=skip_secrets,
-        )
+        persist_run_meta_scan(_output_dir_for_slug(slug), plan)
         with log_path.open("wb") as log_f:
-            log_f.write(f"=== command: {' '.join(cmd)} ===\n".encode())
+            log_f.write(f"=== command: {cmd_str} ===\n".encode())
+            env = os.environ.copy()
+            env["PYTHONUNBUFFERED"] = "1"
             proc = subprocess.Popen(
                 cmd,
                 cwd=str(ROOT),
                 stdout=log_f,
                 stderr=subprocess.STDOUT,
-                env=os.environ.copy(),
+                env=env,
+                start_new_session=True,
             )
+        if not run_lock.try_acquire(
+            lock_file,
+            pid=proc.pid,
+            command=cmd_str,
+            source=run_lock.FRONTEND_SOURCE,
+        ):
+            proc.terminate()
+            return slug, True
         _RUNNING[slug] = proc
         _INFLIGHT[combo] = slug
+        threading.Thread(
+            target=_watch_process,
+            args=(slug, proc, lock_file),
+            daemon=True,
+        ).start()
         return slug, False
 
 
@@ -213,28 +292,43 @@ def get_status(slug: str) -> dict:
 
     result_path = ROOT / "scanner" / "output" / slug / "scan_result.json"
     log_path = ROOT / "scanner" / "output" / slug / "scan_run.log"
+    rel_log = f"scanner/output/{slug}/scan_run.log"
 
     proc = _RUNNING.get(slug)
     if proc is not None and proc.poll() is None:
-        msg = ""
-        if log_path.is_file():
-            msg = log_path.read_text(encoding="utf-8", errors="replace")[-500:]
-        return {"status": "running", "message": msg}
+        return {
+            "status": "running",
+            "log_path": rel_log,
+            **run_log_payload(log_path),
+        }
 
-    if proc is not None and proc.returncode == 0 and result_path.is_file():
-        return {"status": "complete", "message": ""}
+    if run_lock.is_active(_run_lock_path(slug)) and not result_path.is_file():
+        return {
+            "status": "running",
+            "log_path": rel_log,
+            **run_log_payload(log_path),
+        }
 
-    if result_path.is_file() and proc is None:
-        return {"status": "complete", "message": ""}
+    if result_path.is_file():
+        return {"status": "complete", "message": "", "log_path": rel_log}
 
     if proc is not None and proc.poll() is not None:
-        msg = log_path.read_text(encoding="utf-8", errors="replace")[-800:] if log_path.is_file() else ""
-        return {"status": "failed", "message": msg, "hf_repo": _read_hf_repo(slug)}
+        return {
+            "status": "failed",
+            "message": status_message(log_path, failed=True),
+            "hf_repo": _read_hf_repo(slug),
+            "log_path": rel_log,
+        }
 
     if log_path.is_file() and not result_path.is_file():
-        msg = log_path.read_text(encoding="utf-8", errors="replace")[-800:]
+        msg = status_message(log_path, failed=True)
         if msg.strip():
-            return {"status": "failed", "message": msg, "hf_repo": _read_hf_repo(slug)}
+            return {
+                "status": "failed",
+                "message": msg,
+                "hf_repo": _read_hf_repo(slug),
+                "log_path": rel_log,
+            }
 
     return {"status": "not_found", "message": ""}
 
@@ -253,6 +347,7 @@ def get_launch_options() -> dict:
     return {
         "suggested_hf_repos": list(SUGGESTED_HF_REPOS),
         "existing_scan_slugs": sorted(_existing_scan_slugs()),
+        "inflight_scan_slugs": sorted(inflight_scan_slugs()),
         "launch_mode": "docker" if docker_launch.use_docker() else "host",
         "docker_available": docker_launch.docker_available(),
         "compose_file": str(DOCKER_COMPOSE_FILE.relative_to(ROOT)),

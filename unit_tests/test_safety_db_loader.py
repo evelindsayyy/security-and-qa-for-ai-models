@@ -251,8 +251,8 @@ class LoadFileTest(unittest.TestCase):
             result = run_ingest(apply=False, dsn=None, output_dir=root)
         self.assertEqual(result.count, 2)
 
-    def test_flat_file_outside_profile_dir_not_found(self) -> None:
-        """Files at <slug>/merged_safety_result.json (old layout) should be ignored."""
+    def test_flat_file_outside_profile_dir_treated_as_base_profile(self) -> None:
+        """Files at <slug>/merged_safety_result.json (legacy layout) load as profile 'base'."""
         from safety.db.load_safety import run_ingest
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -263,7 +263,7 @@ class LoadFileTest(unittest.TestCase):
                 json.dumps(_merged_payload()), encoding="utf-8"
             )
             result = run_ingest(apply=False, dsn=None, output_dir=root)
-        self.assertEqual(result.count, 0)
+        self.assertEqual(result.count, 1)
 
     def test_missing_completed_at_returns_none(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

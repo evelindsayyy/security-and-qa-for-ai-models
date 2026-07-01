@@ -1,0 +1,124 @@
+# =============================================================================
+# Plain-Language Rewriting Evaluation Rubric — v1 (DRAFT — not expert-calibrated)
+# =============================================================================
+# For tasks where the model is given a dense, technical, or bureaucratic Duke
+# passage (a policy clause, an IT instruction, a financial-aid notice) and asked
+# to rewrite it in plain language for a general audience. Graded by an
+# LLM-as-judge against a reference plain rewrite.
+#
+# The core tension this rubric captures: a rewrite must be EASIER to read
+# (simplicity) WITHOUT dropping or distorting the original's meaning
+# (faithfulness). Either failure mode is bad — gibberish-simple or
+# faithful-but-still-impenetrable.
+#
+# Mixes shared-library dimensions (faithfulness, completeness, tone) with one
+# task-specific inline dimension (simplicity).
+#
+# DO NOT EDIT in place after the W7 freeze — copy to v2 and bump the version.
+# =============================================================================
+
+rubric_version: "plain_language_v1"
+task_type: "plain_language"
+shared_dimensions_lib: "_shared_dimensions.yaml"
+shared_dimensions_version: "shared_v1"
+
+description: |
+  Evaluation rubric for plain-language rewriting. Applied by an LLM-as-judge
+  with access to the original passage and a reference plain rewrite. Scores
+  whether the rewrite is faithful to the source AND genuinely simpler.
+
+
+dimensions:
+
+  faithfulness:
+    from: shared
+    weight: 0.35
+    task_note: >
+      The rewrite must preserve the original's facts and meaning — every
+      condition, actor, number, and deadline carried over, nothing added, no
+      claim that isn't in the source. Dropping a qualifier ("only full-time
+      students") or softening a hard requirement counts as unfaithful even if
+      the result reads nicely.
+
+  simplicity:
+    definition: >
+      Is the rewrite genuinely easier to read than the original for a general
+      audience — short, direct sentences; common words; jargon removed or
+      briefly explained; bureaucratic and passive phrasing replaced with plain,
+      active wording?
+    scale: [1, 5]
+    weight: 0.30
+    anchors:
+      1: >
+        No real simplification — keeps the jargon, long sentences, or passive/
+        bureaucratic phrasing of the original; a general reader is no better off.
+      3: >
+        Somewhat simpler (a few terms explained or sentences split) but still
+        contains avoidable jargon or long, winding sentences.
+      5: >
+        Markedly easier to read: short active sentences, everyday words, jargon
+        removed or explained in passing; a general Duke reader understands it on
+        one read.
+
+  completeness:
+    from: shared
+    weight: 0.20
+    task_note: >
+      Keeps the essential information and required actions the reader needs —
+      does NOT over-simplify away a required condition, deadline, or
+      consequence. Simplicity must not come at the cost of leaving the reader
+      unable to act correctly.
+
+  tone:
+    from: shared
+    weight: 0.15
+    task_note: >
+      Friendly, respectful, and plain — appropriate for a general Duke audience.
+      Not condescending ("obviously, you just..."), not stiff. The target is
+      "a helpful person explaining it to a peer."
+
+
+aggregation:
+  method: "weighted_normalized"
+  weights_sum_to: 1.0
+  display_scale: 5
+  note: |
+    Per HELM, per-dimension scores stay the headline. faithfulness carries the
+    most weight: an easy-to-read rewrite that changes the meaning is worse than
+    a clunky-but-correct one. simplicity is the reason the task exists, so it is
+    second.
+
+
+evaluation_steps:
+  - "If the candidate response is empty, whitespace-only, or a refusal that doesn't rewrite the passage, score 1 on every dimension with rationale 'empty response' or 'refusal without engagement'. Skip the rest."
+  - "Read the original passage and list its essential facts: every actor, condition, number, deadline, and consequence."
+  - "Read the reference plain rewrite to see which facts must survive and the target reading level."
+  - "Read the candidate rewrite."
+  - "For FAITHFULNESS, check each essential fact from the original against the candidate — flag anything dropped, added, or distorted."
+  - "For SIMPLICITY, judge whether a general reader would find it markedly easier than the original: sentence length, word choice, jargon, active vs. passive."
+  - "For COMPLETENESS, check that no required condition/deadline/consequence was simplified away."
+  - "For TONE, judge whether it reads as plain and respectful, not condescending or stiff."
+  - "When between anchors, pick the LOWER score and explain why in the rationale."
+  - "Give a one-sentence rationale per dimension, naming the specific phrase that drove the score."
+  - "Output valid JSON matching the schema. No prose outside the JSON. No markdown fences."
+
+
+validation:
+  sample_size_min: 30
+  sample_size_target: 50
+  raters_min: 2
+  metrics_to_report:
+    - "Pearson correlation per dimension (judge vs. human mean)"
+    - "Agreement within one point (|judge - human| <= 1)"
+  expected_outcome_note: |
+    faithfulness and simplicity are expected to be the discriminating
+    dimensions and may trade off; if raters disagree heavily on simplicity,
+    the anchors need a concrete readability cue (sentence length, word grade).
+
+
+limitations:
+  - "Reference-based: many equally-good plain rewrites exist; a very different but valid rewrite may be under-scored. Pilot before locking."
+  - "Anchors NOT yet expert-calibrated; references are hand-written PLACEHOLDERs (publicly-inferable Duke phrasings), not validated by a Duke communications/compliance office."
+  - "Simplicity is judged qualitatively, not by a readability formula (Flesch-Kincaid) in v1 — a v2 could add a measured readability signal alongside the judge."
+  - "Tone (1-3) is the most subjective dimension; expect lower judge-human agreement."
+  - "Judge bias not corrected (same MT-Bench caveats as other rubrics)."

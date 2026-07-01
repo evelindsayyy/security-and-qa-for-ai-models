@@ -14,7 +14,7 @@ ENV VARIABLES:
     LITELLM_API_KEY     - required
     LITELLM_BASE_URL    - default: https://litellm.oit.duke.edu/v1
     MBPP_MODEL          - default: openai/gpt-5.1-chat
-    MBPP_OUTPUT         - default: test_results
+    MBPP_OUTPUT         - default: results
     MBPP_SAMPLE         - number of problems to sample (default: 50, 0 = full dataset)
     MBPP_SEED           - random seed for sampling (default: 42)
     MBPP_TIMEOUT        - seconds before killing code execution (default: 5)
@@ -34,6 +34,14 @@ import litellm
 import dotenv
 
 from model_client import query_chat_completion, response_content
+from benchmark_metrics import (
+    has_usable_text,
+    print_binary_summary,
+    slugify_model,
+    summarize_binary_accuracy,
+)
+from benchmark_run_stats import attach_run_stats, run_with_stats, write_stats_sidecar
+from benchmark_progress import init_progress, tick
 
 dotenv.load_dotenv()
 
@@ -43,10 +51,11 @@ litellm.suppress_debug_info = True
 # CONFIGURATION
 # ============================================================================
 
+HERE = Path(__file__).resolve().parent
 BASE_URL = os.getenv("LITELLM_BASE_URL") or os.getenv("DUKE_GATEWAY_URL") or "https://litellm.oit.duke.edu/v1"
 API_KEY = os.getenv("LITELLM_API_KEY") or os.getenv("DUKE_GATEWAY_KEY") or os.getenv("OPENAI_API_KEY")
 MODEL = os.getenv("MBPP_MODEL", "openai/gpt-5.1")
-OUTPUT_DIR = os.getenv("MBPP_OUTPUT", "test_results")
+OUTPUT_DIR = os.getenv("MBPP_OUTPUT", str(HERE / "results"))
 SAMPLE_SIZE = int(os.getenv("MBPP_SAMPLE", "50"))
 SEED = int(os.getenv("MBPP_SEED", "42"))
 TIMEOUT = int(os.getenv("MBPP_TIMEOUT", "5"))
@@ -80,8 +89,7 @@ Code:"""
             max_tokens=1000,
         )
         return response_content(response)
-    except Exception as e:
-        print(f"  [ERROR] API error: {e}")
+    except Exception:
         return ""
 
 
@@ -160,6 +168,7 @@ def run_mbpp_test(dataset) -> Dict:
 
     results = []
     correct = 0
+    init_progress(total=len(dataset), unit="problems", message="Running MBPP…")
 
     for idx, row in enumerate(dataset):
         task_id = row["task_id"]
@@ -168,19 +177,25 @@ def run_mbpp_test(dataset) -> Dict:
         test_setup_code = row.get("test_setup_code", "")
 
         raw_response = query_model(problem, test_list)
-        code = extract_code(raw_response)
+        answered = has_usable_text(raw_response)
+        code = extract_code(raw_response) if answered else ""
+        has_code = bool(code)
 
-        if not code:
-            print(f"  [FAIL] Q{idx+1} (task {task_id}): no code generated")
+        if not has_code:
+            status = "SKIP" if not answered else "FAIL"
+            print(f"  [{status}] Q{idx+1} (task {task_id}): no code generated")
             results.append({
                 "task_id": task_id,
                 "problem": problem,
                 "generated_code": "",
                 "passed": False,
+                "answered": has_code,
+                "api_answered": answered,
                 "tests_passed": 0,
                 "tests_total": len(test_list),
                 "test_results": [],
             })
+            tick(message=f"Problem {idx + 1}/{len(dataset)}")
             continue
 
         exec_result = run_tests(code, test_list, test_setup_code)
@@ -203,22 +218,22 @@ def run_mbpp_test(dataset) -> Dict:
             "problem": problem,
             "generated_code": code,
             "passed": exec_result["passed"],
+            "answered": True,
+            "api_answered": answered,
             "tests_passed": exec_result["tests_passed"],
             "tests_total": exec_result["tests_total"],
             "test_results": exec_result["test_results"],
         })
+        tick(message=f"Problem {idx + 1}/{len(dataset)}")
 
-    total = len(results)
-    accuracy = round(correct / total, 4) if total > 0 else 0
+    attempted = len(results)
+    scored = sum(1 for r in results if r["answered"])
+    summary = summarize_binary_accuracy(attempted=attempted, correct=correct, scored=scored)
 
     return {
         "model": MODEL,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "summary": {
-            "total": total,
-            "correct": correct,
-            "accuracy": accuracy,
-        },
+        "summary": summary,
         "results": results,
     }
 
@@ -229,10 +244,12 @@ def run_mbpp_test(dataset) -> Dict:
 
 def save_results(data: Dict, output_dir: str):
     """Save results to a JSON file."""
+    attach_run_stats(data["summary"])
+    write_stats_sidecar()
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_slug = data["model"].replace(" ", "_").replace("/", "_")
+    model_slug = slugify_model(data["model"])
     path = out / f"mbpp_{model_slug}_{timestamp}.json"
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
@@ -257,17 +274,10 @@ def main():
         print(f"[OK] Using full dataset ({len(ds)} problems)")
 
     try:
-        data = run_mbpp_test(ds)
-        save_results(data, OUTPUT_DIR)
-
-        s = data["summary"]
-        bar_len = int(s["accuracy"] * 40)
-        bar = "[" + "=" * bar_len + "-" * (40 - bar_len) + "]"
-        print(f"\n{'='*70}")
-        print("SUMMARY")
-        print(f"{'='*70}")
-        print(f"{MODEL:35s} {bar} {s['accuracy']:.1%} "
-              f"({s['correct']}/{s['total']})")
+        with run_with_stats():
+            data = run_mbpp_test(ds)
+            save_results(data, OUTPUT_DIR)
+            print_binary_summary(MODEL, data["summary"])
 
     except Exception as e:
         print(f"[ERROR] {e}")

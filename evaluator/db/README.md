@@ -15,7 +15,7 @@ Column-level docs: `docs/data-model.md` (Track B section).
 ## Setup (one-time)
 
 ```bash
-uv sync --group db            # installs psycopg (optional dependency group)
+uv sync            # psycopg is a core dependency
 cp .env.example .env          # if you don't have one; then fill in:
 # EFFICACY_DB_DSN="postgresql://USER:PASSWORD@codeplus-postgres-test-01.oit.duke.edu:5432/qa_ai_models"
 ```
@@ -24,10 +24,11 @@ Set `EFFICACY_DB_DSN` in `.env` (credentials from team lead; never commit them).
 
 ## Apply the schema (one-time)
 
-Requires ``uv sync --group db`` and ``EFFICACY_DB_DSN`` (or ``POSTGRES_DSN``) in ``.env`` with ``?sslmode=require``:
+Requires ``uv sync --group dev`` and ``EFFICACY_DB_DSN`` (or ``POSTGRES_DSN``) in ``.env`` with ``?sslmode=require``:
 
 ```bash
-uv run python -m dbutils.apply_schema evaluator/db/efficacy_schema.sql
+./scripts/apply-schemas.sh              # all four pillars
+uv run python -m dbutils.apply_schema evaluator/db/efficacy_schema.sql   # this pillar only
 ```
 
 ## Load results

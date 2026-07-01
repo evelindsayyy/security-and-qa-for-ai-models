@@ -17,7 +17,16 @@ Each pillar keeps its own ``pillar/db/`` directory (transforms + INSERT SQL).
 | `sql` | `apply_sql_file`, `execute_many`, `transaction` |
 | `cli` | `add_ingest_arguments` — standard `--apply` / `--dsn` |
 | `apply_schema.py` | `python -m dbutils.apply_schema` — apply pillar DDL (no `psql`) |
+| `compose` | `compose_cmd`, `compose_run` — shared Docker Compose helpers |
 | `post_run.py` | `maybe_sync_artifact` — auto-ingest after successful pillar runs |
+| `startup.py` | Flask startup log for Postgres read path |
+| `run_fingerprint.py` | Config normalize + SHA-256 for run dedup |
+| `run_access.py` | Postgres lookup for reusable runs; `user_run_links` |
+| `run_meta.py` | `run_meta.json` sidecar read/write at launch |
+| `auth_columns.py` | Merge auth fields into loader rows |
+| `visibility.py` | SQL + artifact filters for public/private views |
+| `run_lock.py` | File-based `run.lock` for scan/safety/benchmark job coordination |
+| `log_tail.py` | `read_log_tail` — tail of run logs for UI status polling |
 
 ## Pillar loader template (scanner / safety / benchmarks)
 
@@ -72,17 +81,16 @@ def main() -> int:
 
 ## Apply schema (one-time)
 
-Requires ``uv sync --group db``. Use ``python -m dbutils.apply_schema`` (no ``psql`` client needed):
+After ``uv sync --group dev`` (psycopg is a core dependency):
 
 ```bash
-uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql
+./scripts/apply-schemas.sh --bootstrap   # all four DDL files + seed from disk
+uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql   # single file
 ```
 
-## Dependencies
+## Auto-ingest
 
-```bash
-uv sync --group db   # psycopg — optional; plain uv sync skips it
-```
+When ``POSTGRES_DSN`` (or ``EFFICACY_DB_DSN``) is set, each pillar calls ``maybe_sync_artifact`` after a successful run. Disable with ``AUTO_INGEST=0``. Bulk backfill: ``python -m api.ingest --apply``.
 
 ## Pillar loaders
 

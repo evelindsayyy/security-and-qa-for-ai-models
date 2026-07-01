@@ -45,10 +45,27 @@ def main() -> int:
     args = parser.parse_args()
 
     if not args.input.is_file():
-        print(f"ERROR: file not found: {args.input}", file=sys.stderr)
+        size = args.input.stat().st_size if args.input.exists() else 0
+        print(
+            f"ERROR: file not found: {args.input} "
+            f"(exists={args.input.exists()}, size={size})",
+            file=sys.stderr,
+        )
+        print(
+            "  Hint: check OPENAI_API_KEY / gateway access and Promptfoo eval logs.",
+            file=sys.stderr,
+        )
         return 1
 
-    payload = json.loads(args.input.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(args.input.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        print(
+            f"ERROR: invalid JSON in {args.input} ({exc})",
+            file=sys.stderr,
+        )
+        return 1
+
     suite = args.probe_suite or (SUITE_REDTEAM if args.redteam else None) or detect_promptfoo_suite(payload)
 
     if args.output:
@@ -58,11 +75,18 @@ def main() -> int:
     else:
         out = args.input.parent / DEFAULT_POLICY_OUTPUT
 
-    doc = export_from_promptfoo_eval(
-        payload,
-        source_file=str(args.input),
-        probe_suite=suite,
-    )
+    try:
+        doc = export_from_promptfoo_eval(
+            payload,
+            source_file=str(args.input),
+            probe_suite=suite,
+        )
+    except Exception as exc:
+        print(
+            f"ERROR: export failed for {args.input} ({type(exc).__name__}: {exc})",
+            file=sys.stderr,
+        )
+        return 1
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 

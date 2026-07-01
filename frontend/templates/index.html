@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import cli_scan_docker, cli_eval_docker, cli_safety_docker, cli_benchmark_docker %}
 
 {% block title %}Home — AI Model Security & QA{% endblock %}
 
@@ -20,7 +21,7 @@
         <p class="pillar-stat">highest risk: <span class="tier tier-{{ scan_worst_tier }}">{{ scan_worst_tier }}</span> ({{ scan_worst_score }})</p>
         <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('scan_run_new') }}">▶ Start scan</a><a href="{{ url_for('scans') }}">View scans →</a></p>
       {% else %}
-        <p class="empty">no scan_result.json found — run <code>python -m scanner scan &lt;hf_id&gt;</code> on dgx</p>
+        <p class="empty">No scans yet — use <b>Start scan</b> below or CLI: <code>{{ cli_scan_docker() }}</code></p>
         <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('scan_run_new') }}">▶ Start scan</a><a href="{{ url_for('scans') }}">Scans page →</a></p>
       {% endif %}
     </div>
@@ -35,7 +36,7 @@
         {% endif %}
         <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('eval_run_new') }}">▶ Start eval</a><a href="{{ url_for('eval_run') }}">View eval runs →</a></p>
       {% else %}
-        <p class="empty">no results jsonl — run <code>evaluator/runner.py</code> with gateway env set</p>
+        <p class="empty">No eval runs yet — use <b>Start eval</b> below or CLI: <code>{{ cli_eval_docker() }}</code></p>
         <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('eval_run_new') }}">▶ Start eval</a><a href="{{ url_for('eval_run') }}">Eval runs page →</a></p>
       {% endif %}
     </div>
@@ -50,7 +51,7 @@
         </p>
         <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('safety_run_new') }}">▶ Start safety</a><a href="{{ url_for('safety') }}">View safety results →</a></p>
       {% else %}
-        <p class="empty">no merged_safety_result.json — run promptfoo + garak, then <code>safety.merge</code></p>
+        <p class="empty">No safety results yet — use <b>Start safety</b> below or CLI: <code>{{ cli_safety_docker() }}</code></p>
         <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('safety_run_new') }}">▶ Start safety</a><a href="{{ url_for('safety') }}">Safety page →</a></p>
       {% endif %}
     </div>
@@ -61,7 +62,7 @@
       {% if benchmark_has %}
         <p class="pillar-stat"><b>{{ benchmark_count }}</b> run{{ "s" if benchmark_count != 1 else "" }} recorded</p>
       {% else %}
-        <p class="empty">no benchmark results yet</p>
+        <p class="empty">No benchmark results yet — use <b>Start benchmark</b> below or CLI: <code>{{ cli_benchmark_docker() }}</code></p>
       {% endif %}
       <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('benchmark_run_new') }}">▶ Start benchmark</a><a href="{{ url_for('benchmarks') }}">View benchmarks →</a></p>
     </div>

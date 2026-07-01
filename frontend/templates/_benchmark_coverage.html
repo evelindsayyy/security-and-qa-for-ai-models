@@ -1,0 +1,11 @@
+{% if coverage and coverage.partial %}
+<div class="coverage-banner" role="note">
+  <p>
+    <strong>Partial run:</strong>
+    {{ coverage.failed }} item{{ '' if coverage.failed == 1 else 's' }} skipped
+    ({{ coverage.scored }}/{{ coverage.attempted }} answered).
+    Headline accuracy is over answered items only.
+  </p>
+  <p class="form-hint">{{ coverage_skip_explanation }}</p>
+</div>
+{% endif %}

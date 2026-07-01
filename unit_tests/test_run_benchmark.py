@@ -32,6 +32,11 @@ class BenchmarkKeysTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             rb.run("not-a-real-benchmark", "gpt-5-chat")
 
+    def test_options_schema_has_sample_defaults(self) -> None:
+        opts = rb.benchmark_options_schema()
+        self.assertEqual(opts["truthfulqa"]["sample"]["default"], 50)
+        self.assertIn("seed", opts["mmlu"])
+
 
 if __name__ == "__main__":
     unittest.main()

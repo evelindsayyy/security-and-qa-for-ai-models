@@ -10,6 +10,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from frontend.path_safety import is_safe_slug
+from safety.merged_paths import iter_merged_result_paths, merged_result_path
+
 ROOT = Path(__file__).parent.parent
 OUTPUT_DIR = ROOT / "safety" / "output"
 
@@ -191,9 +194,26 @@ def _suite_panels(runs: list, tool_results: dict, findings: list[dict]) -> list[
                 "garak_version": garak.get("garak_version"),
                 "garak_report": garak.get("report_file"),
                 "garak_run_id": garak.get("run_id"),
+                "garak_expected_modules": garak.get("expected_modules"),
+                "garak_completed_modules": garak.get("completed_modules"),
+                "garak_report_complete": garak.get("report_complete"),
             }
         )
     return panels
+
+
+def _garak_partial_note(data: dict) -> str | None:
+    garak_tool = (data.get("tool_results") or {}).get("garak_subset_v1") or {}
+    garak_meta = garak_tool.get("garak") or {}
+    expected = garak_meta.get("expected_modules")
+    completed = garak_meta.get("completed_modules")
+    if garak_meta.get("report_complete") is False:
+        if expected and completed is not None:
+            return f"Garak partial ({completed}/{expected} modules) — tier reflects only completed probes."
+        return "Garak partial (incomplete report) — tier reflects only completed probes."
+    if expected and completed is not None and completed < expected:
+        return f"Garak partial ({completed}/{expected} modules) — tier reflects only completed probes."
+    return None
 
 
 def _build_safety_detail(slug: str, data: dict, profile: str = "base") -> dict:
@@ -214,6 +234,7 @@ def _build_safety_detail(slug: str, data: dict, profile: str = "base") -> dict:
         "pass_rate_display": _pass_rate_display(data.get("summary_pass_rate")),
         "pass_rate_class": _rate_class(data.get("summary_pass_rate")),
         "missing_suites": [_suite_label(s) for s in (data.get("missing_suites") or [])],
+        "garak_partial_note": _garak_partial_note(data),
         "status": data.get("status") or "unknown",
         "findings": findings,
         "n_findings": len(findings),
@@ -236,6 +257,8 @@ def _build_safety_detail(slug: str, data: dict, profile: str = "base") -> dict:
 
 def _get_safety_data_files() -> dict:
     """List every merged_safety_result.json under safety/output/<slug>/<profile>/."""
+    from frontend.read_context import artifact_path_visible
+
     if not OUTPUT_DIR.exists():
         return {
             "has_safety": False,
@@ -244,9 +267,9 @@ def _get_safety_data_files() -> dict:
         }
 
     rows: list[dict] = []
-    for path in sorted(OUTPUT_DIR.glob("*/*/merged_safety_result.json")):
-        profile = path.parent.name
-        slug = path.parent.parent.name
+    for path, slug, profile in iter_merged_result_paths(OUTPUT_DIR):
+        if not artifact_path_visible(path.parent):
+            continue
         row = _summarize_merged(path, slug, profile)
         if row:
             rows.append(row)
@@ -263,7 +286,7 @@ def _get_safety_data_files() -> dict:
 
 def _get_safety_detail_files(slug: str, profile: str = "base") -> dict | None:
     """Structured safety payload for one (slug, profile) pair, read from disk."""
-    path = OUTPUT_DIR / slug / profile / "merged_safety_result.json"
+    path = merged_result_path(OUTPUT_DIR, slug, profile)
     if not path.is_file():
         return None
     try:
@@ -298,3 +321,84 @@ def get_safety_detail(slug: str, profile: str = "base") -> dict | None:
     except Exception:
         pass
     return _get_safety_detail_files(slug, profile)
+
+
+def delete_safety_paths(slug: str, profile: str) -> list[str]:
+    if not is_safe_slug(slug) or not is_safe_slug(profile):
+        return []
+    paths = [
+        f"safety/output/{slug}/{profile}/",
+        f"safety/promptfoo/output/{slug}/{profile}/",
+    ]
+    other_profiles = [
+        prof for _path, s, prof in iter_merged_result_paths(OUTPUT_DIR)
+        if s == slug and prof != profile
+    ]
+    if not other_profiles:
+        paths.append(f"safety/garak/output/{slug}/")
+    return paths
+
+
+def delete_safety(slug: str, profile: str = "base") -> str | None:
+    """Remove one safety merge (and DB row when configured). Returns error or None."""
+    from frontend.output_dirs import wipe_dir
+    from frontend.safety_launch import inflight_safety_keys
+
+    if not is_safe_slug(slug) or not is_safe_slug(profile):
+        return f"invalid slug/profile: {slug!r}/{profile!r}"
+    if f"{slug}/{profile}" in inflight_safety_keys():
+        return "cannot delete while the run is still in progress"
+
+    merged_path = merged_result_path(OUTPUT_DIR, slug, profile)
+    db_keys: tuple[str, str] | None = None
+    if merged_path.is_file():
+        try:
+            data = json.loads(merged_path.read_text(encoding="utf-8"))
+            gateway_model_id = data.get("gateway_model_id")
+            completed_at = data.get("completed_at")
+            if gateway_model_id and completed_at:
+                db_keys = (gateway_model_id, completed_at)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    removed_disk = False
+    if merged_path.is_file():
+        try:
+            merged_path.unlink()
+            removed_disk = True
+        except OSError:
+            pass
+
+    for rel in (
+        OUTPUT_DIR / slug / profile,
+        ROOT / "safety" / "promptfoo" / "output" / slug / profile,
+    ):
+        if rel.is_dir():
+            wipe_dir(rel)
+            removed_disk = True
+
+    remaining = any(
+        prof != profile
+        for _path, s, prof in iter_merged_result_paths(OUTPUT_DIR)
+        if s == slug
+    )
+    garak_dir = ROOT / "safety" / "garak" / "output" / slug
+    if not remaining and garak_dir.is_dir():
+        wipe_dir(garak_dir)
+        removed_disk = True
+
+    removed_db = False
+    try:
+        from frontend import safety_db_data
+
+        if safety_db_data.available():
+            if db_keys:
+                removed_db = safety_db_data.delete_run(*db_keys)
+            if not removed_db:
+                removed_db = safety_db_data.delete_run_by_slug(slug)
+    except Exception:
+        pass
+
+    if not removed_disk and not removed_db:
+        return f"no safety result found for {slug!r}/{profile!r}"
+    return None

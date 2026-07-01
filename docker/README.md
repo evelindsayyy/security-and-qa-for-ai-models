@@ -1,12 +1,21 @@
 # Application Docker stack
 
-Containerized Flask UI for the application VM. Start it with the launcher, which
-auto-detects your user, the Docker socket group, and the repo path:
+Containerized Flask UI (default for local dev and the application VM). Scripts
+auto-detect your user, the Docker socket group, and the repo path.
+
+**One-time** — build pillar job images (required before browser **Start** buttons work):
 
 ```bash
-./docker/run.sh up --build      # foreground
-./docker/run.sh up -d --build   # background
-./docker/run.sh down            # stop
+./docker/build-pillars.sh
+```
+
+**Run the UI** — builds the web image on first `up --build`:
+
+```bash
+python3 main.py up --build      # foreground (same as ./docker/run.sh)
+python3 main.py up -d --build   # background
+python3 main.py down            # stop
+python3 main.py logs -f web     # logs
 ```
 
 The repo is bind-mounted at the **same absolute path** inside the container as on
@@ -15,3 +24,14 @@ through the mounted Docker socket. See [`docs/docker.md`](../docs/docker.md) for
 the model and [`docs/cli.md`](../docs/cli.md) for all commands.
 
 Postgres is external (`POSTGRES_DSN` on OIT host).
+
+| Script | Role |
+|--------|------|
+| `host-env.sh` | Shared `HOST_*` and pillar `UID`/`GID` (bash `UID` is readonly) |
+| `build-pillars.sh` | One-time pillar image builds |
+| `deploy-remote.sh` | VM deploy (git pull + registry pull + compose up) |
+| `compose.deploy.yml` | Use `WEB_IMAGE` from CI instead of local build |
+| `compose.caddy.yml` | Production HTTPS overlay (auto-included when `CADDY_DOMAIN` set) |
+| `Caddyfile` | Caddy TLS + reverse proxy config |
+
+Production HTTPS: [`docs/https-setup.md`](../docs/https-setup.md).

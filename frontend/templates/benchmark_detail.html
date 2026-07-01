@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable %}
+{% from '_macros.html' import expandable, cli_benchmark_docker, benchmark_item_status %}
 
 {% block title %}{% if missing %}Benchmark not found{% else %}{{ kind_label }} — {{ model }}{% endif %}{% endblock %}
 
@@ -8,58 +8,140 @@
   {% if missing %}
     <h1>Benchmark not found</h1>
     <p class="sub empty">no file matching slug <code>{{ slug }}</code> in benchmark results.</p>
+    <p class="form-hint"><a href="{{ url_for('benchmark_run_new') }}">Start a benchmark</a> or CLI: <code>{{ cli_benchmark_docker() }}</code></p>
     <p><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
   {% elif running %}
     <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
     <h1>Benchmark run in progress</h1>
-    <p class="sub">slug <code>{{ slug }}</code> · updates every 5 seconds</p>
-    <div class="progress-card">
+    <p class="sub">
+      {% if run_status.benchmark_label %}<strong>{{ run_status.benchmark_label }}</strong>{% endif %}
+      {% if run_status.model %} · {{ run_status.model }}{% endif %}
+      · slug <code>{{ slug }}</code>
+      · updates every 5 seconds
+    </p>
+    <div class="progress-card progress-card--wide">
+      <div class="progress-track">
+        <div id="prog-bar" class="progress-fill" style="width: {{ (100 * run_status.progress / run_status.total) if run_status.total else 0 }}%;"></div>
+      </div>
       <p class="progress-meta">
-        status: <b id="prog-state">{{ run_status.status }}</b>
+        <b id="prog-text">{% if run_status.total %}{{ run_status.progress }}/{{ run_status.total }}{% else %}{{ run_status.progress }}{% endif %}</b>
+        <span id="prog-unit">{{ run_status.unit or 'items' }}</span> ·
+        <span id="prog-state" class="progress-state">{{ run_status.status }}</span>
       </p>
+      <p class="progress-meta dim" id="prog-message"{% if not run_status.message or run_status.message == (run_status.log or '') %} style="display:none"{% endif %}>{{ run_status.message }}</p>
+      <p id="prog-truncated" class="log-terminal-hint" style="display: none;"></p>
+      <pre class="log-terminal log-terminal--run" id="prog-log" aria-live="polite">{{ run_status.log or run_status.message or '' }}</pre>
+      <p class="log-terminal-hint">Run continues in the background if you switch tabs.</p>
       <p class="progress-fail" id="fail-hint" style="display: {{ 'block' if run_status.status == 'failed' else 'none' }};">
-        Run failed — check <code>benchmarks/results/{{ slug }}.log</code>.
+        Run failed — see log above or <code>benchmarks/results/{{ slug }}.log</code>.
       </p>
+      {% if run_status.status == 'failed' %}
+      <p class="detail-delete-form">
+        <a href="{{ url_for('benchmark_delete', slug=slug) }}" class="btn-danger">Delete failed run</a>
+      </p>
+      {% endif %}
     </div>
     <script>
-      const poll = setInterval(async () => {
-        const r = await fetch("{{ url_for('benchmark_run_status', slug=slug) }}");
-        if (!r.ok) return;
-        const s = await r.json();
-        document.getElementById("prog-state").textContent = s.status;
-        if (s.status === "complete") { clearInterval(poll); location.href = location.pathname; }
-        if (s.status === "failed") {
-          clearInterval(poll);
-          document.getElementById("fail-hint").style.display = "block";
+      (function () {
+        const logEl = document.getElementById("prog-log");
+        const truncatedEl = document.getElementById("prog-truncated");
+        function updateLog(text) {
+          if (typeof text !== "string" || text === logEl.textContent) return;
+          const atBottom = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 48;
+          const prevTop = logEl.scrollTop;
+          logEl.textContent = text;
+          logEl.scrollTop = atBottom ? logEl.scrollHeight : prevTop;
         }
-      }, 5000);
+        const poll = setInterval(async () => {
+          const r = await fetch("{{ url_for('benchmark_run_status', slug=slug) }}");
+          if (!r.ok) return;
+          const s = await r.json();
+          if (s.total) {
+            document.getElementById("prog-bar").style.width = (100 * s.progress / s.total) + "%";
+            document.getElementById("prog-text").textContent = s.progress + "/" + s.total;
+          } else {
+            document.getElementById("prog-bar").style.width = "0%";
+            document.getElementById("prog-text").textContent = String(s.progress || 0);
+          }
+          document.getElementById("prog-unit").textContent = s.unit || "items";
+          document.getElementById("prog-state").textContent = s.status;
+          const msgEl = document.getElementById("prog-message");
+          if (s.message && s.message !== (s.log || "")) {
+            msgEl.textContent = s.message;
+            msgEl.style.display = "";
+          } else {
+            msgEl.style.display = "none";
+          }
+          if (truncatedEl) {
+            if (s.log_truncated) {
+              truncatedEl.textContent = "Log is very large — showing the most recent portion. See the run log file on disk for the full history.";
+              truncatedEl.style.display = "block";
+            } else {
+              truncatedEl.style.display = "none";
+            }
+          }
+          const logText = s.log || s.message;
+          if (logText) updateLog(logText);
+          if (s.status === "complete") { clearInterval(poll); location.href = location.pathname; }
+          if (s.status === "failed") {
+            clearInterval(poll);
+            document.getElementById("fail-hint").style.display = "block";
+          }
+        }, 5000);
+      })();
     </script>
   {% else %}
     <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
-    <h1>{{ kind_label }} — {{ model }}</h1>
+    <h1>{{ kind_label }} — {{ model }}{% if is_reference %} <span class="badge badge-pilot">Reference</span>{% endif %}</h1>
     <p class="sub">
       slug <code>{{ slug }}</code> ·
       file <code>{{ filename }}</code> ·
       {{ timestamp }}
     </p>
 
+    {% if not is_reference %}
+    <form method="post" action="{{ url_for('benchmark_delete', slug=slug) }}"
+          class="detail-delete-form"
+          onsubmit="return confirm('Delete this benchmark result? This cannot be undone.');">
+      <input type="hidden" name="confirm" value="1">
+      <button type="submit" class="btn-danger">Delete result</button>
+    </form>
+    {% endif %}
+
     <div class="summary-row">
       <div class="summary-chips">
         <span class="badge badge-pilot">{{ kind_label }}</span>
-        <span class="summary-score">
+        <span class="summary-score {{ score_class }}">
           {{ headline_metric }} <b>{{ headline_display }}</b>
         </span>
-        <span class="dim">n = {{ n }}</span>
+        <span class="dim">n = {{ n_display or n }}</span>
+        {% if coverage and coverage.partial %}
+        <span class="coverage-partial-badge" title="{{ coverage_skip_explanation }}">
+          {{ coverage.failed }} skipped
+        </span>
+        {% endif %}
+        {% if run_stats_chips %}
+          {% for chip in run_stats_chips %}
+          <span class="dim">{{ chip.label }}: <b>{{ chip.value }}</b></span>
+          {% endfor %}
+        {% endif %}
         {% if raw_row_count and raw_row_count > 50 %}
           <span class="dim">detail view: first 50 of {{ raw_row_count }}</span>
         {% endif %}
       </div>
     </div>
 
+    {% include '_benchmark_coverage.html' %}
+
     {% if meta %}
     <details class="tool-panel" open>
       <summary>About {{ meta.title or kind_label }}</summary>
       <p>{{ meta.about }}</p>
+      {% if meta.score_hint or meta.score_hint_sources %}
+      {% with hint=meta.score_hint, sources=meta.score_hint_sources, show_label=true %}
+      {% include '_benchmark_score_hint.html' %}
+      {% endwith %}
+      {% endif %}
       {% if meta.source %}
         <p class="dim">Source:
           {% if meta.source.startswith('http') %}
@@ -111,10 +193,10 @@
     {% if kind == 'ifeval' %}
       <h2>Per prompt ({{ raw_rows|length }}{% if raw_row_count > raw_rows|length %} of {{ raw_row_count }}{% endif %})</h2>
       {% if raw_rows %}
-        {% for r in raw_rows %}
-        <details class="finding-detail {% if not r.judge.passed %}finding-fail{% endif %}">
+        {% for r in raw_rows|sort(attribute='answered') %}
+        <details class="finding-detail {% if r.answered is defined and not r.answered %}finding-skip{% elif not r.judge.passed %}finding-fail{% endif %}">
           <summary>
-            {% if r.judge.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+            {{ benchmark_item_status(r) }}
             <code>{{ r.key }}</code>
             {% if r.instruction_id_list %}
               · <span class="dim">{{ r.instruction_id_list|join(", ") }}</span>
@@ -239,12 +321,13 @@
 
       <h2>Sample questions ({{ results|length }}{% if raw_row_count > results|length %} of {{ raw_row_count }}{% endif %})</h2>
       {% if results %}
-        {% for r in results %}
-        <details class="finding-detail {% if not r.passed %}finding-fail{% endif %}">
+        {% for r in results|sort(attribute='answered') %}
+        <details class="finding-detail {% if r.answered is defined and not r.answered %}finding-skip{% elif not r.passed %}finding-fail{% endif %}">
           <summary>
-            {% if r.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+            {{ benchmark_item_status(r) }}
             · {{ r.subject|replace("_", " ") }}
-            · correct <b>{{ r.correct_answer }}</b> · model <b>{{ r.model_answer }}</b>
+            · correct <b>{{ r.correct_answer }}</b>
+            · model <b>{% if r.answered is defined and not r.answered %}<span class="dim">(no answer)</span>{% else %}{{ r.model_answer }}{% endif %}</b>
             {% if r.question %}
               · <span class="finding-summary-title">{{ r.question[:70] }}{% if r.question|length > 70 %}…{% endif %}</span>
             {% endif %}
@@ -268,7 +351,12 @@
             <dl class="benchmark-meta-dl">
               <dt>Subject</dt><dd>{{ r.subject|replace("_", " ") }}</dd>
               <dt>Correct</dt><dd>{{ r.correct_answer }}</dd>
-              <dt>Model picked</dt><dd>{{ r.model_answer }}</dd>
+              <dt>Model picked</dt>
+              <dd>{% if r.answered is defined and not r.answered %}<span class="dim">Skipped — no usable answer</span>{% else %}{{ r.model_answer }}{% endif %}</dd>
+              {% if r.answered is defined and not r.answered %}
+              <dt>Why skipped?</dt>
+              <dd class="form-hint">{{ coverage_skip_explanation }}</dd>
+              {% endif %}
             </dl>
           </div>
         </details>
@@ -280,12 +368,13 @@
     {% if kind == 'tomi' %}
       <h2>Per story ({{ results|length }}{% if raw_row_count > results|length %} of {{ raw_row_count }}{% endif %})</h2>
       {% if results %}
-        {% for r in results %}
-        <details class="finding-detail {% if not r.passed %}finding-fail{% endif %}">
+        {% for r in results|sort(attribute='answered') %}
+        <details class="finding-detail {% if r.answered is defined and not r.answered %}finding-skip{% elif not r.passed %}finding-fail{% endif %}">
           <summary>
-            {% if r.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+            {{ benchmark_item_status(r) }}
             · <span class="dim">{{ r.question_type }}</span>
-            · correct <b>{{ r.correct_answer }}</b> · model <b>{{ r.model_answer }}</b>
+            · correct <b>{{ r.correct_answer }}</b>
+            · model <b>{% if r.answered is defined and not r.answered %}<span class="dim">(no answer)</span>{% else %}{{ r.model_answer }}{% endif %}</b>
             {% if r.question %}
               · <span class="finding-summary-title">{{ r.question[:70] }}…</span>
             {% endif %}
@@ -300,8 +389,10 @@
             <dl class="benchmark-meta-dl">
               <dt>Type</dt><dd><code>{{ r.question_type }}</code> — see “About ToMi” for what each type tests.</dd>
               <dt>Correct answer</dt><dd>{{ r.correct_answer }}</dd>
-              <dt>Model answer</dt><dd>{{ r.model_answer }}</dd>
-              <dt>Outcome</dt><dd>{% if r.passed %}Answer matches expected belief/reality tracking.{% else %}Mismatch — model may have failed theory-of-mind reasoning for this story.{% endif %}</dd>
+              <dt>Model answer</dt>
+              <dd>{% if r.answered is defined and not r.answered %}<span class="dim">Skipped — no usable answer</span>{% else %}{{ r.model_answer }}{% endif %}</dd>
+              <dt>Outcome</dt>
+              <dd>{% if r.answered is defined and not r.answered %}Not scored — model output was missing or unusable.{% elif r.passed %}Answer matches expected belief/reality tracking.{% else %}Mismatch — model may have failed theory-of-mind reasoning for this story.{% endif %}</dd>
             </dl>
           </div>
         </details>
@@ -313,10 +404,10 @@
 
     {# ---- MBPP ---- #}
     {% if kind == 'mbpp' %}
-      {% for r in results %}
-      <details class="finding-detail {% if not r.passed %}finding-fail{% endif %}">
+      {% for r in results|sort(attribute='answered') %}
+      <details class="finding-detail {% if r.answered is defined and not r.answered %}finding-skip{% elif not r.passed %}finding-fail{% endif %}">
         <summary>
-          {% if r.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+          {{ benchmark_item_status(r) }}
           · task {{ r.task_id }} · {{ r.tests_passed }}/{{ r.tests_total }} tests
         </summary>
         <div class="finding-detail-panel benchmark-item-panel">
@@ -329,7 +420,8 @@
           <dl class="benchmark-meta-dl">
             <dt>Task ID</dt><dd><code>{{ r.task_id }}</code></dd>
             <dt>Tests</dt><dd>{{ r.tests_passed }}/{{ r.tests_total }}</dd>
-            <dt>Outcome</dt><dd>{% if r.passed %}All tests passed.{% else %}One or more tests failed.{% endif %}</dd>
+            <dt>Outcome</dt>
+            <dd>{% if r.answered is defined and not r.answered %}Not scored — no code was generated.{% elif r.passed %}All tests passed.{% else %}One or more tests failed.{% endif %}</dd>
           </dl>
 
           {% if not r.passed and r.test_results %}
@@ -352,13 +444,14 @@
 
     {# ---- QuALITY ---- #}
     {% if kind == 'quality' %}
-    {% for r in results %}
-    <details class="finding-detail {% if not r.passed %}finding-fail{% endif %}">
+    {% for r in results|sort(attribute='answered') %}
+    <details class="finding-detail {% if r.answered is defined and not r.answered %}finding-skip{% elif not r.passed %}finding-fail{% endif %}">
       <summary>
-        {% if r.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+        {{ benchmark_item_status(r) }}
         · article {{ r.article_id }}
         {% if r.hard %}· <span class="dim">HARD</span>{% endif %}
-        · correct <b>{{ r.correct_answer }}</b> · model <b>{{ r.model_answer }}</b>
+        · correct <b>{{ r.correct_answer }}</b>
+        · model <b>{% if r.answered is defined and not r.answered %}<span class="dim">(no answer)</span>{% else %}{{ r.model_answer }}{% endif %}</b>
         {% if r.question %}
           · <span class="finding-summary-title">{{ r.question[:70] }}{% if r.question|length > 70 %}…{% endif %}</span>
         {% endif %}
@@ -395,7 +488,7 @@
           <dt>Correct</dt><dd>{{ r.correct_answer or "—" }}</dd>
           <dt>Model picked</dt><dd>{{ r.model_answer or "—" }}</dd>
           <dt>Outcome</dt>
-          <dd>{% if r.passed %}Model picked the correct letter.{% else %}Mismatch — counts against accuracy.{% endif %}</dd>
+          <dd>{% if r.answered is defined and not r.answered %}Not scored — model output was missing or unparseable.{% elif r.passed %}Model picked the correct letter.{% else %}Mismatch — counts against accuracy.{% endif %}</dd>
         </dl>
       </div>
     </details>

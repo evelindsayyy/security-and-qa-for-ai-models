@@ -16,3 +16,124 @@
 {% macro source_badge(source) %}
 <span class="badge badge-{{ source }}">{{ source }}</span>
 {% endmacro %}
+
+{# Manual pillar runs when the UI has no data yet — matches docs/cli.md (Docker default). #}
+{% macro cli_scan_docker() -%}
+docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner python -m scanner scan &lt;hf_repo&gt;
+{%- endmacro %}
+
+{% macro cli_eval_docker() -%}
+docker compose --env-file .env -f evaluator/docker/compose.yml run --rm evaluator python runner.py --candidate-model "&lt;model&gt;" --judge-model "&lt;model&gt;"
+{%- endmacro %}
+
+{% macro cli_safety_docker() -%}
+docker compose --env-file .env -f safety/docker/compose.yml run --rm safety python -m safety.run "&lt;model&gt;"
+{%- endmacro %}
+
+{% macro cli_safety_host() -%}
+uv run python -m safety.run "&lt;model&gt;"
+{%- endmacro %}
+
+{% macro cli_benchmark_docker() -%}
+docker compose --env-file .env -f benchmarks/docker/compose.yml run --rm benchmarks python run_benchmark.py --benchmark truthfulqa --model "&lt;model&gt;"
+{%- endmacro %}
+
+{% macro cli_gateway_host() -%}
+uv run python -m gateway
+{%- endmacro %}
+
+{% macro benchmark_item_status(r) %}
+  {% if r.answered is defined and not r.answered %}
+    <span class="status-skip">SKIP</span>
+  {% elif r.judge is defined %}
+    {% if r.judge.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+  {% elif r.passed is defined %}
+    {% if r.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+  {% else %}
+    <span class="status-fail">FAIL</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro progress_terminal(poll_url, interval, hint='', show_retry=false, retry_url='', initial_status='running', initial_message='') %}
+<div class="progress-card progress-card--wide">
+  <p class="progress-meta">status: <b id="prog-state">{{ initial_status }}</b></p>
+  <p id="prog-truncated" class="log-terminal-hint" style="display: none;"></p>
+  <p id="prog-alert" class="form-warning" style="display: none;" role="alert"></p>
+  <pre class="log-terminal log-terminal--run" id="prog-log" aria-live="polite">{{ initial_message }}</pre>
+  {% if hint %}
+  <p class="log-terminal-hint">{{ hint }}</p>
+  {% endif %}
+  {% if show_retry %}
+  <p id="prog-retry" class="sub" style="display: none;">
+    <a href="{{ retry_url }}" id="prog-retry-link">Start a new run →</a>
+  </p>
+  {% endif %}
+</div>
+<script>
+(function () {
+  const pollUrl = {{ poll_url | tojson }};
+  const intervalMs = {{ interval }};
+  const logEl = document.getElementById("prog-log");
+  const stateEl = document.getElementById("prog-state");
+  const alertEl = document.getElementById("prog-alert");
+  const truncatedEl = document.getElementById("prog-truncated");
+  const retryEl = document.getElementById("prog-retry");
+
+  function updateLog(text) {
+    if (typeof text !== "string" || text === logEl.textContent) return;
+    const atBottom = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 48;
+    const prevTop = logEl.scrollTop;
+    logEl.textContent = text;
+    if (atBottom) {
+      logEl.scrollTop = logEl.scrollHeight;
+    } else {
+      logEl.scrollTop = prevTop;
+    }
+  }
+
+  function showAlert(text) {
+    if (!text || !alertEl) return;
+    alertEl.textContent = text;
+    alertEl.style.display = "block";
+  }
+
+  function applyStatus(s) {
+    if (s.alert) {
+      stateEl.textContent = "running (suite failed)";
+      showAlert(s.alert);
+    } else if (s.warnings && s.warnings.length) {
+      const msg = s.warnings.map(function (w) {
+        return w.toLowerCase().indexOf("partial") >= 0 ? w : w + " did not run.";
+      }).join("; ");
+      showAlert(msg);
+    } else {
+      stateEl.textContent = s.status;
+      if (alertEl) alertEl.style.display = "none";
+    }
+    if (truncatedEl) {
+      if (s.log_truncated) {
+        truncatedEl.textContent = "Log is very large — showing the most recent portion. See the run log file on disk for the full history.";
+        truncatedEl.style.display = "block";
+      } else {
+        truncatedEl.style.display = "none";
+      }
+    }
+    const logText = s.message || s.log;
+    if (logText) updateLog(logText);
+    if (s.status === "complete" || s.status === "partial") {
+      window.location = window.location.pathname;
+    } else if (s.status === "failed") {
+      stateEl.textContent = "failed";
+      if (retryEl) retryEl.style.display = "block";
+    }
+  }
+
+  function poll() {
+    fetch(pollUrl).then(function (r) { return r.json(); }).then(applyStatus).catch(function () {});
+  }
+
+  poll();
+  setInterval(poll, intervalMs);
+})();
+</script>
+{% endmacro %}

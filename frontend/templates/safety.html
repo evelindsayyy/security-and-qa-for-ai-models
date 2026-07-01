@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import cli_safety_docker, cli_safety_host %}
 
 {% block title %}Safety red-team{% endblock %}
 
@@ -7,9 +8,23 @@
   <h1>Safety red-team</h1>
   <p><a class="btn-primary" href="{{ url_for('safety_run_new') }}">▶ Start a new run</a></p>
 
+  <section class="key">
+    <h2>How to read this</h2>
+    <dl class="legend-grid">
+      <dt><span class="tier tier-low">Tier</span></dt>
+      <dd>Weighted pass rates: Duke policy <b>40%</b>, red-team <b>35%</b>, Garak <b>25%</b> (renormalized if a suite was skipped). Escalates when a curated policy probe fails.</dd>
+      <dt class="num-sample">Pass rate</dt>
+      <dd>Share of all probes the model resisted across suites that ran.</dd>
+      <dt>Suite columns</dt>
+      <dd>Per-suite pass rates — policy (hand-written Duke rules), red-team (Promptfoo adversarial plugins), Garak (automated attack modules).</dd>
+    </dl>
+  </section>
+
   {% if not has_safety %}
     <p class="sub">
-      No results yet. Run <code>./safety/run_safety.sh &lt;model&gt;</code> or use Start a new run above.
+      No results yet. Use <b>Start a new run</b> above, or from repo root:
+      <code>{{ cli_safety_docker() }}</code>
+      <span class="dim">(host: <code>{{ cli_safety_host() }}</code>)</span>
     </p>
   {% else %}
     <p class="sub">
@@ -30,6 +45,7 @@
           {% endfor %}
           <th class="num">Failed</th>
           <th class="col-nowrap">Completed</th>
+          <th class="col-actions">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -48,37 +64,15 @@
           {% endfor %}
           <td class="num dim">{{ m.n_failed }}</td>
           <td class="col-nowrap dim">{{ m.completed_at[:10] if m.completed_at != "—" else "—" }}</td>
+          <td class="col-actions" onclick="event.stopPropagation()">
+            <a href="{{ url_for('safety_delete', slug=m.slug, profile=m.profile) }}"
+               class="btn-danger btn-sm" title="Delete result">Delete</a>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
     </div>
-
-    <section class="key">
-      <h2>How to read this table</h2>
-      <dl class="legend-grid">
-        <dt><span class="tier tier-low">tier</span></dt>
-        <dd>Calibrated risk band: a weighted blend of the three suites (Duke
-            policy 55%, red-team 35%, Garak 10%), escalated if a curated Duke
-            policy probe fails. Tuned so known-safe commercial models read
-            <b>low</b>. Rows sort highest-risk first.</dd>
-
-        <dt class="num-sample">Pass rate</dt>
-        <dd>Raw share of all probes the model resisted, across the three suites.</dd>
-
-        <dt>Duke policy</dt>
-        <dd>Hand-written probes for Duke rules — FERPA/PHI, credentials,
-            academic integrity, impersonation, off-topic.</dd>
-
-        <dt>Red-team</dt>
-        <dd>Promptfoo adversarial plugins (PII, jailbreak pivots, excessive agency)
-            graded by a separate model.</dd>
-
-        <dt>Garak</dt>
-        <dd>Automated attack modules (encoding, prompt injection, DAN, package
-            hallucination) — deliberately aggressive, so weighted lightest.</dd>
-      </dl>
-    </section>
   {% endif %}
 </div>
 {% endblock %}
