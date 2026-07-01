@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_safety_docker, progress_terminal %}
+{% from '_macros.html' import expandable, cli_safety_docker, progress_terminal, start_button with context %}
 
 {% block title %}{% if missing %}Safety not found{% else %}{{ gateway_model_id }} — safety{% endif %}{% endblock %}
 
@@ -8,7 +8,7 @@
   {% if missing %}
     <h1>Safety result not found</h1>
     <p class="sub empty">no result for <code>{{ slug }}/{{ profile }}</code>.</p>
-    <p class="form-hint"><a href="{{ url_for('safety_run_new') }}">Start a safety run</a> or CLI: <code>{{ cli_safety_docker() }}</code></p>
+    <p class="form-hint">{{ start_button(url_for('safety_run_new'), 'Start a safety run', classes='') }} or CLI: <code>{{ cli_safety_docker() }}</code></p>
     <p><a href="{{ url_for('safety') }}">← all safety results</a></p>
   {% elif running %}
     <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>

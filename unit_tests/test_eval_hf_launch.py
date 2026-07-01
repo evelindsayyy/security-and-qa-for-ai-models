@@ -23,7 +23,11 @@ from frontend import create_app, eval_launch  # noqa: E402
 
 
 def _client():
-    return create_app(test_config={"TESTING": True}).test_client()
+    # /eval-run/new and /eval-run/start require a signed-in user.
+    client = create_app(test_config={"TESTING": True}).test_client()
+    with client.session_transaction() as sess:
+        sess["user"] = {"id": "u-test", "netid": "testuser", "display_name": "Test"}
+    return client
 
 
 _GOOD = hf_intake.ValidationResult(
@@ -42,6 +46,11 @@ class _Base(unittest.TestCase):
                               return_value=eval_launch._CANDIDATE_FALLBACK)
         p.start()
         self.addCleanup(p.stop)
+        # force the dev-auth bypass on regardless of the real .env AUTH_ENABLED,
+        # so a session user (set by _client()) is allowlisted.
+        env_patch = mock.patch.dict(os.environ, {"AUTH_ENABLED": "0"})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
 
 
 class HfLaunchFormTest(_Base):

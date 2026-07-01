@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_eval_docker %}
+{% from '_macros.html' import expandable, cli_eval_docker, start_button with context %}
 
 {% block title %}{% if missing %}Run not found{% else %}{{ candidate_model }} — run{% endif %}{% endblock %}
 
@@ -8,7 +8,7 @@
   {% if missing %}
     <h1>Run not found</h1>
     <p class="sub empty">no results JSONL for slug <code>{{ slug }}</code>.</p>
-    <p class="form-hint"><a href="{{ url_for('eval_run_new') }}">Start an eval run</a> or CLI: <code>{{ cli_eval_docker() }}</code></p>
+    <p class="form-hint">{{ start_button(url_for('eval_run_new'), 'Start an eval run', classes='') }} or CLI: <code>{{ cli_eval_docker() }}</code></p>
     <p><a href="{{ url_for('eval_run') }}">← all runs</a></p>
   {% elif running %}
     <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>

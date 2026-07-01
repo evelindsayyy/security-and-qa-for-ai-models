@@ -15,11 +15,11 @@ def read_context() -> tuple[str, str | None]:
         return "public", None
 
 
-def artifact_path_visible(directory) -> bool:
+def artifact_path_visible(directory, *, pillar: str = "generic") -> bool:
     """Whether an on-disk run directory should appear in the current view."""
-    from dbutils.run_meta import read_run_meta
+    from dbutils.run_meta import read_run_meta_for_pillar
     from dbutils.visibility import artifact_visible
 
     view_mode, user_id = read_context()
-    meta = read_run_meta(directory)
+    meta = read_run_meta_for_pillar(directory, pillar=pillar)
     return artifact_visible(meta, view_mode=view_mode, user_id=user_id)

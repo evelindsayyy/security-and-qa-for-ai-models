@@ -6,7 +6,7 @@ Default entry: containerized UI (same as ./docker/run.sh).
     uv run python main.py down
     uv run python main.py --host           # dev Flask (PORT or APP_PORT, default 5000)
 
-See docs/cli.md and docs/local-testing.md.
+See docs/cli.md and auth/README.md.
 """
 
 from __future__ import annotations

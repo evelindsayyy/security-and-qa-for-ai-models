@@ -97,8 +97,19 @@
         window.location.href = "{{ url_for('auth.login') }}";
         {% endif %}
       });
+      function isTrustedAuthOrigin(origin) {
+        if (origin === window.location.origin) return true;
+        try {
+          var from = new URL(origin);
+          var here = window.location;
+          var loopback = from.hostname === "localhost" || from.hostname === "127.0.0.1";
+          return loopback && from.protocol === here.protocol && from.hostname === here.hostname;
+        } catch (err) {
+          return false;
+        }
+      }
       window.addEventListener("message", function (ev) {
-        if (ev.origin !== window.location.origin) return;
+        if (!isTrustedAuthOrigin(ev.origin)) return;
         if (ev.data && ev.data.type === "auth-complete") window.location.reload();
       });
     }

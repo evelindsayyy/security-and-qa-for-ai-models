@@ -9,7 +9,7 @@ How the images fit together. For commands, see [`cli.md`](cli.md).
 python3 main.py               # containerized UI (default); same as ./docker/run.sh up --build
 ```
 
-Production on the application VM uses the same scripts with optional **Caddy HTTPS** when `CADDY_DOMAIN` is set in `.env`. See [`https-setup.md`](https-setup.md). Host Flask (`uv run flask …`) is a development alternative only.
+Production on the application VM uses the same scripts with optional **Caddy HTTPS** when `CADDY_DOMAIN` is set in `.env`. See [`../docker/compose.caddy.yml`](../docker/compose.caddy.yml). Host Flask (`uv run flask ...`) is a development alternative only.
 
 ## Two layers
 
@@ -75,4 +75,4 @@ On the application VM, set `CADDY_DOMAIN` in `.env`. [`docker/run.sh`](../docker
 - **web** is reachable only inside the Docker network (not published on `:5000`)
 - Set `TRUST_PROXY=1` so Flask trusts `X-Forwarded-Proto`
 
-Full operator steps: [`https-setup.md`](https-setup.md). Do not run Caddy locally.
+Do not run Caddy locally; the production overlay is [`../docker/compose.caddy.yml`](../docker/compose.caddy.yml).

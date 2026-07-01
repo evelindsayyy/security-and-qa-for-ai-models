@@ -5,35 +5,18 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from dbutils.run_meta import read_run_meta
+from dbutils.run_meta import read_run_meta_for_pillar
 
 
 def auth_fields_from_artifact(artifact_path: Path, *, pillar: str) -> dict[str, Any]:
-    """Read run_meta.json or merged scan_meta for ingest columns."""
+    """Read run_meta.json (or merged scan_meta.json) for ingest columns."""
     if pillar == "scan":
         directory = artifact_path.parent
-        meta = read_run_meta(directory)
-        scan_meta_path = directory / "scan_meta.json"
-        if scan_meta_path.is_file():
-            import json
-
-            try:
-                scan_meta = json.loads(scan_meta_path.read_text(encoding="utf-8"))
-                if isinstance(scan_meta, dict):
-                    for key in (
-                        "visibility",
-                        "config_fingerprint",
-                        "config_json",
-                        "owner_user_id",
-                    ):
-                        if key in scan_meta and key not in meta:
-                            meta[key] = scan_meta[key]
-            except (OSError, json.JSONDecodeError):
-                pass
     elif pillar in ("eval", "benchmark"):
-        meta = read_run_meta(artifact_path.parent / artifact_path.stem)
+        directory = artifact_path.parent / artifact_path.stem
     else:
-        meta = read_run_meta(artifact_path.parent)
+        directory = artifact_path.parent
+    meta = read_run_meta_for_pillar(directory, pillar=pillar)
 
     visibility = meta.get("visibility") or "public"
     owner = meta.get("owner_user_id")

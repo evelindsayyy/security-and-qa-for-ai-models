@@ -16,4 +16,4 @@ uv run python db/migrate_auth_columns.py          # dry run
 uv run python db/migrate_auth_columns.py --apply  # write
 ```
 
-See [`docs/auth-setup.md`](../docs/auth-setup.md) for the full operator sequence.
+See [`auth/README.md`](../auth/README.md) for auth setup.

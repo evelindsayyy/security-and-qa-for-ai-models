@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 
-from flask import Blueprint, jsonify, redirect, render_template_string, request, session, url_for
+from flask import Blueprint, current_app, jsonify, redirect, render_template_string, request, session, url_for
 
 from auth.oidc import init_oauth, oauth, redirect_uri
 from auth.session import (
@@ -28,7 +29,8 @@ _POPUP_DONE_HTML = """
 <body>
 <script>
   if (window.opener) {
-    window.opener.postMessage({type: "auth-complete"}, window.location.origin);
+    var targetOrigin = {{ opener_origin|tojson }} || window.location.origin;
+    window.opener.postMessage({type: "auth-complete"}, targetOrigin);
     window.close();
   } else {
     window.location.href = {{ home_url|tojson }};
@@ -41,6 +43,8 @@ _POPUP_DONE_HTML = """
 
 def register_auth(app) -> None:
     init_oauth(app)
+    if auth_enabled():
+        app.logger.setLevel(logging.INFO)
     app.register_blueprint(bp)
     app.add_url_rule("/login", view_func=oauth_callback, methods=["GET"])
     app.context_processor(lambda: auth_context_for_template())
@@ -73,7 +77,26 @@ def login():
     session["oauth_state"] = state
     session["oauth_popup"] = request.args.get("popup") == "1"
     session["oauth_next"] = request.args.get("next") or url_for("index")
-    return client.authorize_redirect(redirect_uri(), state=state)
+    session["oauth_opener_origin"] = request.host_url.rstrip("/")
+    callback_uri = redirect_uri()
+    current_app.logger.info(
+        "oauth login start host=%s redirect_uri=%s popup=%s",
+        request.host,
+        callback_uri,
+        session["oauth_popup"],
+    )
+    try:
+        # First network call of the flow: fetches Duke's OIDC discovery
+        # document (cached after) and builds the authorize redirect. A
+        # timeout or connection error here must not become an unhandled
+        # 500 — the public (signed-out) site must keep working regardless
+        # of whether this specific login attempt succeeds.
+        return client.authorize_redirect(callback_uri, state=state)
+    except Exception as exc:
+        current_app.logger.warning("oauth authorize redirect failed: %s", exc)
+        for key in ("oauth_state", "oauth_popup", "oauth_next", "oauth_opener_origin"):
+            session.pop(key, None)
+        return f"Could not reach Duke sign-in — try again in a moment: {exc}", 502
 
 
 @bp.route("/callback")
@@ -91,12 +114,27 @@ def oauth_callback():
         return "OIDC not configured", 503
 
     expected_state = session.pop("oauth_state", None)
-    if not expected_state or request.args.get("state") != expected_state:
+    received_state = request.args.get("state")
+    current_app.logger.info(
+        "oauth callback received host=%s code_present=%s state_present=%s expected_state_present=%s",
+        request.host,
+        bool(request.args.get("code")),
+        bool(received_state),
+        bool(expected_state),
+    )
+    if not expected_state or received_state != expected_state:
+        current_app.logger.warning(
+            "oauth callback invalid state host=%s state_present=%s expected_state_present=%s",
+            request.host,
+            bool(received_state),
+            bool(expected_state),
+        )
         return "Invalid OAuth state.", 400
 
     try:
         token = client.authorize_access_token()
     except Exception as exc:
+        current_app.logger.warning("oauth token exchange failed: %s", exc)
         return f"OAuth token exchange failed: {exc}", 400
 
     userinfo = token.get("userinfo")
@@ -128,9 +166,11 @@ def oauth_callback():
     login_user(user)
 
     if not is_allowlisted(user):
+        current_app.logger.warning("oauth login rejected netid=%s allowlisted=false", netid)
         logout_user()
         return "Your NetID is not authorized for this application.", 403
 
+    current_app.logger.info("oauth login complete netid=%s", netid)
     popup = session.pop("oauth_popup", False)
     return _finish_login(popup=popup)
 
@@ -165,6 +205,7 @@ def _finish_login(*, popup: bool):
         return render_template_string(
             _POPUP_DONE_HTML,
             home_url=next_url,
+            opener_origin=session.pop("oauth_opener_origin", None),
         )
     return redirect(next_url)
 

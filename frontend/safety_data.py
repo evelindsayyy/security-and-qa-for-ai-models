@@ -268,7 +268,7 @@ def _get_safety_data_files() -> dict:
 
     rows: list[dict] = []
     for path, slug, profile in iter_merged_result_paths(OUTPUT_DIR):
-        if not artifact_path_visible(path.parent):
+        if not artifact_path_visible(path.parent, pillar="safety"):
             continue
         row = _summarize_merged(path, slug, profile)
         if row:
@@ -286,8 +286,12 @@ def _get_safety_data_files() -> dict:
 
 def _get_safety_detail_files(slug: str, profile: str = "base") -> dict | None:
     """Structured safety payload for one (slug, profile) pair, read from disk."""
+    from frontend.read_context import artifact_path_visible
+
     path = merged_result_path(OUTPUT_DIR, slug, profile)
     if not path.is_file():
+        return None
+    if not artifact_path_visible(path.parent, pillar="safety"):
         return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))

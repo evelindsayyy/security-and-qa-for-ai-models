@@ -392,7 +392,7 @@ def _get_scans_data_files() -> dict:
     rows: list[dict] = []
     for path in sorted(OUTPUT_DIR.glob("*/scan_result.json")):
         slug = path.parent.name
-        if not artifact_path_visible(path.parent):
+        if not artifact_path_visible(path.parent, pillar="scan"):
             continue
         row = _summarize_scan(path, slug)
         if row:
@@ -415,10 +415,15 @@ def _get_scan_detail_files(slug: str) -> dict | None:
     """
     structured scan payload for one slug — findings, tool panels, coverage stats.
 
-    returns none if the slug dir or scan_result.json is missing.
+    returns none if the slug dir or scan_result.json is missing, or the run
+    isn't visible in the current view (private + not the owner).
     """
+    from frontend.read_context import artifact_path_visible
+
     path = OUTPUT_DIR / slug / "scan_result.json"
     if not path.is_file():
+        return None
+    if not artifact_path_visible(path.parent, pillar="scan"):
         return None
 
     try:

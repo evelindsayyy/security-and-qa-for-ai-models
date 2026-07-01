@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import cli_scan_docker, cli_eval_docker, cli_safety_docker, cli_benchmark_docker %}
+{% from '_macros.html' import start_button with context %}
 
 {% block title %}Home — AI Model Security & QA{% endblock %}
 
@@ -19,10 +19,10 @@
       {% if scan_has %}
         <p class="pillar-stat"><b>{{ scan_count }}</b> model{{ "s" if scan_count != 1 else "" }} scanned</p>
         <p class="pillar-stat">highest risk: <span class="tier tier-{{ scan_worst_tier }}">{{ scan_worst_tier }}</span> ({{ scan_worst_score }})</p>
-        <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('scan_run_new') }}">▶ Start scan</a><a href="{{ url_for('scans') }}">View scans →</a></p>
+        <p class="pillar-actions">{{ start_button(url_for('scan_run_new'), '▶ Start scan') }}<a href="{{ url_for('scans') }}">View scans →</a></p>
       {% else %}
-        <p class="empty">No scans yet — use <b>Start scan</b> below or CLI: <code>{{ cli_scan_docker() }}</code></p>
-        <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('scan_run_new') }}">▶ Start scan</a><a href="{{ url_for('scans') }}">Scans page →</a></p>
+        <p class="empty">{% if is_logged_in %}No scans yet — click Start scan below.{% else %}No scans yet. Sign in to start a scan.{% endif %}</p>
+        <p class="pillar-actions">{{ start_button(url_for('scan_run_new'), '▶ Start scan') }}<a href="{{ url_for('scans') }}">Scans page →</a></p>
       {% endif %}
     </div>
 
@@ -34,10 +34,10 @@
         {% if eval_best_overall is not none %}
           <p class="pillar-stat">best overall (mean): <b>{{ "%.2f"|format(eval_best_overall) }}</b></p>
         {% endif %}
-        <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('eval_run_new') }}">▶ Start eval</a><a href="{{ url_for('eval_run') }}">View eval runs →</a></p>
+        <p class="pillar-actions">{{ start_button(url_for('eval_run_new'), '▶ Start eval') }}<a href="{{ url_for('eval_run') }}">View eval runs →</a></p>
       {% else %}
-        <p class="empty">No eval runs yet — use <b>Start eval</b> below or CLI: <code>{{ cli_eval_docker() }}</code></p>
-        <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('eval_run_new') }}">▶ Start eval</a><a href="{{ url_for('eval_run') }}">Eval runs page →</a></p>
+        <p class="empty">{% if is_logged_in %}No eval runs yet — click Start eval below.{% else %}No eval runs yet. Sign in to start an eval.{% endif %}</p>
+        <p class="pillar-actions">{{ start_button(url_for('eval_run_new'), '▶ Start eval') }}<a href="{{ url_for('eval_run') }}">Eval runs page →</a></p>
       {% endif %}
     </div>
 
@@ -49,10 +49,10 @@
         <p class="pillar-stat">highest risk: <span class="tier tier-{{ safety_worst_tier }}">{{ safety_worst_tier }}</span>
           {% if safety_worst_pass_rate is not none %}({{ "%.0f"|format(safety_worst_pass_rate * 100) }}% pass){% endif %}
         </p>
-        <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('safety_run_new') }}">▶ Start safety</a><a href="{{ url_for('safety') }}">View safety results →</a></p>
+        <p class="pillar-actions">{{ start_button(url_for('safety_run_new'), '▶ Start safety') }}<a href="{{ url_for('safety') }}">View safety results →</a></p>
       {% else %}
-        <p class="empty">No safety results yet — use <b>Start safety</b> below or CLI: <code>{{ cli_safety_docker() }}</code></p>
-        <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('safety_run_new') }}">▶ Start safety</a><a href="{{ url_for('safety') }}">Safety page →</a></p>
+        <p class="empty">{% if is_logged_in %}No safety results yet — click Start safety below.{% else %}No safety results yet. Sign in to start a run.{% endif %}</p>
+        <p class="pillar-actions">{{ start_button(url_for('safety_run_new'), '▶ Start safety') }}<a href="{{ url_for('safety') }}">Safety page →</a></p>
       {% endif %}
     </div>
 
@@ -62,9 +62,9 @@
       {% if benchmark_has %}
         <p class="pillar-stat"><b>{{ benchmark_count }}</b> run{{ "s" if benchmark_count != 1 else "" }} recorded</p>
       {% else %}
-        <p class="empty">No benchmark results yet — use <b>Start benchmark</b> below or CLI: <code>{{ cli_benchmark_docker() }}</code></p>
+        <p class="empty">{% if is_logged_in %}No benchmark results yet — click Start benchmark below.{% else %}No benchmark results yet. Sign in to start a run.{% endif %}</p>
       {% endif %}
-      <p class="pillar-actions"><a class="btn-primary" href="{{ url_for('benchmark_run_new') }}">▶ Start benchmark</a><a href="{{ url_for('benchmarks') }}">View benchmarks →</a></p>
+      <p class="pillar-actions">{{ start_button(url_for('benchmark_run_new'), '▶ Start benchmark') }}<a href="{{ url_for('benchmarks') }}">View benchmarks →</a></p>
     </div>
   </section>
 
