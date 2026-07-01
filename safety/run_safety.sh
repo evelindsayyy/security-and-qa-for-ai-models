@@ -212,6 +212,32 @@ if ! $SKIP_PROMPTFOO; then
     run_py safety/promptfoo/export_safety_result.py \
       "safety/promptfoo/output/${SLUG}/${REDTEAM_PROFILE}/redteam_eval.json"
     MERGE_ARGS+=(--promptfoo "safety/promptfoo/output/${SLUG}/${REDTEAM_PROFILE}/redteam_safety_result.json")
+
+    echo "--- Promptfoo manual evals (remote-plugin coverage) ---"
+    _MANUAL_STEMS=(harmful bias remote_policy)
+    _MANUAL_YAMLS=(manual/harmful_content.yaml manual/bias.yaml manual/remote_policy.yaml)
+    for _i in "${!_MANUAL_STEMS[@]}"; do
+      _STEM="${_MANUAL_STEMS[$_i]}"
+      _YAML="${_MANUAL_YAMLS[$_i]}"
+      echo "  running ${_YAML} ..."
+      set +e
+      $PF_DC run --rm \
+        -e GATEWAY_MODEL="$MODEL" \
+        -e REDTEAM_GRADER_MODEL="$REDTEAM_GRADER_MODEL" \
+        promptfoo \
+        promptfoo eval -c "$_YAML" \
+          -o "output/${SLUG}/${REDTEAM_PROFILE}/manual_${_STEM}_eval.json"
+      _MANUAL_RC=$?
+      set -e
+      if [[ $_MANUAL_RC -ne 0 && ! -f "safety/promptfoo/output/${SLUG}/${REDTEAM_PROFILE}/manual_${_STEM}_eval.json" ]]; then
+        echo "WARN: manual eval '${_STEM}' failed (exit ${_MANUAL_RC}), skipping" >&2
+        continue
+      fi
+      run_py safety/promptfoo/export_safety_result.py \
+        "safety/promptfoo/output/${SLUG}/${REDTEAM_PROFILE}/manual_${_STEM}_eval.json" \
+        -o "safety/promptfoo/output/${SLUG}/${REDTEAM_PROFILE}/manual_${_STEM}_safety_result.json"
+      MERGE_ARGS+=(--promptfoo "safety/promptfoo/output/${SLUG}/${REDTEAM_PROFILE}/manual_${_STEM}_safety_result.json")
+    done
   else
     echo "--- Promptfoo red-team skipped (--skip-redteam) ---"
   fi

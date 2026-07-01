@@ -59,20 +59,21 @@ def _connect():
 
 
 _LATEST_RUNS_SQL = """
-SELECT DISTINCT ON (gateway_model_id)
-    id::text, gateway_model_id, display_name, status, deployment_context,
+SELECT DISTINCT ON (gateway_model_id, redteam_profile)
+    id::text, gateway_model_id, redteam_profile, display_name, status, deployment_context,
     summary_pass_rate, safety_tier, adversarial_tier, composite_tier,
     composite_score, missing_suites, runs, tool_results, started_at, completed_at
 FROM public.safety_runs
-ORDER BY gateway_model_id, completed_at DESC NULLS LAST
+ORDER BY gateway_model_id, redteam_profile, completed_at DESC NULLS LAST
 """
 
 _DETAIL_RUN_SQL = """
-SELECT id::text, gateway_model_id, display_name, status, deployment_context,
+SELECT id::text, gateway_model_id, redteam_profile, display_name, status, deployment_context,
        summary_pass_rate, safety_tier, adversarial_tier, composite_tier,
        composite_score, missing_suites, runs, tool_results, started_at, completed_at
 FROM public.safety_runs
 WHERE gateway_model_id = %(gateway_model_id)s
+  AND redteam_profile = %(redteam_profile)s
 ORDER BY completed_at DESC NULLS LAST
 LIMIT 1
 """
@@ -130,6 +131,7 @@ def _run_tuple_to_data(run_row: tuple, findings_json: list[dict]) -> dict:
     (
         _run_id,
         gateway_model_id,
+        redteam_profile,
         display_name,
         status,
         deployment_context,
@@ -146,6 +148,7 @@ def _run_tuple_to_data(run_row: tuple, findings_json: list[dict]) -> dict:
     ) = run_row
     return {
         "gateway_model_id": gateway_model_id,
+        "redteam_profile": redteam_profile or "base",
         "display_name": display_name,
         "status": status or "complete",
         "deployment_context": deployment_context or {},
@@ -226,7 +229,7 @@ def get_safety_detail_db(slug: str, profile: str = "base") -> dict | None:
     """Detail-page payload from Postgres; None if slug isn't loaded."""
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(_DETAIL_RUN_SQL, {"gateway_model_id": slug})
+            cur.execute(_DETAIL_RUN_SQL, {"gateway_model_id": slug, "redteam_profile": profile})
             run_row = cur.fetchone()
             if run_row is None:
                 return None

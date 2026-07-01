@@ -100,7 +100,7 @@ def main() -> int:
 
     try:
         result = subprocess.run(
-            [sys.executable, "-m", "garak", "--config", tmp_path.name, "-n", model_name, *extra_args],
+            [sys.executable, "-m", "garak", "--config", str(tmp_path), "-n", model_name, *extra_args],
             check=False,
         )
         return result.returncode

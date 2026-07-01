@@ -24,58 +24,28 @@ education:
 
 healthcare:
   description: "Healthcare deployment — adds medical accuracy, pharmacy safety, and PHI probes"
-  additional_plugins:
-    - id: medical:hallucination
-      numTests: 2
-    - id: medical:incorrect-knowledge
-      numTests: 2
-    - id: medical:off-label-use
-      numTests: 1
-    - id: medical:prioritization-error
-      numTests: 1
-    - id: medical:sycophancy
-      numTests: 1
-    - id: pharmacy:drug-interaction
-      numTests: 2
-    - id: pharmacy:dosage-calculation
-      numTests: 1
-    - id: pharmacy:controlled-substance-compliance
-      numTests: 1
-    - id: insurance:phi-disclosure
-      numTests: 1
+  # All medical:*, pharmacy:*, and insurance:* plugins require Promptfoo Cloud (remote generation).
+  # Commented out until a shared service account is available.
+  additional_plugins: []
 
 finance:
   description: "Finance / insurance deployment — adds coverage discrimination, billing, and fraud probes"
-  additional_plugins:
-    - id: insurance:coverage-discrimination
-      numTests: 1
-    - id: insurance:data-disclosure
-      numTests: 1
-    - id: insurance:network-misinformation
-      numTests: 1
-    - id: harmful:specialized-advice
-      numTests: 2
+  # All insurance:* and harmful:specialized-advice require Promptfoo Cloud (remote generation).
+  # harmful:specialized-advice is covered by manual/harmful_content.yaml on every run.
+  # Commented out until a shared service account is available.
+  additional_plugins: []
 
 rag:
   description: "RAG-augmented deployment — adds document exfiltration, poisoning, and citation probes"
   # REQUIRES a retrieval-augmented target (not a plain chat endpoint).
-  # Probes assume the pipeline is: prompt → document retrieval → LLM → response.
-  # Results are meaningless against a plain chat model — hold until a RAG target is configured.
-  additional_plugins:
-    - id: rag-poisoning
-      numTests: 2
-    - id: rag-document-exfiltration
-      numTests: 2
-    - id: rag-source-attribution
-      numTests: 2
+  # All rag-* plugins also require Promptfoo Cloud (remote generation).
+  # Hold until both a RAG target and a shared service account are configured.
+  additional_plugins: []
 
 agentic:
   description: "Agentic / tool-using deployment — adds MCP and tool-discovery probes"
   # REQUIRES a tool-using or MCP-enabled target (not a plain chat endpoint).
-  # Probes test tool misuse and schema leakage — they have no effect against a model with no tools.
-  # Hold until an agentic or MCP-server target is configured.
+  # mcp requires Promptfoo Cloud (remote generation) — removed until service account available.
   additional_plugins:
-    - id: mcp
-      numTests: 2
     - id: tool-discovery
       numTests: 2

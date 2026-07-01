@@ -85,38 +85,56 @@ Shapes: `scanner/schemas.py` (`ScanResult`, `Finding`).
 
 ## `safety_runs` / `safety_findings` (Track A — safety)
 
-One red-team job against one or more gateway models.
+> **Authoritative DDL:** `safety/db/safety_schema.sql` (implemented; loader:
+> `safety/db/load_safety.py`, idempotent, dry-run by default, uses `dbutils/`).
+> Idempotency: `UNIQUE (gateway_model_id, redteam_profile, completed_at)`.
+> Shared `models` FK on `safety_runs.model_id` deferred (same stance as scans).
+
+One merged red-team result per gateway model per profile. Multiple probe suites
+(garak, promptfoo policy, promptfoo red-team) are merged into a single
+`merged_safety_result.json` artifact at `safety/output/<slug>/<profile>/` and
+loaded as one `safety_runs` row with child `safety_findings` rows.
 
 **`safety_runs`:**
 
 | Column | Example |
 |--------|---------|
 | `id` | UUID |
+| `model_id` | FK → `models.id` (nullable; deferred until shared models table exists) |
 | `gateway_model_id` | `gpt-4.1-mini` |
-| `inference_backend` | string | `gateway` (LiteLLM) \| `dcc` (open weights served on the cluster) |
-| `hf_repo` | string, nullable | set when an open-weight model was served on DCC instead of the gateway |
+| `redteam_profile` | `base` \| `education` \| `healthcare` \| … |
+| `display_name` | `GPT 4.1 Mini` |
 | `status` | `complete` |
-| `deployment_context` | JSONB (required for ITSO-aligned probes) |
-| `probe_suite` | string | `garak_subset_v1` or `promptfoo_duke_policy_v1` |
-| `summary_pass_rate` | float | `0.85` |
-| `tool_results` | JSONB | `{"garak": {...}, "promptfoo": {...}}` raw blobs (shapes in `safety/schemas.py`) |
-| `started_at` / `completed_at` | timestamptz | |
+| `deployment_context` | JSONB — `{"deployment_type": "chatbot", "has_guardrails": true, …}` (ITSO context) |
+| `summary_pass_rate` | `0.85` — fraction of findings with `passed=true` across all suites |
+| `safety_tier` | `low` \| `medium` \| `high` \| `critical` — Duke policy headline (promptfoo_duke_policy_v1) |
+| `adversarial_tier` | `low` \| `medium` \| `high` \| `critical` — worst failed severity across garak + red-team |
+| `composite_tier` | `low` \| `medium` \| `high` \| `critical` — calibrated headline (see `safety_scorer.py`) |
+| `composite_score` | `0.85` — weighted pass rate used to rank models |
+| `missing_suites` | JSONB array — suites expected but absent (skipped/failed runs), e.g. `["promptfoo_duke_policy_v1"]` |
+| `runs` | JSONB array of `SafetyRunSummary` — one entry per probe suite with per-suite pass rate and probe ids |
+| `tool_results` | JSONB — raw tool metadata keyed by suite, e.g. `{"garak_subset_v1": {"garak": {"run_id": "…"}}}` |
+| `started_at` / `completed_at` | timestamptz |
+| `created_at` | timestamptz — row insertion time |
 
-**`safety_findings`** (normalized for UI):
+**`safety_findings`** (normalized probe outcomes, child of `safety_runs`):
 
 | Column | Example |
 |--------|---------|
 | `id` | UUID |
-| `safety_run_id` | FK |
-| `category` | `jailbreak` \| `toxicity` \| `policy` \| `leakage` |
+| `run_id` | FK → `safety_runs.id` ON DELETE CASCADE |
+| `finding_key` | `c515df9a-…` — `SafetyFinding.id` UUID assigned at merge time |
+| `category` | `smoke` \| `policy` \| `jailbreak` \| `leakage` \| `toxicity` |
 | `source` | `garak` \| `promptfoo` \| `duke_probe` |
-| `passed` | bool | `false` |
-| `severity` | `medium` |
+| `passed` | `true` = model resisted the probe; `false` = failure |
+| `severity` | `low` \| `medium` \| `high` \| `critical` |
 | `title` | `academic integrity — graded submission request` |
-| `description` | text |
-| `probe_id` | string | `duke.policy.003` |
+| `description` | text — pass/fail summary from the tool |
+| `probe_id` | `duke.policy.003` \| `garak.apikey` |
+| `probe_suite` | `garak_subset_v1` \| `promptfoo_duke_policy_v1` \| `promptfoo_duke_redteam_v1` |
+| `corroborated_by` | JSONB string array — other tools that failed the same category, e.g. `["garak"]`; null otherwise |
 
-Pydantic types in `safety/schemas.py` match this table.
+Pydantic types: `safety/schemas.py` (`MergedSafetyResult`, `SafetyFinding`, `SafetyRunSummary`).
 
 ---
 

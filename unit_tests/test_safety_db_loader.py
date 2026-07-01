@@ -27,6 +27,7 @@ from safety.db.load_safety import (  # noqa: E402
 def _merged_payload(**overrides) -> dict:
     base = {
         "gateway_model_id": "gpt-4.1",
+        "redteam_profile": "base",
         "display_name": "GPT 4.1",
         "status": "complete",
         "deployment_context": {"deployment_type": "chatbot", "has_guardrails": True},
@@ -72,9 +73,20 @@ class SafetyRunRowTest(unittest.TestCase):
     def test_maps_scalar_fields(self) -> None:
         row = safety_run_row(_merged_payload())
         self.assertEqual(row["gateway_model_id"], "gpt-4.1")
+        self.assertEqual(row["redteam_profile"], "base")
         self.assertEqual(row["composite_tier"], "low")
         self.assertAlmostEqual(row["composite_score"], 0.9)
         self.assertEqual(row["completed_at"], "2026-06-16T15:52:44+00:00")
+
+    def test_non_base_profile_preserved(self) -> None:
+        row = safety_run_row(_merged_payload(redteam_profile="healthcare"))
+        self.assertEqual(row["redteam_profile"], "healthcare")
+
+    def test_missing_profile_defaults_to_base(self) -> None:
+        payload = _merged_payload()
+        del payload["redteam_profile"]
+        row = safety_run_row(payload)
+        self.assertEqual(row["redteam_profile"], "base")
 
     def test_z_suffix_normalized(self) -> None:
         row = safety_run_row(_merged_payload(completed_at="2026-01-01T00:00:00Z"))
@@ -202,12 +214,17 @@ class LoadIntoTest(unittest.TestCase):
         self.assertIsInstance(finding_params["corroborated_by"], str)
         self.assertEqual(self._json.loads(finding_params["corroborated_by"]), ["garak"])
 
+    def test_run_insert_includes_redteam_profile(self) -> None:
+        _, run_params = self.conn.log[0]
+        self.assertIn("redteam_profile", run_params)
+        self.assertEqual(run_params["redteam_profile"], "base")
+
 
 class LoadFileTest(unittest.TestCase):
     def test_valid_result_round_trips(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            model_dir = Path(tmp) / "gpt-4.1"
-            model_dir.mkdir()
+            model_dir = Path(tmp) / "gpt-4.1" / "base"
+            model_dir.mkdir(parents=True)
             data = _merged_payload()
             (model_dir / "merged_safety_result.json").write_text(
                 json.dumps(data), encoding="utf-8"
@@ -216,12 +233,42 @@ class LoadFileTest(unittest.TestCase):
         assert parsed is not None
         run, findings = parsed
         self.assertEqual(run["gateway_model_id"], "gpt-4.1")
+        self.assertEqual(run["redteam_profile"], "base")
         self.assertEqual(len(findings), 1)
+
+    def test_profile_scoped_glob_finds_nested_files(self) -> None:
+        """run_ingest uses */*/merged_safety_result.json — verify two profiles are found."""
+        from safety.db.load_safety import run_ingest
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for profile in ("base", "healthcare"):
+                d = root / "gpt-4.1" / profile
+                d.mkdir(parents=True)
+                (d / "merged_safety_result.json").write_text(
+                    json.dumps(_merged_payload(redteam_profile=profile)), encoding="utf-8"
+                )
+            result = run_ingest(apply=False, dsn=None, output_dir=root)
+        self.assertEqual(result.count, 2)
+
+    def test_flat_file_outside_profile_dir_not_found(self) -> None:
+        """Files at <slug>/merged_safety_result.json (old layout) should be ignored."""
+        from safety.db.load_safety import run_ingest
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            slug_dir = root / "gpt-4.1"
+            slug_dir.mkdir()
+            (slug_dir / "merged_safety_result.json").write_text(
+                json.dumps(_merged_payload()), encoding="utf-8"
+            )
+            result = run_ingest(apply=False, dsn=None, output_dir=root)
+        self.assertEqual(result.count, 0)
 
     def test_missing_completed_at_returns_none(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            model_dir = Path(tmp) / "gpt-4.1"
-            model_dir.mkdir()
+            model_dir = Path(tmp) / "gpt-4.1" / "base"
+            model_dir.mkdir(parents=True)
             data = _merged_payload(completed_at=None)
             (model_dir / "merged_safety_result.json").write_text(
                 json.dumps(data), encoding="utf-8"
