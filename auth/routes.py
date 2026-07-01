@@ -85,7 +85,18 @@ def login():
         callback_uri,
         session["oauth_popup"],
     )
-    return client.authorize_redirect(callback_uri, state=state)
+    try:
+        # First network call of the flow: fetches Duke's OIDC discovery
+        # document (cached after) and builds the authorize redirect. A
+        # timeout or connection error here must not become an unhandled
+        # 500 — the public (signed-out) site must keep working regardless
+        # of whether this specific login attempt succeeds.
+        return client.authorize_redirect(callback_uri, state=state)
+    except Exception as exc:
+        current_app.logger.warning("oauth authorize redirect failed: %s", exc)
+        for key in ("oauth_state", "oauth_popup", "oauth_next", "oauth_opener_origin"):
+            session.pop(key, None)
+        return f"Could not reach Duke sign-in — try again in a moment: {exc}", 502
 
 
 @bp.route("/callback")

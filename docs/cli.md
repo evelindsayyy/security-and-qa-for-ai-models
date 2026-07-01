@@ -96,6 +96,11 @@ python3 main.py --host
 
 Set `APP_PORT` in `.env` to change the container port. One-time pillar builds: `./docker/build-pillars.sh`.
 
+**Browsing via an IDE-forwarded port** (VS Code Remote, JetBrains Gateway, `ssh -L`,
+…) needs no config — Duke NetID login works on whatever local port the IDE
+forwards to `APP_PORT`, even if it changes between sessions. See
+[`auth/README.md`](../auth/README.md#oidc-callback-ports-local-dev--ide-port-forwarding).
+
 ## JSON API
 
 Same Flask app as the UI. See [`api/README.md`](../api/README.md).

@@ -24,9 +24,6 @@ ENV_ARGS=()
 [ -f .env ] && ENV_ARGS=(--env-file .env)
 
 COMPOSE_FILES=(-f docker/compose.yml)
-if [ -f .env ] && grep -qE '^APP_FORWARD_PORT=[0-9]+' .env 2>/dev/null; then
-  COMPOSE_FILES+=(-f docker/compose.forward-port.yml)
-fi
 if [ -f .env ] && grep -qE '^CADDY_DOMAIN=.+' .env 2>/dev/null; then
   COMPOSE_FILES+=(-f docker/compose.caddy.yml)
 fi
