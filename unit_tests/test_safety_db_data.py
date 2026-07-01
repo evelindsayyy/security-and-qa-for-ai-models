@@ -22,6 +22,7 @@ from frontend import safety_data, safety_db_data
 def _merged_data_dict(**overrides):
     base = {
         "gateway_model_id": "gpt-4.1",
+        "redteam_profile": "base",
         "display_name": "GPT 4.1",
         "status": "complete",
         "deployment_context": {"deployment_type": "chatbot", "has_guardrails": True},
@@ -68,6 +69,7 @@ def _db_run_tuple(data: dict):
     return (
         "run-uuid",
         data["gateway_model_id"],
+        data.get("redteam_profile") or "base",
         data.get("display_name"),
         data["status"],
         data.get("deployment_context") or {},

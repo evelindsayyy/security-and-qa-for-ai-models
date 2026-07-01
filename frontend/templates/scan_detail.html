@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_scan_docker, progress_terminal %}
+{% from '_macros.html' import expandable, cli_scan_docker, progress_terminal, start_button with context %}
 
 {% block title %}{% if missing %}Scan not found{% else %}{{ model_id }} — scan{% endif %}{% endblock %}
 
@@ -8,7 +8,7 @@
   {% if missing %}
     <h1>Scan not found</h1>
     <p class="sub empty">no <code>scan_result.json</code> for slug <code>{{ slug }}</code>.</p>
-    <p class="form-hint"><a href="{{ url_for('scan_run_new') }}">Start a scan</a> or CLI: <code>{{ cli_scan_docker() }}</code></p>
+    <p class="form-hint">{{ start_button(url_for('scan_run_new'), 'Start a scan', classes='') }} or CLI: <code>{{ cli_scan_docker() }}</code></p>
     <p><a href="{{ url_for('scans') }}">← all scans</a></p>
   {% elif running %}
     <p class="back"><a href="{{ url_for('scans') }}">← all scans</a></p>

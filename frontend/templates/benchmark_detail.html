@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_benchmark_docker, benchmark_item_status %}
+{% from '_macros.html' import expandable, cli_benchmark_docker, benchmark_item_status, start_button with context %}
 
 {% block title %}{% if missing %}Benchmark not found{% else %}{{ kind_label }} — {{ model }}{% endif %}{% endblock %}
 
@@ -8,7 +8,7 @@
   {% if missing %}
     <h1>Benchmark not found</h1>
     <p class="sub empty">no file matching slug <code>{{ slug }}</code> in benchmark results.</p>
-    <p class="form-hint"><a href="{{ url_for('benchmark_run_new') }}">Start a benchmark</a> or CLI: <code>{{ cli_benchmark_docker() }}</code></p>
+    <p class="form-hint">{{ start_button(url_for('benchmark_run_new'), 'Start a benchmark', classes='') }} or CLI: <code>{{ cli_benchmark_docker() }}</code></p>
     <p><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
   {% elif running %}
     <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>

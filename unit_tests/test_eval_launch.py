@@ -198,7 +198,15 @@ class LaunchRoutesTest(unittest.TestCase):
         )
         patcher.start()
         self.addCleanup(patcher.stop)
+        # /eval-run/new and /eval-run/start require a signed-in, allowlisted
+        # user — force the dev-auth bypass on regardless of the real .env
+        # AUTH_ENABLED.
+        env_patch = mock.patch.dict(os.environ, {"AUTH_ENABLED": "0"})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
         self.client = create_app({"TESTING": True}).test_client()
+        with self.client.session_transaction() as sess:
+            sess["user"] = {"id": "u-test", "netid": "testuser", "display_name": "Test"}
 
     def test_form_renders(self) -> None:
         r = self.client.get("/eval-run/new")

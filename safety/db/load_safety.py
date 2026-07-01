@@ -1,9 +1,9 @@
 """
 load_safety.py — merged_safety_result.json -> public.safety_runs / public.safety_findings.
 
-Reads every ``merged_safety_result.json`` under ``safety/output/<model>/`` and loads
-validated ``MergedSafetyResult`` rows into Postgres. Uses shared ``dbutils`` for env,
-file IO, connect, JSONB params, and the dry-run CLI contract.
+Reads every ``merged_safety_result.json`` under ``safety/output/<model>/<profile>/``
+and loads validated ``MergedSafetyResult`` rows into Postgres. Uses shared ``dbutils``
+for env, file IO, connect, JSONB params, and the dry-run CLI contract.
 
 SAFE BY DEFAULT: without ``--apply`` this is a dry run — it prints what WOULD
 be loaded and never opens a database connection.
@@ -71,6 +71,7 @@ def safety_run_row(data: dict[str, Any]) -> dict:
     return {
         "model_id": None,
         "gateway_model_id": data["gateway_model_id"],
+        "redteam_profile": data.get("redteam_profile") or "base",
         "display_name": data.get("display_name"),
         "status": data.get("status") or "complete",
         "deployment_context": data.get("deployment_context") or {},
@@ -145,23 +146,25 @@ def load_file(path: Path) -> tuple[dict, list[dict]] | None:
 
 _RUN_INSERT = """
 INSERT INTO public.safety_runs (
-    model_id, gateway_model_id, display_name, status, deployment_context,
+    model_id, gateway_model_id, redteam_profile, display_name, status, deployment_context,
     summary_pass_rate, safety_tier, adversarial_tier, composite_tier,
     composite_score, missing_suites, runs, tool_results, started_at, completed_at,
     visibility, owner_user_id, config_fingerprint, config_json)
 VALUES (
-    %(model_id)s, %(gateway_model_id)s, %(display_name)s, %(status)s,
+    %(model_id)s, %(gateway_model_id)s, %(redteam_profile)s, %(display_name)s, %(status)s,
     %(deployment_context)s::jsonb, %(summary_pass_rate)s, %(safety_tier)s,
     %(adversarial_tier)s, %(composite_tier)s, %(composite_score)s,
     %(missing_suites)s::jsonb, %(runs)s::jsonb, %(tool_results)s::jsonb,
     %(started_at)s, %(completed_at)s,
     %(visibility)s, %(owner_user_id)s, %(config_fingerprint)s, %(config_json)s::jsonb)
-ON CONFLICT (gateway_model_id, completed_at) DO NOTHING
+ON CONFLICT (gateway_model_id, redteam_profile, completed_at) DO NOTHING
 """
 
 _RUN_SELECT = """
 SELECT id FROM public.safety_runs
-WHERE gateway_model_id = %(gateway_model_id)s AND completed_at = %(completed_at)s
+WHERE gateway_model_id = %(gateway_model_id)s
+  AND redteam_profile = %(redteam_profile)s
+  AND completed_at = %(completed_at)s
 """
 
 _FINDING_INSERT = """
@@ -244,7 +247,7 @@ def run_ingest(
     print(f"{len(parsed)} loadable safety run(s) in {root}:")
     for run, findings in parsed:
         print(
-            f"  {run['gateway_model_id']}:  "
+            f"  {run['gateway_model_id']}/{run['redteam_profile']}:  "
             f"composite_tier={run['composite_tier']}  "
             f"score={run['composite_score']:.2f}  "
             f"findings={len(findings)}  "

@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_eval_docker %}
+{% from '_macros.html' import expandable, cli_eval_docker, start_button with context %}
 
 {% block title %}Model comparison{% endblock %}
 
 {% block content %}
 <div class="eval-comparison">
   <h1>Model comparison</h1>
-  <p><a class="btn-primary" href="{{ url_for('eval_run_new') }}">▶ Start a new run</a></p>
+  <p>{{ start_button(url_for('eval_run_new'), '▶ Start a new run') }}</p>
 
   <section class="key">
     <h2>How to read this</h2>

@@ -111,6 +111,7 @@ def get_runs_data_db() -> dict:
     # Import here, not at module top: eval_run_data imports this module lazily,
     # and these two helpers are the file-side fallbacks we merge with.
     from frontend.eval_run_data import _aggregate_file, _postprocess_runs
+    from frontend.read_context import artifact_path_visible
 
     with queries.connect() as conn:
         records = queries.fetch_runs(conn)
@@ -121,6 +122,12 @@ def get_runs_data_db() -> dict:
     if RESULTS_DIR.exists():
         for path in RESULTS_DIR.glob("*.jsonl"):
             if "_trace" in path.name or path.stem in seen_slugs:
+                continue
+            # Not-yet-ingested files skip the DB's visibility_clause entirely —
+            # apply the same run_meta.json check the file-fallback path uses so
+            # a private run can't leak into another user's (or the public) view
+            # just because it hasn't been synced to Postgres yet.
+            if not artifact_path_visible(RESULTS_DIR / path.stem, pillar="eval"):
                 continue
             row = _aggregate_file(path)
             if row is not None:

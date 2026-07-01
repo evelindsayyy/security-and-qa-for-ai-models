@@ -3,16 +3,12 @@
 -- =============================================================================
 -- Target database: qa_ai_models   Target schema: public
 --
--- Status: DRAFT for team review. Running this file CREATEs tables in the
--- shared Duke Postgres (codeplus-postgres-test-01). DO NOT run until someone
--- with CREATE rights on `public` has reviewed this.
---
 -- Design sources:
 --   - docs/data-model.md         — safety_runs / safety_findings sketch
 --   - safety/schemas.py          — MergedSafetyResult + SafetyFinding on disk
 --
 -- Idempotency keys (loader ON CONFLICT DO NOTHING):
---   safety_runs:     UNIQUE (gateway_model_id, completed_at)
+--   safety_runs:     UNIQUE (gateway_model_id, redteam_profile, completed_at)
 --   safety_findings: UNIQUE (run_id, finding_key)  — finding_key = SafetyFinding.id
 --
 -- Deferred: shared `models` table FK on safety_runs.model_id (same stance as scans).
@@ -27,6 +23,7 @@ CREATE TABLE IF NOT EXISTS public.safety_runs (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     model_id            UUID,                       -- nullable; FK to models.id when that table exists
     gateway_model_id    TEXT NOT NULL,              -- MergedSafetyResult.gateway_model_id
+    redteam_profile     TEXT NOT NULL DEFAULT 'base', -- MergedSafetyResult.redteam_profile (base | education | healthcare | …)
     display_name        TEXT,
     status              TEXT NOT NULL DEFAULT 'complete',
     deployment_context  JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -39,13 +36,14 @@ CREATE TABLE IF NOT EXISTS public.safety_runs (
     runs                JSONB NOT NULL DEFAULT '[]'::jsonb,  -- SafetyRunSummary[]
     tool_results        JSONB NOT NULL DEFAULT '{}'::jsonb,
     started_at          TIMESTAMPTZ,
-    completed_at        TIMESTAMPTZ,                -- idempotency key with gateway_model_id
+    completed_at        TIMESTAMPTZ,                -- idempotency key with gateway_model_id + redteam_profile
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-    UNIQUE (gateway_model_id, completed_at)
+    UNIQUE (gateway_model_id, redteam_profile, completed_at)
 );
 
 CREATE INDEX IF NOT EXISTS idx_safety_runs_gateway_model_id ON public.safety_runs (gateway_model_id);
+CREATE INDEX IF NOT EXISTS idx_safety_runs_redteam_profile ON public.safety_runs (redteam_profile);
 CREATE INDEX IF NOT EXISTS idx_safety_runs_completed_at ON public.safety_runs (completed_at DESC);
 
 

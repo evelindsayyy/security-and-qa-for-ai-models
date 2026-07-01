@@ -39,6 +39,14 @@ ALL_MODELS = (
 PROMPTFOO_COMPOSE = REPO_ROOT / "safety" / "promptfoo" / "docker" / "compose.yml"
 GARAK_COMPOSE = REPO_ROOT / "safety" / "garak" / "docker" / "compose.yml"
 
+# Remote-plugin coverage that can't run inside the promptfoo redteam job (needs a
+# local LLM grader); run separately against static manual/*.yaml configs.
+MANUAL_EVALS = (
+    ("harmful", "manual/harmful_content.yaml"),
+    ("bias", "manual/bias.yaml"),
+    ("remote_policy", "manual/remote_policy.yaml"),
+)
+
 
 @dataclass
 class RunConfig:
@@ -305,6 +313,43 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
                 "--promptfoo",
                 str(pf_output / "redteam_safety_result.json"),
             ])
+
+            print("--- Promptfoo manual evals (remote-plugin coverage) ---", flush=True)
+            for stem, yaml_rel in MANUAL_EVALS:
+                print(f"  running {yaml_rel} ...", flush=True)
+                manual_eval = pf_output / f"manual_{stem}_eval.json"
+                try:
+                    compose_run(
+                        PROMPTFOO_COMPOSE,
+                        "promptfoo",
+                        [
+                            "promptfoo", "eval", "-c", yaml_rel,
+                            "-o", f"output/{slug}/{cfg.redteam_profile}/manual_{stem}_eval.json",
+                        ],
+                        extra_env=pf_env,
+                        check=True,
+                    )
+                except subprocess.CalledProcessError:
+                    pass
+                if not manual_eval.is_file():
+                    print(f"WARN: manual eval '{stem}' failed, skipping", file=sys.stderr, flush=True)
+                    continue
+
+                manual_result = pf_output / f"manual_{stem}_safety_result.json"
+                try:
+                    run_py([
+                        "safety/promptfoo/export_safety_result.py",
+                        str(manual_eval),
+                        "-o", str(manual_result),
+                    ])
+                except subprocess.CalledProcessError as exc:
+                    print(
+                        f"WARN: export failed for manual eval '{stem}' (exit {exc.returncode}), skipping",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    continue
+                merge_args.extend(["--promptfoo", str(manual_result)])
         else:
             print("--- Promptfoo red-team skipped (--skip-redteam) ---", flush=True)
     else:

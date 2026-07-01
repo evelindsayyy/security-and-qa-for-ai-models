@@ -46,7 +46,7 @@ Verify: `curl -s localhost:5000/api/health | python3 -m json.tool` → `db_avail
 
 ### Optional — authentication (OIDC)
 
-Deploy code first with `AUTH_ENABLED=0`. Full operator sequence: [`auth-setup.md`](auth-setup.md).
+Deploy code first with `AUTH_ENABLED=0`. Auth details: [`../auth/README.md`](../auth/README.md).
 
 ```bash
 # After OAuth client is registered on the VM .env:
@@ -95,6 +95,11 @@ python3 main.py --host
 ```
 
 Set `APP_PORT` in `.env` to change the container port. One-time pillar builds: `./docker/build-pillars.sh`.
+
+**Browsing via an IDE-forwarded port** (VS Code Remote, JetBrains Gateway, `ssh -L`,
+…) needs no config — Duke NetID login works on whatever local port the IDE
+forwards to `APP_PORT`, even if it changes between sessions. See
+[`auth/README.md`](../auth/README.md#oidc-callback-ports-local-dev--ide-port-forwarding).
 
 ## JSON API
 
@@ -265,6 +270,6 @@ python3 main.py up -d --build
 curl -s http://127.0.0.1:5000/api/health | python3 -m json.tool
 ```
 
-After deploy: `GET /api/health` → `db_available: true`, then POST a job and poll `status_url`. Enable OIDC when ready: [`auth-setup.md`](auth-setup.md).
+After deploy: `GET /api/health` → `db_available: true`, then POST a job and poll `status_url`. Enable OIDC when ready; see [`../auth/README.md`](../auth/README.md).
 
 Ongoing: `git pull && ./docker/run.sh up -d --build`; `uv run python -m api.ingest --apply` to bulk re-ingest artifacts from VM disk.

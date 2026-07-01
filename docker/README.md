@@ -34,4 +34,4 @@ Postgres is external (`POSTGRES_DSN` on OIT host).
 | `compose.caddy.yml` | Production HTTPS overlay (auto-included when `CADDY_DOMAIN` set) |
 | `Caddyfile` | Caddy TLS + reverse proxy config |
 
-Production HTTPS: [`docs/https-setup.md`](../docs/https-setup.md).
+Production HTTPS: [`docs/docker.md`](../docs/docker.md#production-https-caddy).
