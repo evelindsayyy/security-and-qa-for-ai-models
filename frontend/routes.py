@@ -44,6 +44,7 @@ def _hub_context() -> dict:
     safety_worst_tier = "—"
     benchmark_has = False
     benchmark_count = 0
+    benchmark_has_reference = False
 
     try:
         from frontend.scan_data import get_scans_data
@@ -86,6 +87,7 @@ def _hub_context() -> dict:
         bench = get_benchmarks_data()
         benchmark_has = bench["has_runs"]
         benchmark_count = len(bench["runs"])
+        benchmark_has_reference = bench.get("has_reference", False)
     except Exception:
         pass
 
@@ -107,6 +109,7 @@ def _hub_context() -> dict:
         "safety_worst_tier": safety_worst_tier,
         "benchmark_has": benchmark_has,
         "benchmark_count": benchmark_count,
+        "benchmark_has_reference": benchmark_has_reference,
     }
 
 
@@ -601,7 +604,7 @@ def register_routes(app):
         )
         if error:
             return error, 400
-        slug, _already, visibility = start_run(
+        slug, already, visibility = start_run(
             benchmark_key,
             model,
             base_url=base_url,
@@ -610,7 +613,8 @@ def register_routes(app):
             seed=seed,
         )
         endpoint = "benchmark_detail_private" if visibility == "private" else "benchmark_detail"
-        return redirect(url_for(endpoint, slug=slug, status="running"))
+        status = "running"
+        return redirect(url_for(endpoint, slug=slug, status=status))
 
     @app.route("/benchmarks/<slug>/status")
     def benchmark_run_status(slug: str):

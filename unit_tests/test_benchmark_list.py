@@ -12,7 +12,10 @@ import unittest
 
 os.environ.setdefault("FRONTEND_LAUNCH_MODE", "host")
 
-from frontend.benchmark_data import _postprocess_benchmark_runs  # noqa: E402
+from frontend.benchmark_data import (  # noqa: E402
+    _build_comparison_section,
+    _postprocess_benchmark_runs,
+)
 
 
 def _row(
@@ -62,15 +65,15 @@ class BenchmarkListDedupeTest(unittest.TestCase):
         data = _postprocess_benchmark_runs(runs)
         self.assertEqual(data["run_count"], 3)
 
-    def test_sorts_deduped_runs_by_score_desc(self) -> None:
+    def test_sorts_deduped_runs_by_timestamp_desc(self) -> None:
         runs = [
-            _row("low", kind="mmlu", model="Model A", headline_value=0.60),
-            _row("high", kind="ifeval", kind_label="IFEval", model="Model B", headline_value=0.95),
-            _row("mid", kind="tomi", kind_label="ToMi", model="Model C", headline_value=0.80),
+            _row("old", model="Model A", timestamp_raw="20260601T100000Z"),
+            _row("new", model="Model B", timestamp_raw="20260602T100000Z"),
+            _row("mid", kind="ifeval", kind_label="IFEval", model="Model C", timestamp_raw="20260601T150000Z"),
         ]
         data = _postprocess_benchmark_runs(runs)
         slugs = [r["slug"] for r in data["runs"]]
-        self.assertEqual(slugs, ["high", "mid", "low"])
+        self.assertEqual(slugs, ["new", "mid", "old"])
 
     def test_marks_superseded_rows_in_all_runs(self) -> None:
         runs = [
@@ -81,6 +84,32 @@ class BenchmarkListDedupeTest(unittest.TestCase):
         by_slug = {r["slug"]: r for r in data["all_runs"]}
         self.assertFalse(by_slug["old"]["is_latest"])
         self.assertTrue(by_slug["new"]["is_latest"])
+
+
+class BenchmarkComparisonMatrixTest(unittest.TestCase):
+    def test_builds_benchmark_by_model_matrix(self) -> None:
+        runs = [
+            _row("c1", kind="consistency", kind_label="Consistency", model="gpt-5-codex", headline_value=0.82),
+            _row("m1", kind="mmlu", model="GPT 4.1 Mini", headline_value=0.80),
+            _row("m2", kind="mmlu", model="Llama 3.3", headline_value=0.75),
+        ]
+        for r in runs:
+            r["score_class"] = "score-mid"
+            r["coverage"] = {"partial": False, "failed": 0, "n_display": "100"}
+        data = _build_comparison_section(runs)
+        self.assertTrue(data["has_comparison"])
+        self.assertEqual(data["comparison_models"], ["GPT 4.1 Mini", "Llama 3.3", "gpt-5-codex"])
+        mmlu = next(r for r in data["comparison_rows"] if r["key"] == "mmlu")
+        self.assertIn("GPT 4.1 Mini", mmlu["cells"])
+        self.assertIn("Llama 3.3", mmlu["cells"])
+        self.assertNotIn("gpt-5-codex", mmlu["cells"])
+        consistency = next(r for r in data["comparison_rows"] if r["key"] == "consistency")
+        self.assertIn("gpt-5-codex", consistency["cells"])
+
+    def test_empty_runs_yields_no_comparison(self) -> None:
+        data = _build_comparison_section([])
+        self.assertFalse(data["has_comparison"])
+        self.assertEqual(data["comparison_models"], [])
 
 
 if __name__ == "__main__":

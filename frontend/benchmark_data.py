@@ -228,60 +228,13 @@ BENCHMARK_META: dict[str, dict] = {
 
 # Per-benchmark orientation bands for reference scores (pilot sample sizes — not leaderboard claims).
 SCORE_BANDS: dict[str, dict] = {
-    "truthfulqa": {
-        "mid": 0.55,
-        "strong": 0.70,
-        "hint": "Many models score 55-70% on this benchmark. Top models can score ~85%, while human experts can score ~94%.",
-        "hint_sources": [
-            {"label": "TruthfulQA paper", "url": "https://arxiv.org/abs/2109.07958"},
-            {"label": "llm-stats.com", "url": "https://llm-stats.com/benchmarks/truthfulqa"},
-        ],
-    },
-    "ifeval": {
-        "mid": 0.80,
-        "strong": 0.90,
-        "hint": "Many models score 80-90% on this benchmark. Top models can score ~95%.",
-        "hint_sources": [
-            {"label": "llm-stats.com", "url": "https://llm-stats.com/benchmarks/ifeval"},
-        ],
-    },
-    "mmlu": {
-        "mid": 0.80,
-        "strong": 0.90,
-        "hint": "Many models score 80-90% on this benchmark. Top models can score ~95%, better than the human baseline of 90%.",
-        "hint_sources": [
-            {"label": "lmmarketcap.com", "url": "https://lmmarketcap.com/benchmarks/mmlu"},
-        ],
-    },
-    "tomi": {
-        "mid": 0.70,
-        "strong": 0.85,
-        "hint": "Older models score ~60% on this benchmark. Newer models might score better.",
-        "hint_sources": [
-            {"label": "Sap et al.", "url": "https://arxiv.org/abs/2210.13312"},
-        ],
-    },
-    "consistency": {
-        "mid": 0.75,
-        "strong": 0.85,
-        "hint": "Custom benchmark, measuring mean BERTScore F1 (0–1) between answers to paraphrased prompts. Many models score 80-85%. Lower scores often reflect different response length or structure, not necessarily contradictory conclusions.",
-    },
-    "mbpp": {
-        "mid": 0.60,
-        "strong": 0.80,
-        "hint": "Many modern models score ~80% on this benchmark, with top models recording ~95%.",
-        "hint_sources": [
-            {"label": "Codesota", "url": "https://www.codesota.com/llm/humaneval-mbpp#mbpp"},
-        ],
-    },
-    "quality": {
-        "mid": 0.50,
-        "strong": 0.70,
-        "hint": "Many models struggle to reach 70% on this benchmark. Top models can score ~90%, while human experts score 93.5%.",
-        "hint_sources": [
-            {"label": "Official QuALITY leaderboard", "url": "https://nyu-mll.github.io/quality/"},
-        ],
-    },
+    "truthfulqa": {"mid": 0.55, "strong": 0.70},
+    "ifeval": {"mid": 0.80, "strong": 0.90},
+    "mmlu": {"mid": 0.80, "strong": 0.90},
+    "tomi": {"mid": 0.70, "strong": 0.85},
+    "consistency": {"mid": 0.75, "strong": 0.85},
+    "mbpp": {"mid": 0.60, "strong": 0.80},
+    "quality": {"mid": 0.50, "strong": 0.70},
 }
 
 REFERENCE_DIR = ROOT / "frontend" / "benchmark_refs"
@@ -763,6 +716,71 @@ def _build_reference_section() -> dict:
     }
 
 
+def _matrix_cell_from_run(row: dict, *, kind: str) -> dict:
+    """Summary fields for one benchmark×model matrix cell."""
+    cell = {
+        "slug": row["slug"],
+        "headline_display": row["headline_display"],
+        "headline_metric": row["headline_metric"],
+        "headline_value": row.get("headline_value"),
+        "score_class": row.get("score_class") or _score_class(kind, row.get("headline_value")),
+        "coverage": row.get("coverage") or _coverage_info(row),
+        "timestamp": row.get("timestamp"),
+    }
+    ref = _reference_by_kind_model().get(kind, {}).get(_normalize_model_name(row.get("model") or "—"))
+    your_value = row.get("headline_value")
+    if ref and your_value is not None and ref.get("headline_value") is not None:
+        delta = your_value - ref["headline_value"]
+        if delta > 1e-9:
+            delta_class = "ref-delta-up"
+        elif delta < -1e-9:
+            delta_class = "ref-delta-down"
+        else:
+            delta_class = "ref-delta-flat"
+        cell["ref_delta_display"] = _format_reference_delta(kind, delta)
+        cell["ref_delta_class"] = delta_class
+    return cell
+
+
+def _build_comparison_section(deduped_runs: list[dict]) -> dict:
+    """Pivot latest user runs into a benchmark×model matrix (like Reference)."""
+    from benchmarks.run_benchmark import BENCHMARKS  # noqa: E402
+
+    if not deduped_runs:
+        return {"has_comparison": False, "comparison_models": [], "comparison_rows": []}
+
+    by_kind_model: dict[str, dict[str, dict]] = {}
+    for row in deduped_runs:
+        kind = row.get("kind")
+        model = _normalize_model_name(row.get("model") or "—")
+        if kind and model != "—":
+            by_kind_model.setdefault(kind, {})[model] = row
+
+    models_set = {m for per in by_kind_model.values() for m in per}
+    comparison_models = [m for m in _PREFERRED_REFERENCE_MODELS if m in models_set]
+    comparison_models.extend(sorted(models_set - set(comparison_models)))
+
+    comparison_rows: list[dict] = []
+    for key, cfg in BENCHMARKS.items():
+        cells: dict[str, dict] = {}
+        for model in comparison_models:
+            row = by_kind_model.get(key, {}).get(model)
+            if row:
+                cells[model] = _matrix_cell_from_run(row, kind=key)
+        comparison_rows.append({
+            "key": key,
+            "label": cfg["label"],
+            "badge_class": _BENCHMARK_BADGE.get(key, "badge-pilot"),
+            "cells": cells,
+        })
+
+    return {
+        "has_comparison": bool(comparison_models),
+        "comparison_models": comparison_models,
+        "comparison_rows": comparison_rows,
+    }
+
+
 def _summarize_quality(path: Path, data: dict) -> dict:
     summary = data.get("summary") or {}
     acc = summary.get("accuracy")
@@ -882,7 +900,7 @@ def _dedupe_key(row: dict) -> tuple[str, str] | None:
 
 
 def _postprocess_benchmark_runs(runs: list[dict]) -> dict:
-    """Keep the latest run per (model, benchmark); sort best score first."""
+    """Keep the latest run per (model, benchmark); default list order is newest first."""
     all_runs = list(runs)
     latest: dict[tuple[str, str], dict] = {}
     for r in sorted(
@@ -909,13 +927,7 @@ def _postprocess_benchmark_runs(runs: list[dict]) -> dict:
             r["older_run_count"] = max(key_counts.get(key, 1) - 1, 0)
 
     deduped = list(latest.values())
-    deduped.sort(
-        key=lambda r: (
-            r.get("headline_value") if r.get("headline_value") is not None else -1.0,
-            r.get("timestamp_raw") or "",
-        ),
-        reverse=True,
-    )
+    deduped.sort(key=lambda r: r.get("timestamp_raw") or "", reverse=True)
     all_runs.sort(key=lambda r: r.get("timestamp_raw") or "", reverse=True)
 
     kinds = sorted({r["kind_label"] for r in deduped})
@@ -1143,6 +1155,7 @@ def get_benchmarks_data() -> dict:
     for row in data.get("all_runs", []):
         row["score_class"] = _score_class(row.get("kind"), row.get("headline_value"))
         row["coverage"] = _coverage_info(row)
+    data.update(_build_comparison_section(data.get("runs", [])))
     return data
 
 

@@ -64,7 +64,13 @@
       {% else %}
         <p class="empty">{% if is_logged_in %}No benchmark results yet — click Start benchmark below.{% else %}No benchmark results yet. Sign in to start a run.{% endif %}</p>
       {% endif %}
-      <p class="pillar-actions">{{ start_button(url_for('benchmark_run_new'), '▶ Start benchmark') }}<a href="{{ url_for('benchmarks') }}">View benchmarks →</a></p>
+      <p class="pillar-actions">
+        {{ start_button(url_for('benchmark_run_new'), '▶ Start benchmark') }}
+        <a href="{{ url_for('benchmarks') }}">View benchmarks →</a>
+        {% if benchmark_has_reference %}
+        <a class="pillar-reference-link" href="{{ url_for('benchmark_reference') }}">Reference &amp; guide →</a>
+        {% endif %}
+      </p>
     </div>
   </section>
 

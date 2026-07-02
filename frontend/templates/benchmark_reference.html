@@ -1,10 +1,20 @@
 {% extends "base.html" %}
 
-{% block title %}Guide{% endblock %}
+{% block title %}Reference{% endblock %}
 
 {% block content %}
 <div class="eval-comparison">
-  <p class="back"><a href="{{ url_for('benchmarks') }}">← your benchmark runs</a></p>
+  <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmark results</a></p>
+  {% if has_reference %}
+  <aside class="benchmark-reference-callout benchmark-reference-callout--compact" aria-label="You are viewing benchmark reference scores">
+    <div class="benchmark-reference-callout-text">
+      <p class="benchmark-reference-callout-title">Reference scores for sample gateway models</p>
+      <p class="benchmark-reference-callout-desc">
+        Pilot-size runs on this site — use as orientation, not a leaderboard. Expand the guide below for what each benchmark tests.
+      </p>
+    </div>
+  </aside>
+  {% endif %}
   <h1>Reference</h1>
   <p class="sub">
     Sample reference scores for

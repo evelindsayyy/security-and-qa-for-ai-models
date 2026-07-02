@@ -288,7 +288,7 @@ def start_run(
     seed: int | None = None,
 ) -> tuple[str, bool, str]:
     """Returns (stem, was_already_running, visibility)."""
-    from frontend.run_launch import build_launch_plan, persist_run_meta_dir, reused_slug
+    from frontend.run_launch import build_launch_plan, persist_run_meta_dir
     from frontend.run_paths import inflight_scope_key
 
     plan = build_launch_plan(
@@ -296,9 +296,9 @@ def start_run(
         benchmark_key=benchmark_key,
         model=model,
     )
-    if plan.reused:
-        stem = reused_slug(plan) or predict_stem(benchmark_key, model)
-        return stem, True, plan.visibility
+    # Unlike scan/eval reuse, always allow a fresh benchmark run when the user
+    # clicks Start — list dedupe keeps the UI tidy; blocking reruns here made
+    # "Start a new run" jump back to an old result with no new subprocess.
 
     combo = (
         benchmark_key, model, (base_url or "").strip(),
