@@ -96,7 +96,8 @@
             data-model="{{ r.model }}"
             data-latest="{{ 'true' if r.is_latest else 'false' }}"
             data-score="{{ r.headline_value if r.headline_value is not none else '' }}"
-            data-when="{{ r.timestamp_raw or '' }}">
+            data-when="{{ r.timestamp_raw or '' }}"
+            data-slug="{{ r.slug }}">
           <td class="col-nowrap"><span class="badge {{ badge_class }}">{{ r.kind_label }}</span></td>
           <td>
             <span class="model">{{ r.model }}</span>
@@ -198,12 +199,17 @@
             (!fm || r.dataset.model === fm));
 
           visible.sort((a, b) => {
+            let cmp = 0;
             if (sortKey === "when") {
               const av = a.dataset.when || "";
               const bv = b.dataset.when || "";
-              return sortDir * av.localeCompare(bv);
+              cmp = av.localeCompare(bv);
+              if (!cmp) cmp = (a.dataset.slug || "").localeCompare(b.dataset.slug || "");
+            } else {
+              cmp = num(a, "score") - num(b, "score");
+              if (!cmp) cmp = (a.dataset.when || "").localeCompare(b.dataset.when || "");
             }
-            return sortDir * (num(a, "score") - num(b, "score"));
+            return sortDir * cmp;
           });
 
           tbody.innerHTML = "";

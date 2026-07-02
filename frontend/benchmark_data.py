@@ -8,8 +8,9 @@ Schema detection is content-based so renames do not break the viewer.
 from __future__ import annotations
 
 import json
+import re
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from frontend.path_safety import is_safe_slug, resolves_inside
@@ -286,15 +287,47 @@ def _candidate_dirs() -> list[Path]:
     return dirs
 
 
-def _format_ts(raw: str) -> str:
+def _parse_timestamp(raw: str) -> datetime | None:
+    """Parse a benchmark timestamp from JSON, DB, or slug conventions."""
+    raw = (raw or "").strip()
     if not raw:
-        return "—"
+        return None
     for fmt in ("%Y%m%d_%H%M%S", "%Y%m%dT%H%M%SZ", "%Y-%m-%dT%H:%M:%S.%f%z", "%Y-%m-%dT%H:%M:%S%z"):
         try:
-            return datetime.strptime(raw, fmt).strftime("%Y-%m-%d %H:%M")
+            dt = datetime.strptime(raw, fmt)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
         except ValueError:
             continue
-    return raw[:19] if len(raw) > 19 else raw
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        return None
+
+
+_SLUG_TS_RE = re.compile(r"^(\d{8}T\d{6}Z)")
+
+
+def normalize_timestamp_raw(raw: str, slug: str = "") -> str:
+    """Canonical UTC sort key ``YYYYMMDDTHHMMSSZ`` for list ordering."""
+    parsed = _parse_timestamp(raw)
+    if parsed is not None:
+        return parsed.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    match = _SLUG_TS_RE.match((slug or "").strip())
+    if match:
+        return match.group(1)
+    return (raw or "").strip()
+
+
+def _format_ts(raw: str) -> str:
+    parsed = _parse_timestamp(raw)
+    if parsed is not None:
+        return parsed.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    return raw[:19] if len(raw) > 19 else raw or "—"
 
 
 def _detect_kind(path: Path) -> str | None:
@@ -1151,6 +1184,12 @@ def get_benchmarks_data() -> dict:
     data["has_reference"] = ref.get("has_reference", False)
     data["coverage_skip_explanation"] = COVERAGE_SKIP_EXPLANATION
     raw_runs = data.pop("runs", [])
+    for row in raw_runs:
+        row["timestamp_raw"] = normalize_timestamp_raw(
+            row.get("timestamp_raw") or "",
+            row.get("slug") or "",
+        )
+        row["timestamp"] = _format_ts(row["timestamp_raw"])
     data.update(_postprocess_benchmark_runs(raw_runs))
     for row in data.get("all_runs", []):
         row["score_class"] = _score_class(row.get("kind"), row.get("headline_value"))

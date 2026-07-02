@@ -15,6 +15,7 @@ os.environ.setdefault("FRONTEND_LAUNCH_MODE", "host")
 from frontend.benchmark_data import (  # noqa: E402
     _build_comparison_section,
     _postprocess_benchmark_runs,
+    normalize_timestamp_raw,
 )
 
 
@@ -84,6 +85,36 @@ class BenchmarkListDedupeTest(unittest.TestCase):
         by_slug = {r["slug"]: r for r in data["all_runs"]}
         self.assertFalse(by_slug["old"]["is_latest"])
         self.assertTrue(by_slug["new"]["is_latest"])
+
+
+class BenchmarkTimestampNormalizeTest(unittest.TestCase):
+    def test_normalizes_db_isoformat(self) -> None:
+        self.assertEqual(
+            normalize_timestamp_raw("2026-07-02T15:37:00+00:00", ""),
+            "20260702T153700Z",
+        )
+
+    def test_normalizes_compact_json_timestamp(self) -> None:
+        self.assertEqual(
+            normalize_timestamp_raw("20260624T154900Z", ""),
+            "20260624T154900Z",
+        )
+
+    def test_slug_fallback_when_body_timestamp_missing(self) -> None:
+        self.assertEqual(
+            normalize_timestamp_raw("", "20260702T153700Z_mbpp_gpt"),
+            "20260702T153700Z",
+        )
+
+    def test_newest_sort_order_after_normalization(self) -> None:
+        runs = [
+            _row("old", model="A", timestamp_raw="2026-06-24T15:49:00+00:00"),
+            _row("new", model="B", timestamp_raw="20260702T153700Z"),
+        ]
+        for r in runs:
+            r["timestamp_raw"] = normalize_timestamp_raw(r["timestamp_raw"], r["slug"])
+        runs.sort(key=lambda r: r["timestamp_raw"], reverse=True)
+        self.assertEqual(runs[0]["slug"], "new")
 
 
 class BenchmarkComparisonMatrixTest(unittest.TestCase):
