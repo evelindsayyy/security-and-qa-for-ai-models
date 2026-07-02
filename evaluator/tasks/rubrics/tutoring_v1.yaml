@@ -16,6 +16,12 @@
 # Design lineage: HELM (task-conditional dims), G-Eval (anchored scale +
 # evaluation_steps + JSON), MT-Bench (cross-family judge, temp 0).
 #
+# W7 Day-3 (pre-freeze): anchors tightened for discrimination after the live-
+# validation ceiling finding (a strong model scored ~5.0 across the board) —
+# added explicit "4" anchors (very good but not excellent) and hardened every
+# "5"/"3" with a concrete, checkable bar. The shared `tone` dim overrides the
+# shared anchors inline; weights/scales/dimensions are unchanged.
+#
 # DO NOT EDIT in place after the W7 freeze — copy to v2 and bump the version.
 # =============================================================================
 
@@ -47,9 +53,14 @@ dimensions:
       3: >
         Mostly correct but with an imprecision or a small slip (right idea but
         loose terminology, or an off-by-one / arithmetic slip in a worked step).
+      4: >
+        Correct concept, method, and final answer, but one definition or term
+        is phrased loosely enough that a careful student could half-form a
+        misconception from it (though it is not outright wrong).
       5: >
-        Fully correct: right concept, right method, and the right final answer
-        where one is given; nothing that would teach the student something false.
+        Fully correct AND precise: right concept, right method, right final
+        answer, and terminology stated precisely enough that the student could
+        not form a subtle misconception from it.
 
   pedagogy:
     definition: >
@@ -66,10 +77,14 @@ dimensions:
       3: >
         Explains some reasoning but skips steps, or pitches it at the wrong
         level (too advanced or too shallow) for the student's stated confusion.
+      4: >
+        Explains the reasoning step by step at about the right level, but either
+        doesn't make the "why" explicit or gives no concrete example/analogy to
+        help the student generalize.
       5: >
-        Walks through the reasoning step by step, explains the "why", and uses a
-        concrete example or analogy where useful — the student could apply the
-        idea to a similar problem afterward.
+        Walks through the reasoning step by step, makes the "why" explicit at
+        each step, AND uses a concrete example or analogy where useful — the
+        student could apply the idea to a similar problem afterward.
 
   completeness:
     definition: >
@@ -86,9 +101,12 @@ dimensions:
       3: >
         Covers the main idea but skips a supporting step, an edge case, or a
         check the student would realistically need.
+      4: >
+        Covers every step and concept needed, but omits the relevant caveat or
+        common-mistake note the reference flags.
       5: >
-        Covers every step/concept needed to understand and solve it, including a
-        relevant caveat or common-mistake note where appropriate.
+        Covers every step and concept AND the relevant caveat or common-mistake
+        note — the student is warned about the trap, not just shown the path.
 
   tone:
     from: shared
@@ -97,6 +115,15 @@ dimensions:
       The audience is a student who is confused or stuck. Target tone is
       encouraging and patient — never condescending ("obviously, you just..."),
       dismissive, or impatient. Warmth that keeps the student engaged scores high.
+    anchors:   # tightened for this task (overrides the shared 1-3)
+      1: >
+        Condescending, dismissive, or impatient with a stuck student.
+      2: >
+        Neutral and fine but not especially warm — gets the job done without
+        acknowledging the confusion or encouraging the student.
+      3: >
+        Encouraging and patient — acknowledges the confusion, keeps the student
+        engaged, never talks down; the warmth would keep a stuck student going.
 
 
 aggregation:
@@ -114,10 +141,11 @@ evaluation_steps:
   - "Read the student's question and identify (a) the concept or skill involved and (b) where the student seems confused or stuck."
   - "Read the reference tutoring answer to see the correct content and how it teaches."
   - "Read the candidate response."
-  - "For CORRECTNESS, check the method, definitions, and any final answer against the reference; flag anything that would teach the student something false."
+  - "For CORRECTNESS, check the method, definitions, and any final answer against the reference; flag anything that would teach the student something false. If the question states a misconception, a correct response must correct it, not affirm it."
   - "For PEDAGOGY, judge whether it explains the reasoning step by step at the right level (not just states the answer), and whether an example/analogy aids understanding."
   - "For COMPLETENESS, check that no needed step, concept, or common-mistake caveat is missing."
   - "For TONE, judge whether it reads as encouraging and patient for a stuck student, not condescending or curt."
+  - "A 5 requires meeting the FULL top-anchor bar. When a response is clearly strong but not flawless — it teaches well but skips the 'why' or the example, or is correct but slightly loose — score 4, not 5. Reserve 5 for a response that teaches transferable understanding with nothing important missing."
   - "When between anchors, pick the LOWER score and explain why in the rationale."
   - "Give a one-sentence rationale per dimension, naming the specific aspect that drove the score."
   - "Output valid JSON matching the schema. No prose outside the JSON. No markdown fences."
