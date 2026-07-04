@@ -23,6 +23,8 @@ import threading
 import time
 from pathlib import Path
 
+from markupsafe import escape
+
 from frontend import docker_launch
 from frontend.log_status import status_message
 from frontend.path_safety import is_safe_slug
@@ -181,17 +183,19 @@ def validate_launch(
     candidate: str, judge: str, suite_key: str, max_tokens: int
 ) -> str | None:
     """Return an error message, or None if the launch request is valid."""
+    # NOTE: these messages are rendered as HTML by the caller, so every reflected
+    # user value is HTML-escaped to prevent reflected XSS (e.g. candidate="<script>").
     if candidate not in candidate_models():
-        return f"candidate model not in allowlist: {candidate!r}"
+        return f"candidate model not in allowlist: '{escape(candidate)}'"
     if judge not in JUDGE_MODELS:
-        return f"judge model not in allowlist: {judge!r}"
+        return f"judge model not in allowlist: '{escape(judge)}'"
     if model_family(judge) == model_family(candidate):
         return (
-            f"judge {judge!r} is the same model family as candidate "
-            f"{candidate!r} — cross-family judging required (MT-Bench rule)"
+            f"judge '{escape(judge)}' is the same model family as candidate "
+            f"'{escape(candidate)}' — cross-family judging required (MT-Bench rule)"
         )
     if _suite_cfg(suite_key) is None:
-        return f"unknown suite: {suite_key!r}"
+        return f"unknown suite: '{escape(suite_key)}'"
     if not (MAX_TOKENS_MIN <= max_tokens <= MAX_TOKENS_MAX):
         return f"max_tokens must be {MAX_TOKENS_MIN}-{MAX_TOKENS_MAX}"
     if docker_launch.use_docker() and not docker_launch.docker_available():

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import time
@@ -45,7 +46,21 @@ def _read_state() -> dict[str, str]:
     return data
 
 
+# A served model id is an HF repo id or local path — only these characters.
+# Rejecting anything else stops a comma (or other metachar) in --model from
+# injecting extra NAME=VALUE pairs into sbatch's comma-separated --export list
+# (e.g. `--model "x,LD_PRELOAD=/tmp/evil.so"`).
+_SAFE_MODEL_ID = re.compile(r"^[A-Za-z0-9._/-]+$")
+
+
 def cmd_start(args: argparse.Namespace) -> int:
+    if not _SAFE_MODEL_ID.fullmatch(args.model):
+        print(
+            f"error: refusing unsafe --model {args.model!r}: only letters, digits, "
+            ". _ / - are allowed (an HF repo id or local path).",
+            file=sys.stderr,
+        )
+        return 2
     log_dir = Path(args.log_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
 

@@ -80,10 +80,14 @@ def _cache_key(
     question: str,
     candidate_response: str,
     rubric_version: str,
+    max_tokens: int,
 ) -> str:
+    # max_tokens is part of the key: a reasoning judge (e.g. gpt-oss-120b) re-run
+    # with a larger --judge-max-tokens must MISS the cache, not return the stale
+    # (possibly empty/truncated) answer from the smaller budget.
     raw = (
         f"{judge_model}|{judge_prompt_version}|{question}"
-        f"|{candidate_response}|{rubric_version}"
+        f"|{candidate_response}|{rubric_version}|{max_tokens}"
     ).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
 
@@ -147,6 +151,7 @@ def _strip_fences(text: str) -> str:
 def _parse_scores(
     raw: str,
     expected_dims: tuple[str, ...] = _EXPECTED_DIMENSIONS,
+    scales: Optional[dict[str, tuple[float, float]]] = None,
 ) -> dict[str, DimensionScore]:
     """Parse a JSON judge response into a {dim: DimensionScore} dict.
 
@@ -186,6 +191,20 @@ def _parse_scores(
             score = float(entry["score"])
         except (TypeError, ValueError) as e:
             raise ValueError(f"dimension '{dim}' score is not numeric") from e
+        # A judge can hallucinate an out-of-range or fractional score (the prompt
+        # asks for an INTEGER inside the dimension's scale). Clamp to the scale and
+        # round, so one bad dimension can't silently push the weighted overall out
+        # of the display range. Warn so the misbehavior is surfaced, not buried.
+        if scales and dim in scales:
+            lo, hi = scales[dim]
+            fixed = float(round(max(lo, min(hi, score))))
+            if fixed != score:
+                print(
+                    f"  WARN: judge score {score:g} for '{dim}' outside scale "
+                    f"[{lo:g}, {hi:g}] — clamped to {fixed:g}",
+                    file=sys.stderr,
+                )
+            score = fixed
         rationale = str(entry["rationale"]).strip()
         scores[dim] = DimensionScore(score=score, rationale=rationale)
 
@@ -315,6 +334,7 @@ def judge_response(
         question=question,
         candidate_response=candidate_response,
         rubric_version=rubric_version,
+        max_tokens=max_tokens,
     )
     cached = _cache_read(key)
     if cached is not None:
@@ -327,6 +347,12 @@ def judge_response(
     expected_dims: tuple[str, ...] = tuple((rubric.get("dimensions") or {}).keys())
     if not expected_dims:
         expected_dims = _EXPECTED_DIMENSIONS
+
+    # Per-dimension [min, max] scale, used by _parse_scores to clamp scores.
+    scales = {
+        d: tuple((rubric.get("dimensions") or {}).get(d, {}).get("scale", [1, 5]))
+        for d in expected_dims
+    }
 
     output_schema_lines = ["{"]
     max_dim_len = max(len(d) for d in expected_dims)
@@ -373,7 +399,7 @@ def judge_response(
         )
 
     try:
-        scores = _parse_scores(raw1, expected_dims=expected_dims)
+        scores = _parse_scores(raw1, expected_dims=expected_dims, scales=scales)
         result = JudgeResult(scores=scores, raw_response=raw1)
         _cache_write(key, result)
         return result
@@ -412,7 +438,7 @@ def judge_response(
         )
 
     try:
-        scores = _parse_scores(raw2, expected_dims=expected_dims)
+        scores = _parse_scores(raw2, expected_dims=expected_dims, scales=scales)
         result = JudgeResult(scores=scores, raw_response=raw2)
         _cache_write(key, result)
         return result
