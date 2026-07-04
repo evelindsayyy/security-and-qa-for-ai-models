@@ -92,8 +92,8 @@ def anonymize(text: str) -> str:
 
 
 def load_suite(name: str) -> dict[str, dict]:
-    rows = [json.loads(l) for l in (TASKS / f"{name}.jsonl").read_text().splitlines()
-            if l.strip()]
+    rows = [json.loads(line) for line in (TASKS / f"{name}.jsonl").read_text().splitlines()
+            if line.strip()]
     return {r["id"]: r for r in rows if "id" in r}
 
 
@@ -275,7 +275,7 @@ md = ["# Item → version map & collection design", "",
       f"items.** Every comparison is **{DPO_TARGET} vs** one of "
       f"{', '.join(OPPONENTS)} (on-policy for the DPO run). Judge = {JUDGE} "
       "(cross-family).",
-      f"- Task-type mix: " + ", ".join(f"{k} {v}" for k, v in sorted(by_type.items())) + ".",
+      "- Task-type mix: " + ", ".join(f"{k} {v}" for k, v in sorted(by_type.items())) + ".",
       f"- **{NUM_VERSIONS} versions**, ~{QUESTIONS_PER_VERSION} questions each, "
       "**non-overlapping**; a prompt never repeats within a survey.",
       f"- **1 team per version** ({TEAM_SIZE} students) → every question gets "
