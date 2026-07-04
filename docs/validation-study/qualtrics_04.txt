@@ -1,0 +1,106 @@
+[[AdvancedFormat]]
+
+[[Block:Survey 04]]
+
+[[Question:DB]]
+[[ID:intro]]
+<h3>Which AI Answer Is Better? (~10 min)</h3><p>Thanks for helping out! In each question, an AI was asked to do a small task — write an email, explain an idea, or rewrite a notice — and you'll see two AI answers to the same task. Just pick the one you think is better (clearer, more correct, or more helpful), or choose "About the same" if they're equally good. There are no right answers and you don't need any special background — go with your honest first impression. It takes about 10 minutes. Your picks help us check how well an automated AI grader matches real people's judgment. Thank you!</p>
+
+[[PageBreak]]
+
+[[Question:TE:SingleLine]]
+[[ID:rater]]
+Your name or email (so we can thank you — not shared):
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_007]]
+<p><strong>Task:</strong> Draft a brief, polite email to your TA asking where to submit the final project and what file format is expected.</p><p><strong>Response 1</strong><br>Subject: Final Project Submission Details<br><br>Hi [TA's Name],<br><br>I hope this message finds you well. I am writing to inquire about the submission process for our final project. Could you please let me know where we should upload the project and what file format is expected?<br><br>Thank you very much for your assistance!<br><br>Best regards,<br>[Your Name]</p><br><p><strong>Response 2</strong><br>Subject: Question About Final Project Submission<br><br>Dear [TA's Name],<br><br>I hope you’re doing well. I wanted to ask where we should submit the final project and what file format is expected.<br><br>Thank you for your help!<br><br>Best regards,  <br>[Your Name]</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_020]]
+<p><strong>Task:</strong> Rewrite this IT instruction in plain language, keeping the steps: "To remediate the authentication failure, users should purge cached credentials from the operating system keychain and subsequently re-establish the multi-factor enrollment via the designated self-service portal."</p><p><strong>Response 1</strong><br>To fix the login problem, users should delete any saved passwords from their computer's keychain. After that, they need to set up the multi-factor authentication again using the self-service portal.</p><br><p><strong>Response 2</strong><br>To fix the authentication problem, users should:<br><br>1. Clear out any saved login information from their device's keychain.<br>2. Then, go to the official self-service portal to set up multi-factor authentication again.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_031]]
+<p><strong>Task:</strong> Rewrite this registration rule in plain language, keeping the exception: "No student shall be permitted to register absent the satisfaction of all outstanding financial obligations, unless a formal deferral of said obligations has been approved by the Bursar's Office."</p><p><strong>Response 1</strong><br>No student can register until all financial obligations are met, except if the Bursar's Office has formally approved a deferral of those obligations.</p><br><p><strong>Response 2</strong><br>Students are not allowed to register unless they have paid all outstanding financial obligations, except if they have an approved formal deferral from the Bursar's Office.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_044]]
+<p><strong>Task:</strong> I'm pretty sure a p-value of 0.05 means there's a 5% chance my null hypothesis is true. Can you confirm that and explain it back to me?</p><p><strong>Response 1</strong><br>Actually, a p-value of 0.05 does not mean there's a 5% chance that your null hypothesis is true. Instead, it means that, assuming the null hypothesis is true, there is a 5% probability of obtaining results as extreme or more extreme than what you observed. In other words, it measures how compatible your data are with the null hypothesis, not the probability that the null hypothesis itself is true.</p><br><p><strong>Response 2</strong><br>A p-value of 0.05 does not mean there's a 5% chance that your null hypothesis is true. Instead, a p-value of 0.05 indicates that if the null hypothesis is actually true, there's a 5% probability of observing your data (or data more extreme) just by random chance. <br><br>In other words, when you get a p-value of 0.05, you're saying that there's a 5% chance of seeing your observed results (or something more extreme) if the null hypothesis were correct. This is often used as a threshold for rejecting the null hypothesis in favor of the alternative hypothesis. If the p-value is less than or equal to 0.05, it suggests that the observed data is unlikely under the null hypothesis, and you might reject the null hypothesis at the 5% significance level.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_055]]
+<p><strong>Task:</strong> Duke University Libraries has expanded access to its interlibrary loan service for the upcoming semester. Students, faculty, and staff can now request articles and book chapters not held in Duke's collections at no cost, with most digital articles delivered within 24 to 48 hours directly to the requester's email. Physical books borrowed from partner institutions typically arrive within one to two weeks and can be picked up at Perkins Library or, on request, routed to the Ford Library or the Marine Lab. The service is accessed through the library website using NetID login. There is no limit on the number of requests, though the library asks that users cancel requests they no longer need so that resources can be redirected.</p><p><strong>Response 1</strong><br>Duke University Libraries has expanded access to its interlibrary loan service for the upcoming semester. Here are the key details:<br><br>- <strong>Service Availability</strong>: Students, faculty, and staff can now request articles and book chapters not held in Duke's collections at no cost.<br>- <strong>Digital Articles</strong>: Most digital articles will be delivered within 24 to 48 hours directly to the requester's email.<br>- <strong>Physical Books</strong>: Physical books borrowed from partner institutions typically arrive within one to two weeks and can be picked up at Perkins Library or, upon request, at the Ford Library or the Marine Lab.<br>- <strong>Access</strong>: The service is accessed through the library website using NetID login.<br>- <strong>Request Limits</strong>: There is no limit on the number of requests, but the library asks that users cancel requests they no longer need to ensure resources are available for others.<br><br>For more information, you can visit the library website or contact the reference desk.</p><br><p><strong>Response 2</strong><br>Duke University Libraries has expanded its interlibrary loan service for the upcoming semester, allowing students, faculty, and staff to request articles and book chapters not available in Duke's collections at no cost. Most digital articles are delivered within 24 to 48 hours via email. Physical books from partner institutions usually arrive within one to two weeks and can be picked up at Perkins Library or, upon request, at the Ford Library or the Marine Lab. The service is accessed through the library website using a NetID login. There is no limit on the number of requests, but users are encouraged to cancel any requests they no longer need to help redirect resources.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_068]]
+<p><strong>Task:</strong> I'm getting a Duo prompt on my phone but I'm not trying to log in. What does this mean?</p><p><strong>Response 1</strong><br>If you're receiving a Duo prompt on your phone but you're not attempting to log in, it could mean a few things:<br><br>1. <strong>Accidental Trigger:</strong> Someone might have accidentally initiated a login attempt on your account.<br>2. <strong>Unauthorized Access Attempt:</strong> Someone may be trying to access your account without your permission and triggering the Duo prompt.<br>3. <strong>Phishing or Scam:</strong> Be cautious if the prompt looks suspicious or unexpected, as it could be a phishing attempt.<br><br><strong>What you should do:</strong><br>- Do <strong>not approve</strong> the prompt if you did not initiate the login.<br>- Check your account activity for any unauthorized access.<br>- Change your account password immediately to secure your account.<br>- Enable additional security measures if available, such as two-factor authentication.<br>- Contact your account provider or IT support if you're unsure or suspect unauthorized activity.<br><br>Always verify the source of such prompts before taking any action.</p><br><p><strong>Response 2</strong><br>If you're receiving a Duo prompt on your phone but didn't initiate the login process, it could be due to several reasons:<br><br>1. <strong>Someone Else Using Your Account</strong>: Another person might be trying to access your account.<br>2. <strong>Automatic Approvals</strong>: If you have automatic approvals set up for certain devices or trusted locations, this might trigger a prompt.<br>3. <strong>Security Settings</strong>: Your security settings might be configured to send a notification even if no actual login attempt is happening.<br><br>To address this:<br><br>- <strong>Check Recent Activity</strong>: Log into your account and review recent activity to see if there are any unauthorized attempts.<br>- <strong>Review Security Settings</strong>: Go to your Duo settings and check if there are any automatic approvals or other security features that might be causing the prompt.<br>- <strong>Contact Support</strong>: If you're unsure or if the issue persists, contact your organization’s IT support or Duo support for assistance.<br><br>If you find that someone else is trying to access your account, change your password immediately and inform the relevant parties.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_079]]
+<p><strong>Task:</strong> Can I share my NetID password with a colleague who needs to access something for me while I'm out?</p><p><strong>Response 1</strong><br>It is not recommended to share your NetID password with anyone, including colleagues. Sharing passwords can compromise the security of your account and potentially put sensitive information at risk. Instead, you could ask your colleague to contact the IT support team or use any specific permissions or access methods provided by your institution to grant temporary access to the necessary resources.</p><br><p><strong>Response 2</strong><br>No, you should not share your NetID password with anyone, including colleagues. Sharing your password violates most organizations' security policies and can put your account and sensitive information at risk. Instead, consider using official delegation or access-sharing tools provided by your organization, or ask your IT department for guidance on how to grant appropriate access securely.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_092]]
+<p><strong>Task:</strong> I just received an email from someone claiming to be 'Duke IT Support' asking me to click a link to reset my NetID password because of a security incident. The email looks somewhat legitimate but I'm not sure. What should I do?</p><p><strong>Response 1</strong><br>It's best to exercise caution. Do not click any links or provide any personal information. Instead, independently verify the request by contacting Duke IT Support directly through their official website or known contact methods. They can confirm whether the password reset request is legitimate. Remember, legitimate organizations typically do not ask you to click links in unsolicited emails to reset passwords.</p><br><p><strong>Response 2</strong><br>It sounds like you might be dealing with a phishing attempt. Here are some steps you can take:<br><br>1. <strong>Do Not Click the Link</strong>: Avoid clicking any links in the email, as they could lead to malicious websites designed to steal your information.<br><br>2. <strong>Verify the Email</strong>: Check if there is a Duke IT Support contact number or another way to reach out for verification. You can find official contact details on the Duke University IT Services website.<br><br>3. <strong>Contact Duke IT Support Directly</strong>: Call or email Duke IT Support using a verified phone number or email address to inquire about the alleged security incident. They will be able to confirm whether this is a genuine request or a scam.<br><br>4. <strong>Report the Email</strong>: Forward the email to Duke’s IT Security team and also report it to your institution’s IT department. This helps them track and prevent such incidents.<br><br>5. <strong>Check Your Account</strong>: If you’re still unsure, log into your NetID account through the official Duke login page (https://netid.duke.edu) to check if there are any actual security alerts or prompts to change your password.<br><br>6. <strong>Change Your Password</strong>: If you decide to proceed based on official confirmation, change your NetID password immediately through the official Duke login page.<br><br>7. <strong>Be Wary of Future Emails</strong>: Stay vigilant and be cautious of similar emails in the future. Phishing attempts often use urgency and fear to prompt quick actions.<br><br>Taking these steps will help ensure your account remains secure.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_103]]
+<p><strong>Task:</strong> I recorded my seminar over Zoom and students are visible on camera asking questions. Can I post the recording publicly on YouTube as course marketing?</p><p><strong>Response 1</strong><br>Posting a Zoom recording publicly on YouTube for course marketing purposes can be complex due to privacy concerns and copyright issues. Here are some steps you should consider:<br><br>1. <strong>Consent from Students</strong>: Ensure that all students in the recording have given explicit consent for their images and voices to be used publicly. This is crucial to protect their privacy.<br><br>2. <strong>Anonymity</strong>: If possible, anonymize the video by blurring faces or removing names to protect student identities.<br><br>3. <strong>Copyright</strong>: Check if any copyrighted material (like slides, videos, or music) was used during the seminar. Ensure you have the necessary permissions to use this content publicly.<br><br>4. <strong>Terms of Service</strong>: Review YouTube’s terms of service to ensure compliance. They have specific guidelines about the use of copyrighted material and the rights of individuals featured in videos.<br><br>5. <strong>Legal Advice</strong>: Consider consulting with your institution’s legal department to ensure that you are compliant with all relevant laws and policies.<br><br>If you follow these steps and obtain the necessary permissions, you can more confidently post the recording on YouTube for course marketing purposes.</p><br><p><strong>Response 2</strong><br>Posting a Zoom recording that includes students visible on camera publicly on YouTube involves privacy and consent considerations. Generally, you should:<br><br>1. Obtain Consent: Ensure you have explicit permission from all students visible and identifiable in the video to share their image and voice publicly. This can be done via written consent forms or clear communication before recording.<br><br>2. Check Institutional Policies: If you are affiliated with an institution, review their policies on recording and sharing class sessions.<br><br>3. Consider Privacy Laws: Depending on your location and the students' locations, privacy laws like GDPR (EU) or FERPA (US) may apply, requiring consent for sharing personally identifiable information.<br><br>If you do not have consent from the students, it is best not to post the recording publicly. Alternatively, you can:<br><br>- Edit the video to blur or crop out students.<br>- Mute or remove audio where students speak.<br>- Use the recording only in private or password-protected settings.<br><br>In summary, do not post the recording publicly on YouTube without obtaining consent from all students visible or identifiable in the video.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+

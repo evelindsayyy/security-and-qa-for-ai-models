@@ -1,0 +1,106 @@
+[[AdvancedFormat]]
+
+[[Block:Survey 09]]
+
+[[Question:DB]]
+[[ID:intro]]
+<h3>Which AI Answer Is Better? (~10 min)</h3><p>Thanks for helping out! In each question, an AI was asked to do a small task — write an email, explain an idea, or rewrite a notice — and you'll see two AI answers to the same task. Just pick the one you think is better (clearer, more correct, or more helpful), or choose "About the same" if they're equally good. There are no right answers and you don't need any special background — go with your honest first impression. It takes about 10 minutes. Your picks help us check how well an automated AI grader matches real people's judgment. Thank you!</p>
+
+[[PageBreak]]
+
+[[Question:TE:SingleLine]]
+[[ID:rater]]
+Your name or email (so we can thank you — not shared):
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_006]]
+<p><strong>Task:</strong> Draft an email to your academic advisor, Professor B, requesting a short meeting to discuss adding a Machine Learning &amp; AI minor. Suggest a couple of times.</p><p><strong>Response 1</strong><br>Subject: Request for Meeting to Discuss Adding a Machine Learning &amp; AI Minor<br><br>Dear Professor B,<br><br>I hope this message finds you well. I am writing to request a brief meeting with you to discuss my interest in adding a Machine Learning &amp; AI minor to my current degree program. Given your expertise and guidance, I believe this would be a valuable addition to my academic journey.<br><br>Could we schedule a meeting at your earliest convenience? I have a few suggestions:<br><br>1. Next Tuesday, March 14th, from 2:00 PM to 3:00 PM.<br>2. Thursday, March 16th, from 10:00 AM to 11:00 AM.<br><br>Please let me know which time works best for you, or if there is another time that might be more convenient. I look forward to discussing this opportunity further.<br><br>Thank you for your time and consideration.<br><br>Best regards,<br><br>[Your Full Name]  <br>[Your Student ID]  <br>[Your Major/Program]  <br>[Your Contact Information]</p><br><p><strong>Response 2</strong><br>Subject: Request for Meeting to Discuss Adding Machine Learning &amp; AI Minor<br><br>Dear Professor B,<br><br>I hope this message finds you well. I am interested in adding a Machine Learning &amp; AI minor to my academic program and would appreciate the opportunity to discuss this with you.<br><br>Could we schedule a brief meeting at your convenience? I am available on Tuesday or Thursday afternoons between 2:00 PM and 4:00 PM. Please let me know if any of these times work for you or if there is a more suitable time.<br><br>Thank you very much for your guidance.<br><br>Best regards,  <br>[Your Name]  <br>[Your Student ID]</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_017]]
+<p><strong>Task:</strong> Rewrite the following in plain language for a general student audience, keeping all the facts: "Students must remit payment of all outstanding account balances prior to the commencement of the registration period; failure to do so will result in the placement of a financial hold precluding enrollment."</p><p><strong>Response 1</strong><br>Students must pay any outstanding balances on their accounts before the registration period starts. If they do not, a financial hold will be placed on their account, and they will not be allowed to register for classes.</p><br><p><strong>Response 2</strong><br>Before you can register for classes, you need to pay any money that still owes on your account. If you don't pay, the school will put a hold on your account, which means you won't be able to enroll in classes.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_030]]
+<p><strong>Task:</strong> Rewrite this refund notice in plain language for students, keeping the distinction it draws: "Tuition refunds are prorated according to the effective date of withdrawal, which is determined by the date the withdrawal takes effect in the registrar's system, and not by the date on which the student provides notification of intent to withdraw."</p><p><strong>Response 1</strong><br>Refunds for tuition will be calculated based on when you officially withdraw, as recorded in the registrar’s system, not when you tell us you want to withdraw. This means the amount refunded will depend on the exact date your withdrawal becomes official, not the date you notify us.</p><br><p><strong>Response 2</strong><br>Refunds for tuition are calculated based on the date your withdrawal officially takes effect in the school's system. This means that even if you tell us you want to withdraw earlier, the refund amount will be based on the date the withdrawal is processed and becomes official, not the date you notify us.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_041]]
+<p><strong>Task:</strong> I'm confused about GROUP BY in SQL. What does it actually do?</p><p><strong>Response 1</strong><br>The `GROUP BY` clause in SQL is used to arrange identical data into groups. It groups rows that have the same values in specified columns into summary rows, like "find the total sales for each product" or "count the number of employees in each department."<br><br>Here's what it does:<br><br>- It collects rows with the same values in the specified column(s).<br>- It allows you to perform aggregate functions (like `COUNT()`, `SUM()`, `AVG()`, `MAX()`, `MIN()`) on each group.<br>- The result is one row per group.<br><br><strong>Example:</strong><br><br>Suppose you have a table `Sales`:<br><br>| Product | Amount |<br>|---------|--------|<br>| Apple   | 100    |<br>| Banana  | 150    |<br>| Apple   | 200    |<br>| Banana  | 100    |<br><br>If you want to find the total sales amount per product, you can use:<br><br>```sql<br>SELECT Product, SUM(Amount) AS TotalSales<br>FROM Sales<br>GROUP BY Product;<br>```<br><br>Result:<br><br>| Product | TotalSales |<br>|---------|------------|<br>| Apple   | 300        |<br>| Banana  | 250        |<br><br>So, `GROUP BY` groups the rows by product, and then `SUM(Amount)` calculates the total for each group.<br><br><strong>In short:</strong> `GROUP BY` groups rows sharing the same values in specified columns so you can aggregate data per group.</p><br><p><strong>Response 2</strong><br>Certainly! The `GROUP BY` clause in SQL is used to arrange rows that have the same values in specified columns into groups. This allows you to perform aggregate functions (like `COUNT`, `SUM`, `AVG`, `MAX`, and `MIN`) on these groups.<br><br>Here’s a simple example to illustrate how `GROUP BY` works:<br><br>Suppose you have a table called `Orders` with the following data:<br><br>| OrderID | CustomerID | Amount |<br>|---------|------------|--------|<br>| 1       | 101        | 200    |<br>| 2       | 101        | 300    |<br>| 3       | 102        | 150    |<br>| 4       | 101        | 250    |<br><br>If you want to find the total amount spent by each customer, you would use `GROUP BY` like this:<br><br>```sql<br>SELECT CustomerID, SUM(Amount) AS TotalSpent<br>FROM Orders<br>GROUP BY CustomerID;<br>```<br><br>This query will return:<br><br>| CustomerID | TotalSpent |<br>|------------|------------|<br>| 101        | 750        |<br>| 102        | 150        |<br><br>In this example:<br>- The `GROUP BY CustomerID` clause groups the rows by `CustomerID`.<br>- The `SUM(Amount)` function calculates the total amount for each group of `CustomerID`.<br><br>So, `GROUP BY` helps you summarize data by creating groups based on one or more columns, and then performing calculations on those groups.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_054]]
+<p><strong>Task:</strong> The Duke Compute Cluster (DCC) is a shared high-performance computing environment available to Duke researchers. Jobs are submitted through the Slurm scheduler rather than run interactively on login nodes, which are reserved for editing, compiling, and lightweight tasks. Each research group is allocated storage under /work, while home directories are limited to 25 GB and are not intended for large datasets. Free, lower-priority access is available to all users through the common partition, and groups that have purchased dedicated nodes receive higher scheduling priority on their own partitions. Users running large or long jobs should request appropriate resources in their submission scripts; jobs that exceed requested memory or time limits are terminated by the scheduler.</p><p><strong>Response 1</strong><br>The Duke Compute Cluster (DCC) is a high-performance computing environment accessible to Duke researchers. Here’s a summary of its key features:<br><br>1. <strong>Job Submission</strong>: Jobs are submitted via the Slurm scheduler, not run interactively on login nodes.<br>2. <strong>Login Nodes</strong>: These are reserved for editing, compiling, and performing lightweight tasks.<br>3. <strong>Storage Allocation</strong>:<br>   - Research groups get storage under `/work`.<br>   - Home directories are limited to 25 GB and are not suitable for large datasets.<br>4. <strong>Access Levels</strong>:<br>   - All users have free, lower-priority access through the common partition.<br>   - Groups with dedicated nodes have higher scheduling priority on their own partitions.<br>5. <strong>Resource Management</strong>:<br>   - Users must request appropriate resources in their job submission scripts.<br>   - Jobs exceeding memory or time limits are terminated by the scheduler.<br><br>This setup ensures efficient use of computational resources and supports both general and specialized research needs.</p><br><p><strong>Response 2</strong><br>The Duke Compute Cluster (DCC) is a shared high-performance computing system for Duke researchers. Users submit jobs via the Slurm scheduler, not by running interactively on login nodes, which are reserved for editing, compiling, and lightweight tasks. Each research group has dedicated storage under /work, while home directories are limited to 25 GB and are not suitable for large datasets. All users can access the common partition for free, lower-priority jobs, while groups with dedicated nodes have higher scheduling priority on their own partitions. When submitting jobs, it’s important to specify appropriate resources such as memory and time limits; jobs exceeding these limits will be terminated by the scheduler.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_065]]
+<p><strong>Task:</strong> How do I set up Duo Mobile for multi-factor authentication?</p><p><strong>Response 1</strong><br>To set up Duo Mobile for multi-factor authentication (MFA), follow these general steps:<br><br>1. <strong>Install Duo Mobile App:</strong><br>   - Download and install the Duo Mobile app on your smartphone or tablet.<br>   - Available on [iOS App Store](https://apps.apple.com/app/duo-mobile/id422663827) and [Google Play Store](https://play.google.com/store/apps/details?id=com.duosecurity.duomobile).<br><br>2. <strong>Start the Enrollment Process:</strong><br>   - Log in to the service or application that requires Duo MFA.<br>   - When prompted to set up MFA, select Duo Mobile as your authentication method.<br><br>3. <strong>Activate Duo Mobile:</strong><br>   - The service will display a QR code.<br>   - Open the Duo Mobile app on your device.<br>   - Tap the “+” or “Add Account” button.<br>   - Use your device’s camera to scan the QR code shown on your computer screen.<br><br>4. <strong>Complete Setup:</strong><br>   - After scanning, Duo Mobile will add the account and generate passcodes.<br>   - Confirm the setup by approving a test push notification or entering a generated passcode.<br><br>5. <strong>Use Duo Mobile for Authentication:</strong><br>   - When logging in, you will receive a push notification to approve or can enter a passcode from the Duo Mobile app.<br><br>If your organization provides specific instructions or a unique enrollment link, follow those details accordingly.<br><br>Let me know if you need setup instructions for a specific service!</p><br><p><strong>Response 2</strong><br>Setting up Duo Mobile for multi-factor authentication involves several steps. Here’s a general guide to help you get started:<br><br>1. <strong>Download the Duo Mobile App:</strong><br>   - Go to your device’s app store (Google Play Store or Apple App Store).<br>   - Search for "Duo Mobile" and download the app.<br><br>2. <strong>Sign Up for Duo Security:</strong><br>   - If your organization hasn’t already set up Duo Security, they will need to do so first.<br>   - Once it’s set up, you’ll receive an invitation or instructions from your IT department on how to sign up.<br><br>3. <strong>Install Duo Mobile on Your Device:</strong><br>   - Open the Duo Mobile app after downloading it.<br>   - Follow the on-screen instructions to complete the setup process.<br><br>4. <strong>Enroll in Duo Mobile:</strong><br>   - You will need to enroll your device with Duo Security. This typically involves scanning a QR code provided by your IT department or entering a specific enrollment code.<br>   - Follow the prompts in the Duo Mobile app to complete the enrollment process.<br><br>5. <strong>Configure Multi-Factor Authentication:</strong><br>   - Log into your account that requires multi-factor authentication.<br>   - When prompted, select Duo Mobile as your authentication method.<br>   - Follow the instructions within the Duo Mobile app to complete the authentication process.<br><br>6. <strong>Test Your Setup:</strong><br>   - Try logging into your account again to ensure that everything is working correctly.<br>   - Make sure you can receive push notifications or enter verification codes through the Duo Mobile app.<br><br>If you encounter any issues during the setup process, refer to your organization’s IT support or the official Duo Security documentation for further assistance.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_078]]
+<p><strong>Task:</strong> I'm a new employee and I haven't received my NetID yet. What do I do?</p><p><strong>Response 1</strong><br>If you haven't received your NetID as a new employee, you should contact the IT support or help desk at your organization. They can assist you in getting your NetID set up or provide information on where to find this information. Typically, they will have a process for new employees to follow, which may include providing some form of identification or completing an online form.</p><br><p><strong>Response 2</strong><br>Welcome! If you haven't received your NetID yet, please contact your company's IT or Human Resources department. They can assist you with your account setup and provide your NetID. It's also helpful to check your email (including spam or junk folders) for any onboarding communications. If there's an internal portal or helpdesk, you may be able to submit a request there as well.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_089]]
+<p><strong>Task:</strong> As a TA, can I store scanned copies of student exams in Duke Box if I keep the folder private?</p><p><strong>Response 1</strong><br>At Duke University, storing student exams or any student educational records must comply with FERPA (Family Educational Rights and Privacy Act) regulations. While Duke Box is a secure cloud storage service provided by the university, simply keeping the folder private may not be sufficient to ensure compliance.<br><br>As a TA, you should:<br><br>1. Ensure that the folder is shared only with authorized individuals (e.g., yourself, the instructor, or other authorized staff).<br>2. Avoid sharing links publicly or with unauthorized users.<br>3. Follow any additional departmental or university policies regarding handling and storage of student records.<br>4. Consider encrypting sensitive files if possible.<br>5. Delete the files once they are no longer needed for legitimate educational purposes.<br><br>If you are unsure, it is best to consult your course instructor or Duke’s Office of Information Technology or the Registrar’s Office for specific guidance.<br><br>In summary, you can store scanned copies of student exams in Duke Box if the folder is kept private and access is strictly controlled, but always ensure you follow FERPA guidelines and Duke’s policies.</p><br><p><strong>Response 2</strong><br>Yes, as a Teaching Assistant, you can store scanned copies of student exams in Duke Box if you keep the folder private. This ensures that only authorized individuals with proper permissions can access the documents, maintaining confidentiality and adhering to privacy policies. Make sure to follow your institution's guidelines for managing sensitive information.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_102]]
+<p><strong>Task:</strong> Can I have Duke GPT grade my students' short-answer quizzes and enter those scores directly as their grades?</p><p><strong>Response 1</strong><br>While Duke GPT, or any AI model, can assist in grading short-answer quizzes by providing feedback or scoring rubrics, it is not currently designed to directly enter scores into your gradebook system. You would need to manually review the AI-generated scores and then input them into your gradebook.<br><br>However, you can use Duke GPT to:<br><br>1. <strong>Generate Feedback:</strong> Provide detailed and personalized feedback on student responses.<br>2. <strong>Score Rubrics:</strong> Use pre-defined rubrics to score the responses and provide a numerical score based on those criteria.<br>3. <strong>Initial Scoring:</strong> Quickly score a large number of responses using a consistent rubric.<br><br>After using Duke GPT for these tasks, you can then manually input the scores into your gradebook system. This approach ensures accuracy and allows you to maintain control over the grading process.</p><br><p><strong>Response 2</strong><br>Currently, Duke GPT or similar AI tools can assist in grading short-answer quizzes by analyzing student responses and providing suggested scores based on predefined rubrics or criteria. However, the process typically involves human oversight to ensure accuracy and fairness. <br><br>To directly enter scores into your gradebook, you would need to:<br><br>1. Use the AI to generate suggested grades for each student.<br>2. Review and verify these suggestions to ensure they align with your grading standards.<br>3. Manually input the verified scores into your grading system or platform.<br><br>Automating the entire process—grading and entering scores directly—is generally not fully supported without custom integration or additional software development. Always check with your institution's policies and the specific tools available to ensure compliance and proper use.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
