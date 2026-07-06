@@ -43,6 +43,7 @@ jack/
 instance/
 logs/
 scripts/dcc/.vllm-session.env
+scripts/dcc/.jobs/
 
 # Ignore tqa test results
 test_results/

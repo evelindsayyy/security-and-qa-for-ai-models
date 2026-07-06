@@ -20,6 +20,36 @@ uv run python -m scripts.dcc.vllm stop
 
 Thin wrappers (same): `scripts/dcc/start_vllm.sh`, `wait_vllm.sh`, `status_vllm.sh`, `stop_vllm.sh`
 
+## One-command self-serve eval (orchestrator)
+
+The four steps above are what you run by hand. For a full **serve → evaluate →
+tear-down** in a single call, use the orchestrator — it validates the model,
+starts vLLM, waits for `/health`, runs the eval suite against the endpoint, and
+**always** cancels the job afterwards (even if the eval fails), so a served model
+never leaks the GPU:
+
+```bash
+uv run python -m evaluator.dcc_orchestrate \
+  --hf-repo Qwen/Qwen2.5-7B-Instruct \
+  --judge-model "Llama 4 Maverick"
+```
+
+Preview the exact chain first, without touching the cluster:
+
+```bash
+uv run python -m evaluator.dcc_orchestrate \
+  --hf-repo Qwen/Qwen2.5-7B-Instruct --judge-model "Llama 4 Maverick" --dry-run
+```
+
+Notes:
+
+- Per-run job state goes to `scripts/dcc/.jobs/<slug>.env` (pass `--slug` to name
+  it), so several orchestrations can run at once without clobbering each other.
+- Options mirror the runner: `--suite`, `--rubric`, `--system-prompt`,
+  `--judge-prompt`, `--max-tokens`, `--port`, `--output-name`.
+- Teardown is unconditional once the job is submitted; a validate/start failure
+  returns immediately with nothing to cancel.
+
 ## Scripts
 
 - `python -m scripts.dcc.vllm start` / `start_vllm.sh`: submit a Slurm job that starts vLLM
