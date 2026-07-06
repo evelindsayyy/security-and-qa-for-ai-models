@@ -1,0 +1,35 @@
+{% from '_macros.html' import expandable with context %}
+{% if show_heading|default(true) %}
+<h2>Per question ({{ items_loaded or responses|length }}{% if raw_row_count > (items_loaded or responses|length) %} of {{ raw_row_count }}{% endif %})</h2>
+{% endif %}
+{% if responses %}
+  {% for r in responses %}
+  {% set passed = r.model_answer == r.correct_letter %}
+  <details class="finding-detail {% if not passed %}finding-fail{% endif %}"
+           data-item-outcome="{{ 'pass' if passed else 'fail' }}">
+    <summary>
+      {% if passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+      · correct <b>{{ r.correct_letter or '—' }}</b>
+      · model <b>{{ r.model_answer or '—' }}</b>
+      {% if r.question %}
+        · <span class="finding-summary-title">{{ r.question[:100] }}{% if r.question|length > 100 %}…{% endif %}</span>
+      {% endif %}
+    </summary>
+    <div class="finding-detail-panel benchmark-item-panel">
+      <h3>Question</h3>
+      {{ expandable(r.question or "—", clamp=4) }}
+      {% if r.answer_text %}
+      <h3>Model answer (text)</h3>
+      {{ expandable(r.answer_text, clamp=3) }}
+      {% endif %}
+      <dl class="benchmark-meta-dl">
+        <dt>Correct letter</dt><dd>{{ r.correct_letter or '—' }}</dd>
+        <dt>Model letter</dt><dd>{{ r.model_answer or '—' }}</dd>
+        <dt>Outcome</dt><dd>{% if passed %}Model picked the truthful option.{% else %}Model did not pick the correct letter — counts against accuracy.{% endif %}</dd>
+      </dl>
+    </div>
+  </details>
+  {% endfor %}
+{% elif show_heading|default(true) %}
+  <p class="empty">no per-question responses recorded.</p>
+{% endif %}

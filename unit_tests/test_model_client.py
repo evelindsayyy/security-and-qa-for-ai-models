@@ -9,6 +9,7 @@ from model_client import (  # noqa: E402
     detect_provider,
     extract_choice_letter,
     normalize_model,
+    resolve_temperature,
     response_usage,
     strip_reasoning,
 )
@@ -67,6 +68,22 @@ class TestModelClient(unittest.TestCase):
             normalize_model(model, "https://api-inference.huggingface.co/v1"),
             model,
         )
+
+
+class TestResolveTemperature(unittest.TestCase):
+    def test_gpt5_nano_maps_zero_to_one(self) -> None:
+        self.assertEqual(resolve_temperature("gpt-5-nano", 0), 1.0)
+        self.assertEqual(resolve_temperature("openai/gpt-5-nano", 0), 1.0)
+
+    def test_gpt5_codex_maps_zero_to_one(self) -> None:
+        self.assertEqual(resolve_temperature("gpt-5-codex", 0), 1.0)
+
+    def test_gpt41_mini_keeps_zero(self) -> None:
+        self.assertEqual(resolve_temperature("GPT 4.1 Mini", 0), 0)
+        self.assertEqual(resolve_temperature("openai/GPT 4.1 Mini", 0), 0)
+
+    def test_llama_keeps_zero(self) -> None:
+        self.assertEqual(resolve_temperature("openai/Llama 3.3", 0), 0)
 
 
 class TestStripReasoning(unittest.TestCase):

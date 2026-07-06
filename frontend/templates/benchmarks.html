@@ -23,6 +23,42 @@
   </aside>
   {% endif %}
 
+  <details class="key">
+    <summary>How to read this</summary>
+    <dl class="legend-grid">
+      <dt>Score</dt>
+      <dd>
+        Headline metric per benchmark (<code>accuracy</code>, <code>pass rate</code>, etc.).
+        Color bands mark this site's pilot thresholds — orientation, not a leaderboard.
+        Click a row for per-item PASS, FAIL, or SKIP detail.
+      </dd>
+      <dt class="num-sample" title="{{ coverage_n_tooltip }}">n</dt>
+      <dd>{{ coverage_n_explanation }}</dd>
+      <dt><span class="coverage-partial-badge">N skipped</span></dt>
+      <dd>{{ coverage_skip_explanation }}</dd>
+      <dt>List</dt>
+      <dd>
+        One latest run per model and benchmark by default; enable <b>Show all runs</b> for history.
+        Superseded rows are dimmed.
+      </dd>
+      {% if has_comparison %}
+      <dt>Compare</dt>
+      <dd>
+        Matrix of latest scores (benchmark × model). Optional columns for item count and
+        reference deltas. Empty cells mean no run yet.
+      </dd>
+      {% endif %}
+      {% if has_reference %}
+      <dt>Reference</dt>
+      <dd>
+        Committed gateway baselines on default pilot sizes —
+        <a href="{{ url_for('benchmark_reference') }}">open reference &amp; guide</a>
+        for what each benchmark measures.
+      </dd>
+      {% endif %}
+    </dl>
+  </details>
+
   <h2>Your runs</h2>
   {% if not has_runs %}
     <p class="sub empty">
@@ -72,7 +108,7 @@
           <th class="col-nowrap">Benchmark</th>
           <th>Model</th>
           <th class="num sortable" data-sort="score">Score <span class="s-ind"></span></th>
-          <th class="num">n</th>
+          <th class="num" title="{{ coverage_n_tooltip }}">n <span class="col-hint" aria-hidden="true">ⓘ</span></th>
           <th class="num sortable" data-sort="when">When <span class="s-ind">▼</span></th>
           <th>File</th>
           <th class="col-actions">Actions</th>
@@ -113,7 +149,7 @@
             {{ r.headline_display }}
             <span class="dim"> {{ r.headline_metric }}</span>
           </td>
-          <td class="num">
+          <td class="num" title="{{ coverage_n_tooltip }}">
             {{ r.coverage.n_display }}
             {% if r.coverage.partial %}
             <span class="coverage-partial-badge" title="{{ coverage_skip_explanation }}">
@@ -229,7 +265,7 @@
       </p>
       <div class="table-controls comparison-matrix-controls">
         <label class="checkbox-inline">
-          <input type="checkbox" id="f-compare-n"> Show n &amp; coverage
+          <input type="checkbox" id="f-compare-n"> Show item count (n)
         </label>
         <label class="checkbox-inline">
           <input type="checkbox" id="f-compare-ref"> Compare to reference

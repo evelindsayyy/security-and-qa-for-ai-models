@@ -1,0 +1,18 @@
+{% if per_subject_rows %}
+<details class="tool-panel">
+  <summary>Per-subject accuracy ({{ per_subject_rows|length }} subjects, weakest first)</summary>
+  <table class="run-table compact-table">
+    <thead><tr><th>Subject</th><th class="num">Accuracy</th><th class="num">Correct</th></tr></thead>
+    <tbody>
+      {% for row in per_subject_rows %}
+      <tr class="{% if loop.index <= 5 %}row-warn{% endif %}">
+        <td>{{ row.subject|replace("_", " ") }}</td>
+        <td class="num">{{ "%.1f"|format(row.accuracy * 100) }}%</td>
+        <td class="num">{{ row.stats.correct }}/{{ row.stats.total or row.stats.scored or row.stats.attempted }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="form-hint">Bottom five subjects are highlighted — expand sample questions below for item-level detail.</p>
+</details>
+{% endif %}

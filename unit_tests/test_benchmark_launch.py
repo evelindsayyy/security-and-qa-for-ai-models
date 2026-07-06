@@ -39,6 +39,11 @@ class DeleteRouteLoginGateTest(unittest.TestCase):
         r = self.client.get("/benchmarks/nonexistent-slug/private")
         self.assertIn(r.status_code, (302, 401, 403))
 
+    def test_cancel_requires_login(self) -> None:
+        r = self.client.post("/benchmarks/nonexistent-slug/cancel")
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("/auth/login", r.headers["Location"])
+
 
 class TestRunLockPath(unittest.TestCase):
     def test_lock_is_flat_file_under_results(self) -> None:

@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "benchmarks"))
 
-from benchmark_progress import init_progress, load_progress, tick, write_progress_stub  # noqa: E402
+from benchmark_progress import init_progress, load_progress, mark_cancelled, tick, write_progress_stub  # noqa: E402
 
 
 class BenchmarkProgressTest(unittest.TestCase):
@@ -112,6 +112,51 @@ class BenchmarkLaunchStatusTest(unittest.TestCase):
                 status = bl.get_status(slug)
             self.assertEqual(status["status"], "failed")
             self.assertIn("log", status)
+
+    def test_mark_cancelled_sets_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "run.progress.json"
+            write_progress_stub(
+                path,
+                benchmark_key="mmlu",
+                benchmark_label="MMLU",
+                model="gpt-5-nano",
+                total=100,
+                unit="questions",
+            )
+            mark_cancelled(path)
+            data = load_progress(path)
+            self.assertTrue(data.get("cancelled"))
+            self.assertIn("Cancelled", data.get("message", ""))
+
+    def test_get_status_reports_cancelled(self) -> None:
+        from frontend import benchmark_launch as bl
+
+        with tempfile.TemporaryDirectory() as tmp:
+            results = Path(tmp)
+            slug = "20260101T120000Z_mmlu_test"
+            path = results / f"{slug}.progress.json"
+            mark_cancelled(path)
+            path.write_text(
+                json.dumps(
+                    {
+                        **load_progress(path),
+                        "progress": 12,
+                        "total": 100,
+                        "unit": "questions",
+                        "benchmark_label": "MMLU",
+                        "model": "gpt-5-nano",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (results / f"{slug}.log").write_text("partial\n", encoding="utf-8")
+            with mock.patch.object(bl, "RESULTS_DIR", results), mock.patch.object(
+                bl, "_RUNNING", {}
+            ), mock.patch.object(bl, "_output_path", return_value=None):
+                status = bl.get_status(slug)
+            self.assertEqual(status["status"], "cancelled")
+            self.assertEqual(status["progress"], 12)
 
 
 if __name__ == "__main__":
