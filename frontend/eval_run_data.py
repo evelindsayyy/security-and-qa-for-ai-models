@@ -397,6 +397,7 @@ def attach_cost_perf(data: dict, weights: CostPerfWeights = BALANCED) -> dict:
                 "cost_norm": s.cost_norm,
                 "latency_norm": s.latency_norm,
                 "cost_per_response_usd": s.cost_per_response_usd,
+                "on_frontier": s.on_frontier,
                 "note": s.notes[0] if s.notes else "",
             }
 
