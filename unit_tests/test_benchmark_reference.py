@@ -46,6 +46,8 @@ class TestBenchmarkReference(unittest.TestCase):
     def test_benchmark_guide_rows(self) -> None:
         guide = get_benchmark_guide_data()
         self.assertEqual(len(guide["guide_rows"]), 7)
+        self.assertIn("coverage_n_explanation", guide)
+        self.assertTrue(guide["coverage_n_explanation"])
         tqa = next(r for r in guide["guide_rows"] if r["key"] == "truthfulqa")
         self.assertTrue(tqa["procedure"])
         self.assertTrue(tqa["scoring"])
@@ -141,6 +143,16 @@ class TestBenchmarkReference(unittest.TestCase):
         self.assertEqual(detail["coverage"]["failed"], 1)
         skipped = [r for r in detail["results"] if not r.get("answered")]
         self.assertEqual(len(skipped), 1)
+
+    def test_launch_options_include_benchmark_descriptions(self) -> None:
+        from frontend.benchmark_launch import get_launch_options
+
+        opts = get_launch_options()
+        self.assertIn("coverage_n_explanation", opts)
+        tqa = opts["benchmark_options"]["truthfulqa"]
+        self.assertTrue(tqa.get("about"))
+        self.assertEqual(tqa.get("headline_metric"), "accuracy")
+        self.assertEqual(tqa.get("default_sample"), 50)
 
 
 if __name__ == "__main__":

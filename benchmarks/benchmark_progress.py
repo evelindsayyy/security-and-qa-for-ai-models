@@ -89,6 +89,15 @@ def load_progress(path: Path) -> dict[str, Any]:
     return _read(path)
 
 
+def mark_cancelled(path: Path, *, message: str = "Cancelled by user") -> None:
+    """Record that a run was stopped from the UI."""
+    data = _read(path) if path.is_file() else {}
+    data["cancelled"] = True
+    data["message"] = message
+    data["updated_at"] = _now()
+    _write(path, data)
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 

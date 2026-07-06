@@ -16,7 +16,9 @@ from dbutils import load_repo_env, resolve_dsn
 from frontend.benchmark_data import (
     PRIMARY_DIR,
     _attach_meta,
+    _attach_per_subject,
     _format_ts,
+    _paginate_detail_items,
     _summarize_file,
 )
 
@@ -179,26 +181,26 @@ def _build_detail_db(row: tuple) -> dict:
     kind = row[3]
     metrics = row[7] or {}
     items = row[8] or []
+    run_params = row[9]
     detail = dict(summary)
-
-    if kind == "ifeval":
-        detail["raw_rows"] = items[:50]
-        detail["raw_row_count"] = len(items)
-    elif kind == "truthfulqa":
-        detail["responses"] = items[:50]
-        detail["raw_row_count"] = len(items)
-    elif kind == "consistency":
-        detail["questions"] = items[:50]
-        detail["raw_row_count"] = len(items)
-    elif kind == "mmlu":
-        detail["per_subject"] = metrics.get("per_subject") or {}
-        detail["results"] = items[:50]
-        detail["raw_row_count"] = len(items)
-    elif kind in ("tomi", "mbpp", "quality"):
-        detail["results"] = items[:50]
-        detail["raw_row_count"] = len(items)
-
+    if run_params:
+        detail["run_params"] = run_params
+    if kind == "mmlu":
+        _attach_per_subject(detail, metrics.get("per_subject") or {})
+    _paginate_detail_items(detail, items)
     return _attach_meta(detail)
+
+
+def fetch_detail_row(
+    slug: str, *, visibility: str | None = None, owner_user_id: str | None = None
+) -> tuple | None:
+    """Raw DB row for detail / pagination loaders."""
+    vis_clause, vis_params = _visibility_params(visibility=visibility, owner_user_id=owner_user_id)
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            params = {"slug": slug, **vis_params}
+            cur.execute(_DETAIL_SQL.format(visibility_filter=vis_clause), params)
+            return cur.fetchone()
 
 
 def _visibility_params(

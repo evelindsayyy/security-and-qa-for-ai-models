@@ -14,6 +14,10 @@ from benchmark_run_stats import get_active_run_stats
 DEFAULT_MAX_RETRIES = max(1, int(os.getenv("BENCHMARK_MAX_RETRIES", "3")))
 DEFAULT_RETRY_DELAY_SEC = float(os.getenv("BENCHMARK_RETRY_DELAY_SEC", "1.0"))
 
+# LiteLLM rejects temperature=0 on GPT-5 / o3 / o4 — only 1 is allowed.
+_GPT5_FAMILY = re.compile(r"(?i)^gpt-5")
+_O_REASONING_FAMILY = re.compile(r"(?i)^o[34]")
+
 # LiteLLM routes by the first path segment of the model id (e.g. huggingface/…).
 _KNOWN_LITELLM_PREFIXES = frozenset({
     "openai",
@@ -62,6 +66,23 @@ def _fatal_error_hint(exc: Exception) -> str | None:
             "monthly reset, upgrade to PRO, or run against your own vLLM endpoint"
         )
     return None
+
+
+def _bare_model_id(model: str) -> str:
+    """Model id without LiteLLM provider prefix (e.g. openai/gpt-5-nano → gpt-5-nano)."""
+    if "/" in model:
+        prefix, rest = model.split("/", 1)
+        if prefix.lower() in _KNOWN_LITELLM_PREFIXES or prefix.lower().startswith("azure"):
+            return rest
+    return model
+
+
+def resolve_temperature(model: str, temperature: float) -> float:
+    """Map temperature for provider restrictions (GPT-5 / o-series)."""
+    bare = _bare_model_id(model)
+    if _GPT5_FAMILY.match(bare) or _O_REASONING_FAMILY.match(bare):
+        return 1.0
+    return temperature
 
 
 def detect_provider(base_url: str) -> str:
@@ -333,6 +354,7 @@ def query_chat_completion(
     """
     normalized = normalize_model(model, base_url)
     retries = max(1, max_retries if max_retries is not None else DEFAULT_MAX_RETRIES)
+    effective_temperature = resolve_temperature(normalized, temperature)
 
     last_exc: Exception | None = None
     response = None
@@ -344,7 +366,7 @@ def query_chat_completion(
             "api_base": base_url,
             "api_key": api_key,
             "messages": messages,
-            "temperature": temperature,
+            "temperature": effective_temperature,
         }
         if tokens is not None:
             kwargs["max_tokens"] = tokens

@@ -1,0 +1,45 @@
+{# Benchmark × model matrix — expects comparison_models, comparison_rows, coverage_skip_explanation #}
+<div class="table-wrap">
+<table class="run-table reference-table comparison-table">
+  <thead>
+    <tr>
+      <th>Benchmark</th>
+      {% for m in comparison_models %}
+      <th class="num">{{ m }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in comparison_rows %}
+    <tr>
+      <td class="reference-benchmark-cell">
+        <span class="badge {{ row.badge_class }}">{{ row.label }}</span>
+      </td>
+      {% for m in comparison_models %}
+      {% set cell = row.cells.get(m) %}
+      <td class="num comparison-cell">
+        {% if cell %}
+        <a href="{{ url_for('benchmark_detail_private' if view_mode == 'private' else 'benchmark_detail', slug=cell.slug) }}"
+           class="reference-score-link {{ cell.score_class }}">{{ cell.headline_display }}</a>
+        <span class="comparison-cell-extra comparison-cell-extra-n">
+          <span class="dim"> {{ cell.headline_metric }}</span>
+          <span class="dim"> · n={{ cell.coverage.n_display }}</span>
+          {% if cell.coverage.partial %}
+          <span class="coverage-partial-badge" title="{{ coverage_skip_explanation }}">
+            {{ cell.coverage.failed }} skipped
+          </span>
+          {% endif %}
+        </span>
+        {% if cell.ref_delta_display %}
+        <span class="comparison-cell-extra comparison-cell-extra-ref comparison-ref-delta {{ cell.ref_delta_class }}">vs ref {{ cell.ref_delta_display }}</span>
+        {% endif %}
+        {% else %}
+        <span class="dim">—</span>
+        {% endif %}
+      </td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>

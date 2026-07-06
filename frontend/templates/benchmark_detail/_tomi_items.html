@@ -1,0 +1,38 @@
+{% from '_macros.html' import expandable, benchmark_item_status with context %}
+{% if show_heading|default(true) %}
+<h2>Per story ({{ items_loaded or results|length }}{% if raw_row_count > (items_loaded or results|length) %} of {{ raw_row_count }}{% endif %})</h2>
+{% endif %}
+{% if results %}
+  {% for r in results %}
+  <details class="finding-detail {% if r.answered is defined and not r.answered %}finding-skip{% elif not r.passed %}finding-fail{% endif %}"
+           data-item-outcome="{% if r.answered is defined and not r.answered %}skip{% elif r.passed %}pass{% else %}fail{% endif %}">
+    <summary>
+      {{ benchmark_item_status(r) }}
+      · <span class="dim">{{ r.question_type }}</span>
+      · correct <b>{{ r.correct_answer }}</b>
+      · model <b>{% if r.answered is defined and not r.answered %}<span class="dim">(no answer)</span>{% else %}{{ r.model_answer }}{% endif %}</b>
+      {% if r.question %}
+        · <span class="finding-summary-title">{{ r.question[:70] }}…</span>
+      {% endif %}
+    </summary>
+    <div class="finding-detail-panel benchmark-item-panel">
+      {% if r.story %}
+      <h3>Story</h3>
+      {{ expandable(r.story, clamp=4) }}
+      {% endif %}
+      <h3>Question</h3>
+      {{ expandable(r.question or "—", clamp=2) }}
+      <dl class="benchmark-meta-dl">
+        <dt>Type</dt><dd><code>{{ r.question_type }}</code> — see “About ToMi” for what each type tests.</dd>
+        <dt>Correct answer</dt><dd>{{ r.correct_answer }}</dd>
+        <dt>Model answer</dt>
+        <dd>{% if r.answered is defined and not r.answered %}<span class="dim">Skipped — no usable answer</span>{% else %}{{ r.model_answer }}{% endif %}</dd>
+        <dt>Outcome</dt>
+        <dd>{% if r.answered is defined and not r.answered %}Not scored — model output was missing or unusable.{% elif r.passed %}Answer matches expected belief/reality tracking.{% else %}Mismatch — model may have failed theory-of-mind reasoning for this story.{% endif %}</dd>
+      </dl>
+    </div>
+  </details>
+  {% endfor %}
+{% elif show_heading|default(true) %}
+  <p class="empty">no per-story results.</p>
+{% endif %}

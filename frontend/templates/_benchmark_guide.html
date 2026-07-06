@@ -21,7 +21,9 @@
       <dl class="benchmark-guide-dl">
         {% if row.default_sample is not none %}
         <dt>Default sample</dt>
-        <dd>{{ row.default_sample }} {{ row.sample_unit }}</dd>
+        <dd title="{{ coverage_n_tooltip | default('') }}">
+          {{ row.default_sample }} {{ row.sample_unit }} in a pilot run
+        </dd>
         {% endif %}
         {% if row.procedure %}
         <dt>What happens in a run</dt>

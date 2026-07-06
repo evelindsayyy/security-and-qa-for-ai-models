@@ -44,6 +44,8 @@ def _hub_context() -> dict:
     safety_worst_tier = "—"
     benchmark_has = False
     benchmark_count = 0
+    benchmark_has_reference = False
+    benchmark_latest = None
 
     try:
         from frontend.scan_data import get_scans_data
@@ -81,11 +83,13 @@ def _hub_context() -> dict:
         pass
 
     try:
-        from frontend.benchmark_data import get_benchmarks_data
+        from frontend.benchmark_data import get_benchmark_latest_for_hub, get_benchmarks_data
 
         bench = get_benchmarks_data()
         benchmark_has = bench["has_runs"]
         benchmark_count = len(bench["runs"])
+        benchmark_has_reference = bench.get("has_reference", False)
+        benchmark_latest = get_benchmark_latest_for_hub(bench.get("all_runs") or [])
     except Exception:
         pass
 
@@ -107,6 +111,8 @@ def _hub_context() -> dict:
         "safety_worst_tier": safety_worst_tier,
         "benchmark_has": benchmark_has,
         "benchmark_count": benchmark_count,
+        "benchmark_has_reference": benchmark_has_reference,
+        "benchmark_latest": benchmark_latest,
     }
 
 
@@ -554,9 +560,21 @@ def register_routes(app):
     @app.route("/benchmarks/new")
     @require_login()
     def benchmark_run_new():
+        from flask import request
+
+        from frontend.benchmark_data import get_benchmark_rerun_params
         from frontend.benchmark_launch import get_launch_options
 
-        return render_template("benchmark_run_new.html", **get_launch_options())
+        opts = get_launch_options()
+        from_slug = request.args.get("from", "").strip()
+        if from_slug:
+            from frontend.read_context import read_context
+
+            visibility, owner_user_id = read_context()
+            opts["rerun"] = get_benchmark_rerun_params(
+                from_slug, visibility=visibility, owner_user_id=owner_user_id
+            )
+        return render_template("benchmark_run_new.html", **opts)
 
     @app.route("/benchmarks/start", methods=["POST"])
     @require_login()
@@ -601,7 +619,7 @@ def register_routes(app):
         )
         if error:
             return error, 400
-        slug, _already, visibility = start_run(
+        slug, already, visibility = start_run(
             benchmark_key,
             model,
             base_url=base_url,
@@ -610,7 +628,8 @@ def register_routes(app):
             seed=seed,
         )
         endpoint = "benchmark_detail_private" if visibility == "private" else "benchmark_detail"
-        return redirect(url_for(endpoint, slug=slug, status="running"))
+        status = "running"
+        return redirect(url_for(endpoint, slug=slug, status=status))
 
     @app.route("/benchmarks/<slug>/status")
     def benchmark_run_status(slug: str):
@@ -619,6 +638,24 @@ def register_routes(app):
         from frontend.benchmark_launch import get_status
 
         return jsonify(get_status(slug))
+
+    @app.route("/benchmarks/<slug>/cancel", methods=["POST"])
+    @require_login()
+    def benchmark_cancel(slug: str):
+        from flask import jsonify, request
+
+        from frontend.benchmark_launch import cancel_run
+        from frontend.read_context import read_context
+
+        visibility, owner_user_id = read_context()
+        error = cancel_run(slug, visibility=visibility, owner_user_id=owner_user_id)
+        if error:
+            return jsonify({"ok": False, "error": error}), 400
+        if request.accept_mimetypes.best == "application/json":
+            return jsonify({"ok": True, "status": "cancelled"})
+        from flask import redirect, url_for
+
+        return redirect(url_for("benchmark_detail", slug=slug, status="cancelled"))
 
     @app.route("/benchmarks/<slug>/private/status")
     @require_login()
@@ -629,6 +666,23 @@ def register_routes(app):
 
         visibility, owner_user_id = _private_scope()
         return jsonify(get_status(slug, visibility=visibility, owner_user_id=owner_user_id))
+
+    @app.route("/benchmarks/<slug>/private/cancel", methods=["POST"])
+    @require_login()
+    def benchmark_cancel_private(slug: str):
+        from flask import jsonify, request
+
+        from frontend.benchmark_launch import cancel_run
+
+        visibility, owner_user_id = _private_scope()
+        error = cancel_run(slug, visibility=visibility, owner_user_id=owner_user_id)
+        if error:
+            return jsonify({"ok": False, "error": error}), 400
+        if request.accept_mimetypes.best == "application/json":
+            return jsonify({"ok": True, "status": "cancelled"})
+        from flask import redirect, url_for
+
+        return redirect(url_for("benchmark_detail_private", slug=slug, status="cancelled"))
 
     @app.route("/benchmarks/<slug>")
     def benchmark_detail(slug: str):
@@ -641,7 +695,7 @@ def register_routes(app):
             from frontend.benchmark_launch import get_status
 
             status = get_status(slug)
-            if status["status"] in ("running", "failed"):
+            if status["status"] in ("running", "failed", "cancelled"):
                 return render_template(
                     "benchmark_detail.html",
                     missing=False,
@@ -671,7 +725,7 @@ def register_routes(app):
             from frontend.benchmark_launch import get_status
 
             status = get_status(slug, visibility=visibility, owner_user_id=owner_user_id)
-            if status["status"] in ("running", "failed"):
+            if status["status"] in ("running", "failed", "cancelled"):
                 return render_template(
                     "benchmark_detail.html",
                     missing=False,
@@ -689,6 +743,54 @@ def register_routes(app):
                 is_private=True,
             )
         return render_template("benchmark_detail.html", missing=False, is_private=True, **detail)
+
+    @app.route("/benchmarks/<slug>/items")
+    def benchmark_detail_items(slug: str):
+        from flask import jsonify, render_template, request
+
+        from frontend.benchmark_data import get_benchmark_detail_items
+
+        offset = max(0, request.args.get("offset", 0, type=int))
+        page = get_benchmark_detail_items(slug, offset)
+        if page is None:
+            return jsonify({"error": "not found"}), 404
+        html = render_template(
+            f"benchmark_detail/_{page['kind']}_items.html",
+            show_heading=False,
+            **page,
+        )
+        return jsonify({
+            "html": html,
+            "offset": page["items_loaded"],
+            "has_more": page["items_has_more"],
+            "total": page["raw_row_count"],
+        })
+
+    @app.route("/benchmarks/<slug>/private/items")
+    @require_login()
+    def benchmark_detail_items_private(slug: str):
+        from flask import jsonify, render_template, request
+
+        from frontend.benchmark_data import get_benchmark_detail_items
+
+        visibility, owner_user_id = _private_scope()
+        offset = max(0, request.args.get("offset", 0, type=int))
+        page = get_benchmark_detail_items(
+            slug, offset, visibility=visibility, owner_user_id=owner_user_id
+        )
+        if page is None:
+            return jsonify({"error": "not found"}), 404
+        html = render_template(
+            f"benchmark_detail/_{page['kind']}_items.html",
+            show_heading=False,
+            **page,
+        )
+        return jsonify({
+            "html": html,
+            "offset": page["items_loaded"],
+            "has_more": page["items_has_more"],
+            "total": page["raw_row_count"],
+        })
 
     @app.route("/benchmarks/<slug>/delete", methods=["GET", "POST"])
     @require_login()

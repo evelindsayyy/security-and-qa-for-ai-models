@@ -1,0 +1,47 @@
+{% from '_macros.html' import expandable, benchmark_item_status with context %}
+{% if show_heading|default(true) %}
+<h2>Per prompt ({{ items_loaded or raw_rows|length }}{% if raw_row_count > (items_loaded or raw_rows|length) %} of {{ raw_row_count }}{% endif %})</h2>
+{% endif %}
+{% if raw_rows %}
+  {% for r in raw_rows %}
+  <details class="finding-detail {% if r.answered is defined and not r.answered %}finding-skip{% elif not r.judge.passed %}finding-fail{% endif %}"
+           data-item-outcome="{% if r.answered is defined and not r.answered %}skip{% elif r.judge.passed %}pass{% else %}fail{% endif %}">
+    <summary>
+      {{ benchmark_item_status(r) }}
+      <code>{{ r.key }}</code>
+      {% if r.instruction_id_list %}
+        · <span class="dim">{{ r.instruction_id_list|join(", ") }}</span>
+      {% endif %}
+      {% if r.prompt %}
+        · <span class="finding-summary-title">{{ r.prompt[:80] }}{% if r.prompt|length > 80 %}…{% endif %}</span>
+      {% endif %}
+    </summary>
+    <div class="finding-detail-panel benchmark-item-panel">
+      <h3>Prompt</h3>
+      {{ expandable(r.prompt or "—", clamp=4) }}
+      <h3>Model response</h3>
+      {{ expandable(r.response or "—", clamp=6) }}
+      {% if r.judge.per_instruction %}
+      <h3>Constraint checks</h3>
+      <table class="run-table compact-table">
+        <thead><tr><th>Instruction</th><th class="col-nowrap">Pass?</th></tr></thead>
+        <tbody>
+          {% for inst in r.judge.per_instruction %}
+          <tr class="{% if inst.passed is sameas false %}row-warn{% endif %}">
+            <td><code>{{ inst.instruction_id or inst.id or '—' }}</code></td>
+            <td class="col-nowrap">
+              {% if inst.passed %}<span class="status-ok">yes</span>
+              {% elif inst.passed is sameas false %}<span class="status-fail">no</span>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+  </details>
+  {% endfor %}
+{% elif show_heading|default(true) %}
+  <p class="empty">no rows in this jsonl.</p>
+{% endif %}

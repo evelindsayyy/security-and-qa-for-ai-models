@@ -8,8 +8,9 @@ Schema detection is content-based so renames do not break the viewer.
 from __future__ import annotations
 
 import json
+import re
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from frontend.path_safety import is_safe_slug, resolves_inside
@@ -26,6 +27,26 @@ COVERAGE_SKIP_EXPLANATION = (
     "error, a rate limit, or exhausted provider credits. Headline accuracy is computed "
     "over answered items only."
 )
+
+COVERAGE_N_EXPLANATION = (
+    "Number of benchmark items in this pilot run — the questions, instructions, or "
+    "code tasks the model was asked to complete. A plain number (e.g. n = 100) means "
+    "every item was scored; scored/attempted (e.g. 99/100) means some items were skipped."
+)
+
+COVERAGE_N_TOOLTIP = "Number of items"
+
+DETAIL_ITEMS_PAGE_SIZE = 50
+
+_DETAIL_ITEM_KEYS: dict[str, str] = {
+    "truthfulqa": "responses",
+    "ifeval": "raw_rows",
+    "consistency": "questions",
+    "mmlu": "results",
+    "tomi": "results",
+    "mbpp": "results",
+    "quality": "results",
+}
 
 PRIMARY_DIR = ROOT / "benchmarks" / "results"
 LEGACY_DIRS = (
@@ -228,60 +249,13 @@ BENCHMARK_META: dict[str, dict] = {
 
 # Per-benchmark orientation bands for reference scores (pilot sample sizes — not leaderboard claims).
 SCORE_BANDS: dict[str, dict] = {
-    "truthfulqa": {
-        "mid": 0.55,
-        "strong": 0.70,
-        "hint": "Many models score 55-70% on this benchmark. Top models can score ~85%, while human experts can score ~94%.",
-        "hint_sources": [
-            {"label": "TruthfulQA paper", "url": "https://arxiv.org/abs/2109.07958"},
-            {"label": "llm-stats.com", "url": "https://llm-stats.com/benchmarks/truthfulqa"},
-        ],
-    },
-    "ifeval": {
-        "mid": 0.80,
-        "strong": 0.90,
-        "hint": "Many models score 80-90% on this benchmark. Top models can score ~95%.",
-        "hint_sources": [
-            {"label": "llm-stats.com", "url": "https://llm-stats.com/benchmarks/ifeval"},
-        ],
-    },
-    "mmlu": {
-        "mid": 0.80,
-        "strong": 0.90,
-        "hint": "Many models score 80-90% on this benchmark. Top models can score ~95%, better than the human baseline of 90%.",
-        "hint_sources": [
-            {"label": "lmmarketcap.com", "url": "https://lmmarketcap.com/benchmarks/mmlu"},
-        ],
-    },
-    "tomi": {
-        "mid": 0.70,
-        "strong": 0.85,
-        "hint": "Older models score ~60% on this benchmark. Newer models might score better.",
-        "hint_sources": [
-            {"label": "Sap et al.", "url": "https://arxiv.org/abs/2210.13312"},
-        ],
-    },
-    "consistency": {
-        "mid": 0.75,
-        "strong": 0.85,
-        "hint": "Custom benchmark, measuring mean BERTScore F1 (0–1) between answers to paraphrased prompts. Many models score 80-85%. Lower scores often reflect different response length or structure, not necessarily contradictory conclusions.",
-    },
-    "mbpp": {
-        "mid": 0.60,
-        "strong": 0.80,
-        "hint": "Many modern models score ~80% on this benchmark, with top models recording ~95%.",
-        "hint_sources": [
-            {"label": "Codesota", "url": "https://www.codesota.com/llm/humaneval-mbpp#mbpp"},
-        ],
-    },
-    "quality": {
-        "mid": 0.50,
-        "strong": 0.70,
-        "hint": "Many models struggle to reach 70% on this benchmark. Top models can score ~90%, while human experts score 93.5%.",
-        "hint_sources": [
-            {"label": "Official QuALITY leaderboard", "url": "https://nyu-mll.github.io/quality/"},
-        ],
-    },
+    "truthfulqa": {"mid": 0.55, "strong": 0.70},
+    "ifeval": {"mid": 0.80, "strong": 0.90},
+    "mmlu": {"mid": 0.80, "strong": 0.90},
+    "tomi": {"mid": 0.70, "strong": 0.85},
+    "consistency": {"mid": 0.75, "strong": 0.85},
+    "mbpp": {"mid": 0.60, "strong": 0.80},
+    "quality": {"mid": 0.50, "strong": 0.70},
 }
 
 REFERENCE_DIR = ROOT / "frontend" / "benchmark_refs"
@@ -322,6 +296,8 @@ def get_benchmark_guide_data() -> dict:
     return {
         "guide_rows": rows,
         "coverage_skip_explanation": COVERAGE_SKIP_EXPLANATION,
+        "coverage_n_explanation": COVERAGE_N_EXPLANATION,
+        "coverage_n_tooltip": COVERAGE_N_TOOLTIP,
     }
 
 
@@ -333,15 +309,47 @@ def _candidate_dirs() -> list[Path]:
     return dirs
 
 
-def _format_ts(raw: str) -> str:
+def _parse_timestamp(raw: str) -> datetime | None:
+    """Parse a benchmark timestamp from JSON, DB, or slug conventions."""
+    raw = (raw or "").strip()
     if not raw:
-        return "—"
+        return None
     for fmt in ("%Y%m%d_%H%M%S", "%Y%m%dT%H%M%SZ", "%Y-%m-%dT%H:%M:%S.%f%z", "%Y-%m-%dT%H:%M:%S%z"):
         try:
-            return datetime.strptime(raw, fmt).strftime("%Y-%m-%d %H:%M")
+            dt = datetime.strptime(raw, fmt)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
         except ValueError:
             continue
-    return raw[:19] if len(raw) > 19 else raw
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        return None
+
+
+_SLUG_TS_RE = re.compile(r"^(\d{8}T\d{6}Z)")
+
+
+def normalize_timestamp_raw(raw: str, slug: str = "") -> str:
+    """Canonical UTC sort key ``YYYYMMDDTHHMMSSZ`` for list ordering."""
+    parsed = _parse_timestamp(raw)
+    if parsed is not None:
+        return parsed.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    match = _SLUG_TS_RE.match((slug or "").strip())
+    if match:
+        return match.group(1)
+    return (raw or "").strip()
+
+
+def _format_ts(raw: str) -> str:
+    parsed = _parse_timestamp(raw)
+    if parsed is not None:
+        return parsed.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    return raw[:19] if len(raw) > 19 else raw or "—"
 
 
 def _detect_kind(path: Path) -> str | None:
@@ -603,6 +611,8 @@ def _attach_coverage(summary: dict) -> dict:
     summary["coverage"] = cov
     summary["n_display"] = cov["n_display"]
     summary["coverage_skip_explanation"] = COVERAGE_SKIP_EXPLANATION
+    summary["coverage_n_explanation"] = COVERAGE_N_EXPLANATION
+    summary["coverage_n_tooltip"] = COVERAGE_N_TOOLTIP
     return summary
 
 
@@ -760,6 +770,73 @@ def _build_reference_section() -> dict:
         "reference_models": reference_models,
         "reference_rows": reference_rows,
         "coverage_skip_explanation": COVERAGE_SKIP_EXPLANATION,
+        "coverage_n_explanation": COVERAGE_N_EXPLANATION,
+        "coverage_n_tooltip": COVERAGE_N_TOOLTIP,
+    }
+
+
+def _matrix_cell_from_run(row: dict, *, kind: str) -> dict:
+    """Summary fields for one benchmark×model matrix cell."""
+    cell = {
+        "slug": row["slug"],
+        "headline_display": row["headline_display"],
+        "headline_metric": row["headline_metric"],
+        "headline_value": row.get("headline_value"),
+        "score_class": row.get("score_class") or _score_class(kind, row.get("headline_value")),
+        "coverage": row.get("coverage") or _coverage_info(row),
+        "timestamp": row.get("timestamp"),
+    }
+    ref = _reference_by_kind_model().get(kind, {}).get(_normalize_model_name(row.get("model") or "—"))
+    your_value = row.get("headline_value")
+    if ref and your_value is not None and ref.get("headline_value") is not None:
+        delta = your_value - ref["headline_value"]
+        if delta > 1e-9:
+            delta_class = "ref-delta-up"
+        elif delta < -1e-9:
+            delta_class = "ref-delta-down"
+        else:
+            delta_class = "ref-delta-flat"
+        cell["ref_delta_display"] = _format_reference_delta(kind, delta)
+        cell["ref_delta_class"] = delta_class
+    return cell
+
+
+def _build_comparison_section(deduped_runs: list[dict]) -> dict:
+    """Pivot latest user runs into a benchmark×model matrix (like Reference)."""
+    from benchmarks.run_benchmark import BENCHMARKS  # noqa: E402
+
+    if not deduped_runs:
+        return {"has_comparison": False, "comparison_models": [], "comparison_rows": []}
+
+    by_kind_model: dict[str, dict[str, dict]] = {}
+    for row in deduped_runs:
+        kind = row.get("kind")
+        model = _normalize_model_name(row.get("model") or "—")
+        if kind and model != "—":
+            by_kind_model.setdefault(kind, {})[model] = row
+
+    models_set = {m for per in by_kind_model.values() for m in per}
+    comparison_models = [m for m in _PREFERRED_REFERENCE_MODELS if m in models_set]
+    comparison_models.extend(sorted(models_set - set(comparison_models)))
+
+    comparison_rows: list[dict] = []
+    for key, cfg in BENCHMARKS.items():
+        cells: dict[str, dict] = {}
+        for model in comparison_models:
+            row = by_kind_model.get(key, {}).get(model)
+            if row:
+                cells[model] = _matrix_cell_from_run(row, kind=key)
+        comparison_rows.append({
+            "key": key,
+            "label": cfg["label"],
+            "badge_class": _BENCHMARK_BADGE.get(key, "badge-pilot"),
+            "cells": cells,
+        })
+
+    return {
+        "has_comparison": bool(comparison_models),
+        "comparison_models": comparison_models,
+        "comparison_rows": comparison_rows,
     }
 
 
@@ -882,7 +959,7 @@ def _dedupe_key(row: dict) -> tuple[str, str] | None:
 
 
 def _postprocess_benchmark_runs(runs: list[dict]) -> dict:
-    """Keep the latest run per (model, benchmark); sort best score first."""
+    """Keep the latest run per (model, benchmark); default list order is newest first."""
     all_runs = list(runs)
     latest: dict[tuple[str, str], dict] = {}
     for r in sorted(
@@ -909,13 +986,7 @@ def _postprocess_benchmark_runs(runs: list[dict]) -> dict:
             r["older_run_count"] = max(key_counts.get(key, 1) - 1, 0)
 
     deduped = list(latest.values())
-    deduped.sort(
-        key=lambda r: (
-            r.get("headline_value") if r.get("headline_value") is not None else -1.0,
-            r.get("timestamp_raw") or "",
-        ),
-        reverse=True,
-    )
+    deduped.sort(key=lambda r: r.get("timestamp_raw") or "", reverse=True)
     all_runs.sort(key=lambda r: r.get("timestamp_raw") or "", reverse=True)
 
     kinds = sorted({r["kind_label"] for r in deduped})
@@ -930,6 +1001,335 @@ def _postprocess_benchmark_runs(runs: list[dict]) -> dict:
         "all_run_count": len(all_runs),
         "kinds": kinds,
         "models": models,
+    }
+
+
+def _sort_detail_items(kind: str, items: list) -> list:
+    """Skipped / unanswered items first — matches detail template ordering."""
+    if kind in ("ifeval", "mmlu", "tomi", "mbpp", "quality"):
+        return sorted(items, key=lambda r: r.get("answered", True))
+    return items
+
+
+def _per_subject_rows(per_subject: dict) -> list[dict]:
+    """Subjects sorted weakest-first for the per-subject table."""
+    rows: list[dict] = []
+    for name, stats in (per_subject or {}).items():
+        acc = stats.get("accuracy")
+        if acc is None:
+            total = stats.get("total") or stats.get("attempted") or 0
+            if total:
+                acc = (stats.get("correct") or 0) / total
+            else:
+                acc = 0.0
+        rows.append({"subject": name, "stats": stats, "accuracy": float(acc)})
+    rows.sort(key=lambda r: (r["accuracy"], r["subject"]))
+    return rows
+
+
+def _assign_detail_items(detail: dict, items: list) -> None:
+    key = _DETAIL_ITEM_KEYS.get(detail.get("kind") or "")
+    if key:
+        detail[key] = items
+
+
+def _paginate_detail_items(
+    detail: dict,
+    all_items: list,
+    *,
+    offset: int = 0,
+    limit: int = DETAIL_ITEMS_PAGE_SIZE,
+) -> dict:
+    kind = detail.get("kind") or ""
+    sorted_items = _sort_detail_items(kind, all_items)
+    detail["raw_row_count"] = len(sorted_items)
+    detail["items_offset"] = offset
+    detail["items_page_size"] = limit
+    page = sorted_items[offset : offset + limit]
+    detail["items_has_more"] = offset + len(page) < len(sorted_items)
+    detail["items_loaded"] = offset + len(page)
+    _assign_detail_items(detail, page)
+    return detail
+
+
+def _attach_per_subject(detail: dict, per_subject: dict) -> None:
+    detail["per_subject"] = per_subject or {}
+    detail["per_subject_rows"] = _per_subject_rows(detail["per_subject"])
+
+
+def _attach_rerun(detail: dict, *, run_params: dict | None = None) -> None:
+    """Launch-form prefill from a completed run."""
+    from benchmarks.run_benchmark import BENCHMARKS  # noqa: E402
+    from frontend.benchmark_launch import HF_INFERENCE_BASE_URL, candidate_models  # noqa: E402
+
+    kind = detail.get("kind") or ""
+    slug = detail.get("slug") or ""
+    model = _normalize_model_name(detail.get("model") or "")
+    stored = _load_stored_run_options(slug) if slug else {}
+    params = {**stored, **(run_params or detail.get("run_params") or {})}
+    extras = detail.get("extras") or {}
+
+    sample = params.get("sample")
+    sample_explicit = sample is not None
+    if sample is None and extras.get("attempted"):
+        sample = extras["attempted"]
+    elif sample is None and detail.get("n"):
+        sample = detail.get("n")
+
+    seed = params.get("seed")
+    cfg = BENCHMARKS.get(kind, {})
+    default_sample = (cfg.get("sample") or {}).get("default")
+    if (
+        not sample_explicit
+        and sample is not None
+        and default_sample is not None
+        and sample == default_sample
+    ):
+        sample = None
+
+    model_source = "gateway"
+    gateway_model = model
+    hosted_model = None
+    custom_model = None
+    base_url = params.get("base_url")
+
+    allowlist = set(candidate_models())
+    if model and model not in allowlist:
+        if base_url == HF_INFERENCE_BASE_URL or (
+            not base_url and "/" in model and not model.startswith("—")
+        ):
+            model_source = "hosted"
+            hosted_model = model
+            gateway_model = None
+        else:
+            model_source = "custom"
+            custom_model = model
+            gateway_model = None
+
+    detail["rerun"] = {
+        "benchmark": kind,
+        "model_source": model_source,
+        "model": gateway_model,
+        "hosted_model": hosted_model,
+        "custom_model": custom_model,
+        "base_url": base_url or "",
+        "sample": sample,
+        "seed": seed,
+    }
+
+
+def _parse_run_options_from_log(slug: str) -> dict:
+    """Recover sample/seed from a run log when no sidecar was written."""
+    if not is_safe_slug(slug):
+        return {}
+    for base in _candidate_dirs():
+        log_path = base / f"{slug}.log"
+        if not log_path.is_file():
+            continue
+        try:
+            text = log_path.read_text(encoding="utf-8", errors="replace")[:12000]
+        except OSError:
+            continue
+        opts: dict = {}
+        for match in re.finditer(r"=== sample=(\d+) ===", text):
+            opts["sample"] = int(match.group(1))
+        for match in re.finditer(r"=== seed=(\d+) ===", text):
+            opts["seed"] = int(match.group(1))
+        cmd = re.search(r"=== command: (.+?) ===", text, re.DOTALL)
+        if cmd:
+            cmdline = cmd.group(1).replace("\n", " ")
+            sm = re.search(r"--sample\s+(\d+)", cmdline)
+            if sm:
+                opts["sample"] = int(sm.group(1))
+            sd = re.search(r"--seed\s+(\d+)", cmdline)
+            if sd:
+                opts["seed"] = int(sd.group(1))
+        if opts:
+            return opts
+    return {}
+
+
+def _load_stored_run_options(slug: str) -> dict:
+    """Sample, seed, and endpoint options saved at launch time (or parsed from log)."""
+    if not is_safe_slug(slug):
+        return {}
+    for base in _candidate_dirs():
+        path = base / f"{slug}.run_options.json"
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+        except (OSError, json.JSONDecodeError):
+            continue
+    return _parse_run_options_from_log(slug)
+
+
+def _extract_file_items(kind: str, data: dict, *, jsonl_rows: list | None = None) -> list:
+    if kind == "ifeval":
+        return jsonl_rows or []
+    if kind == "truthfulqa":
+        return data.get("responses") or []
+    if kind == "consistency":
+        return data.get("questions") or []
+    if kind in ("mmlu", "tomi", "mbpp", "quality"):
+        return data.get("results") or []
+    return []
+
+
+def get_benchmark_rerun_params(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
+    detail = get_benchmark_detail(slug, visibility=visibility, owner_user_id=owner_user_id)
+    if detail is None or detail.get("is_reference"):
+        return None
+    return detail.get("rerun")
+
+
+def get_benchmark_detail_items(
+    slug: str,
+    offset: int,
+    *,
+    visibility: str = "public",
+    owner_user_id: str | None = None,
+    limit: int = DETAIL_ITEMS_PAGE_SIZE,
+) -> dict | None:
+    """One page of per-item rows for lazy-load on the detail page."""
+    bundle = _load_benchmark_detail_items(
+        slug, visibility=visibility, owner_user_id=owner_user_id
+    )
+    if bundle is None:
+        return None
+    detail, all_items = bundle
+    _paginate_detail_items(detail, all_items, offset=offset, limit=limit)
+    detail["coverage_skip_explanation"] = COVERAGE_SKIP_EXPLANATION
+    detail["coverage_n_explanation"] = COVERAGE_N_EXPLANATION
+    detail["coverage_n_tooltip"] = COVERAGE_N_TOOLTIP
+    return detail
+
+
+def _load_benchmark_detail_items(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> tuple[dict, list] | None:
+    """Summary detail dict plus the full ordered item list (not paginated)."""
+    if is_reference_slug(slug):
+        detail = _get_benchmark_detail_files(slug)
+        if detail is None:
+            return None
+        kind = detail["kind"]
+        key = _DETAIL_ITEM_KEYS.get(kind, "")
+        all_items = _sort_detail_items(kind, detail.get(key) or [])
+        # Re-load full list from reference file (detail only has first page).
+        for d in _result_dirs():
+            for path in (d / f"{slug}.json", d / f"{slug}.jsonl"):
+                if not path.is_file():
+                    continue
+                kind = _detect_kind(path)
+                if kind is None:
+                    continue
+                if kind == "ifeval":
+                    rows = []
+                    with path.open("r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line:
+                                try:
+                                    rows.append(json.loads(line))
+                                except json.JSONDecodeError:
+                                    continue
+                    all_items = _sort_detail_items(kind, rows)
+                else:
+                    with path.open("r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    all_items = _sort_detail_items(kind, _extract_file_items(kind, data))
+                return detail, all_items
+        return detail, all_items
+
+    try:
+        from frontend import benchmark_db_data
+
+        if benchmark_db_data.available():
+            row = benchmark_db_data.fetch_detail_row(
+                slug, visibility=visibility, owner_user_id=owner_user_id
+            )
+            if row is not None:
+                detail = benchmark_db_data._summarize_db_run(row)
+                kind = row[3]
+                items = row[8] or []
+                detail = _attach_meta(detail)
+                run_params = row[9]
+                if run_params:
+                    detail["run_params"] = run_params
+                _attach_per_subject(detail, (row[7] or {}).get("per_subject") or {})
+                return detail, _sort_detail_items(kind, items)
+    except Exception:
+        pass
+
+    for d in _result_dirs():
+        ref = _reference_dir()
+        if d == ref:
+            continue
+        from dbutils.run_meta import read_run_meta_for_pillar
+        from dbutils.visibility import artifact_visible
+
+        meta = read_run_meta_for_pillar(d / slug, pillar="benchmark")
+        if not artifact_visible(meta, view_mode=visibility, user_id=owner_user_id):
+            continue
+        for path in (d / f"{slug}.json", d / f"{slug}.jsonl"):
+            if not path.is_file():
+                continue
+            kind = _detect_kind(path)
+            if kind is None:
+                continue
+            if kind == "ifeval":
+                rows = []
+                with path.open("r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            try:
+                                rows.append(json.loads(line))
+                            except json.JSONDecodeError:
+                                continue
+                summary = _summarize_ifeval(path)
+                all_items = _sort_detail_items(kind, rows)
+                data = {}
+            else:
+                with path.open("r", encoding="utf-8") as f:
+                    data = json.load(f)
+                summarize = {
+                    "truthfulqa": lambda: _summarize_truthfulqa(path, data),
+                    "consistency": lambda: _summarize_consistency(path, data),
+                    "mmlu": lambda: _summarize_mmlu(path, data),
+                    "tomi": lambda: _summarize_tomi(path, data),
+                    "mbpp": lambda: _summarize_mbpp(path, data),
+                    "quality": lambda: _summarize_quality(path, data),
+                }
+                summary = summarize[kind]()
+                all_items = _sort_detail_items(kind, _extract_file_items(kind, data))
+            summary = _attach_meta(summary)
+            if kind == "mmlu":
+                _attach_per_subject(summary, data.get("per_subject") or {})
+            if data.get("run_params"):
+                summary["run_params"] = data["run_params"]
+            return summary, all_items
+    return None
+
+
+def get_benchmark_latest_for_hub(all_runs: list[dict] | None = None) -> dict | None:
+    """Most recent benchmark run for the home pillar card."""
+    if all_runs is None:
+        data = get_benchmarks_data()
+        all_runs = data.get("all_runs") or []
+    if not all_runs:
+        return None
+    latest = max(all_runs, key=lambda r: r.get("timestamp_raw") or "")
+    return {
+        "kind_label": latest.get("kind_label") or "—",
+        "model": latest.get("model") or "—",
+        "headline_display": latest.get("headline_display") or "—",
+        "slug": latest.get("slug") or "",
     }
 
 
@@ -1002,54 +1402,50 @@ def _get_benchmark_detail_files(
                             except json.JSONDecodeError:
                                 continue
                     summary = _summarize_ifeval(path)
-                    summary["raw_rows"] = rows[:50]
-                    summary["raw_row_count"] = len(rows)
+                    all_items = _sort_detail_items(kind, rows)
                     _attach_run_stats(summary, path)
-                    return _attach_meta(summary)
+                    summary = _attach_meta(summary)
+                    _paginate_detail_items(summary, all_items)
+                    return summary
                 with path.open("r", encoding="utf-8") as f:
                     data = json.load(f)
                 if kind == "truthfulqa":
                     summary = _summarize_truthfulqa(path, data)
-                    summary["responses"] = (data.get("responses") or [])[:50]
-                    summary["raw_row_count"] = len(data.get("responses") or [])
+                    all_items = _extract_file_items(kind, data)
                     _attach_run_stats(summary, path, data)
-                    return _attach_meta(summary)
-                if kind == "consistency":
+                elif kind == "consistency":
                     summary = _summarize_consistency(path, data)
-                    summary["questions"] = (data.get("questions") or [])[:50]
-                    summary["raw_row_count"] = len(data.get("questions") or [])
+                    all_items = _extract_file_items(kind, data)
                     _attach_run_stats(summary, path, data)
-                    return _attach_meta(summary)
-                if kind == "mmlu":
+                elif kind == "mmlu":
                     summary = _summarize_mmlu(path, data)
-                    summary["per_subject"] = data.get("per_subject") or {}
-                    summary["results"] = (data.get("results") or [])[:50]
-                    summary["raw_row_count"] = len(data.get("results") or [])
+                    all_items = _extract_file_items(kind, data)
+                    _attach_per_subject(summary, data.get("per_subject") or {})
                     _attach_run_stats(summary, path, data)
-                    return _attach_meta(summary)
-                if kind == "tomi":
+                elif kind == "tomi":
                     summary = _summarize_tomi(path, data)
-                    summary["results"] = (data.get("results") or [])[:50]
-                    summary["raw_row_count"] = len(data.get("results") or [])
+                    all_items = _extract_file_items(kind, data)
                     _attach_run_stats(summary, path, data)
-                    return _attach_meta(summary)
-                if kind == "mbpp":
+                elif kind == "mbpp":
                     summary = _summarize_mbpp(path, data)
-                    summary["results"] = (data.get("results") or [])[:50]
-                    summary["raw_row_count"] = len(data.get("results") or [])
+                    all_items = _extract_file_items(kind, data)
                     _attach_run_stats(summary, path, data)
-                    return _attach_meta(summary)
-                if kind == "quality":
+                elif kind == "quality":
                     summary = _summarize_quality(path, data)
-                    summary["results"] = (data.get("results") or [])[:50]
-                    summary["raw_row_count"] = len(data.get("results") or [])
+                    all_items = _extract_file_items(kind, data)
                     _attach_run_stats(summary, path, data)
-                    return _attach_meta(summary)
+                else:
+                    continue
+                if data.get("run_params"):
+                    summary["run_params"] = data["run_params"]
+                summary = _attach_meta(summary)
+                _paginate_detail_items(summary, all_items)
+                return summary
     return None
 
 
 # Artifact suffixes for a benchmark run stem (under benchmarks/results/ or legacy dirs).
-_ARTIFACT_SUFFIXES = (".json", ".jsonl", ".stats.json", ".progress.json", ".log")
+_ARTIFACT_SUFFIXES = (".json", ".jsonl", ".stats.json", ".progress.json", ".log", ".run_options.json")
 
 
 def _artifact_paths(slug: str) -> list[Path]:
@@ -1138,11 +1534,20 @@ def get_benchmarks_data() -> dict:
     ref = _build_reference_section()
     data["has_reference"] = ref.get("has_reference", False)
     data["coverage_skip_explanation"] = COVERAGE_SKIP_EXPLANATION
+    data["coverage_n_explanation"] = COVERAGE_N_EXPLANATION
+    data["coverage_n_tooltip"] = COVERAGE_N_TOOLTIP
     raw_runs = data.pop("runs", [])
+    for row in raw_runs:
+        row["timestamp_raw"] = normalize_timestamp_raw(
+            row.get("timestamp_raw") or "",
+            row.get("slug") or "",
+        )
+        row["timestamp"] = _format_ts(row["timestamp_raw"])
     data.update(_postprocess_benchmark_runs(raw_runs))
     for row in data.get("all_runs", []):
         row["score_class"] = _score_class(row.get("kind"), row.get("headline_value"))
         row["coverage"] = _coverage_info(row)
+    data.update(_build_comparison_section(data.get("runs", [])))
     return data
 
 
@@ -1176,4 +1581,6 @@ def get_benchmark_detail(
         detail["score_class"] = _score_class(detail.get("kind"), detail.get("headline_value"))
         _attach_coverage(detail)
         _attach_reference_comparison(detail)
+        if not detail.get("is_reference"):
+            _attach_rerun(detail)
     return detail
