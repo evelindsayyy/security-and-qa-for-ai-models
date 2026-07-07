@@ -67,7 +67,7 @@ PYTHONPATH=. uv run python safety/garak/export_safety_result.py \
 ```bash
 PYTHONPATH=. uv run python -m safety.merge \
   --garak safety/garak/output/${SLUG}/safety_result.json \
-  -o safety/output/${SLUG}/merged_safety_result.json
+  -o safety/output/${SLUG}/base/merged_safety_result.json
 ```
 
 Add `--promptfoo` flags for any Promptfoo exports you have. See [`../README.md`](../README.md).

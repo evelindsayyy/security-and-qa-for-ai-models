@@ -7,7 +7,9 @@ Routes (mounted under /api by api.register_api):
     GET  /api/evals/<slug>     one run's full detail
     GET  /api/evals/<slug>/status  poll job status
     POST /api/evals            start a run (202 + job_id)
-    GET  /api/models/<slug>    one model's rollup across suites
+
+Cross-pillar ``GET /api/models`` and ``GET /api/models/<slug>`` live in
+``api/models.py`` (``frontend.model_rollup``), not here.
 """
 
 from __future__ import annotations
@@ -104,15 +106,3 @@ def start_eval():
         url_for("evals_api.eval_status", slug=slug),
         already_running=already,
     )
-
-
-@bp.get("/models/<slug>")
-@json_errors
-def get_model(slug: str):
-    """One model's rollup across every suite it was evaluated on."""
-    if not is_safe_slug(slug):
-        return err("invalid model id", 400)
-    detail = eval_run_data.get_model_detail(slug)
-    if detail is None:
-        return err("model not found", 404)
-    return ok(detail)

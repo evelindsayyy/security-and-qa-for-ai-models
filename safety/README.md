@@ -79,7 +79,7 @@ PYTHONPATH=. uv run python -m safety.merge \
   --promptfoo safety/promptfoo/output/${SLUG}/safety_result.json \
   --promptfoo safety/promptfoo/output/${SLUG}/redteam_safety_result.json \
   --garak safety/garak/output/${SLUG}/safety_result.json \
-  -o safety/output/${SLUG}/merged_safety_result.json
+  -o safety/output/${SLUG}/base/merged_safety_result.json
 ```
 
 Omit flags for suites you did not run.
@@ -143,6 +143,8 @@ artifact risk score vs. supply-chain sub-signals.
 | `medium` | `goodside`, `snowball`, `misleading`, `leakreplay`, `divergence` |
 
 **After config changes** you must re-run `./safety/run_safety.sh` (or at least the changed suite + merge). Existing `merged_safety_result.json` files are not auto-updated.
+
+**Promptfoo SQLite contention:** concurrent runs must not share one `PROMPTFOO_CONFIG_DIR`. Each run uses `safety/output/<slug>/<profile>/.promptfoo`. See [`promptfoo/README.md`](promptfoo/README.md#troubleshooting).
 
 ## Layout
 

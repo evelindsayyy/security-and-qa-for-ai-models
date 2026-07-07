@@ -22,8 +22,7 @@ Session state: Flask cookie (`user`, `view_mode`). Run ownership, visibility
 scoping, and dedup live in Postgres (`db/auth_schema.sql`) plus per-run
 `run_meta.json`/`scan_meta.json` sidecars on disk — see
 [`frontend/run_paths.py`](../frontend/run_paths.py) for how private runs are
-kept on a separate on-disk path per pillar, and
-[`PROJECT_GUIDE.md`](../PROJECT_GUIDE.md) for the full isolation model.
+kept on a separate on-disk path per pillar.
 
 ## Modules
 

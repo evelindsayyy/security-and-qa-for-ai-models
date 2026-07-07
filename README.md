@@ -10,6 +10,7 @@ Automated **nutrition labels** for Duke AI Gateway models: **security** (artifac
 | **Safety** | Can the model be misused or violate policy at inference? |
 | **Efficacy** | How well does it perform on Duke-relevant and standard tasks? |
 
+**Live application:** [https://model-advisor.colab.duke.edu](https://model-advisor.colab.duke.edu)
 
 ---
 
@@ -17,10 +18,12 @@ Automated **nutrition labels** for Duke AI Gateway models: **security** (artifac
 
 | I want to… | Start here |
 |------------|------------|
+| **Onboard (agents & contributors)** | [`AGENTS.md`](AGENTS.md) |
 | **Run the UI** | [Quick start](#quick-start) |
 | **CLI and JSON API** — scans, safety, eval, benchmarks, tests | [`docs/cli.md`](docs/cli.md) · [`api/README.md`](api/README.md) |
 | **Docker model** (UI + pillar jobs) | [`docs/docker.md`](docs/docker.md) · [`docker/`](docker/) |
 | **Understand the system** (VM, Postgres, background jobs) | [`docs/architecture.md`](docs/architecture.md) |
+| **Model catalog & compare** (`/models`, `/compare`, rollup API) | [`frontend/README.md`](frontend/README.md) · [`api/README.md`](api/README.md) |
 | **Postgres schema and ingest** | [`docs/data-model.md`](docs/data-model.md) · [`dbutils/README.md`](dbutils/README.md) |
 | **Authentication (OIDC, public/private views)** | [`auth/README.md`](auth/README.md) |
 | **HTTPS / TLS (production Caddy)** | [`docker/README.md`](docker/README.md) |
@@ -72,7 +75,7 @@ Requires Docker and Docker Compose. Pillar dependency groups (`scanner`, `safety
 
 ### Optional — Postgres
 
-When `POSTGRES_DSN` is set; Set `EFFICACY_DB_DSN` to the same value. Runs auto-sync to Postgres by default; set `AUTO_INGEST=0` to disable.
+When `POSTGRES_DSN` is set, set `EFFICACY_DB_DSN` to the same value. Runs auto-sync to Postgres by default; set `AUTO_INGEST=0` to disable.
 
 ```bash
 ./scripts/apply-schemas.sh --bootstrap

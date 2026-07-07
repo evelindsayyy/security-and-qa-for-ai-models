@@ -1522,15 +1522,14 @@ def get_benchmark_reference_data() -> dict:
 
 
 def get_benchmarks_data() -> dict:
-    try:
-        from frontend import benchmark_db_data
+    from frontend import benchmark_db_data
+    from frontend.db_fallback import get_data_with_db_fallback
 
-        if benchmark_db_data.available():
-            data = benchmark_db_data.get_benchmarks_data_db()
-        else:
-            data = _get_benchmarks_data_files()
-    except Exception:
-        data = _get_benchmarks_data_files()
+    data = get_data_with_db_fallback(
+        benchmark_db_data.available,
+        benchmark_db_data.get_benchmarks_data_db,
+        _get_benchmarks_data_files,
+    )
     ref = _build_reference_section()
     data["has_reference"] = ref.get("has_reference", False)
     data["coverage_skip_explanation"] = COVERAGE_SKIP_EXPLANATION

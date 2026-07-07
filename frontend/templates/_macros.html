@@ -31,13 +31,24 @@
 {% endif %}
 {% endmacro %}
 
-{% macro tier_label(level) %}
+{% macro tier_label(level) -%}
 <span class="tier tier-{{ level }}">{{ level }}</span>
-{% endmacro %}
+{%- endmacro %}
 
-{% macro source_badge(source) %}
+{% macro source_badge(source) -%}
 <span class="badge badge-{{ source }}">{{ source }}</span>
-{% endmacro %}
+{%- endmacro %}
+
+{# Identical "private" badge repeated on every pillar's detail page. #}
+{% macro private_badge() -%}
+<span class="badge badge-private" title="Only visible to you">private</span>
+{%- endmacro %}
+
+{# Identical back-to-list link used by the running/complete branches of
+   every pillar's detail page (the "missing" branch has its own shape). #}
+{% macro back_link(url, label) -%}
+<p class="back"><a href="{{ url }}">{{ label }}</a></p>
+{%- endmacro %}
 
 {# Manual pillar runs when the UI has no data yet — matches docs/cli.md (Docker default). #}
 {% macro cli_scan_docker() -%}
@@ -63,6 +74,27 @@ docker compose --env-file .env -f benchmarks/docker/compose.yml run --rm benchma
 {% macro cli_gateway_host() -%}
 uv run python -m gateway
 {%- endmacro %}
+
+{# Pillar reference/guide callout — mirrors benchmarks list page. #}
+{% macro pillar_guide_callout(title, description, reference_url, kicker='Start here') %}
+<aside class="benchmark-reference-callout" aria-label="{{ title }}">
+  <div class="benchmark-reference-callout-text">
+    <p class="benchmark-reference-callout-kicker">{{ kicker }}</p>
+    <p class="benchmark-reference-callout-title">{{ title }}</p>
+    <p class="benchmark-reference-callout-desc">{{ description }}</p>
+  </div>
+  <a class="btn-reference" href="{{ reference_url }}">Open reference &amp; guide →</a>
+</aside>
+{% endmacro %}
+
+{# Rerun link — prefills the pillar launch form from a completed run. #}
+{% macro rerun_button(url, label='Rerun') %}
+{% if is_logged_in %}
+<a class="btn-secondary btn-sm" href="{{ url }}">{{ label }}</a>
+{% else %}
+<span class="btn-secondary btn-sm is-disabled" aria-disabled="true" title="Sign in to rerun">{{ label }}</span>
+{% endif %}
+{% endmacro %}
 
 {% macro benchmark_item_status(r) %}
   {% if r.answered is defined and not r.answered %}

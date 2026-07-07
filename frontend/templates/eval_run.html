@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button with context %}
+{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button, pillar_guide_callout with context %}
 
 {% block title %}Model comparison{% endblock %}
 
@@ -8,8 +8,14 @@
   <h1>Model comparison</h1>
   <p>{{ start_button(url_for('eval_run_new'), '▶ Start a new run') }}</p>
 
-  <section class="key">
-    <h2>How to read this</h2>
+  {{ pillar_guide_callout(
+       'Reference scores & eval guide',
+       'LLM-as-judge suites for Duke IT tasks — rubric dimensions, overall score, and cost/quality tradeoffs.',
+       url_for('eval_reference')
+     ) }}
+
+  <details class="key" open>
+    <summary>How to read this</summary>
     <dl class="legend-grid">
       <dt>Score columns</dt>
       <dd>From each run's rubric (usually 1–5; tone 1–3). Higher is better; "—" means not graded.</dd>
@@ -21,8 +27,12 @@
       <dd>Weighted tradeoff <code>w_Q·quality − w_C·cost − w_L·latency</code> (weights shown above the table); compares models within a suite, not an absolute score.</dd>
       <dt><span class="badge badge-warn">⚠ empty</span></dt>
       <dd>Candidate returned no text (often token budget) — re-run with higher max-tokens before comparing.</dd>
+      {% if has_comparison %}
+      <dt>Compare</dt>
+      <dd>Matrix of overall scores (suite × model). Best run per suite shown when multiple judges exist.</dd>
+      {% endif %}
     </dl>
-  </section>
+  </details>
 
   {% if not has_runs %}
     <p class="sub">
@@ -30,6 +40,15 @@
       <code>{{ cli_eval_docker() }}</code>
     </p>
   {% else %}
+    <h2>Runs</h2>
+    <div class="bench-view-tabs" role="tablist" aria-label="Eval results view">
+      <button type="button" class="bench-view-tab is-active" data-view="list" role="tab" aria-selected="true">List</button>
+      {% if has_comparison %}
+      <button type="button" class="bench-view-tab" data-view="compare" role="tab" aria-selected="false">Compare</button>
+      {% endif %}
+    </div>
+
+    <div id="pillar-view-list" class="bench-view-panel" role="tabpanel">
     <p class="sub">
       {{ runs|length }} run{{ "" if runs|length == 1 else "s" }} ·
       {{ n_summary }} question{{ "" if n_summary == "1" else "s" }} ·
@@ -131,7 +150,21 @@
       </tbody>
     </table>
     </div>
+    </div>
 
+    {% if has_comparison %}
+    <div id="pillar-view-compare" class="bench-view-panel" role="tabpanel" hidden>
+      <p class="sub">
+        Overall score per suite and model — click a cell for per-question detail.
+        Empty cells mean no run for that suite yet.
+      </p>
+      {% with detail_endpoint='eval_run_detail' %}
+      {% include '_pillar_comparison_matrix.html' %}
+      {% endwith %}
+    </div>
+    {% endif %}
+
+    <script src="{{ url_for('static', filename='table-sort.js') }}"></script>
     <script>
       (function () {
         const tbody = document.querySelector("#runs-table tbody");
@@ -139,7 +172,6 @@
         const nCols = document.querySelectorAll("#runs-table thead th").length;
         let sortKey = "overall", sortDir = -1, groupBy = "";
 
-        // populate filter dropdowns from the rows themselves
         for (const [id, key] of [["f-suite", "suite"], ["f-candidate", "candidate"], ["f-judge", "judge"]]) {
           const sel = document.getElementById(id);
           [...new Set(rows.map(r => r.dataset[key]))].sort().forEach(v => {
@@ -163,11 +195,6 @@
             render();
           });
         });
-
-        function num(row, key) {
-          const v = parseFloat(row.dataset[key]);
-          return isNaN(v) ? -Infinity : v;
-        }
 
         function render() {
           const fs = document.getElementById("f-suite").value;
@@ -203,6 +230,9 @@
         }
       })();
     </script>
+    {% if has_comparison %}
+    <script src="{{ url_for('static', filename='pillar-view-tabs.js') }}"></script>
+    {% endif %}
   {% endif %}
 </div>
 {% endblock %}

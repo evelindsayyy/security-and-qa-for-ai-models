@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% from '_macros.html' import tier_label with context %}
+
+{% block title %}Compare models{% endblock %}
+
+{% block content %}
+<div class="eval-comparison">
+  <p class="back"><a href="{{ url_for('models_catalog') }}">← model catalog</a></p>
+  <h1>Compare models</h1>
+  <p class="sub">Head-to-head view over the same cross-pillar rollup used by <code>GET /api/models/&lt;slug&gt;</code>.</p>
+
+  <form method="get" action="{{ url_for('compare_models') }}" class="launch-form">
+    <label>Model slugs (comma-separated — from the URL under <code>/models/&lt;slug&gt;</code>)
+      <input type="text" name="models" value="{{ requested_slugs|join(',') }}" placeholder="gpt-4.1-mini,llama-3.3">
+    </label>
+    <button type="submit" class="btn-primary">Compare</button>
+  </form>
+
+  {% if requested_slugs and not rollups %}
+  <p class="empty">None of the requested slugs matched a known model — check the slug in each model's <code>/models/&lt;slug&gt;</code> URL.</p>
+  {% elif rollups %}
+  {% if compare_summary and rollups|length >= 2 %}
+  <section class="key">
+    <h2>Comparison summary
+      <span class="dim">({% if compare_summary.source == 'ai' %}AI{% else %}rules v1{% endif %})</span>
+    </h2>
+    <p>{{ compare_summary.summary }}</p>
+    {% if compare_summary.tradeoffs %}
+    <ul>{% for t in compare_summary.tradeoffs %}<li>{{ t }}</li>{% endfor %}</ul>
+    {% endif %}
+  </section>
+  {% endif %}
+  {% if unmatched %}
+  <p class="sub dim">Not found: {{ unmatched|join(', ') }}</p>
+  {% endif %}
+
+  <div class="table-wrap">
+  <table class="run-table">
+    <thead>
+      <tr>
+        <th>Model</th>
+        {% for r in rollups %}
+        <th><a href="{{ url_for('model_detail', slug=r.slug) }}">{{ r.display_name }}</a></th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="dim">Scan tier</td>
+        {% for r in rollups %}
+        <td>{% if r.scan %}{{ tier_label(r.scan.tier) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+        {% endfor %}
+      </tr>
+      <tr>
+        <td class="dim">Safety tier</td>
+        {% for r in rollups %}
+        <td>{% if r.safety %}{{ tier_label(r.safety.tier) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+        {% endfor %}
+      </tr>
+      <tr>
+        <td class="dim">Safety pass rate</td>
+        {% for r in rollups %}
+        <td class="num">{% if r.safety %}{{ "%.0f%%"|format(r.safety.pass_rate * 100) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+        {% endfor %}
+      </tr>
+      <tr>
+        <td class="dim">Best eval score</td>
+        {% for r in rollups %}
+        <td class="num">{% if r.eval and r.eval.best_overall is not none %}{{ "%.2f"|format(r.eval.best_overall) }} / 5{% else %}<span class="dim">—</span>{% endif %}</td>
+        {% endfor %}
+      </tr>
+      <tr>
+        <td class="dim">Mean latency</td>
+        {% for r in rollups %}
+        <td class="num">{% if r.eval and r.eval.mean_latency_ms is not none %}{{ r.eval.mean_latency_ms }} ms{% else %}<span class="dim">—</span>{% endif %}</td>
+        {% endfor %}
+      </tr>
+      <tr>
+        <td class="dim">Eval cost</td>
+        {% for r in rollups %}
+        <td class="num">{% if r.eval %}${{ "%.4f"|format(r.eval.total_cost_usd) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+        {% endfor %}
+      </tr>
+      <tr>
+        <td class="dim">Benchmarks</td>
+        {% for r in rollups %}
+        <td>
+          {% if r.benchmark and r.benchmark.kinds %}
+            {% for kind, info in r.benchmark.kinds.items() %}<div>{{ kind }}: <b>{{ info.headline_display }}</b></div>{% endfor %}
+          {% else %}<span class="dim">—</span>{% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="chart-row">
+    <div class="chart-card">
+      <h3>Safety pass rate</h3>
+      <canvas id="chart-safety" height="220"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Best eval score (/5)</h3>
+      <canvas id="chart-eval" height="220"></canvas>
+    </div>
+    {% if benchmark_kinds %}
+    <div class="chart-card">
+      <h3>Benchmark headline scores</h3>
+      <canvas id="chart-benchmark" height="220"></canvas>
+    </div>
+    {% endif %}
+  </div>
+  <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+  <script>
+  (function () {
+    const labels = {{ rollups|map(attribute='display_name')|list|tojson }};
+    const style = getComputedStyle(document.documentElement);
+    const dukeBlue = style.getPropertyValue('--duke-blue').trim() || '#012169';
+
+    new Chart(document.getElementById('chart-safety'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Safety pass rate (%)',
+          data: {{ rollups|map(attribute='safety')|list|tojson }}.map(
+            s => s && s.pass_rate != null ? Math.round(s.pass_rate * 100) : null
+          ),
+          backgroundColor: dukeBlue,
+        }],
+      },
+      options: { scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
+    });
+
+    new Chart(document.getElementById('chart-eval'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Best overall (/5)',
+          data: {{ rollups|map(attribute='eval')|list|tojson }}.map(
+            e => e && e.best_overall != null ? e.best_overall : null
+          ),
+          backgroundColor: dukeBlue,
+        }],
+      },
+      options: { scales: { y: { beginAtZero: true, max: 5 } }, plugins: { legend: { display: false } } },
+    });
+
+    {% if benchmark_kinds %}
+    const benchmarkKinds = {{ benchmark_kinds|tojson }};
+    const benchmarkByModel = {{ rollups|map(attribute='benchmark')|list|tojson }};
+    new Chart(document.getElementById('chart-benchmark'), {
+      type: 'bar',
+      data: {
+        labels: benchmarkKinds,
+        datasets: labels.map((label, i) => ({
+          label: label,
+          data: benchmarkKinds.map(kind => {
+            const b = benchmarkByModel[i];
+            const info = b && b.kinds ? b.kinds[kind] : null;
+            return info && info.headline_value != null ? info.headline_value : null;
+          }),
+        })),
+      },
+      options: { scales: { y: { beginAtZero: true } } },
+    });
+    {% endif %}
+  })();
+  </script>
+
+  <h2>Recommendations</h2>
+  {% for r in rollups %}
+  <section class="key">
+    <h2>{{ r.display_name }}</h2>
+    <p>{{ recommendations[r.slug].summary }}</p>
+    {% if recommendations[r.slug].tradeoffs %}
+    <ul>
+      {% for t in recommendations[r.slug].tradeoffs %}
+      <li>{{ t }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+  {% endfor %}
+  {% endif %}
+</div>
+{% endblock %}

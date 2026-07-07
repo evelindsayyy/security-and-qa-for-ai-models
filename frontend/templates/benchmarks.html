@@ -23,7 +23,7 @@
   </aside>
   {% endif %}
 
-  <details class="key">
+  <details class="key" open>
     <summary>How to read this</summary>
     <dl class="legend-grid">
       <dt>Score</dt>
@@ -59,7 +59,7 @@
     </dl>
   </details>
 
-  <h2>Your runs</h2>
+  <h2>Runs</h2>
   {% if not has_runs %}
     <p class="sub empty">
       No benchmark output yet. Use <b>Start a new run</b> above, or from repo root:
@@ -168,6 +168,7 @@
     </table>
     </div>
 
+    <script src="{{ url_for('static', filename='table-sort.js') }}"></script>
     <script>
       (function () {
         const table = document.getElementById("bench-table");
@@ -217,11 +218,6 @@
             render();
           });
         });
-
-        function num(row, key) {
-          const v = parseFloat(row.dataset[key]);
-          return isNaN(v) ? -Infinity : v;
-        }
 
         function render() {
           const fk = document.getElementById("f-kind").value;

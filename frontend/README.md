@@ -29,7 +29,30 @@ Open http://127.0.0.1:5000.
 
 Launch pages: `/scans/new`, `/safety/new`, `/eval-run/new`, `/benchmarks/new` — gateway dropdowns on each form. Benchmark model-input options (Gateway / Hosted / Custom): [`benchmarks/README.md`](../benchmarks/README.md).
 
-While a job runs, its detail page polls status and shows a live log tail. Scan and safety start forms warn when the same model/repo is already in progress (`run.lock` under the output dir).
+Cross-pillar pages: `/models` (catalog + aggregate ranking), `/models/<slug>` (detail + AI/rules recommendations), `/compare?models=slug1,slug2` (head-to-head charts). API: `GET /api/models`, `GET /api/models/<slug>` — see [`../api/README.md`](../api/README.md).
+
+Pillar list pages use **List / Compare** tabs (suite×model or tool×model matrices). Reference guides: `/safety/reference`, `/eval-run/reference`, `/scans/reference`, `/benchmarks/reference` (preferred-model score tables where data exists).
+
+## Modules
+
+| Module | Role |
+|--------|------|
+| `model_rollup.py` | Cross-pillar union for catalog, API, compare (batch lookup + TTL cache) |
+| `model_identity.py` | Gateway slug / HF repo id normalization |
+| `model_summary.py` | Gateway-backed AI summaries (cached); rules-v1 fallback |
+| `recommendation_rules.py` | Rules-v1 analyst summaries (fallback) |
+| `reference_constants.py` | Preferred reference model ordering |
+| `db_fallback.py` | Postgres-with-disk-fallback for all pillars |
+| `launch_registry.py` | Shared in-flight job liveness |
+| `docker_launch.py` | Browser-launched pillar Docker stacks |
+| `static/pillar-view-tabs.js` | List/Compare tab toggle on pillar pages |
+| `static/compare-panel.js` | Catalog model checkbox compare |
+| `static/findings-table.js` | Filterable findings tables |
+| `static/log-scroll.js` | Auto-scroll run logs |
+| `static/table-sort.js` | Client-side table sort |
+| `static/vendor/chart.umd.min.js` | Chart.js for `/compare` |
+
+While a job runs, its detail page polls status and shows a live log tail.
 
 Header: **Public | Private** view toggle · **Sign in with Duke NetID** (when `AUTH_ENABLED=1`).
 
@@ -82,7 +105,7 @@ python3 main.py --host
   ```
 
 - **`db_available: false`** — check `POSTGRES_DSN`, schema apply, and network ([`docs/cli.md`](../docs/cli.md)).
-- **“Docker is required for browser-launched … runs”** — usually a transient daemon check or a stale web process after deploy. Deploys force-recreate the web container; for a one-off fix: `./docker/run.sh up -d --build`. If it keeps happening, verify socket access: `stat -c '%g' /var/run/docker.sock` should match the web container `group_add` (`DOCKER_GID` from `./docker/run.sh`).
+- **“Docker is required for browser-launched … runs”** — often a UID mismatch on `.docker-home` after CI deploy, or a stale web process. See [`docker/README.md`](../docker/README.md#troubleshooting). Quick fix: `./docker/run.sh up -d --force-recreate`.
 - **Skip Docker for jobs** — `FRONTEND_LAUNCH_MODE=host` in `.env` (legacy; safety may still use nested Docker).
 
 ## See also

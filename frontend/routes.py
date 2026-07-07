@@ -44,8 +44,6 @@ def _hub_context() -> dict:
     safety_worst_tier = "—"
     benchmark_has = False
     benchmark_count = 0
-    benchmark_has_reference = False
-    benchmark_latest = None
 
     try:
         from frontend.scan_data import get_scans_data
@@ -83,13 +81,11 @@ def _hub_context() -> dict:
         pass
 
     try:
-        from frontend.benchmark_data import get_benchmark_latest_for_hub, get_benchmarks_data
+        from frontend.benchmark_data import get_benchmarks_data
 
         bench = get_benchmarks_data()
         benchmark_has = bench["has_runs"]
         benchmark_count = len(bench["runs"])
-        benchmark_has_reference = bench.get("has_reference", False)
-        benchmark_latest = get_benchmark_latest_for_hub(bench.get("all_runs") or [])
     except Exception:
         pass
 
@@ -111,8 +107,6 @@ def _hub_context() -> dict:
         "safety_worst_tier": safety_worst_tier,
         "benchmark_has": benchmark_has,
         "benchmark_count": benchmark_count,
-        "benchmark_has_reference": benchmark_has_reference,
-        "benchmark_latest": benchmark_latest,
     }
 
 
@@ -127,12 +121,29 @@ def register_routes(app):
 
         return render_template("scans.html", **get_scans_data())
 
+    @app.route("/scans/reference")
+    def scan_reference():
+        from frontend.scan_data import get_scan_reference_data
+
+        return render_template("scan_reference.html", **get_scan_reference_data())
+
     @app.route("/scans/new")
     @require_login()
     def scan_run_new():
+        from flask import request
+
+        from frontend.read_context import read_context
+        from frontend.scan_data import get_scan_rerun_params
         from frontend.scan_launch import get_launch_options
 
-        return render_template("scan_run_new.html", **get_launch_options())
+        opts = get_launch_options()
+        from_slug = request.args.get("from", "").strip()
+        if from_slug:
+            visibility, owner_user_id = read_context()
+            opts["rerun"] = get_scan_rerun_params(
+                from_slug, visibility=visibility, owner_user_id=owner_user_id
+            )
+        return render_template("scan_run_new.html", **opts)
 
     @app.route("/scans/start", methods=["POST"])
     @require_login()
@@ -310,9 +321,20 @@ def register_routes(app):
     @app.route("/eval-run/new")
     @require_login()
     def eval_run_new():
-        from frontend.eval_launch import get_launch_options
+        from flask import request
 
-        return render_template("eval_run_new.html", **get_launch_options())
+        from frontend.eval_launch import get_launch_options
+        from frontend.eval_run_data import get_eval_rerun_params
+        from frontend.read_context import read_context
+
+        opts = get_launch_options()
+        from_slug = request.args.get("from", "").strip()
+        if from_slug:
+            visibility, owner_user_id = read_context()
+            opts["rerun"] = get_eval_rerun_params(
+                from_slug, visibility=visibility, owner_user_id=owner_user_id
+            )
+        return render_template("eval_run_new.html", **opts)
 
     @app.route("/eval-run/start", methods=["POST"])
     @require_login()
@@ -856,12 +878,36 @@ def register_routes(app):
 
         return render_template("safety.html", **get_safety_data())
 
+    @app.route("/safety/reference")
+    def safety_reference():
+        from frontend.safety_data import get_safety_reference_data
+
+        return render_template("safety_reference.html", **get_safety_reference_data())
+
+    @app.route("/eval-run/reference")
+    def eval_reference():
+        from frontend.eval_run_data import get_eval_reference_data
+
+        return render_template("eval_reference.html", **get_eval_reference_data())
+
     @app.route("/safety/new")
     @require_login()
     def safety_run_new():
+        from flask import request
+
+        from frontend.read_context import read_context
+        from frontend.safety_data import get_safety_rerun_params
         from frontend.safety_launch import get_launch_options
 
-        return render_template("safety_run_new.html", **get_launch_options())
+        opts = get_launch_options()
+        from_slug = request.args.get("from", "").strip()
+        profile = request.args.get("profile", "base").strip() or "base"
+        if from_slug:
+            visibility, owner_user_id = read_context()
+            opts["rerun"] = get_safety_rerun_params(
+                from_slug, profile, visibility=visibility, owner_user_id=owner_user_id
+            )
+        return render_template("safety_run_new.html", **opts)
 
     @app.route("/safety/start", methods=["POST"])
     @require_login()
@@ -1065,26 +1111,109 @@ def register_routes(app):
 
     @app.route("/models")
     def models_catalog():
+        from frontend import model_rollup
+
         gw = get_gateway_catalog()
+        rollup_by_gateway_id = model_rollup.rollups_for_gateway_ids(
+            [m["id"] for m in gw["models"]]
+        )
+        gateway_by_category = []
+        for section in gw["by_category"]:
+            models = sorted(
+                section["models"],
+                key=lambda m: (
+                    rollup_by_gateway_id[m["id"]].get("aggregate") is None,
+                    -(rollup_by_gateway_id[m["id"]].get("aggregate") or 0),
+                    m["id"].lower(),
+                ),
+            )
+            gateway_by_category.append({**section, "models": models})
         return render_template(
             "catalog.html",
             gateway=gw["models"],
-            gateway_by_category=gw["by_category"],
+            gateway_by_category=gateway_by_category,
             gateway_count=gw["count"],
             gateway_source=gw["source"],
             gateway_fetched_at=gw["fetched_at"],
             gateway_error=gw["error"],
             gateway_deprecated=gw["deprecated"],
+            rollup_by_gateway_id=rollup_by_gateway_id,
         )
 
     @app.route("/models/<slug>")
     def model_detail(slug: str):
+        from frontend import model_rollup, model_summary
         from frontend.eval_run_data import get_model_detail
+        from frontend.model_identity import gateway_is_hf_scannable, gateway_slug
 
-        detail = get_model_detail(slug)
-        if detail is None:
-            return render_template("model_detail.html", missing=True, slug=slug)
-        return render_template("model_detail.html", missing=False, **detail)
+        rollup = model_rollup.get_model_rollup(slug)
+        gateway_profile = None
+        gateway_id = None
+        if rollup is None:
+            gw = get_gateway_catalog()
+            for m in gw["models"]:
+                if gateway_slug(m["id"]) == slug:
+                    gateway_id = m["id"]
+                    gateway_profile = m.get("notes")
+                    rollup = model_rollup.empty_gateway_rollup(m["id"])
+                    break
+            if rollup is None:
+                return render_template("model_detail.html", missing=True, slug=slug)
+
+        detail = get_model_detail(slug) or {
+            "model": rollup["display_name"], "runs": [], "dim_columns": [],
+            "n_runs": 0, "suites": [], "best_overall": None, "total_cost_usd": 0,
+        }
+        recommendation = model_summary.get_recommendation_summary(rollup)
+        can_hf_scan = gateway_is_hf_scannable(rollup["display_name"])
+        return render_template(
+            "model_detail.html",
+            missing=False,
+            rollup=rollup,
+            recommendation=recommendation,
+            gateway_profile=gateway_profile,
+            gateway_id=gateway_id,
+            can_hf_scan=can_hf_scan,
+            **detail,
+        )
+
+    @app.route("/compare")
+    def compare_models():
+        from flask import request
+
+        from frontend import model_rollup, model_summary
+        from frontend.model_identity import gateway_slug
+
+        raw = request.args.get("models", "")
+        slugs = [s for s in (p.strip() for p in raw.split(",")) if s]
+        gw = get_gateway_catalog()
+        id_by_slug = {gateway_slug(m["id"]): m["id"] for m in gw["models"]}
+        rollups = []
+        for slug in slugs:
+            rollup = model_rollup.get_model_rollup(slug)
+            if rollup is None and slug in id_by_slug:
+                rollup = model_rollup.empty_gateway_rollup(id_by_slug[slug])
+            if rollup is not None:
+                rollups.append(rollup)
+        recommendations = {
+            r["slug"]: model_summary.get_recommendation_summary(r) for r in rollups
+        }
+        compare_summary = model_summary.get_compare_summary(rollups) if len(rollups) >= 2 else None
+        unmatched = [s for s in slugs if s not in {r["slug"] for r in rollups}]
+        benchmark_kinds = sorted({
+            kind
+            for r in rollups
+            for kind in (r.get("benchmark") or {}).get("kinds", {})
+        })
+        return render_template(
+            "compare.html",
+            rollups=rollups,
+            recommendations=recommendations,
+            compare_summary=compare_summary,
+            requested_slugs=slugs,
+            unmatched=unmatched,
+            benchmark_kinds=benchmark_kinds,
+        )
 
     @app.route("/gateway/refresh", methods=["POST"])
     def gateway_refresh():

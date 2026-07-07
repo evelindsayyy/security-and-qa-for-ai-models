@@ -8,6 +8,8 @@
 # Docker socket, and their bind mounts resolve on the host daemon correctly.
 # Postgres is external (POSTGRES_DSN on OIT host).
 
+name: qa-ai-models
+
 services:
   web:
     build:
@@ -26,7 +28,7 @@ services:
 
     environment:
       - PYTHONPATH=${HOST_REPO:-/workspace}
-      - HOME=${HOST_REPO:-/workspace}/.docker-home
+      - HOME=${HOST_REPO:-/workspace}/.docker-home/${HOST_UID:-1000}
       - COMPOSE_PROJECT_NAME=qa-ai-models
       - COMPOSE_IGNORE_ORPHANS=1
       - FRONTEND_LAUNCH_MODE=${FRONTEND_LAUNCH_MODE:-docker}
@@ -36,6 +38,13 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
 
     working_dir: ${HOST_REPO:-/workspace}
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
     stdin_open: true
     tty: true

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button with context %}
+{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button, private_badge, back_link, rerun_button with context %}
 
 {% block title %}{% if missing %}Run not found{% else %}{{ candidate_model }} — run{% endif %}{% endblock %}
 
@@ -11,7 +11,7 @@
     <p class="form-hint">{{ start_button(url_for('eval_run_new'), 'Start an eval run', classes='') }} or CLI: <code>{{ cli_eval_docker() }}</code></p>
     <p><a href="{{ url_for('eval_run') }}">← all runs</a></p>
   {% elif running %}
-    <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
+    {{ back_link(url_for('eval_run'), '← all runs') }}
     <h1>Run in progress</h1>
     <p class="sub">slug <code>{{ slug }}</code> · live log updates every 5 seconds</p>
     <div class="progress-card progress-card--wide">
@@ -34,17 +34,12 @@
       </p>
       {% endif %}
     </div>
+    <script src="{{ url_for('static', filename='log-scroll.js') }}"></script>
     <script>
       (function () {
         const logEl = document.getElementById("prog-log");
         const truncatedEl = document.getElementById("prog-truncated");
-        function updateLog(text) {
-          if (typeof text !== "string" || text === logEl.textContent) return;
-          const atBottom = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 48;
-          const prevTop = logEl.scrollTop;
-          logEl.textContent = text;
-          logEl.scrollTop = atBottom ? logEl.scrollHeight : prevTop;
-        }
+        function updateLog(text) { updateLogPreservingScroll(logEl, text); }
         const poll = setInterval(async () => {
           const r = await fetch("{{ url_for('eval_run_status_private' if is_private else 'eval_run_status', slug=slug) }}");
           if (!r.ok) return;
@@ -73,8 +68,8 @@
       })();
     </script>
   {% else %}
-    <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
-    <h1>{{ candidate_model }}{% if is_private %} <span class="badge badge-private" title="Only visible to you">private</span>{% endif %}</h1>
+    {{ back_link(url_for('eval_run'), '← all runs') }}
+    <h1>{{ candidate_model }}{% if is_private %} {{ private_badge() }}{% endif %}</h1>
     <p class="sub">
       slug <code>{{ slug }}</code> ·
       run <code>{{ run_id }}</code> ·
@@ -82,6 +77,7 @@
     </p>
 
     <p class="detail-delete-form">
+      {{ rerun_button(url_for('eval_run_new', from=slug), '↻ Run again') }}
       {{ delete_button(url_for('eval_run_delete_private' if is_private else 'eval_run_delete', slug=slug)) }}
     </p>
 

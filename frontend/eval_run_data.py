@@ -427,14 +427,117 @@ def attach_cost_perf(data: dict, weights: CostPerfWeights = BALANCED) -> dict:
 
 
 def get_runs_data() -> dict:
-    try:
-        from frontend import eval_db_data
+    from frontend import eval_db_data
+    from frontend.db_fallback import get_data_with_db_fallback
 
-        if eval_db_data.available():
-            return attach_cost_perf(eval_db_data.get_runs_data_db())
-    except Exception:
-        pass  # any DB hiccup -> files, never a broken page
-    return attach_cost_perf(_get_runs_data_files())
+    data = attach_cost_perf(
+        get_data_with_db_fallback(
+            eval_db_data.available,
+            eval_db_data.get_runs_data_db,
+            _get_runs_data_files,
+        )
+    )
+    data.update(_build_eval_comparison_section(data.get("runs") or []))
+    return data
+
+
+def _eval_matrix_cell(run: dict) -> dict | None:
+    overall = run.get("overall")
+    if overall is None:
+        return None
+    return {
+        "display": f"{overall:.2f}",
+        "score_class": "",
+        "slug": run.get("slug"),
+    }
+
+
+def _build_eval_comparison_section(runs: list[dict]) -> dict:
+    """Pivot eval runs into suite×model overall matrix."""
+    from frontend.eval_launch import SUITES
+    from frontend.reference_constants import order_models
+
+    if not runs:
+        return {"has_comparison": False, "comparison_models": [], "comparison_rows": []}
+
+    by_suite_model: dict[str, dict[str, dict]] = {}
+    for r in runs:
+        suite = r.get("suite")
+        model = r.get("candidate_model")
+        if not suite or not model:
+            continue
+        bucket = by_suite_model.setdefault(suite, {})
+        existing = bucket.get(model)
+        if existing is None or (r.get("overall") or 0) > (existing.get("overall") or 0):
+            bucket[model] = r
+
+    models_set = {m for per in by_suite_model.values() for m in per}
+    comparison_models = order_models(models_set)
+
+    comparison_rows: list[dict] = []
+    for suite_key in sorted(set(by_suite_model.keys()) | set(SUITES.keys())):
+        label = SUITES.get(suite_key, {}).get("label", suite_key)
+        cells: dict[str, dict] = {}
+        for model_name in comparison_models:
+            row = by_suite_model.get(suite_key, {}).get(model_name)
+            if row:
+                cell = _eval_matrix_cell(row)
+                if cell:
+                    cells[model_name] = cell
+        comparison_rows.append({
+            "key": suite_key,
+            "label": label,
+            "badge_class": "badge-eval",
+            "cells": cells,
+        })
+
+    return {
+        "has_comparison": bool(comparison_models),
+        "comparison_models": comparison_models,
+        "comparison_rows": comparison_rows,
+    }
+
+
+def _build_eval_reference_scores(runs: list[dict]) -> dict:
+    from frontend.eval_launch import SUITES
+    from frontend.reference_constants import PREFERRED_REFERENCE_MODELS
+
+    by_suite_model: dict[str, dict[str, dict]] = {}
+    for r in runs:
+        suite = r.get("suite")
+        model = r.get("candidate_model")
+        if not suite or not model or model not in PREFERRED_REFERENCE_MODELS:
+            continue
+        bucket = by_suite_model.setdefault(suite, {})
+        existing = bucket.get(model)
+        if existing is None or (r.get("overall") or 0) > (existing.get("overall") or 0):
+            bucket[model] = r
+
+    reference_models = list(PREFERRED_REFERENCE_MODELS)
+    reference_rows: list[dict] = []
+    for suite_key in sorted(set(by_suite_model) | set(SUITES)):
+        label = SUITES.get(suite_key, {}).get("label", suite_key)
+        cells: dict[str, dict] = {}
+        for model_name in reference_models:
+            row = by_suite_model.get(suite_key, {}).get(model_name)
+            if row:
+                cell = _eval_matrix_cell(row)
+                if cell:
+                    cells[model_name] = cell
+        if suite_key in by_suite_model or suite_key in SUITES:
+            reference_rows.append({
+                "key": suite_key,
+                "label": label,
+                "badge_class": "badge-eval",
+                "cells": cells,
+            })
+
+    has_scores = any(c for row in reference_rows for c in row["cells"].values())
+    return {
+        "has_reference_scores": has_scores,
+        "reference_models": reference_models,
+        "reference_rows": reference_rows,
+    }
 
 
 def get_run_detail(
@@ -456,6 +559,20 @@ def get_run_detail(
     except Exception:
         pass
     return _get_run_detail_files(slug, visibility=visibility, owner_user_id=owner_user_id)
+
+
+def get_eval_rerun_params(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
+    """Launch-form prefill from a completed eval run."""
+    detail = get_run_detail(slug, visibility=visibility, owner_user_id=owner_user_id)
+    if detail is None:
+        return None
+    return {
+        "candidate_model": detail.get("candidate_model"),
+        "judge_model": detail.get("judge_model"),
+        "suite": detail.get("suite_version") or detail.get("suite"),
+    }
 
 
 _EVAL_ARTIFACT_SUFFIXES = (".jsonl", ".log", "_trace.jsonl")
@@ -511,3 +628,68 @@ def delete_eval_run(
     if removed_files == 0 and not removed_db:
         return f"no eval run found for slug {slug!r}"
     return None
+
+
+_EVAL_SUITE_ABOUT = {
+    "it_support": (
+        "Duke IT-support scenarios — troubleshooting, policy Q&A, and ticket-style "
+        "requests scored against reference answers."
+    ),
+    "plain_language": (
+        "Plain-language rewriting — dense bureaucratic passages rewritten for a "
+        "general audience; faithfulness and clarity weighted in the rubric."
+    ),
+    "email_drafting": (
+        "Professional email drafting — tone, structure, and constraint handling "
+        "for Duke-flavored workplace scenarios."
+    ),
+    "tutoring": (
+        "Tutoring scenarios — confused students asking for help; pedagogy and "
+        "misconception correction weighted highest."
+    ),
+    "robustness": (
+        "Robustness perturbations — same base questions with typos, informal "
+        "phrasing, and ambiguity to measure score stability."
+    ),
+}
+
+
+def get_eval_guide_data() -> dict:
+    """Rows for the eval reference/guide pages."""
+    from frontend.eval_launch import SUITES, suite_question_count
+
+    runs = get_runs_data().get("runs") or []
+    example = runs[0] if runs else None
+    rows = []
+    for key, cfg in SUITES.items():
+        rows.append({
+            "key": key,
+            "label": cfg["label"],
+            "badge_class": "badge-eval",
+            "about": _EVAL_SUITE_ABOUT.get(key, cfg.get("label", key)),
+            "procedure": (
+                f"LLM-as-judge scores each of {suite_question_count(key)} questions "
+                "against a reference answer using the suite rubric."
+            ),
+            "scoring": (
+                "Per-dimension rubric scores (usually 1–5) roll up to an overall "
+                "0–5 headline; higher is better."
+            ),
+            "default_sample": suite_question_count(key),
+            "sample_unit": "questions",
+        })
+    return {
+        "guide_rows": rows,
+        "has_example": example is not None,
+        "example_slug": example["slug"] if example else None,
+        "example_model": example["candidate_model"] if example else None,
+        "example_suite": example["suite"] if example else None,
+    }
+
+
+def get_eval_reference_data() -> dict:
+    runs = get_runs_data().get("runs") or []
+    data = get_eval_guide_data()
+    data["has_reference"] = data["has_example"]
+    data.update(_build_eval_reference_scores(runs))
+    return data

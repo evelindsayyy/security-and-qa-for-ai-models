@@ -57,6 +57,15 @@ def _rate_class(rate: float | None) -> str:
     return "rate-weak"
 
 
+def _category_breakdown(findings: list[dict]) -> dict[str, dict[str, int]]:
+    """category -> {"passed": n, "failed": n} from parsed findings."""
+    breakdown: dict[str, dict[str, int]] = {}
+    for f in findings:
+        bucket = breakdown.setdefault(f["category"], {"passed": 0, "failed": 0})
+        bucket["passed" if f["passed"] else "failed"] += 1
+    return breakdown
+
+
 def _summarize_merged_data(data: dict, slug: str, profile: str = "base") -> dict:
     """Build a list-table row from an in-memory MergedSafetyResult-shaped dict."""
     findings = data.get("findings") or []
@@ -91,10 +100,12 @@ def _summarize_merged_data(data: dict, slug: str, profile: str = "base") -> dict
             }
             for suite in _SUITE_ORDER
         ],
+        "suite_rates": {suite: by_suite.get(suite) for suite in _SUITE_ORDER},
         "missing_suites": [_suite_label(s) for s in (data.get("missing_suites") or [])],
         "n_findings": len(findings),
         "n_failed": n_failed,
         "n_passed": len(findings) - n_failed,
+        "category_breakdown": _category_breakdown(_parse_findings(findings)),
         "completed_at": data.get("completed_at") or "—",
         "status": data.get("status") or "unknown",
     }
@@ -331,14 +342,137 @@ def _get_safety_detail_files(
 
 
 def get_safety_data() -> dict:
-    try:
-        from frontend import safety_db_data
+    from frontend import safety_db_data
+    from frontend.db_fallback import get_data_with_db_fallback
 
-        if safety_db_data.available():
-            return safety_db_data.get_safety_data_db()
-    except Exception:
-        pass
-    return _get_safety_data_files()
+    data = get_data_with_db_fallback(
+        safety_db_data.available,
+        safety_db_data.get_safety_data_db,
+        _get_safety_data_files,
+    )
+    data["has_safety"] = bool(data.get("models"))
+    data.update(_build_safety_comparison_section(data.get("models") or []))
+    return data
+
+
+_SUITE_BADGE = {
+    "promptfoo_duke_policy_v1": "badge-policy",
+    "promptfoo_duke_redteam_v1": "badge-redteam",
+    "garak_subset_v1": "badge-garak",
+}
+
+
+def _safety_matrix_cell(model: dict, suite: str) -> dict | None:
+    rate = (model.get("suite_rates") or {}).get(suite)
+    if rate is None:
+        return None
+    return {
+        "display": _pass_rate_display(rate),
+        "score_class": _rate_class(rate),
+        "slug": model.get("slug"),
+        "profile": model.get("profile", "base"),
+    }
+
+
+def _build_safety_comparison_section(models: list[dict]) -> dict:
+    """Pivot safety runs into suite×model pass-rate matrix."""
+    from frontend.reference_constants import order_models
+
+    if not models:
+        return {"has_comparison": False, "comparison_models": [], "comparison_rows": []}
+
+    by_model: dict[str, dict] = {}
+    for m in models:
+        name = m.get("gateway_model_id") or m.get("display_name")
+        if not name:
+            continue
+        existing = by_model.get(name)
+        if existing is None or (m.get("profile") == "base" and existing.get("profile") != "base"):
+            by_model[name] = m
+
+    comparison_models = order_models(by_model.keys())
+    comparison_rows: list[dict] = []
+    for suite in _SUITE_ORDER:
+        cells: dict[str, dict] = {}
+        for model_name in comparison_models:
+            row = by_model.get(model_name)
+            if not row:
+                continue
+            cell = _safety_matrix_cell(row, suite)
+            if cell:
+                cells[model_name] = cell
+        comparison_rows.append({
+            "key": suite,
+            "label": _suite_label(suite),
+            "badge_class": _SUITE_BADGE.get(suite, "badge-pilot"),
+            "cells": cells,
+        })
+
+    return {
+        "has_comparison": bool(comparison_models),
+        "comparison_models": comparison_models,
+        "comparison_rows": comparison_rows,
+    }
+
+
+def _build_safety_reference_scores(models: list[dict]) -> dict:
+    """Preferred-model × suite pass-rate table from existing public runs."""
+    from frontend.reference_constants import PREFERRED_REFERENCE_MODELS
+
+    by_model: dict[str, dict] = {}
+    for m in models:
+        name = m.get("gateway_model_id") or m.get("display_name")
+        if not name:
+            continue
+        if name not in by_model or m.get("profile") == "base":
+            by_model[name] = m
+
+    reference_models = list(PREFERRED_REFERENCE_MODELS)
+    reference_rows: list[dict] = []
+    for suite in _SUITE_ORDER:
+        cells: dict[str, dict] = {}
+        for model_name in reference_models:
+            row = by_model.get(model_name)
+            if not row:
+                continue
+            cell = _safety_matrix_cell(row, suite)
+            if cell:
+                cells[model_name] = cell
+        reference_rows.append({
+            "key": suite,
+            "label": _suite_label(suite),
+            "badge_class": _SUITE_BADGE.get(suite, "badge-pilot"),
+            "cells": cells,
+        })
+
+    has_scores = any(c for row in reference_rows for c in row["cells"].values())
+    return {
+        "has_reference_scores": has_scores,
+        "reference_models": reference_models,
+        "reference_rows": reference_rows,
+    }
+
+
+def get_safety_rerun_params(
+    slug: str,
+    profile: str = "base",
+    *,
+    visibility: str = "public",
+    owner_user_id: str | None = None,
+) -> dict | None:
+    """Launch-form prefill from a completed safety run."""
+    detail = get_safety_detail(
+        slug, profile, visibility=visibility, owner_user_id=owner_user_id
+    )
+    if detail is None:
+        return None
+    return {
+        "gateway_model": detail.get("gateway_model_id") or detail.get("model"),
+        "redteam_profile": profile,
+        "run_policy": True,
+        "run_redteam": True,
+        "run_garak": True,
+    }
 
 
 def get_safety_detail(
@@ -481,3 +615,70 @@ def delete_safety(
     if not removed_disk and not removed_db:
         return f"no safety result found for {slug!r}/{profile!r}"
     return None
+
+
+def get_safety_guide_data() -> dict:
+    """Rows for the safety reference/guide pages."""
+    models = get_safety_data().get("models") or []
+    example = models[0] if models else None
+    return {
+        "guide_rows": [
+            {
+                "key": "policy",
+                "label": "Policy",
+                "badge_class": "badge-policy",
+                "about": (
+                    "Hand-written Duke IT policy probes — phishing, data handling, "
+                    "acceptable use, and similar institutional rules."
+                ),
+                "procedure": (
+                    "Promptfoo runs curated policy tests against the gateway model; "
+                    "each probe is scored pass/fail."
+                ),
+                "scoring": (
+                    "Per-probe pass rate; weighted 40% in the composite tier. "
+                    "A single curated policy failure can escalate the tier."
+                ),
+            },
+            {
+                "key": "redteam",
+                "label": "Red-team",
+                "badge_class": "badge-redteam",
+                "about": (
+                    "Promptfoo adversarial plugins — jailbreaks, encoding tricks, "
+                    "and plugin-driven attack patterns."
+                ),
+                "procedure": (
+                    "Red-team profile selects attack plugins (base is the default). "
+                    "Plugins generate adversarial prompts automatically."
+                ),
+                "scoring": "Per-probe pass rate; weighted 35% in the composite tier.",
+            },
+            {
+                "key": "garak",
+                "label": "Garak",
+                "badge_class": "badge-garak",
+                "about": (
+                    "Garak automated attack modules — encoding, prompt injection, "
+                    "and other probe families from the Garak toolkit."
+                ),
+                "procedure": (
+                    "Garak runs a Duke-default probe set; optional comma-separated "
+                    "subset on the launch form."
+                ),
+                "scoring": "Per-probe pass rate; weighted 25% in the composite tier.",
+            },
+        ],
+        "has_example": example is not None,
+        "example_slug": example["slug"] if example else None,
+        "example_profile": example.get("profile", "base") if example else "base",
+        "example_model": example["gateway_model_id"] if example else None,
+    }
+
+
+def get_safety_reference_data() -> dict:
+    models = get_safety_data().get("models") or []
+    data = get_safety_guide_data()
+    data["has_reference"] = data["has_example"]
+    data.update(_build_safety_reference_scores(models))
+    return data
