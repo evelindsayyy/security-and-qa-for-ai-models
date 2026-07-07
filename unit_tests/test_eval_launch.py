@@ -114,6 +114,30 @@ class ModelFamilyTest(unittest.TestCase):
         self.assertEqual(eval_launch.model_family("Qwen/Qwen2.5-7B-Instruct"), "qwen")
 
 
+class SuiteMetadataTest(unittest.TestCase):
+    """Each task suite carries a plain-language description + example question,
+    surfaced by get_launch_options for the on-page suite tooltips."""
+
+    def setUp(self) -> None:
+        patcher = mock.patch.object(
+            eval_launch, "candidate_models",
+            return_value=eval_launch._CANDIDATE_FALLBACK)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_every_suite_has_description_and_example(self) -> None:
+        for key, cfg in eval_launch.SUITES.items():
+            self.assertTrue(cfg.get("description"), f"{key} missing description")
+            self.assertTrue(cfg.get("example"), f"{key} missing example")
+
+    def test_launch_options_surfaces_suite_blurbs(self) -> None:
+        opts = eval_launch.get_launch_options()
+        self.assertTrue(opts["suites"])
+        for s in opts["suites"]:
+            self.assertTrue(s.get("description"), f"{s['key']} blurb missing")
+            self.assertTrue(s.get("example"), f"{s['key']} example missing")
+
+
 class BuildCommandTest(unittest.TestCase):
     def test_command_is_argv_list_with_expected_flags(self) -> None:
         cmd = eval_launch.build_command(

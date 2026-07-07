@@ -98,21 +98,32 @@ def model_family(model: str) -> str:
 
 # Suite key -> contract files. Rubric/prompt pairing lives here so the
 # form can't produce the judge-prompt/rubric mismatch the runner rejects.
+# `description` + `example` are the plain-language blurbs shown in the on-page
+# suite tooltips (surfaced via get_launch_options) — content only, no contract.
 SUITES: dict[str, dict] = {
     "it_support_v1": {
         "label": "IT support (12 questions, locked)",
+        "description": "Common Duke IT help-desk questions — passwords, VPN, "
+                       "email, and account access.",
+        "example": "How do I reset my NetID password?",
         "suite": EVALUATOR / "tasks" / "it_support_v1.jsonl",
         "rubric": EVALUATOR / "tasks" / "rubrics" / "it_support.yaml",
         "system_prompt": EVALUATOR / "prompts" / "system" / "it_support_v1.txt",
     },
     "policy_qa_v1.1": {
         "label": "Duke policy Q&A (12 questions, draft)",
+        "description": "Questions about Duke policy, answered with citations to "
+                       "the source.",
+        "example": "What is Duke's policy on sharing student data with a vendor?",
         "suite": EVALUATOR / "tasks" / "policy_qa_v1.1.jsonl",
         "rubric": EVALUATOR / "tasks" / "rubrics" / "policy_qa_v1.yaml",
         "system_prompt": EVALUATOR / "prompts" / "system" / "it_support_v1.txt",
     },
     "summarization_v1": {
         "label": "Document summarization (6 docs, pilot)",
+        "description": "Summarize a document faithfully and concisely, without "
+                       "adding or dropping key facts.",
+        "example": "Summarize a two-page policy memo into three sentences.",
         "suite": EVALUATOR / "tasks" / "summarization_v1.jsonl",
         "rubric": EVALUATOR / "tasks" / "rubrics" / "summarization_v1.yaml",
         "system_prompt": EVALUATOR / "prompts" / "system" / "summarization_v1.txt",
@@ -589,7 +600,13 @@ def get_launch_options() -> dict:
         "candidates": list(candidates),
         "judges": list(JUDGE_MODELS),
         "suites": [
-            {"key": k, "label": v["label"], "n": suite_question_count(k)}
+            {
+                "key": k,
+                "label": v["label"],
+                "n": suite_question_count(k),
+                "description": v.get("description", ""),
+                "example": v.get("example", ""),
+            }
             for k, v in SUITES.items()
         ],
         "families": {m: model_family(m) for m in (*candidates, *JUDGE_MODELS)},
