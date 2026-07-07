@@ -58,40 +58,12 @@ def _rate_class(rate: float | None) -> str:
 
 
 def _category_breakdown(findings: list[dict]) -> dict[str, dict[str, int]]:
-    """category -> {"passed": n, "failed": n}, from already-parsed findings
-    (see _parse_findings) — the per-model input to summarize_category_heatmap."""
+    """category -> {"passed": n, "failed": n} from parsed findings."""
     breakdown: dict[str, dict[str, int]] = {}
     for f in findings:
         bucket = breakdown.setdefault(f["category"], {"passed": 0, "failed": 0})
         bucket["passed" if f["passed"] else "failed"] += 1
     return breakdown
-
-
-def summarize_category_heatmap(rows: list[dict]) -> list[dict]:
-    """Aggregate every model row's category_breakdown into one category x
-    pass/fail heatmap across the whole catalog, worst pass rate first."""
-    totals: dict[str, dict[str, int]] = {}
-    for row in rows:
-        for category, counts in (row.get("category_breakdown") or {}).items():
-            bucket = totals.setdefault(category, {"passed": 0, "failed": 0})
-            bucket["passed"] += counts.get("passed", 0)
-            bucket["failed"] += counts.get("failed", 0)
-
-    heatmap = []
-    for category, counts in totals.items():
-        total = counts["passed"] + counts["failed"]
-        pass_rate = (counts["passed"] / total) if total else None
-        heatmap.append({
-            "category": category,
-            "passed": counts["passed"],
-            "failed": counts["failed"],
-            "total": total,
-            "pass_rate": pass_rate,
-            "pass_rate_display": _pass_rate_display(pass_rate),
-            "rate_class": _rate_class(pass_rate),
-        })
-    heatmap.sort(key=lambda h: h["pass_rate"] if h["pass_rate"] is not None else 1.0)
-    return heatmap
 
 
 def _summarize_merged_data(data: dict, slug: str, profile: str = "base") -> dict:
@@ -377,8 +349,30 @@ def get_safety_data() -> dict:
         safety_db_data.get_safety_data_db,
         _get_safety_data_files,
     )
-    data["category_heatmap"] = summarize_category_heatmap(data.get("models") or [])
+    data["has_safety"] = bool(data.get("models"))
     return data
+
+
+def get_safety_rerun_params(
+    slug: str,
+    profile: str = "base",
+    *,
+    visibility: str = "public",
+    owner_user_id: str | None = None,
+) -> dict | None:
+    """Launch-form prefill from a completed safety run."""
+    detail = get_safety_detail(
+        slug, profile, visibility=visibility, owner_user_id=owner_user_id
+    )
+    if detail is None:
+        return None
+    return {
+        "gateway_model": detail.get("gateway_model_id") or detail.get("model"),
+        "redteam_profile": profile,
+        "run_policy": True,
+        "run_redteam": True,
+        "run_garak": True,
+    }
 
 
 def get_safety_detail(
@@ -521,3 +515,68 @@ def delete_safety(
     if not removed_disk and not removed_db:
         return f"no safety result found for {slug!r}/{profile!r}"
     return None
+
+
+def get_safety_guide_data() -> dict:
+    """Rows for the safety reference/guide pages."""
+    models = get_safety_data().get("models") or []
+    example = models[0] if models else None
+    return {
+        "guide_rows": [
+            {
+                "key": "policy",
+                "label": "Policy",
+                "badge_class": "badge-policy",
+                "about": (
+                    "Hand-written Duke IT policy probes — phishing, data handling, "
+                    "acceptable use, and similar institutional rules."
+                ),
+                "procedure": (
+                    "Promptfoo runs curated policy tests against the gateway model; "
+                    "each probe is scored pass/fail."
+                ),
+                "scoring": (
+                    "Per-probe pass rate; weighted 40% in the composite tier. "
+                    "A single curated policy failure can escalate the tier."
+                ),
+            },
+            {
+                "key": "redteam",
+                "label": "Red-team",
+                "badge_class": "badge-redteam",
+                "about": (
+                    "Promptfoo adversarial plugins — jailbreaks, encoding tricks, "
+                    "and plugin-driven attack patterns."
+                ),
+                "procedure": (
+                    "Red-team profile selects attack plugins (base is the default). "
+                    "Plugins generate adversarial prompts automatically."
+                ),
+                "scoring": "Per-probe pass rate; weighted 35% in the composite tier.",
+            },
+            {
+                "key": "garak",
+                "label": "Garak",
+                "badge_class": "badge-garak",
+                "about": (
+                    "Garak automated attack modules — encoding, prompt injection, "
+                    "and other probe families from the Garak toolkit."
+                ),
+                "procedure": (
+                    "Garak runs a Duke-default probe set; optional comma-separated "
+                    "subset on the launch form."
+                ),
+                "scoring": "Per-probe pass rate; weighted 25% in the composite tier.",
+            },
+        ],
+        "has_example": example is not None,
+        "example_slug": example["slug"] if example else None,
+        "example_profile": example.get("profile", "base") if example else "base",
+        "example_model": example["gateway_model_id"] if example else None,
+    }
+
+
+def get_safety_reference_data() -> dict:
+    data = get_safety_guide_data()
+    data["has_reference"] = data["has_example"]
+    return data

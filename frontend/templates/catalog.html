@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_gateway_host, tier_label %}
+{% from '_macros.html' import tier_label %}
 
 {% block title %}Model catalog{% endblock %}
 
 {% block content %}
 <div class="catalog-page">
   <h1>Model catalog</h1>
-  <p class="sub">
+  <p class="sub catalog-actions">
     {% if gateway_count %}
       <b>{{ gateway_count }}</b> gateway model{{ "" if gateway_count == 1 else "s" }} live
     {% else %}
@@ -14,48 +14,83 @@
     {% endif %}
     · profiles from <code>gateway/catalog.py</code> · prices from the evaluator cost table
     {% if gateway_fetched_at %} · fetched {{ gateway_fetched_at }}{% endif %}
-    <form method="post" action="{{ url_for('gateway_refresh') }}" class="refresh-form">
-      <input type="hidden" name="next" value="{{ url_for('models_catalog') }}">
-      <button type="submit" class="btn-secondary" title="Re-fetch GET /v1/models now">&#8635; Refresh</button>
-    </form>
+    <span class="catalog-action-links">
+      <a class="btn-secondary" href="{{ url_for('compare_models') }}">Compare models</a>
+      <form method="post" action="{{ url_for('gateway_refresh') }}" class="refresh-form">
+        <input type="hidden" name="next" value="{{ url_for('models_catalog') }}">
+        <button type="submit" class="btn-secondary" title="Re-fetch GET /v1/models now">&#8635; Refresh</button>
+      </form>
+    </span>
   </p>
 
   {% if gateway_error %}
   <p class="empty pillar-stat">{{ gateway_error }}</p>
   {% endif %}
 
+  <details class="key">
+    <summary>How this is ranked / how to read</summary>
+    <dl class="legend-grid">
+      <dt>Aggregate rank</dt>
+      <dd>Mean of available pillar sub-scores (0–100) within each category — higher first. Missing pillars are excluded, not counted as zero.</dd>
+      <dt>Scans</dt>
+      <dd>HF artifact scan tier for open-weight models only; closed-source API models show —.</dd>
+      <dt>Safety</dt>
+      <dd>Composite red-team tier from policy + garak + promptfoo probes.</dd>
+      <dt>Eval</dt>
+      <dd>Best Duke judge-suite overall score (/5) across runs.</dd>
+      <dt>Benchmark</dt>
+      <dd>Mean normalized headline score (%) across benchmark kinds run for this model.</dd>
+      <dt>Profile</dt>
+      <dd>Static gateway catalog note — not generated from test results.</dd>
+    </dl>
+  </details>
+
   {% for section in gateway_by_category %}
   <h2 class="section-title">{{ section.label }}</h2>
   <p class="section-hint">
-    exact liteLLM <code>model=</code> strings — copy verbatim (spaces and capitals matter).
+    exact liteLLM <code>model=</code> strings — ranked by cross-pillar aggregate within this section.
   </p>
-  <table class="run-table">
+  <div class="table-wrap">
+  <table class="run-table catalog-table">
     <thead>
       <tr>
+        <th class="col-compare"><span class="sr-only">Compare</span></th>
         <th>Model id</th>
         <th>Profile</th>
         <th class="num">Input $/1M</th>
         <th class="num">Output $/1M</th>
+        <th class="col-nowrap">Scans</th>
         <th class="col-nowrap">Safety</th>
-        <th class="col-nowrap">Pass rate</th>
+        <th class="num">Eval</th>
+        <th class="num">Benchmark</th>
+        <th class="num">Rank</th>
       </tr>
     </thead>
     <tbody>
       {% for m in section.models %}
       {% set rollup = rollup_by_gateway_id.get(m.id) %}
-      {% set safety = rollup.safety if rollup else none %}
-      <tr class="{% if safety %}row-link{% endif %} {% if safety and safety.tier in ('critical', 'high') %}row-warn{% endif %}"
-          {% if safety %}data-href="{{ url_for('model_detail', slug=rollup.slug) }}"{% endif %}>
+      <tr class="row-link {% if rollup.safety and rollup.safety.tier in ('critical', 'high') %}row-warn{% endif %}"
+          data-href="{{ url_for('model_detail', slug=rollup.slug) }}"
+          tabindex="0"
+          role="link"
+          aria-label="Open model detail for {{ m.id }}">
+        <td class="col-compare" onclick="event.stopPropagation()">
+          <input type="checkbox" class="compare-select" data-slug="{{ rollup.slug }}" aria-label="Select {{ m.id }} for compare">
+        </td>
         <td><span class="model">{{ m.id }}</span></td>
         <td>{{ m.notes or "—" }}</td>
         <td class="num">{{ "$%.2f"|format(m.price_in) if m.price_in is not none else "—" }}</td>
         <td class="num">{{ "$%.2f"|format(m.price_out) if m.price_out is not none else "—" }}</td>
-        <td class="col-nowrap">{% if safety %}{{ tier_label(safety.tier) }}{% else %}<span class="dim">—</span>{% endif %}</td>
-        <td class="col-nowrap">{% if safety %}{{ "%.0f%%"|format(safety.pass_rate * 100) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+        <td class="col-nowrap">{% if rollup.scan %}{{ tier_label(rollup.scan.tier) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+        <td class="col-nowrap">{% if rollup.safety %}{{ tier_label(rollup.safety.tier) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+        <td class="num">{% if rollup.eval and rollup.eval.best_overall is not none %}{{ "%.2f"|format(rollup.eval.best_overall) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+        <td class="num">{% if rollup.benchmark and rollup.benchmark.norm is not none %}{{ "%.0f%%"|format(rollup.benchmark.norm) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+        <td class="num">{% if rollup.aggregate is not none %}{{ "%.0f"|format(rollup.aggregate) }}{% else %}<span class="dim">—</span>{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% endfor %}
 
   {% if gateway_deprecated %}
@@ -79,17 +114,10 @@
   </table>
   {% endif %}
 
-  <section class="key">
-    <h2>How to use this catalog</h2>
-    <ul>
-      <li>Rows are live from the Duke AI Gateway — copy ids exactly (spaces and capitals matter).</li>
-      <li>Use these ids for <a href="{{ url_for('eval_run') }}">efficacy eval</a>,
-          <a href="{{ url_for('benchmarks') }}">public benchmarks</a>, and
-          <a href="{{ url_for('safety') }}">safety</a> runs.</li>
-      <li>Artifact scanning uses Hugging Face repo ids — see <a href="{{ url_for('scans') }}">scan results</a>.</li>
-      <li><b>Prices</b> are USD per 1M tokens (input / output) from the evaluator cost table — a dated snapshot covering priced chat models; others show "—". Verify against current Duke rates before quoting.</li>
-      <li>Refresh: use the button above, or from repo root run <code>{{ cli_gateway_host() }}</code>.</li>
-    </ul>
-  </section>
+  <div class="compare-bar" id="compare-bar" hidden>
+    <button type="button" class="btn-primary" id="compare-selected-btn">Compare selected (0)</button>
+    <a class="btn-secondary" href="{{ url_for('compare_models') }}">Open compare page</a>
+  </div>
 </div>
+<script src="{{ url_for('static', filename='compare-panel.js') }}"></script>
 {% endblock %}

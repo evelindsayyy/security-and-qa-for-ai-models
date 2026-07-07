@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_safety_docker, progress_terminal, start_button, delete_button, tier_label, source_badge, private_badge, back_link with context %}
+{% from '_macros.html' import expandable, cli_safety_docker, progress_terminal, start_button, delete_button, tier_label, source_badge, private_badge, back_link, rerun_button with context %}
 
 {% block title %}{% if missing %}Safety not found{% else %}{{ gateway_model_id }} — safety{% endif %}{% endblock %}
 
@@ -43,6 +43,7 @@
     {% endif %}
 
     <p class="detail-delete-form">
+      {{ rerun_button(url_for('safety_run_new', from=slug, profile=profile), '↻ Run again') }}
       {{ delete_button(url_for('safety_delete_private' if is_private else 'safety_delete', slug=slug, profile=profile)) }}
     </p>
 

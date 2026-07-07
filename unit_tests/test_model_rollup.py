@@ -125,5 +125,57 @@ class GetModelRollupTest(unittest.TestCase):
         self.assertIsNone(row)
 
 
+class AggregateScoreTest(unittest.TestCase):
+    def test_pillar_subscores_normalize_to_0_100(self) -> None:
+        row = {
+            "scan": {"overall_risk_score": 20},
+            "safety": {"pass_rate": 0.8},
+            "eval": {"best_overall": 4.0},
+            "benchmark": {"kinds": {"mmlu": {"headline_value": 0.7}}},
+        }
+        sub = model_rollup.pillar_subscores(row)
+        self.assertAlmostEqual(sub["scan"], 80.0)
+        self.assertAlmostEqual(sub["safety"], 80.0)
+        self.assertAlmostEqual(sub["eval"], 80.0)
+        self.assertAlmostEqual(sub["benchmark"], 70.0)
+
+    def test_aggregate_mean_excludes_missing_pillars(self) -> None:
+        row = {
+            "safety": {"pass_rate": 0.9},
+            "eval": {"best_overall": 5.0},
+        }
+        self.assertAlmostEqual(model_rollup.aggregate_score(row), 95.0)
+
+    def test_aggregate_none_when_no_data(self) -> None:
+        self.assertIsNone(model_rollup.aggregate_score({}))
+
+    def test_enrich_row_attaches_aggregate_and_norm(self) -> None:
+        row = {
+            "slug": "gpt-4.1-mini",
+            "display_name": "GPT 4.1 Mini",
+            "safety": {"pass_rate": 0.5},
+            "benchmark": {"kinds": {"tqa": {"headline_value": 0.6}}},
+        }
+        enriched = model_rollup.enrich_row(row)
+        self.assertAlmostEqual(enriched["aggregate"], 55.0)
+        self.assertAlmostEqual(enriched["benchmark"]["norm"], 60.0)
+        self.assertIn("inputs_hash", enriched)
+
+
+class LookupRollupTest(unittest.TestCase):
+    def test_lookup_returns_empty_gateway_shell(self) -> None:
+        patches = _patched()
+        with patches[0], patches[1], patches[2], patches[3]:
+            row = model_rollup.lookup_rollup_for_gateway("GPT 4.1 Mini")
+        self.assertEqual(row["slug"], "gpt-4.1-mini")
+        self.assertIsNone(row["aggregate"])
+        self.assertIsNone(row["safety"])
+
+    def test_empty_gateway_rollup_has_inputs_hash(self) -> None:
+        row = model_rollup.empty_gateway_rollup("GPT 4.1 Mini")
+        self.assertEqual(row["display_name"], "GPT 4.1 Mini")
+        self.assertIn("inputs_hash", row)
+
+
 if __name__ == "__main__":
     unittest.main()

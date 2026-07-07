@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_scan_docker, start_button, delete_button, tier_label with context %}
+{% from '_macros.html' import expandable, cli_scan_docker, start_button, delete_button, tier_label, rerun_button with context %}
 
 {% block title %}HF artifact scans{% endblock %}
 
@@ -8,8 +8,8 @@
   <h1>HF artifact scans</h1>
   <p>{{ start_button(url_for('scan_run_new'), '▶ Start a new scan') }}</p>
 
-  <section class="key">
-    <h2>How to read this</h2>
+  <details class="key">
+    <summary>How to read this</summary>
     <dl class="legend-grid">
       <dt>Tier</dt>
       <dd>Worst severity across ModelScan, Fickling, ModelAudit, dependencies, and secrets — max, not averaged.</dd>
@@ -18,7 +18,7 @@
       <dt>Fickling</dt>
       <dd><code>LIKELY_UNSAFE</code> on benign PyTorch pickles often leaves tier <b>low</b>.</dd>
     </dl>
-  </section>
+  </details>
 
   {% if not has_scans %}
     <p class="sub">
@@ -58,6 +58,7 @@
           <td class="col-long dim">{{ expandable(s.severity_summary, clamp=1) }}</td>
           <td class="col-nowrap dim">{{ s.scanned_at[:10] if s.scanned_at != "—" else "—" }}</td>
           <td class="col-actions" onclick="event.stopPropagation()">
+            {{ rerun_button(url_for('scan_run_new', from=s.slug)) }}
             {{ delete_button(url_for('scan_delete_private' if view_mode == 'private' else 'scan_delete', slug=s.slug), 'Delete', classes='btn-danger btn-sm') }}
           </td>
         </tr>

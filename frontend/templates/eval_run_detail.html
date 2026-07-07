@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button, private_badge, back_link with context %}
+{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button, private_badge, back_link, rerun_button with context %}
 
 {% block title %}{% if missing %}Run not found{% else %}{{ candidate_model }} — run{% endif %}{% endblock %}
 
@@ -77,6 +77,7 @@
     </p>
 
     <p class="detail-delete-form">
+      {{ rerun_button(url_for('eval_run_new', from=slug), '↻ Run again') }}
       {{ delete_button(url_for('eval_run_delete_private' if is_private else 'eval_run_delete', slug=slug)) }}
     </p>
 

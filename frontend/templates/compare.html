@@ -19,6 +19,17 @@
   {% if requested_slugs and not rollups %}
   <p class="empty">None of the requested slugs matched a known model — check the slug in each model's <code>/models/&lt;slug&gt;</code> URL.</p>
   {% elif rollups %}
+  {% if compare_summary and rollups|length >= 2 %}
+  <section class="key">
+    <h2>Comparison summary
+      <span class="dim">({% if compare_summary.source == 'ai' %}AI{% else %}rules v1{% endif %})</span>
+    </h2>
+    <p>{{ compare_summary.summary }}</p>
+    {% if compare_summary.tradeoffs %}
+    <ul>{% for t in compare_summary.tradeoffs %}<li>{{ t }}</li>{% endfor %}</ul>
+    {% endif %}
+  </section>
+  {% endif %}
   {% if unmatched %}
   <p class="sub dim">Not found: {{ unmatched|join(', ') }}</p>
   {% endif %}

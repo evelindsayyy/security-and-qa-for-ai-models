@@ -6,6 +6,9 @@
 <div class="eval-comparison">
   <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
   <h1>Start a safety run</h1>
+  {% if rerun %}
+  <p class="sub benchmark-rerun-hint">Pre-filled from a previous run — adjust settings if needed, then start.</p>
+  {% endif %}
   <p class="sub">
     Launches <code>safety.run</code> via Docker Compose (default) — Promptfoo, Garak, and merge.
     Full runs can take 30–90 minutes per model.
@@ -70,6 +73,7 @@
   const HAS_RESULTS = {{ model_has_results | tojson }};
   const MODEL_SLUGS = {{ model_slugs | tojson }};
   const INFLIGHT = new Set({{ inflight_safety_keys | tojson }});
+  const RERUN = {{ rerun | default(none) | tojson }};
 
   const modelSel   = document.getElementById("gateway_model");
   const profileSel = document.getElementById("redteam_profile");
@@ -81,6 +85,18 @@
   const submitBtn  = document.getElementById("submit-btn");
   const warning    = document.getElementById("overwrite-warning");
   const inflightWarning = document.getElementById("inflight-warning");
+
+  function applyRerunPrefill() {
+    if (!RERUN) return;
+    if (RERUN.gateway_model) {
+      const match = [...modelSel.options].find((o) => o.value === RERUN.gateway_model);
+      if (match) modelSel.value = RERUN.gateway_model;
+    }
+    if (RERUN.redteam_profile) profileSel.value = RERUN.redteam_profile;
+    if (RERUN.run_policy != null) policyBox.checked = RERUN.run_policy;
+    if (RERUN.run_redteam != null) redteamBox.checked = RERUN.run_redteam;
+    if (RERUN.run_garak != null) garakBox.checked = RERUN.run_garak;
+  }
 
   function inflightKey() {
     const slug = MODEL_SLUGS[modelSel.value] || modelSel.value;
@@ -106,6 +122,7 @@
   redteamBox.addEventListener("change", updateUI);
   garakBox.addEventListener("change", updateUI);
 
+  applyRerunPrefill();
   updateUI();
 })();
 </script>

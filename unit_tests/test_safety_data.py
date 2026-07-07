@@ -109,26 +109,7 @@ class CategoryHeatmapTest(unittest.TestCase):
             "leakage": {"passed": 1, "failed": 0},
         })
 
-    def test_summarize_category_heatmap_aggregates_across_rows_worst_first(self) -> None:
-        rows = [
-            {"category_breakdown": {"jailbreak": {"passed": 1, "failed": 3}}},
-            {"category_breakdown": {"jailbreak": {"passed": 3, "failed": 1}},
-             "category_breakdown_2": None},
-            {"category_breakdown": {"policy": {"passed": 4, "failed": 0}}},
-        ]
-        heatmap = safety_data.summarize_category_heatmap(rows)
-        by_category = {h["category"]: h for h in heatmap}
-        self.assertEqual(by_category["jailbreak"]["passed"], 4)
-        self.assertEqual(by_category["jailbreak"]["failed"], 4)
-        self.assertEqual(by_category["jailbreak"]["pass_rate"], 0.5)
-        self.assertEqual(by_category["policy"]["pass_rate"], 1.0)
-        # worst (lowest pass rate) first
-        self.assertEqual(heatmap[0]["category"], "jailbreak")
-
-    def test_empty_rows_returns_empty_heatmap(self) -> None:
-        self.assertEqual(safety_data.summarize_category_heatmap([]), [])
-
-    def test_get_safety_data_attaches_heatmap(self) -> None:
+    def test_get_safety_data_has_models_flag(self) -> None:
         self._write_merged(
             "gpt-5.5",
             {
@@ -145,9 +126,8 @@ class CategoryHeatmapTest(unittest.TestCase):
 
         with mock.patch.object(safety_db_data, "available", return_value=False):
             data = safety_data.get_safety_data()
-        self.assertIn("category_heatmap", data)
-        categories = {h["category"] for h in data["category_heatmap"]}
-        self.assertEqual(categories, {"policy", "jailbreak"})
+        self.assertTrue(data["has_safety"])
+        self.assertNotIn("category_heatmap", data)
 
 
 if __name__ == "__main__":

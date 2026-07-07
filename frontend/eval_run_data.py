@@ -460,6 +460,20 @@ def get_run_detail(
     return _get_run_detail_files(slug, visibility=visibility, owner_user_id=owner_user_id)
 
 
+def get_eval_rerun_params(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
+    """Launch-form prefill from a completed eval run."""
+    detail = get_run_detail(slug, visibility=visibility, owner_user_id=owner_user_id)
+    if detail is None:
+        return None
+    return {
+        "candidate_model": detail.get("candidate_model"),
+        "judge_model": detail.get("judge_model"),
+        "suite": detail.get("suite_version") or detail.get("suite"),
+    }
+
+
 _EVAL_ARTIFACT_SUFFIXES = (".jsonl", ".log", "_trace.jsonl")
 
 
@@ -513,3 +527,66 @@ def delete_eval_run(
     if removed_files == 0 and not removed_db:
         return f"no eval run found for slug {slug!r}"
     return None
+
+
+_EVAL_SUITE_ABOUT = {
+    "it_support": (
+        "Duke IT-support scenarios — troubleshooting, policy Q&A, and ticket-style "
+        "requests scored against reference answers."
+    ),
+    "plain_language": (
+        "Plain-language rewriting — dense bureaucratic passages rewritten for a "
+        "general audience; faithfulness and clarity weighted in the rubric."
+    ),
+    "email_drafting": (
+        "Professional email drafting — tone, structure, and constraint handling "
+        "for Duke-flavored workplace scenarios."
+    ),
+    "tutoring": (
+        "Tutoring scenarios — confused students asking for help; pedagogy and "
+        "misconception correction weighted highest."
+    ),
+    "robustness": (
+        "Robustness perturbations — same base questions with typos, informal "
+        "phrasing, and ambiguity to measure score stability."
+    ),
+}
+
+
+def get_eval_guide_data() -> dict:
+    """Rows for the eval reference/guide pages."""
+    from frontend.eval_launch import SUITES, suite_question_count
+
+    runs = get_runs_data().get("runs") or []
+    example = runs[0] if runs else None
+    rows = []
+    for key, cfg in SUITES.items():
+        rows.append({
+            "key": key,
+            "label": cfg["label"],
+            "badge_class": "badge-eval",
+            "about": _EVAL_SUITE_ABOUT.get(key, cfg.get("label", key)),
+            "procedure": (
+                f"LLM-as-judge scores each of {suite_question_count(key)} questions "
+                "against a reference answer using the suite rubric."
+            ),
+            "scoring": (
+                "Per-dimension rubric scores (usually 1–5) roll up to an overall "
+                "0–5 headline; higher is better."
+            ),
+            "default_sample": suite_question_count(key),
+            "sample_unit": "questions",
+        })
+    return {
+        "guide_rows": rows,
+        "has_example": example is not None,
+        "example_slug": example["slug"] if example else None,
+        "example_model": example["candidate_model"] if example else None,
+        "example_suite": example["suite"] if example else None,
+    }
+
+
+def get_eval_reference_data() -> dict:
+    data = get_eval_guide_data()
+    data["has_reference"] = data["has_example"]
+    return data

@@ -478,6 +478,16 @@ def get_scan_detail(
     return _get_scan_detail_files(slug, visibility=visibility, owner_user_id=owner_user_id)
 
 
+def get_scan_rerun_params(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
+    """Launch-form prefill from a completed scan."""
+    detail = get_scan_detail(slug, visibility=visibility, owner_user_id=owner_user_id)
+    if detail is None:
+        return None
+    return {"hf_repo": detail.get("model_id") or detail.get("hf_repo")}
+
+
 def delete_scan_paths(
     slug: str, *, visibility: str = "public", owner_user_id: str | None = None
 ) -> list[str]:

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Safety reference{% endblock %}
+
+{% block content %}
+<div class="eval-comparison">
+  <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
+  {% if has_reference %}
+  <aside class="benchmark-reference-callout benchmark-reference-callout--compact" aria-label="Safety reference and guide">
+    <div class="benchmark-reference-callout-text">
+      <p class="benchmark-reference-callout-title">Reference &amp; safety guide</p>
+      <p class="benchmark-reference-callout-desc">
+        How policy, red-team, and Garak suites combine into the composite tier — use as orientation, not a certification.
+      </p>
+    </div>
+  </aside>
+  {% endif %}
+  <h1>Safety reference</h1>
+  <p class="sub">
+    Tools and scoring for gateway-model red-teaming on this site.
+    {% if has_example %}Sample detail: <a href="{{ url_for('safety_detail', slug=example_slug, profile=example_profile) }}">{{ example_model }}</a>.{% endif %}
+  </p>
+
+  {% with title="How safety testing works", intro="What each suite probes and how pass rates feed the composite tier." %}
+  {% include '_safety_guide.html' %}
+  {% endwith %}
+</div>
+{% endblock %}

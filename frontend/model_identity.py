@@ -34,3 +34,9 @@ def hf_slug(repo_id: str) -> str:
 def hf_repo_id(slug: str) -> str:
     """Output-dir slug -> HF repo id for display (``BAAI--bge`` -> ``BAAI/bge``)."""
     return slug_to_model_id(slug)
+
+
+def gateway_is_hf_scannable(gateway_model_id: str) -> bool:
+    """True when an HF artifact scan is meaningful for this gateway model."""
+    lower = gateway_model_id.lower()
+    return "llama" in lower or "gpt-oss" in lower
