@@ -100,6 +100,7 @@ def _summarize_merged_data(data: dict, slug: str, profile: str = "base") -> dict
             }
             for suite in _SUITE_ORDER
         ],
+        "suite_rates": {suite: by_suite.get(suite) for suite in _SUITE_ORDER},
         "missing_suites": [_suite_label(s) for s in (data.get("missing_suites") or [])],
         "n_findings": len(findings),
         "n_failed": n_failed,
@@ -350,7 +351,106 @@ def get_safety_data() -> dict:
         _get_safety_data_files,
     )
     data["has_safety"] = bool(data.get("models"))
+    data.update(_build_safety_comparison_section(data.get("models") or []))
     return data
+
+
+_SUITE_BADGE = {
+    "promptfoo_duke_policy_v1": "badge-policy",
+    "promptfoo_duke_redteam_v1": "badge-redteam",
+    "garak_subset_v1": "badge-garak",
+}
+
+
+def _safety_matrix_cell(model: dict, suite: str) -> dict | None:
+    rate = (model.get("suite_rates") or {}).get(suite)
+    if rate is None:
+        return None
+    return {
+        "display": _pass_rate_display(rate),
+        "score_class": _rate_class(rate),
+        "slug": model.get("slug"),
+        "profile": model.get("profile", "base"),
+    }
+
+
+def _build_safety_comparison_section(models: list[dict]) -> dict:
+    """Pivot safety runs into suite×model pass-rate matrix."""
+    from frontend.reference_constants import order_models
+
+    if not models:
+        return {"has_comparison": False, "comparison_models": [], "comparison_rows": []}
+
+    by_model: dict[str, dict] = {}
+    for m in models:
+        name = m.get("gateway_model_id") or m.get("display_name")
+        if not name:
+            continue
+        existing = by_model.get(name)
+        if existing is None or (m.get("profile") == "base" and existing.get("profile") != "base"):
+            by_model[name] = m
+
+    comparison_models = order_models(by_model.keys())
+    comparison_rows: list[dict] = []
+    for suite in _SUITE_ORDER:
+        cells: dict[str, dict] = {}
+        for model_name in comparison_models:
+            row = by_model.get(model_name)
+            if not row:
+                continue
+            cell = _safety_matrix_cell(row, suite)
+            if cell:
+                cells[model_name] = cell
+        comparison_rows.append({
+            "key": suite,
+            "label": _suite_label(suite),
+            "badge_class": _SUITE_BADGE.get(suite, "badge-pilot"),
+            "cells": cells,
+        })
+
+    return {
+        "has_comparison": bool(comparison_models),
+        "comparison_models": comparison_models,
+        "comparison_rows": comparison_rows,
+    }
+
+
+def _build_safety_reference_scores(models: list[dict]) -> dict:
+    """Preferred-model × suite pass-rate table from existing public runs."""
+    from frontend.reference_constants import PREFERRED_REFERENCE_MODELS
+
+    by_model: dict[str, dict] = {}
+    for m in models:
+        name = m.get("gateway_model_id") or m.get("display_name")
+        if not name:
+            continue
+        if name not in by_model or m.get("profile") == "base":
+            by_model[name] = m
+
+    reference_models = list(PREFERRED_REFERENCE_MODELS)
+    reference_rows: list[dict] = []
+    for suite in _SUITE_ORDER:
+        cells: dict[str, dict] = {}
+        for model_name in reference_models:
+            row = by_model.get(model_name)
+            if not row:
+                continue
+            cell = _safety_matrix_cell(row, suite)
+            if cell:
+                cells[model_name] = cell
+        reference_rows.append({
+            "key": suite,
+            "label": _suite_label(suite),
+            "badge_class": _SUITE_BADGE.get(suite, "badge-pilot"),
+            "cells": cells,
+        })
+
+    has_scores = any(c for row in reference_rows for c in row["cells"].values())
+    return {
+        "has_reference_scores": has_scores,
+        "reference_models": reference_models,
+        "reference_rows": reference_rows,
+    }
 
 
 def get_safety_rerun_params(
@@ -577,6 +677,8 @@ def get_safety_guide_data() -> dict:
 
 
 def get_safety_reference_data() -> dict:
+    models = get_safety_data().get("models") or []
     data = get_safety_guide_data()
     data["has_reference"] = data["has_example"]
+    data.update(_build_safety_reference_scores(models))
     return data

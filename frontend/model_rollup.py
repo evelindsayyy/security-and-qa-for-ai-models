@@ -14,9 +14,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 
 from frontend import benchmark_data, eval_run_data, safety_data, scan_data
 from frontend.model_identity import gateway_slug, hf_repo_id
+
+_UNION_CACHE: list[dict] | None = None
+_UNION_CACHE_AT: float = 0.0
+_UNION_CACHE_TTL_SEC = 45.0
 
 
 def _row(by_key: dict[str, dict], key: str, display_name: str) -> dict:
@@ -121,13 +126,29 @@ def empty_gateway_rollup(gateway_id: str) -> dict:
     })
 
 
-def lookup_rollup_for_gateway(gateway_id: str) -> dict:
+def clear_models_union_cache() -> None:
+    """Reset in-process union cache (for tests)."""
+    global _UNION_CACHE, _UNION_CACHE_AT
+    _UNION_CACHE = None
+    _UNION_CACHE_AT = 0.0
+
+
+def lookup_rollup_for_gateway(gateway_id: str, *, by_slug: dict[str, dict] | None = None) -> dict:
     """Rollup for a gateway catalog id — merges run data or returns empty shell."""
     slug = gateway_slug(gateway_id)
-    existing = get_model_rollup(slug)
+    if by_slug is not None:
+        existing = by_slug.get(slug)
+    else:
+        existing = get_model_rollup(slug)
     if existing is not None:
         return existing
     return empty_gateway_rollup(gateway_id)
+
+
+def rollups_for_gateway_ids(gateway_ids: list[str]) -> dict[str, dict]:
+    """Batch rollup lookup — builds the union once."""
+    by_slug = {row["slug"]: row for row in get_models_union()}
+    return {gid: lookup_rollup_for_gateway(gid, by_slug=by_slug) for gid in gateway_ids}
 
 
 def _add_scan_rows(by_key: dict[str, dict]) -> None:
@@ -191,17 +212,23 @@ def _add_benchmark_rows(by_key: dict[str, dict]) -> None:
 
 def get_models_union() -> list[dict]:
     """One row per model with data in at least one pillar."""
+    global _UNION_CACHE, _UNION_CACHE_AT
+    now = time.monotonic()
+    if _UNION_CACHE is not None and (now - _UNION_CACHE_AT) < _UNION_CACHE_TTL_SEC:
+        return _UNION_CACHE
+
     by_key: dict[str, dict] = {}
     _add_scan_rows(by_key)
     _add_safety_rows(by_key)
     _add_eval_rows(by_key)
     _add_benchmark_rows(by_key)
-    return [enrich_row(r) for r in sorted(by_key.values(), key=lambda r: r["slug"])]
+    rows = [enrich_row(r) for r in sorted(by_key.values(), key=lambda r: r["slug"])]
+    _UNION_CACHE = rows
+    _UNION_CACHE_AT = now
+    return rows
 
 
 def get_model_rollup(slug: str) -> dict | None:
     """Full cross-pillar rollup for one model, resolved by slug."""
-    for row in get_models_union():
-        if row["slug"] == slug:
-            return row
-    return None
+    by_slug = {row["slug"]: row for row in get_models_union()}
+    return by_slug.get(slug)

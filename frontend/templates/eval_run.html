@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button, pillar_guide_callout, rerun_button with context %}
+{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button, pillar_guide_callout with context %}
 
 {% block title %}Model comparison{% endblock %}
 
@@ -14,7 +14,7 @@
        url_for('eval_reference')
      ) }}
 
-  <details class="key">
+  <details class="key" open>
     <summary>How to read this</summary>
     <dl class="legend-grid">
       <dt>Score columns</dt>
@@ -27,6 +27,10 @@
       <dd>Weighted tradeoff <code>w_Q·quality − w_C·cost − w_L·latency</code> (weights shown above the table); compares models within a suite, not an absolute score.</dd>
       <dt><span class="badge badge-warn">⚠ empty</span></dt>
       <dd>Candidate returned no text (often token budget) — re-run with higher max-tokens before comparing.</dd>
+      {% if has_comparison %}
+      <dt>Compare</dt>
+      <dd>Matrix of overall scores (suite × model). Best run per suite shown when multiple judges exist.</dd>
+      {% endif %}
     </dl>
   </details>
 
@@ -36,6 +40,15 @@
       <code>{{ cli_eval_docker() }}</code>
     </p>
   {% else %}
+    <h2>Runs</h2>
+    <div class="bench-view-tabs" role="tablist" aria-label="Eval results view">
+      <button type="button" class="bench-view-tab is-active" data-view="list" role="tab" aria-selected="true">List</button>
+      {% if has_comparison %}
+      <button type="button" class="bench-view-tab" data-view="compare" role="tab" aria-selected="false">Compare</button>
+      {% endif %}
+    </div>
+
+    <div id="pillar-view-list" class="bench-view-panel" role="tabpanel">
     <p class="sub">
       {{ runs|length }} run{{ "" if runs|length == 1 else "s" }} ·
       {{ n_summary }} question{{ "" if n_summary == "1" else "s" }} ·
@@ -70,7 +83,6 @@
     <table class="run-table" id="runs-table">
       <thead>
         <tr>
-          <th class="col-compare"><span class="sr-only">Compare</span></th>
           <th>Candidate</th>
           <th>Judge</th>
           <th>Suite</th>
@@ -101,9 +113,6 @@
             data-cost="{{ "%.4f"|format(r.total_cost_usd) }}"
             data-qpd="{{ "%.4f"|format(r.cost_perf.quality_per_dollar) if r.cost_perf and r.cost_perf.quality_per_dollar is not none else '' }}"
             data-utility="{{ "%.4f"|format(r.cost_perf.utility) if r.cost_perf else '' }}">
-          <td class="col-compare" onclick="event.stopPropagation()">
-            <input type="checkbox" class="compare-select" data-slug="{{ r.model_slug }}" aria-label="Select {{ r.candidate_model }} for compare">
-          </td>
           <td>
             <a class="model" href="{{ url_for('model_detail', slug=r.model_slug) }}">{{ r.candidate_model }}</a>
             {% if r.is_best %}<span class="badge badge-best">best</span>{% endif %}
@@ -134,7 +143,6 @@
             {% endif %}
           </td>
           <td class="col-actions" onclick="event.stopPropagation()">
-            {{ rerun_button(url_for('eval_run_new', from=r.slug)) }}
             {{ delete_button(url_for('eval_run_delete_private' if view_mode == 'private' else 'eval_run_delete', slug=r.slug), 'Delete', classes='btn-danger btn-sm') }}
           </td>
         </tr>
@@ -142,9 +150,19 @@
       </tbody>
     </table>
     </div>
-    <div class="compare-bar" id="compare-bar" hidden>
-      <button type="button" class="btn-primary" id="compare-selected-btn">Compare selected (0)</button>
     </div>
+
+    {% if has_comparison %}
+    <div id="pillar-view-compare" class="bench-view-panel" role="tabpanel" hidden>
+      <p class="sub">
+        Overall score per suite and model — click a cell for per-question detail.
+        Empty cells mean no run for that suite yet.
+      </p>
+      {% with detail_endpoint='eval_run_detail' %}
+      {% include '_pillar_comparison_matrix.html' %}
+      {% endwith %}
+    </div>
+    {% endif %}
 
     <script src="{{ url_for('static', filename='table-sort.js') }}"></script>
     <script>
@@ -154,7 +172,6 @@
         const nCols = document.querySelectorAll("#runs-table thead th").length;
         let sortKey = "overall", sortDir = -1, groupBy = "";
 
-        // populate filter dropdowns from the rows themselves
         for (const [id, key] of [["f-suite", "suite"], ["f-candidate", "candidate"], ["f-judge", "judge"]]) {
           const sel = document.getElementById(id);
           [...new Set(rows.map(r => r.dataset[key]))].sort().forEach(v => {
@@ -213,7 +230,9 @@
         }
       })();
     </script>
+    {% if has_comparison %}
+    <script src="{{ url_for('static', filename='pillar-view-tabs.js') }}"></script>
+    {% endif %}
   {% endif %}
 </div>
-<script src="{{ url_for('static', filename='compare-panel.js') }}"></script>
 {% endblock %}

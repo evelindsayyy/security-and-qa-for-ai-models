@@ -430,13 +430,114 @@ def get_runs_data() -> dict:
     from frontend import eval_db_data
     from frontend.db_fallback import get_data_with_db_fallback
 
-    return attach_cost_perf(
+    data = attach_cost_perf(
         get_data_with_db_fallback(
             eval_db_data.available,
             eval_db_data.get_runs_data_db,
             _get_runs_data_files,
         )
     )
+    data.update(_build_eval_comparison_section(data.get("runs") or []))
+    return data
+
+
+def _eval_matrix_cell(run: dict) -> dict | None:
+    overall = run.get("overall")
+    if overall is None:
+        return None
+    return {
+        "display": f"{overall:.2f}",
+        "score_class": "",
+        "slug": run.get("slug"),
+    }
+
+
+def _build_eval_comparison_section(runs: list[dict]) -> dict:
+    """Pivot eval runs into suite×model overall matrix."""
+    from frontend.eval_launch import SUITES
+    from frontend.reference_constants import order_models
+
+    if not runs:
+        return {"has_comparison": False, "comparison_models": [], "comparison_rows": []}
+
+    by_suite_model: dict[str, dict[str, dict]] = {}
+    for r in runs:
+        suite = r.get("suite")
+        model = r.get("candidate_model")
+        if not suite or not model:
+            continue
+        bucket = by_suite_model.setdefault(suite, {})
+        existing = bucket.get(model)
+        if existing is None or (r.get("overall") or 0) > (existing.get("overall") or 0):
+            bucket[model] = r
+
+    models_set = {m for per in by_suite_model.values() for m in per}
+    comparison_models = order_models(models_set)
+
+    comparison_rows: list[dict] = []
+    for suite_key in sorted(set(by_suite_model.keys()) | set(SUITES.keys())):
+        label = SUITES.get(suite_key, {}).get("label", suite_key)
+        cells: dict[str, dict] = {}
+        for model_name in comparison_models:
+            row = by_suite_model.get(suite_key, {}).get(model_name)
+            if row:
+                cell = _eval_matrix_cell(row)
+                if cell:
+                    cells[model_name] = cell
+        comparison_rows.append({
+            "key": suite_key,
+            "label": label,
+            "badge_class": "badge-eval",
+            "cells": cells,
+        })
+
+    return {
+        "has_comparison": bool(comparison_models),
+        "comparison_models": comparison_models,
+        "comparison_rows": comparison_rows,
+    }
+
+
+def _build_eval_reference_scores(runs: list[dict]) -> dict:
+    from frontend.eval_launch import SUITES
+    from frontend.reference_constants import PREFERRED_REFERENCE_MODELS
+
+    by_suite_model: dict[str, dict[str, dict]] = {}
+    for r in runs:
+        suite = r.get("suite")
+        model = r.get("candidate_model")
+        if not suite or not model or model not in PREFERRED_REFERENCE_MODELS:
+            continue
+        bucket = by_suite_model.setdefault(suite, {})
+        existing = bucket.get(model)
+        if existing is None or (r.get("overall") or 0) > (existing.get("overall") or 0):
+            bucket[model] = r
+
+    reference_models = list(PREFERRED_REFERENCE_MODELS)
+    reference_rows: list[dict] = []
+    for suite_key in sorted(set(by_suite_model) | set(SUITES)):
+        label = SUITES.get(suite_key, {}).get("label", suite_key)
+        cells: dict[str, dict] = {}
+        for model_name in reference_models:
+            row = by_suite_model.get(suite_key, {}).get(model_name)
+            if row:
+                cell = _eval_matrix_cell(row)
+                if cell:
+                    cells[model_name] = cell
+        if suite_key in by_suite_model or suite_key in SUITES:
+            reference_rows.append({
+                "key": suite_key,
+                "label": label,
+                "badge_class": "badge-eval",
+                "cells": cells,
+            })
+
+    has_scores = any(c for row in reference_rows for c in row["cells"].values())
+    return {
+        "has_reference_scores": has_scores,
+        "reference_models": reference_models,
+        "reference_rows": reference_rows,
+    }
 
 
 def get_run_detail(
@@ -587,6 +688,8 @@ def get_eval_guide_data() -> dict:
 
 
 def get_eval_reference_data() -> dict:
+    runs = get_runs_data().get("runs") or []
     data = get_eval_guide_data()
     data["has_reference"] = data["has_example"]
+    data.update(_build_eval_reference_scores(runs))
     return data

@@ -14,6 +14,7 @@ from frontend import model_rollup
 
 
 def _patched(scans=None, safety_models=None, eval_runs=None, benchmark_runs=None):
+    model_rollup.clear_models_union_cache()
     return (
         mock.patch.object(
             model_rollup.scan_data, "get_scans_data",

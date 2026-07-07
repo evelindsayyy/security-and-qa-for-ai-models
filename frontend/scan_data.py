@@ -43,6 +43,61 @@ def _severity_rank(severity: str) -> int:
         return len(_SEVERITY_ORDER)
 
 
+def _tool_status_from_data(data: dict) -> dict[str, dict]:
+    """Per-scanner status for list rows and comparison matrix."""
+    tool = data.get("tool_results") or {}
+    ms = tool.get("modelscan") or {}
+    fick = tool.get("fickling") or {}
+    ma = tool.get("modelaudit") or {}
+    deps = tool.get("dependencies") or {}
+    sec = tool.get("secrets") or {}
+    status: dict[str, dict] = {}
+    if tool.get("modelscan") is not None or ms:
+        issues = ms.get("total_issues", 0)
+        status["modelscan"] = {
+            "display": str(issues),
+            "score_class": "rate-strong" if issues == 0 else "rate-mid",
+        }
+    if tool.get("fickling") is not None or data.get("fickling_severity"):
+        sev = fick.get("severity") or data.get("fickling_severity") or "—"
+        status["fickling"] = {"display": str(sev), "score_class": ""}
+    if tool.get("modelaudit") is not None or ma:
+        n = ma.get("actionable_issue_count", 0)
+        status["modelaudit"] = {
+            "display": str(n),
+            "score_class": "rate-strong" if n == 0 else "rate-mid",
+        }
+    if tool.get("dependencies") is not None:
+        n = deps.get("vuln_count", 0)
+        status["dependencies"] = {
+            "display": str(n),
+            "score_class": "rate-strong" if n == 0 else "rate-mid",
+        }
+    if tool.get("secrets") is not None:
+        n = sec.get("secret_count", 0)
+        status["secrets"] = {
+            "display": str(n),
+            "score_class": "rate-strong" if n == 0 else "rate-mid",
+        }
+    return status
+
+
+_SCAN_TOOL_ROWS = (
+    ("modelscan", "ModelScan", "badge-scan"),
+    ("fickling", "Fickling", "badge-scan"),
+    ("modelaudit", "ModelAudit", "badge-scan"),
+    ("dependencies", "Dependencies", "badge-scan"),
+    ("secrets", "Secrets", "badge-scan"),
+)
+
+
+def _order_scan_model_ids(model_ids: list[str]) -> list[str]:
+    """Llama-family HF repos first (proxy for preferred reference models)."""
+    preferred = sorted(m for m in model_ids if "llama" in m.lower())
+    other = sorted(m for m in model_ids if m not in preferred)
+    return preferred + other
+
+
 def _tool_snippet(data: dict) -> str:
     """one-line summary of the three scanners for the list table."""
     tool = data.get("tool_results") or {}
@@ -96,6 +151,7 @@ def _summarize_from_data(data: dict, slug: str) -> dict:
         ),
         "scanned_at": scanned_at,
         "tool_snippet": _tool_snippet(data),
+        "tool_status": _tool_status_from_data(data),
         "scanned_file_count": len(data.get("scanned_files") or []),
         "status": data.get("status") or "unknown",
         "fickling_severity": data.get("fickling_severity"),
@@ -454,9 +510,149 @@ def get_scans_data() -> dict:
     from frontend import scan_db_data
     from frontend.db_fallback import get_data_with_db_fallback
 
-    return get_data_with_db_fallback(
+    data = get_data_with_db_fallback(
         scan_db_data.available, scan_db_data.get_scans_data_db, _get_scans_data_files
     )
+    data.update(_build_scan_comparison_section(data.get("scans") or []))
+    return data
+
+
+def _build_scan_comparison_section(scans: list[dict]) -> dict:
+    """Pivot scans into tool×HF-model status matrix."""
+    if not scans:
+        return {"has_comparison": False, "comparison_models": [], "comparison_rows": []}
+
+    by_model = {s["model_id"]: s for s in scans if s.get("model_id")}
+    comparison_models = _order_scan_model_ids(list(by_model.keys()))
+
+    comparison_rows: list[dict] = []
+    for tool_key, label, badge in _SCAN_TOOL_ROWS:
+        cells: dict[str, dict] = {}
+        for model_id in comparison_models:
+            scan = by_model.get(model_id)
+            if not scan:
+                continue
+            tool_cell = (scan.get("tool_status") or {}).get(tool_key)
+            if tool_cell:
+                cells[model_id] = {
+                    **tool_cell,
+                    "slug": scan.get("slug"),
+                }
+        comparison_rows.append({
+            "key": tool_key,
+            "label": label,
+            "badge_class": badge,
+            "cells": cells,
+        })
+
+    return {
+        "has_comparison": bool(comparison_models),
+        "comparison_models": comparison_models,
+        "comparison_rows": comparison_rows,
+    }
+
+
+def _build_scan_reference_scores(scans: list[dict]) -> dict:
+    """Preferred HF repos (llama-first) × tool status reference table."""
+    by_model = {s["model_id"]: s for s in scans if s.get("model_id")}
+    llama_models = [m for m in _order_scan_model_ids(list(by_model)) if "llama" in m.lower()]
+    reference_models = llama_models[:2] if llama_models else _order_scan_model_ids(list(by_model))[:2]
+
+    reference_rows: list[dict] = []
+    for tool_key, label, badge in _SCAN_TOOL_ROWS:
+        cells: dict[str, dict] = {}
+        for model_id in reference_models:
+            scan = by_model.get(model_id)
+            if not scan:
+                continue
+            tool_cell = (scan.get("tool_status") or {}).get(tool_key)
+            if tool_cell:
+                cells[model_id] = tool_cell
+        reference_rows.append({
+            "key": tool_key,
+            "label": label,
+            "badge_class": badge,
+            "cells": cells,
+        })
+
+    has_scores = any(c for row in reference_rows for c in row["cells"].values())
+    return {
+        "has_reference_scores": has_scores,
+        "reference_models": reference_models,
+        "reference_rows": reference_rows,
+    }
+
+
+def get_scan_guide_data(scans: list[dict] | None = None) -> dict:
+    if scans is None:
+        from frontend import scan_db_data
+        from frontend.db_fallback import get_data_with_db_fallback
+
+        scans = get_data_with_db_fallback(
+            scan_db_data.available, scan_db_data.get_scans_data_db, _get_scans_data_files
+        ).get("scans") or []
+    example = scans[0] if scans else None
+    return {
+        "guide_rows": [
+            {
+                "key": "modelscan",
+                "label": "ModelScan",
+                "badge_class": "badge-scan",
+                "about": "Scans model weights and config for known unsafe patterns and suspicious ops.",
+                "procedure": "Runs ModelScan over downloaded HF artifacts before deletion.",
+                "scoring": "Issue counts by severity; contributes to the composite tier.",
+            },
+            {
+                "key": "fickling",
+                "label": "Fickling",
+                "badge_class": "badge-scan",
+                "about": "Pickle safety analysis on PyTorch checkpoint files.",
+                "procedure": "Fickling inspects pickle opcodes in weight files.",
+                "scoring": "Severity label; benign LIKELY_UNSAFE often leaves tier low.",
+            },
+            {
+                "key": "modelaudit",
+                "label": "ModelAudit",
+                "badge_class": "badge-scan",
+                "about": "Static analysis of model repo code and configuration.",
+                "procedure": "ModelAudit scans repository files for risky patterns.",
+                "scoring": "Actionable issue count; worst severity drives tier.",
+            },
+            {
+                "key": "dependencies",
+                "label": "Dependencies",
+                "badge_class": "badge-scan",
+                "about": "pip-audit / OSV scan of declared Python dependencies.",
+                "procedure": "Audits requirements files in the HF repo snapshot.",
+                "scoring": "Vulnerability count from dependency scanners.",
+            },
+            {
+                "key": "secrets",
+                "label": "Secrets",
+                "badge_class": "badge-scan",
+                "about": "TruffleHog scan for leaked credentials in repo files.",
+                "procedure": "Pattern-based secret detection across the snapshot.",
+                "scoring": "Secret count; any hit can escalate tier.",
+            },
+        ],
+        "has_example": example is not None,
+        "example_slug": example["slug"] if example else None,
+        "example_model": example["model_id"] if example else None,
+    }
+
+
+def get_scan_reference_data() -> dict:
+    from frontend import scan_db_data
+    from frontend.db_fallback import get_data_with_db_fallback
+
+    raw = get_data_with_db_fallback(
+        scan_db_data.available, scan_db_data.get_scans_data_db, _get_scans_data_files
+    )
+    scans = raw.get("scans") or []
+    data = get_scan_guide_data(scans)
+    data["has_reference"] = data["has_example"]
+    data.update(_build_scan_reference_scores(scans))
+    return data
 
 
 def get_scan_detail(

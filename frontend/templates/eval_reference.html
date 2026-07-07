@@ -24,5 +24,11 @@
   {% with title="How each eval suite works", intro="What each suite measures and how rubric scores roll up to the overall headline." %}
   {% include '_eval_guide.html' %}
   {% endwith %}
+
+  {% if has_reference_scores %}
+  <h2 class="reference-scores-heading">Reference scores</h2>
+  <p class="sub dim">Preferred gateway models from public runs — use as orientation, not a leaderboard.</p>
+  {% include '_pillar_reference_scores.html' %}
+  {% endif %}
 </div>
 {% endblock %}

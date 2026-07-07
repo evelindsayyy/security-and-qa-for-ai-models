@@ -45,11 +45,22 @@ def _client():
 
 
 class ModelsCatalogRiskColumnTest(unittest.TestCase):
+    def test_rollups_for_gateway_ids_called_once_in_catalog(self) -> None:
+        with mock.patch.object(routes, "get_gateway_catalog", return_value=_GATEWAY), \
+             mock.patch(
+                 "frontend.model_rollup.rollups_for_gateway_ids",
+                 return_value={"GPT 4.1 Mini": _ROLLUP_ROW},
+             ) as batch_mock:
+            resp = _client().get("/models")
+        batch_mock.assert_called_once()
+        self.assertEqual(batch_mock.call_args[0][0], ["GPT 4.1 Mini"])
+        self.assertEqual(resp.status_code, 200)
+
     def test_tier_badge_renders_for_matched_model(self) -> None:
         with mock.patch.object(routes, "get_gateway_catalog", return_value=_GATEWAY), \
              mock.patch(
-                 "frontend.model_rollup.lookup_rollup_for_gateway",
-                 return_value=_ROLLUP_ROW,
+                 "frontend.model_rollup.rollups_for_gateway_ids",
+                 return_value={"GPT 4.1 Mini": _ROLLUP_ROW},
              ):
             resp = _client().get("/models")
         self.assertEqual(resp.status_code, 200)
@@ -72,8 +83,8 @@ class ModelsCatalogRiskColumnTest(unittest.TestCase):
         }
         with mock.patch.object(routes, "get_gateway_catalog", return_value=_GATEWAY), \
              mock.patch(
-                 "frontend.model_rollup.lookup_rollup_for_gateway",
-                 return_value=empty,
+                 "frontend.model_rollup.rollups_for_gateway_ids",
+                 return_value={"GPT 4.1 Mini": empty},
              ):
             resp = _client().get("/models")
         self.assertEqual(resp.status_code, 200)

@@ -1,0 +1,32 @@
+{# Reference score table — expects reference_models, reference_rows (no links) #}
+<div class="table-wrap">
+<table class="run-table reference-table">
+  <thead>
+    <tr>
+      <th>Tool / suite</th>
+      {% for m in reference_models %}
+      <th class="num">{{ m }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in reference_rows %}
+    <tr>
+      <td class="reference-benchmark-cell">
+        <span class="badge {{ row.badge_class }}">{{ row.label }}</span>
+      </td>
+      {% for m in reference_models %}
+      {% set cell = row.cells.get(m) %}
+      <td class="num">
+        {% if cell %}
+        <span class="reference-score-link {{ cell.score_class }}">{{ cell.display }}</span>
+        {% else %}
+        <span class="dim">—</span>
+        {% endif %}
+      </td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>

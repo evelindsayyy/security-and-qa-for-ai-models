@@ -44,8 +44,6 @@ def _hub_context() -> dict:
     safety_worst_tier = "—"
     benchmark_has = False
     benchmark_count = 0
-    benchmark_has_reference = False
-    benchmark_latest = None
 
     try:
         from frontend.scan_data import get_scans_data
@@ -83,13 +81,11 @@ def _hub_context() -> dict:
         pass
 
     try:
-        from frontend.benchmark_data import get_benchmark_latest_for_hub, get_benchmarks_data
+        from frontend.benchmark_data import get_benchmarks_data
 
         bench = get_benchmarks_data()
         benchmark_has = bench["has_runs"]
         benchmark_count = len(bench["runs"])
-        benchmark_has_reference = bench.get("has_reference", False)
-        benchmark_latest = get_benchmark_latest_for_hub(bench.get("all_runs") or [])
     except Exception:
         pass
 
@@ -111,8 +107,6 @@ def _hub_context() -> dict:
         "safety_worst_tier": safety_worst_tier,
         "benchmark_has": benchmark_has,
         "benchmark_count": benchmark_count,
-        "benchmark_has_reference": benchmark_has_reference,
-        "benchmark_latest": benchmark_latest,
     }
 
 
@@ -126,6 +120,12 @@ def register_routes(app):
         from frontend.scan_data import get_scans_data
 
         return render_template("scans.html", **get_scans_data())
+
+    @app.route("/scans/reference")
+    def scan_reference():
+        from frontend.scan_data import get_scan_reference_data
+
+        return render_template("scan_reference.html", **get_scan_reference_data())
 
     @app.route("/scans/new")
     @require_login()
@@ -1114,9 +1114,9 @@ def register_routes(app):
         from frontend import model_rollup
 
         gw = get_gateway_catalog()
-        rollup_by_gateway_id = {
-            m["id"]: model_rollup.lookup_rollup_for_gateway(m["id"]) for m in gw["models"]
-        }
+        rollup_by_gateway_id = model_rollup.rollups_for_gateway_ids(
+            [m["id"] for m in gw["models"]]
+        )
         gateway_by_category = []
         for section in gw["by_category"]:
             models = sorted(

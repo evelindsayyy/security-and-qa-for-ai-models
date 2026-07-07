@@ -33,10 +33,6 @@ Every pillar has two independent data slices, selected by the public/private tog
 
 Public and private runs of the same model never collide on disk or share a URL (`/scans/<slug>` vs `/scans/<slug>/private`, same pattern for safety/eval/benchmarks).
 
-## Cross-pillar model rollup
-
-`frontend/model_rollup.py` unions scan (HF repo id space) and safety/eval/benchmark (gateway id space) into one row per model. No shared `models` Postgres table yet — nullable `model_id` FK placeholders only. Surfaces at `/models`, `/models/<slug>`, `/compare`, and `GET /api/models` (`api/models.py`). Recommendations: `frontend/recommendation_rules.py` (rules v1).
-
 ## Shared helpers (reuse before duplicating)
 
 | Module | Role |

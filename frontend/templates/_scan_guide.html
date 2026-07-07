@@ -1,12 +1,12 @@
 <details class="tool-panel benchmark-guide-panel" open>
-  <summary>{{ title or "How safety testing works" }}</summary>
+  <summary>{{ title or "How HF scanning works" }}</summary>
   <div class="benchmark-guide-body">
     {% if intro %}
     <p class="sub">{{ intro }}</p>
     {% else %}
     <p class="sub">
-      Each suite probes a different attack surface. Results merge into a composite tier
-      (policy 40%, red-team 35%, Garak 25%, renormalized when a suite is skipped).
+      Each scanner checks a different artifact risk surface. Results merge into a
+      composite tier (worst severity wins, not averaged).
     </p>
     {% endif %}
 
@@ -20,7 +20,7 @@
       {% endif %}
       <dl class="benchmark-guide-dl">
         {% if row.procedure %}
-        <dt>What happens in a run</dt>
+        <dt>What happens in a scan</dt>
         <dd>{{ row.procedure }}</dd>
         {% endif %}
         {% if row.scoring %}
@@ -33,10 +33,8 @@
 
     {% if has_example and example_slug %}
     <p class="dim benchmark-guide-source">
-      Example run:
-      <a href="{{ url_for('safety_detail', slug=example_slug, profile=example_profile) }}">
-        {{ example_model }} ({{ example_profile }})
-      </a>
+      Example scan:
+      <a href="{{ url_for('scan_detail', slug=example_slug) }}">{{ example_model }}</a>
     </p>
     {% endif %}
   </div>

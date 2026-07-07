@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import cli_safety_docker, cli_safety_host, start_button, delete_button, tier_label, pillar_guide_callout, rerun_button with context %}
+{% from '_macros.html' import cli_safety_docker, cli_safety_host, start_button, delete_button, tier_label, pillar_guide_callout with context %}
 
 {% block title %}Safety red-team{% endblock %}
 
@@ -14,7 +14,7 @@
        url_for('safety_reference')
      ) }}
 
-  <details class="key">
+  <details class="key" open>
     <summary>How to read this</summary>
     <dl class="legend-grid">
       <dt><span class="tier tier-low">Tier</span></dt>
@@ -23,6 +23,10 @@
       <dd>Share of all probes the model resisted across suites that ran.</dd>
       <dt>Suite columns</dt>
       <dd>Per-suite pass rates — policy (hand-written Duke rules), red-team (Promptfoo adversarial plugins), Garak (automated attack modules).</dd>
+      {% if has_comparison %}
+      <dt>Compare</dt>
+      <dd>Matrix of per-suite pass rates (suite × model). Empty cells mean that suite did not run for that model.</dd>
+      {% endif %}
     </dl>
   </details>
 
@@ -33,6 +37,15 @@
       <span class="dim">(host: <code>{{ cli_safety_host() }}</code>)</span>
     </p>
   {% else %}
+    <h2>Runs</h2>
+    <div class="bench-view-tabs" role="tablist" aria-label="Safety results view">
+      <button type="button" class="bench-view-tab is-active" data-view="list" role="tab" aria-selected="true">List</button>
+      {% if has_comparison %}
+      <button type="button" class="bench-view-tab" data-view="compare" role="tab" aria-selected="false">Compare</button>
+      {% endif %}
+    </div>
+
+    <div id="pillar-view-list" class="bench-view-panel" role="tabpanel">
     <p class="sub">
       {{ models|length }} model{{ "" if models|length == 1 else "s" }} ·
       highest risk first
@@ -42,7 +55,6 @@
     <table class="run-table">
       <thead>
         <tr>
-          <th class="col-compare"><span class="sr-only">Compare</span></th>
           <th>Model</th>
           <th class="col-nowrap">Profile</th>
           <th class="col-nowrap">Tier</th>
@@ -62,9 +74,6 @@
             tabindex="0"
             role="link"
             aria-label="Open safety results for {{ m.gateway_model_id }} ({{ m.profile }})">
-          <td class="col-compare" onclick="event.stopPropagation()">
-            <input type="checkbox" class="compare-select" data-slug="{{ m.slug }}" aria-label="Select {{ m.gateway_model_id }} for compare">
-          </td>
           <td><span class="model">{{ m.gateway_model_id }}</span></td>
           <td class="col-nowrap"><span class="badge">{{ m.profile }}</span></td>
           <td class="col-nowrap">{{ tier_label(m.tier) }}</td>
@@ -75,7 +84,6 @@
           <td class="num dim">{{ m.n_failed }}</td>
           <td class="col-nowrap dim">{{ m.completed_at[:10] if m.completed_at != "—" else "—" }}</td>
           <td class="col-actions" onclick="event.stopPropagation()">
-            {{ rerun_button(url_for('safety_run_new', from=m.slug, profile=m.profile)) }}
             {{ delete_button(url_for('safety_delete_private' if view_mode == 'private' else 'safety_delete', slug=m.slug, profile=m.profile), 'Delete', classes='btn-danger btn-sm') }}
           </td>
         </tr>
@@ -83,10 +91,20 @@
       </tbody>
     </table>
     </div>
-    <div class="compare-bar" id="compare-bar" hidden>
-      <button type="button" class="btn-primary" id="compare-selected-btn">Compare selected (0)</button>
     </div>
+
+    {% if has_comparison %}
+    <div id="pillar-view-compare" class="bench-view-panel" role="tabpanel" hidden>
+      <p class="sub">
+        Per-suite pass rates — click a cell for probe-level detail.
+        Empty cells mean that suite did not run for that model.
+      </p>
+      {% with detail_endpoint='safety_detail' %}
+      {% include '_pillar_comparison_matrix.html' %}
+      {% endwith %}
+    </div>
+    <script src="{{ url_for('static', filename='pillar-view-tabs.js') }}"></script>
+    {% endif %}
   {% endif %}
 </div>
-<script src="{{ url_for('static', filename='compare-panel.js') }}"></script>
 {% endblock %}
