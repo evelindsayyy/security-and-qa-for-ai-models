@@ -427,14 +427,16 @@ def attach_cost_perf(data: dict, weights: CostPerfWeights = BALANCED) -> dict:
 
 
 def get_runs_data() -> dict:
-    try:
-        from frontend import eval_db_data
+    from frontend import eval_db_data
+    from frontend.db_fallback import get_data_with_db_fallback
 
-        if eval_db_data.available():
-            return attach_cost_perf(eval_db_data.get_runs_data_db())
-    except Exception:
-        pass  # any DB hiccup -> files, never a broken page
-    return attach_cost_perf(_get_runs_data_files())
+    return attach_cost_perf(
+        get_data_with_db_fallback(
+            eval_db_data.available,
+            eval_db_data.get_runs_data_db,
+            _get_runs_data_files,
+        )
+    )
 
 
 def get_run_detail(

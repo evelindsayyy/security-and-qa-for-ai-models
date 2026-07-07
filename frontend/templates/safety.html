@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import cli_safety_docker, cli_safety_host, start_button, delete_button with context %}
+{% from '_macros.html' import cli_safety_docker, cli_safety_host, start_button, delete_button, tier_label with context %}
 
 {% block title %}Safety red-team{% endblock %}
 
@@ -32,6 +32,33 @@
       highest risk first
     </p>
 
+    {% if category_heatmap %}
+    <h2>Probe categories across the catalog</h2>
+    <p class="sub dim">Pass rate per finding category, summed across every model above — worst first.</p>
+    <div class="table-wrap">
+    <table class="run-table compact-table">
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th class="num">Pass rate</th>
+          <th class="num">Passed</th>
+          <th class="num">Failed</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in category_heatmap %}
+        <tr class="{% if h.rate_class == 'rate-weak' %}row-warn{% endif %}">
+          <td>{{ h.category }}</td>
+          <td class="num {{ h.rate_class }}">{{ h.pass_rate_display }}</td>
+          <td class="num dim">{{ h.passed }}</td>
+          <td class="num dim">{{ h.failed }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% endif %}
+
     <div class="table-wrap">
     <table class="run-table">
       <thead>
@@ -57,7 +84,7 @@
             aria-label="Open safety results for {{ m.gateway_model_id }} ({{ m.profile }})">
           <td><span class="model">{{ m.gateway_model_id }}</span></td>
           <td class="col-nowrap"><span class="badge">{{ m.profile }}</span></td>
-          <td class="col-nowrap"><span class="tier tier-{{ m.tier }}">{{ m.tier }}</span></td>
+          <td class="col-nowrap">{{ tier_label(m.tier) }}</td>
           <td class="num overall {{ m.pass_rate_class }}">{{ m.pass_rate_display }}</td>
           {% for col in m.suite_columns %}
           <td class="num {{ col.rate_class }}">{{ col.display }}</td>

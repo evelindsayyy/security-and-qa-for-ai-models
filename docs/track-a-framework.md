@@ -69,7 +69,7 @@ Normalized shapes: [`data-model.md`](data-model.md) (`scans`/`findings`, `safety
 | Part | Output (JSON today) | Production |
 |------|---------------------|------------|
 | Scanning | `scanner/` → `scanner/output/<slug>/scan_result.json` (Docker: `scanner/docker/`) | Postgres (ingest) |
-| Safety | `safety/` → `safety/output/<slug>/merged_safety_result.json` (`python -m safety.run` → `safety.merge`) | Postgres (ingest) |
+| Safety | `safety/` → `safety/output/<slug>/<profile>/merged_safety_result.json` (`python -m safety.run` → `safety.merge`) | Postgres (ingest) |
 
 ---
 

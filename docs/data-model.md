@@ -28,9 +28,13 @@ Each pillar run table also has: `visibility` (`public`|`private`), `owner_user_i
 
 ---
 
-## `models`
+## `models` (deferred)
 
-Gateway catalog anchor (and optional HF repo for on-prem).
+**Not implemented in DDL today.** Pillar schemas use string keys (`gateway_model_id`,
+`hf_repo`) and nullable `model_id` FK placeholders. Cross-pillar union is done in
+`frontend/model_rollup.py` at read time, not via a shared `models` table.
+
+Sketch for a future anchor table:
 
 | Column | Type (sketch) | Example |
 |--------|---------------|---------|
@@ -143,7 +147,7 @@ Pydantic types: `safety/schemas.py` (`MergedSafetyResult`, `SafetyFinding`, `Saf
 
 ## `task_suites` / `eval_runs` / `eval_results` (Track B — Duke efficacy)
 
-> **Authoritative DDL: `evaluator/db/efficacy_schema.sql`** (implemented week 4;
+> **Authoritative DDL: `evaluator/db/efficacy_schema.sql`** (implemented;
 > loader: `evaluator/db/load_results.py`, idempotent, dry-run by default).
 > The tables below reflect what is implemented; columns marked *planned* are
 > agreed direction but not yet in the DDL.
@@ -247,7 +251,7 @@ How the model is offered (ITSO). Stored on `models` and/or copied onto `safety_r
 
 ---
 
-## Nutrition label aggregate (`GET /models/{id}`)
+## Nutrition label aggregate (`GET /api/models/<slug>`)
 
 Example shape:
 

@@ -57,6 +57,43 @@ def _rate_class(rate: float | None) -> str:
     return "rate-weak"
 
 
+def _category_breakdown(findings: list[dict]) -> dict[str, dict[str, int]]:
+    """category -> {"passed": n, "failed": n}, from already-parsed findings
+    (see _parse_findings) — the per-model input to summarize_category_heatmap."""
+    breakdown: dict[str, dict[str, int]] = {}
+    for f in findings:
+        bucket = breakdown.setdefault(f["category"], {"passed": 0, "failed": 0})
+        bucket["passed" if f["passed"] else "failed"] += 1
+    return breakdown
+
+
+def summarize_category_heatmap(rows: list[dict]) -> list[dict]:
+    """Aggregate every model row's category_breakdown into one category x
+    pass/fail heatmap across the whole catalog, worst pass rate first."""
+    totals: dict[str, dict[str, int]] = {}
+    for row in rows:
+        for category, counts in (row.get("category_breakdown") or {}).items():
+            bucket = totals.setdefault(category, {"passed": 0, "failed": 0})
+            bucket["passed"] += counts.get("passed", 0)
+            bucket["failed"] += counts.get("failed", 0)
+
+    heatmap = []
+    for category, counts in totals.items():
+        total = counts["passed"] + counts["failed"]
+        pass_rate = (counts["passed"] / total) if total else None
+        heatmap.append({
+            "category": category,
+            "passed": counts["passed"],
+            "failed": counts["failed"],
+            "total": total,
+            "pass_rate": pass_rate,
+            "pass_rate_display": _pass_rate_display(pass_rate),
+            "rate_class": _rate_class(pass_rate),
+        })
+    heatmap.sort(key=lambda h: h["pass_rate"] if h["pass_rate"] is not None else 1.0)
+    return heatmap
+
+
 def _summarize_merged_data(data: dict, slug: str, profile: str = "base") -> dict:
     """Build a list-table row from an in-memory MergedSafetyResult-shaped dict."""
     findings = data.get("findings") or []
@@ -95,6 +132,7 @@ def _summarize_merged_data(data: dict, slug: str, profile: str = "base") -> dict
         "n_findings": len(findings),
         "n_failed": n_failed,
         "n_passed": len(findings) - n_failed,
+        "category_breakdown": _category_breakdown(_parse_findings(findings)),
         "completed_at": data.get("completed_at") or "—",
         "status": data.get("status") or "unknown",
     }
@@ -331,14 +369,16 @@ def _get_safety_detail_files(
 
 
 def get_safety_data() -> dict:
-    try:
-        from frontend import safety_db_data
+    from frontend import safety_db_data
+    from frontend.db_fallback import get_data_with_db_fallback
 
-        if safety_db_data.available():
-            return safety_db_data.get_safety_data_db()
-    except Exception:
-        pass
-    return _get_safety_data_files()
+    data = get_data_with_db_fallback(
+        safety_db_data.available,
+        safety_db_data.get_safety_data_db,
+        _get_safety_data_files,
+    )
+    data["category_heatmap"] = summarize_category_heatmap(data.get("models") or [])
+    return data
 
 
 def get_safety_detail(

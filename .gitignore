@@ -26,7 +26,6 @@ testing/**/output/*
 # removed spike tree (OSV/pip-audit experiments lived elsewhere; no re-add)
 testing/security_scanning_tests/
 .gitlab/gitlab-transfer.md
-context.md
 PROJECT_GUIDE.md
 
 # eval spikes — regenerate locally

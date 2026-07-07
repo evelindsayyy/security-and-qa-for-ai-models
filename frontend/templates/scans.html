@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_scan_docker, start_button, delete_button with context %}
+{% from '_macros.html' import expandable, cli_scan_docker, start_button, delete_button, tier_label with context %}
 
 {% block title %}HF artifact scans{% endblock %}
 
@@ -52,7 +52,7 @@
             role="link"
             aria-label="Open scan for {{ s.model_id }}">
           <td><span class="model">{{ s.model_id }}</span></td>
-          <td class="col-nowrap"><span class="tier tier-{{ s.severity_tier }}">{{ s.severity_tier }}</span></td>
+          <td class="col-nowrap">{{ tier_label(s.severity_tier) }}</td>
           <td class="num overall">{{ s.overall_risk_score }}</td>
           <td class="num dim">{{ s.n_findings }}</td>
           <td class="col-long dim">{{ expandable(s.severity_summary, clamp=1) }}</td>

@@ -1,6 +1,6 @@
 # Safety Postgres ingest (`safety/db/`)
 
-Load `safety/output/<model>/merged_safety_result.json` into `public.safety_runs` and
+Load `safety/output/<model>/<profile>/merged_safety_result.json` into `public.safety_runs` and
 `public.safety_findings` on the shared Duke Postgres (`qa_ai_models`). Built on
 **`dbutils/`** — dry-run by default, idempotent upserts.
 
@@ -54,7 +54,7 @@ LIMIT 20;
 
 | Table | Unique key | Notes |
 |-------|------------|-------|
-| `safety_runs` | `(gateway_model_id, completed_at)` | `completed_at` from `MergedSafetyResult` |
+| `safety_runs` | `(gateway_model_id, redteam_profile, completed_at)` | `completed_at` from `MergedSafetyResult` |
 | `safety_findings` | `(run_id, finding_key)` | `finding_key` = `SafetyFinding.id` UUID |
 
 Re-running the same model produces a **new** row only when `completed_at` changes.

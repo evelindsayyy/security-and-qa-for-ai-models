@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 
 from dbutils import run_lock
 from frontend import docker_launch, run_paths
+from frontend.launch_registry import check_inflight_combo
 from frontend.log_status import run_log_payload, status_message
 from frontend.output_dirs import OutputDirError, ensure_writable_dir, prepare_output_dir
 from frontend.path_safety import is_safe_slug
@@ -268,8 +269,8 @@ def start_run(
         if is_scan_inflight(hf_repo):
             return slug, True, plan.visibility
 
-        existing = _INFLIGHT.get(combo)
-        if existing and _RUNNING.get(existing) is not None and _RUNNING[existing].poll() is None:
+        existing = check_inflight_combo(_RUNNING, _INFLIGHT, combo)
+        if existing:
             return existing, True, plan.visibility
 
         _clear_registry_for_slug(slug)

@@ -92,6 +92,7 @@
         {% if gateway_error %}<span class="dim">({{ gateway_error }})</span>{% endif %}
       {% endif %}
       <a href="{{ url_for('models_catalog') }}">View catalog →</a>
+      <a href="{{ url_for('compare_models') }}">Compare models →</a>
     </span>
     <form method="post" action="{{ url_for('gateway_refresh') }}" class="refresh-form">
       <input type="hidden" name="next" value="{{ url_for('index') }}">

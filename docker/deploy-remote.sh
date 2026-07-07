@@ -68,6 +68,18 @@ if grep -qE '^CADDY_DOMAIN=.+' .env 2>/dev/null; then
   SERVICES+=(caddy)
 fi
 
+APP_PORT="$(grep -E '^APP_PORT=' .env 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+APP_PORT="${APP_PORT:-5000}"
+if ss -ltn 2>/dev/null | grep -q ":${APP_PORT} "; then
+  if ! docker compose --project-name qa-ai-models --env-file .env \
+    "${COMPOSE_FILES[@]}" ps --status running --format '{{.Name}}' 2>/dev/null \
+    | grep -q 'qa-ai-models-web'; then
+    echo "Port ${APP_PORT} is in use by a non-qa-ai-models process — free it before deploy" >&2
+    ss -ltnp 2>/dev/null | grep ":${APP_PORT} " || true
+    exit 1
+  fi
+fi
+
 docker compose --project-name qa-ai-models --env-file .env \
   "${COMPOSE_FILES[@]}" pull web
 
@@ -75,6 +87,7 @@ docker compose --project-name qa-ai-models --env-file .env \
 # HOST_UID / DOCKER_GID from host-env.sh (git pull alone does not restart the process).
 docker compose --project-name qa-ai-models --env-file .env \
   "${COMPOSE_FILES[@]}" \
-  up -d --force-recreate --no-build --pull missing --no-deps "${SERVICES[@]}"
+  up -d --force-recreate --no-build --pull missing --no-deps \
+  --wait --wait-timeout 90 "${SERVICES[@]}"
 
 echo "Deployed ${WEB_IMAGE} at ${DEPLOY_PATH} ($(git rev-parse --short HEAD))"

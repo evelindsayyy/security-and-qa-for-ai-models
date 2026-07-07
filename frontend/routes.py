@@ -1065,7 +1065,14 @@ def register_routes(app):
 
     @app.route("/models")
     def models_catalog():
+        from frontend import model_rollup
+        from frontend.model_identity import gateway_slug
+
         gw = get_gateway_catalog()
+        rollup_by_slug = {row["slug"]: row for row in model_rollup.get_models_union()}
+        rollup_by_gateway_id = {
+            m["id"]: rollup_by_slug.get(gateway_slug(m["id"])) for m in gw["models"]
+        }
         return render_template(
             "catalog.html",
             gateway=gw["models"],
@@ -1075,16 +1082,55 @@ def register_routes(app):
             gateway_fetched_at=gw["fetched_at"],
             gateway_error=gw["error"],
             gateway_deprecated=gw["deprecated"],
+            rollup_by_gateway_id=rollup_by_gateway_id,
         )
 
     @app.route("/models/<slug>")
     def model_detail(slug: str):
+        from frontend import model_rollup, recommendation_rules
         from frontend.eval_run_data import get_model_detail
 
-        detail = get_model_detail(slug)
-        if detail is None:
+        rollup = model_rollup.get_model_rollup(slug)
+        if rollup is None:
             return render_template("model_detail.html", missing=True, slug=slug)
-        return render_template("model_detail.html", missing=False, **detail)
+
+        detail = get_model_detail(slug) or {
+            "model": rollup["display_name"], "runs": [], "dim_columns": [],
+            "n_runs": 0, "suites": [], "best_overall": None, "total_cost_usd": 0,
+        }
+        recommendation = recommendation_rules.build_recommendation(rollup)
+        return render_template(
+            "model_detail.html", missing=False, rollup=rollup, recommendation=recommendation, **detail
+        )
+
+    @app.route("/compare")
+    def compare_models():
+        from flask import request
+
+        from frontend import model_rollup, recommendation_rules
+
+        raw = request.args.get("models", "")
+        slugs = [s for s in (p.strip() for p in raw.split(",")) if s]
+        rollups = []
+        for slug in slugs:
+            rollup = model_rollup.get_model_rollup(slug)
+            if rollup is not None:
+                rollups.append(rollup)
+        recommendations = {r["slug"]: recommendation_rules.build_recommendation(r) for r in rollups}
+        unmatched = [s for s in slugs if s not in {r["slug"] for r in rollups}]
+        benchmark_kinds = sorted({
+            kind
+            for r in rollups
+            for kind in (r.get("benchmark") or {}).get("kinds", {})
+        })
+        return render_template(
+            "compare.html",
+            rollups=rollups,
+            recommendations=recommendations,
+            requested_slugs=slugs,
+            unmatched=unmatched,
+            benchmark_kinds=benchmark_kinds,
+        )
 
     @app.route("/gateway/refresh", methods=["POST"])
     def gateway_refresh():

@@ -86,7 +86,8 @@ def _docker_compose_ready(*, timeout: float = 20.0) -> bool:
         )
         return True
     except (OSError, subprocess.SubprocessError) as exc:
-        log.debug("docker compose version failed: %s", exc)
+        detail = getattr(exc, "stderr", None) or getattr(exc, "stdout", None) or str(exc)
+        log.warning("docker compose version failed: %s", detail.strip() if detail else exc)
         return False
 
 

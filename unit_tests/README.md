@@ -20,18 +20,6 @@ uv run python -m unittest unit_tests.test_risk_scorer -v
 
 Tests mock gateway calls and default to `FRONTEND_LAUNCH_MODE=host` — no Docker or secrets required.
 
-| Test module | Covers |
-|-------------|--------|
-| `test_path_safety` | Slug traversal guards |
-| `test_scan_launch` | HF scan browser launch + Flask routes |
-| `test_safety_launch` | Safety browser launch + Flask routes |
-| `test_safety_data` | Merged safety summarize/detail |
-| `test_promptfoo_exporter` | Promptfoo grading helpers |
-| `test_garak_exporter` | Garak JSONL → SafetyRunResult |
-| `test_garak_report_validation` | Garak report completeness, XDG env, ToxicCommentModel preflight |
-| `test_safety_scorer` | Safety merge + tier calibration (committed fixtures) |
-| `test_safety_launch` | Safety browser launch, stale locks, partial Garak warnings |
-| `test_scanner_*` | ModelAudit filters, dependency merge, secret parse, paths |
-| `test_run_benchmark` | Benchmark slug/stem validation |
+The repo has ~800 tests across 88 `test_*.py` modules (scanner, safety, eval, benchmarks, loaders, `*_db_data`, launchers, `api/`, `model_rollup`, `recommendation_rules`, `db_fallback`, `launch_registry`, routes, and `dbutils/`). Run the full suite with `discover` above rather than maintaining a per-module table here.
 
 Fixtures: `unit_tests/fixtures/`. Live scan output: `scanner/output/` (gitignored on host).

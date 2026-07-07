@@ -26,7 +26,8 @@ Bulk Postgres ingest is CLI-only: `python -m api.ingest` (see [`docs/cli.md`](..
 | GET | `/api/evals/<slug>` | `eval_run_data` |
 | GET | `/api/evals/<slug>/status` | `eval_launch.get_status` |
 | POST | `/api/evals` | `eval_launch` → `202` + `job_id` |
-| GET | `/api/models/<slug>` | `eval_run_data` — rollup across suites |
+| GET | `/api/models` | `model_rollup` — every model with data in >=1 pillar, paged |
+| GET | `/api/models/<slug>` | `model_rollup` — full cross-pillar rollup (scan + safety + eval + benchmark) |
 | GET | `/api/benchmarks` | `benchmark_data` — paged |
 | GET | `/api/benchmarks/<slug>` | `benchmark_data` |
 | GET | `/api/benchmarks/<slug>/status` | `benchmark_launch.get_status` |
@@ -143,13 +144,14 @@ Every response is the same shape:
 | `health.py` | Liveness blueprint |
 | `scans.py` | Scan read/write |
 | `safety.py` | Safety read/write |
-| `evals.py` | Efficacy read/write + model rollup |
+| `evals.py` | Efficacy read/write |
 | `benchmarks.py` | Benchmark read/write |
+| `models.py` | Cross-pillar model list + rollup (`frontend.model_rollup`) |
 | `ingest.py` | CLI orchestrator — `python -m api.ingest` (not a REST route) |
 | `__init__.py` | `register_api(app)` |
 
 ## Planned
 
-| Method | Path | Notes |
-|--------|------|-------|
-| GET | `/api/models` | cross-pillar catalog |
+Nothing outstanding — `GET /api/models` (list) and the full cross-pillar
+`GET /api/models/<slug>` rollup are both live (`api/models.py` →
+`frontend/model_rollup.py`).

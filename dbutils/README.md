@@ -97,7 +97,7 @@ When ``POSTGRES_DSN`` (or ``EFFICACY_DB_DSN``) is set, each pillar calls ``maybe
 | Pillar | Directory | Input |
 |--------|-----------|-------|
 | Scanner | `scanner/db/` | `scanner/output/<slug>/scan_result.json` |
-| Safety | `safety/db/` | `safety/output/<model>/merged_safety_result.json` |
+| Safety | `safety/db/` | `safety/output/<model>/<profile>/merged_safety_result.json` |
 | Evaluator | `evaluator/db/` | `evaluator/results/*.jsonl` (standalone CLI; shares DSN via `api.ingest`) |
 | Benchmarks | `benchmarks/db/` | `benchmarks/results/*.{json,jsonl}` |
 

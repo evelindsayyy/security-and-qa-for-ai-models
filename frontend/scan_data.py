@@ -451,14 +451,12 @@ def _get_scan_detail_files(
 
 
 def get_scans_data() -> dict:
-    try:
-        from frontend import scan_db_data
+    from frontend import scan_db_data
+    from frontend.db_fallback import get_data_with_db_fallback
 
-        if scan_db_data.available():
-            return scan_db_data.get_scans_data_db()
-    except Exception:
-        pass
-    return _get_scans_data_files()
+    return get_data_with_db_fallback(
+        scan_db_data.available, scan_db_data.get_scans_data_db, _get_scans_data_files
+    )
 
 
 def get_scan_detail(

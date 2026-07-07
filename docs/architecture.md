@@ -189,6 +189,7 @@ chat call is identical.
 | Safety | A | `/safety` | Duke Gateway | Planned | `safety_runs`, `safety_findings` |
 | Eval | B | `/eval-run` | Duke Gateway | CLI today; UI future | `eval_runs`, `eval_results` |
 | Benchmark | B | `/benchmarks` | Duke Gateway | Planned | `benchmark_runs` |
+| Cross-pillar | — | `/models`, `/compare` | — | — | Union via `frontend/model_rollup.py` (no `models` table yet) |
 
 All four pillars have optional Postgres ingest. When a DSN is set and reachable, the UI reads Postgres for every pillar (merged
 with artifacts not yet loaded); otherwise it reads artifacts directly.
@@ -205,7 +206,7 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 - **`benchmarks/`** (B) — public benchmarks (IFEval, TruthfulQA, MMLU, ToMi, consistency); ingest + UI read via [`benchmarks/db/`](../benchmarks/db/README.md) and `frontend/benchmark_db_data.py`.
 - **`api/`** — Flask REST under `/api`; see [`api/README.md`](../api/README.md).
 - **`auth/`** — Duke OIDC login, sessions, allowlist; see [`auth/README.md`](../auth/README.md).
-- **`frontend/`** — nutrition-label UI; `frontend/*_data.py` + launch helpers. See [`frontend/README.md`](../frontend/README.md).
+- **`frontend/`** — nutrition-label UI; `frontend/*_data.py` + launch helpers; cross-pillar rollup (`model_rollup.py`, `recommendation_rules.py`). See [`frontend/README.md`](../frontend/README.md).
 
 ## Deployment and hosts
 

@@ -103,7 +103,7 @@ See [`scanner/db/README.md`](db/README.md) for schema apply, load, and verify SQ
 |------|------|
 | `scanner/*.py` | Production |
 | `experiments/` | OSV, Trivy spikes |
-| `unit_tests/` | Host unit tests |
+| `../unit_tests/` | Host unit tests (repo root) |
 | `models/<slug>/` | HF weights **during** scan; auto-deleted after `scan_result.json` (see `SCAN_KEEP_WEIGHTS`) |
 | `output/<slug>/` | Persistent scan JSON + logs (UI / ingest source of truth) |
 | `db/` | Postgres schema + loader (`scan_schema.sql`, `load_scans.py`) |

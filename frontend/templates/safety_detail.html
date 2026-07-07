@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_safety_docker, progress_terminal, start_button, delete_button with context %}
+{% from '_macros.html' import expandable, cli_safety_docker, progress_terminal, start_button, delete_button, tier_label, source_badge, private_badge, back_link with context %}
 
 {% block title %}{% if missing %}Safety not found{% else %}{{ gateway_model_id }} — safety{% endif %}{% endblock %}
 
@@ -11,7 +11,7 @@
     <p class="form-hint">{{ start_button(url_for('safety_run_new'), 'Start a safety run', classes='') }} or CLI: <code>{{ cli_safety_docker() }}</code></p>
     <p><a href="{{ url_for('safety') }}">← all safety results</a></p>
   {% elif running %}
-    <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
+    {{ back_link(url_for('safety'), '← all safety results') }}
     <h1>Safety run in progress</h1>
     <p class="sub"><code>{{ slug }}</code> · profile <span class="badge">{{ profile }}</span> · live log every 5 seconds</p>
     {{ progress_terminal(
@@ -27,10 +27,10 @@
     </p>
     {% endif %}
   {% else %}
-    <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
-    <h1><span class="model">{{ gateway_model_id }}</span> <span class="badge">{{ profile }}</span>{% if is_private %} <span class="badge badge-private" title="Only visible to you">private</span>{% endif %}</h1>
+    {{ back_link(url_for('safety'), '← all safety results') }}
+    <h1><span class="model">{{ gateway_model_id }}</span> <span class="badge">{{ profile }}</span>{% if is_private %} {{ private_badge() }}{% endif %}</h1>
     <p class="sub">
-      <span class="tier tier-{{ tier }}">{{ tier }}</span> ·
+      {{ tier_label(tier) }} ·
       <span class="{{ pass_rate_class }}">{{ pass_rate_display }}</span> pass rate ·
       {{ n_passed }}/{{ n_findings }} probes resisted ·
       completed {{ completed_at[:10] if completed_at != "—" else "—" }}
@@ -90,8 +90,8 @@
               <span class="status-fail">FAIL</span>
             {% endif %}
           </td>
-          <td class="col-nowrap"><span class="tier tier-{{ f.severity }}">{{ f.severity }}</span></td>
-          <td class="col-nowrap"><span class="badge badge-{{ f.source }}">{{ f.source }}</span></td>
+          <td class="col-nowrap">{{ tier_label(f.severity) }}</td>
+          <td class="col-nowrap">{{ source_badge(f.source) }}</td>
           <td class="col-nowrap dim">{{ f.category }}</td>
           <td class="col-long"><code>{{ f.probe_id }}</code></td>
           <td class="col-long">{{ f.title }}</td>
@@ -125,7 +125,7 @@
     <div class="probe-item {% if not f.passed %}probe-fail{% endif %}">
       <div class="probe-item-head">
         {% if f.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
-        <span class="tier tier-{{ f.severity }}">{{ f.severity }}</span>
+        {{ tier_label(f.severity) }}
         <code>{{ f.probe_id }}</code>
       </div>
       {% if f.title %}<div class="probe-item-title">{{ f.title }}</div>{% endif %}
@@ -186,44 +186,6 @@
 </div>
 
 {% if not missing and findings %}
-<script>
-(function () {
-  function toggleRow(row) {
-    const detail = row.nextElementSibling;
-    if (!detail || !detail.classList.contains("finding-detail-row")) return;
-    const open = detail.hidden;
-    detail.hidden = !open;
-    row.setAttribute("aria-expanded", open ? "true" : "false");
-    const ind = row.querySelector(".expand-indicator");
-    if (ind) ind.textContent = open ? "▾" : "▸";
-  }
-
-  document.querySelectorAll("#findings-table .finding-row").forEach(function (row) {
-    row.addEventListener("click", function () { toggleRow(row); });
-    row.addEventListener("keydown", function (e) {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleRow(row); }
-    });
-  });
-
-  const sel = document.getElementById("finding-filter");
-  if (!sel) return;
-  sel.addEventListener("change", function () {
-    const v = sel.value;
-    document.querySelectorAll("#findings-table .finding-row").forEach(function (row) {
-      const passed = row.getAttribute("data-finding-passed");
-      const sev = row.getAttribute("data-finding-severity");
-      const src = row.getAttribute("data-finding-source");
-      const cat = row.getAttribute("data-finding-category");
-      const show = v === "all" || v === passed || v === sev || v === src || v === cat;
-      row.style.display = show ? "" : "none";
-      const detail = row.nextElementSibling;
-      if (detail && detail.classList.contains("finding-detail-row")) {
-        detail.style.display = show ? "" : "none";
-        if (!show) { detail.hidden = true; row.setAttribute("aria-expanded", "false"); }
-      }
-    });
-  });
-})();
-</script>
+<script src="{{ url_for('static', filename='findings-table.js') }}"></script>
 {% endif %}
 {% endblock %}

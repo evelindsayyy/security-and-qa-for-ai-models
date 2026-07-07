@@ -16,13 +16,13 @@
 # Mixes shared-library dimensions (completeness, tone) with two task-specific
 # inline dimensions (clarity, structure).
 #
-# W7 Day-3 (pre-freeze): anchors tightened for discrimination after the live-
+# Pre-freeze calibration: anchors tightened for discrimination after the live-
 # validation ceiling finding (a strong model scored ~5.0 across the board) —
 # added explicit "4" anchors (very good but not excellent) and hardened every
 # "5"/"3" with a concrete, checkable bar. The shared dims (completeness, tone)
 # override the shared anchors inline; weights/scales/dimensions are unchanged.
 #
-# DO NOT EDIT in place after the W7 freeze — copy to v2 and bump the version.
+# DO NOT EDIT in place after the rubric is locked for live use — copy to v2 and bump the version.
 # =============================================================================
 
 rubric_version: "email_drafting_v1"

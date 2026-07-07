@@ -132,6 +132,7 @@
     </table>
     </div>
 
+    <script src="{{ url_for('static', filename='table-sort.js') }}"></script>
     <script>
       (function () {
         const tbody = document.querySelector("#runs-table tbody");
@@ -163,11 +164,6 @@
             render();
           });
         });
-
-        function num(row, key) {
-          const v = parseFloat(row.dataset[key]);
-          return isNaN(v) ? -Infinity : v;
-        }
 
         function render() {
           const fs = document.getElementById("f-suite").value;

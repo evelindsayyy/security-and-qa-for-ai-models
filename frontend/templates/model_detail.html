@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import cli_eval_docker, start_button with context %}
+{% from '_macros.html' import cli_eval_docker, start_button, tier_label with context %}
 
 {% block title %}{% if missing %}Model not found{% else %}{{ model }} — efficacy{% endif %}{% endblock %}
 
@@ -11,7 +11,7 @@
     <p class="form-hint">{{ start_button(url_for('eval_run_new'), 'Start an eval run', classes='') }} or CLI: <code>{{ cli_eval_docker() }}</code></p>
     <p><a href="{{ url_for('eval_run') }}">← all runs</a></p>
   {% else %}
-    <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
+    <p class="back"><a href="{{ url_for('models_catalog') }}">← model catalog</a></p>
     <h1>{{ model }}</h1>
     <p class="sub">
       efficacy across {{ suites|length }} suite{{ "" if suites|length == 1 else "s" }} ·
@@ -19,6 +19,42 @@
       {% if best_overall is not none %}· best overall <b>{{ "%.2f"|format(best_overall) }}</b> / 5{% endif %}
       · total cost ${{ "%.4f"|format(total_cost_usd) }}
     </p>
+
+    <section class="key">
+      <h2>Recommendation <span class="dim" title="Evidence-backed guidance only — does not replace OIT sign-off">(rules v1)</span></h2>
+      <p>{{ recommendation.summary }}</p>
+      {% if recommendation.tradeoffs %}
+      <ul>
+        {% for t in recommendation.tradeoffs %}
+        <li>{{ t }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </section>
+
+    <div class="summary-row">
+      <span class="dim">Scan:</span>
+      {% if rollup.scan %}
+        {{ tier_label(rollup.scan.tier) }}
+        <a href="{{ url_for('scan_detail', slug=rollup.scan.slug) }}">detail</a>
+      {% else %}
+        <span class="dim">no HF artifact scan for this model</span>
+      {% endif %}
+      <span class="dim">· Safety:</span>
+      {% if rollup.safety %}
+        {{ tier_label(rollup.safety.tier) }}
+        <a href="{{ url_for('safety_detail', slug=rollup.safety.slug, profile=rollup.safety.profile) }}">detail</a>
+      {% else %}
+        <span class="dim">no safety run for this model</span>
+      {% endif %}
+      <span class="dim">· Benchmarks:</span>
+      {% if rollup.benchmark and rollup.benchmark.kinds %}
+        {% for kind, info in rollup.benchmark.kinds.items() %}<span class="dim">{{ kind }} <b>{{ info.headline_display }}</b></span>{% if not loop.last %}, {% endif %}{% endfor %}
+        <a href="{{ url_for('benchmarks') }}">detail</a>
+      {% else %}
+        <span class="dim">no benchmark runs for this model</span>
+      {% endif %}
+    </div>
 
     <table class="run-table">
       <thead>
@@ -57,7 +93,8 @@
         One row per task suite this model was evaluated on (latest run per
         judge). Scores come from the judge against each suite's rubric; the
         nutrition-label idea is to read quality, speed, and cost together.
-        Scanning and safety results for this model live on their own pages.
+        Full scan/safety/benchmark detail is one click away above; compare
+        this model to another on the <a href="{{ url_for('compare_models') }}?models={{ rollup.slug }}">compare page</a>.
       </p>
     </section>
   {% endif %}

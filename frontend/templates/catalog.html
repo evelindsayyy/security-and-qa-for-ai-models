@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_gateway_host %}
+{% from '_macros.html' import expandable, cli_gateway_host, tier_label %}
 
 {% block title %}Model catalog{% endblock %}
 
@@ -36,15 +36,22 @@
         <th>Profile</th>
         <th class="num">Input $/1M</th>
         <th class="num">Output $/1M</th>
+        <th class="col-nowrap">Safety</th>
+        <th class="col-nowrap">Pass rate</th>
       </tr>
     </thead>
     <tbody>
       {% for m in section.models %}
-      <tr>
+      {% set rollup = rollup_by_gateway_id.get(m.id) %}
+      {% set safety = rollup.safety if rollup else none %}
+      <tr class="{% if safety %}row-link{% endif %} {% if safety and safety.tier in ('critical', 'high') %}row-warn{% endif %}"
+          {% if safety %}data-href="{{ url_for('model_detail', slug=rollup.slug) }}"{% endif %}>
         <td><span class="model">{{ m.id }}</span></td>
         <td>{{ m.notes or "—" }}</td>
         <td class="num">{{ "$%.2f"|format(m.price_in) if m.price_in is not none else "—" }}</td>
         <td class="num">{{ "$%.2f"|format(m.price_out) if m.price_out is not none else "—" }}</td>
+        <td class="col-nowrap">{% if safety %}{{ tier_label(safety.tier) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+        <td class="col-nowrap">{% if safety %}{{ "%.0f%%"|format(safety.pass_rate * 100) }}{% else %}<span class="dim">—</span>{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
