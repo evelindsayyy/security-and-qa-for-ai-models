@@ -152,6 +152,12 @@ def _endpoint_from_state(state_file: Path) -> str:
     return f"http://{host}:{port}/v1"
 
 
+def _emit_phase(name: str) -> None:
+    """Print a machine-readable phase marker the frontend status poller parses
+    from the run log (provisioning -> serving -> evaluating -> tearing-down)."""
+    print(f"PHASE: {name}", flush=True)
+
+
 def _teardown(state_file: Path) -> None:
     """Cancel the job and drop the state file. Never raises — a teardown error
     must not mask (or replace) the real orchestration result."""
@@ -206,6 +212,7 @@ def orchestrate_eval(
 
     # 1) validate — offline allowlist first, then the network fetch (hf_intake).
     #    Runs BEFORE any job is submitted, so a bad repo id costs nothing.
+    _emit_phase("provisioning")
     val = hf_intake.validate(hf_repo)
     if not val.ok:
         return OrchestrationResult(False, "validate", error=val.error)
@@ -231,6 +238,7 @@ def orchestrate_eval(
 
     # A job now exists — teardown ALWAYS runs from here (finally below).
     try:
+        _emit_phase("serving")
         wait_argv = ["wait", "--session-file", str(state_file)]
         if wait_max_attempts is not None:
             wait_argv += ["--max-attempts", str(wait_max_attempts)]
@@ -254,6 +262,7 @@ def orchestrate_eval(
         endpoint = _endpoint_from_state(state_file)
 
         # 3) evaluate — the existing pipeline, pointed at the vLLM endpoint.
+        _emit_phase("evaluating")
         try:
             exit_code = _invoke_runner(
                 hf_repo, endpoint, judge_model=judge_model, suite=suite,
@@ -278,6 +287,7 @@ def orchestrate_eval(
         )
     finally:
         # 4) teardown — always, now that a job was submitted.
+        _emit_phase("tearing-down")
         _teardown(state_file)
 
 

@@ -61,13 +61,20 @@ class HfLaunchValidateTest(_Base):
         self.assertEqual(out["architectures"], ["Qwen2ForCausalLM"])
         self.assertEqual(out["repo_id"], "Qwen/Qwen2.5-7B-Instruct")
 
-    def test_post_hf_valid_shows_ready(self) -> None:
-        with mock.patch.object(hf_intake, "validate", return_value=_GOOD):
+    def test_post_hf_valid_launches_on_dcc(self) -> None:
+        # DCC serving is now wired: a servable HF model launches the orchestrator
+        # and redirects to the running detail (see test_eval_dcc_launch for full
+        # coverage). The custom-form HF path below stays validate-only.
+        with mock.patch.object(hf_intake, "validate", return_value=_GOOD), \
+             mock.patch.object(eval_launch, "start_dcc_run",
+                               return_value=("stem123", False)) as sr:
             r = _client().post("/eval-run/start",
                                data={"source": "hf",
-                                     "hf_repo": "Qwen/Qwen2.5-7B-Instruct"})
-        self.assertEqual(r.status_code, 200)
-        self.assertIn(b"Qwen2ForCausalLM", r.data)
+                                     "hf_repo": "Qwen/Qwen2.5-7B-Instruct",
+                                     "judge": "Llama 4 Maverick",
+                                     "suite": "it_support_v1", "max_tokens": "2000"})
+        self.assertEqual(r.status_code, 302)
+        sr.assert_called_once()
 
     def test_post_hf_invalid_shows_reason(self) -> None:
         with mock.patch.object(hf_intake, "validate", return_value=_BAD):

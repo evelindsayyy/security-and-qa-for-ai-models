@@ -203,6 +203,33 @@ def validate_launch(
     return None
 
 
+def validate_dcc_params(
+    hf_repo: str, judge: str, suite_key: str, max_tokens: int
+) -> str | None:
+    """Validate the NON-model parts of a DCC (HF-model) launch. Returns an error
+    message or None.
+
+    Servability of ``hf_repo`` is checked separately by ``validate_hf_candidate``
+    (the route calls it first and shows the reason inline), so here we only gate
+    the judge/suite/token params — mirroring ``validate_launch`` for the gateway
+    path. The candidate runs on the DCC, but the judge stays a gateway model, so
+    the MT-Bench cross-family rule still applies (judge family ≠ HF-repo family).
+    These messages are rendered as HTML, so reflected values are escaped.
+    """
+    if judge not in JUDGE_MODELS:
+        return f"judge model not in allowlist: '{escape(judge)}'"
+    if model_family(judge) == model_family(hf_repo):
+        return (
+            f"judge '{escape(judge)}' is the same model family as candidate "
+            f"'{escape(hf_repo)}' — cross-family judging required (MT-Bench rule)"
+        )
+    if _suite_cfg(suite_key) is None:
+        return f"unknown suite: '{escape(suite_key)}'"
+    if not (MAX_TOKENS_MIN <= max_tokens <= MAX_TOKENS_MAX):
+        return f"max_tokens must be {MAX_TOKENS_MIN}-{MAX_TOKENS_MAX}"
+    return None
+
+
 # Suggested open-weight models for the HF-model launcher field (datalist hints).
 SUGGESTED_HF_REPOS: tuple[str, ...] = (
     "Qwen/Qwen2.5-7B-Instruct",
@@ -338,6 +365,91 @@ def start_run(
         return stem, False
 
 
+def build_dcc_command(
+    candidate: str, judge: str, suite_key: str, max_tokens: int, stem: str
+) -> list[str]:
+    """argv for the DCC orchestrator subprocess (list form — never a shell).
+
+    Runs ``evaluator.dcc_orchestrate`` as a module from the repo root, which
+    validates the HF model, serves it on the DCC, runs the eval against the vLLM
+    endpoint, and tears the job down. ``--output-name``/``--slug`` = the predicted
+    stem so the status poller can find the results + per-run job state. No Docker
+    here: the orchestrator needs Slurm access and runs on the host; only the
+    candidate inference happens on the cluster.
+    """
+    cfg = _suite_cfg(suite_key)
+    return [
+        sys.executable, "-m", "evaluator.dcc_orchestrate",
+        "--hf-repo", candidate,
+        "--judge-model", judge,
+        "--suite", str(cfg["suite"]),
+        "--rubric", str(cfg["rubric"]),
+        "--system-prompt", str(cfg["system_prompt"]),
+        "--judge-prompt", str(JUDGE_PROMPT),
+        "--max-tokens", str(max_tokens),
+        "--slug", stem,
+        "--output-name", stem,
+    ]
+
+
+def start_dcc_run(
+    candidate: str, judge: str, suite_key: str, max_tokens: int
+) -> tuple[str, bool]:
+    """Spawn a DCC orchestration subprocess. Returns (slug, was_already_running).
+
+    Mirrors ``start_run`` (dedupe, wipe prior, predict stem, log-redirected
+    Popen, registry) but launches the orchestrator instead of the runner. The
+    caller must have passed ``validate_hf_candidate`` + ``validate_dcc_params``.
+    """
+    combo = (candidate, judge, suite_key, max_tokens, "dcc")
+    with _LOCK:
+        existing = _INFLIGHT.get(combo)
+        if existing and _RUNNING.get(existing) is not None \
+                and _RUNNING[existing].poll() is None:
+            return existing, True
+
+        _wipe_prior_runs(suite_key, candidate)
+
+        stem = predict_stem(suite_key, candidate)
+        RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        log_path = RESULTS_DIR / f"{stem}.log"
+        cmd = build_dcc_command(candidate, judge, suite_key, max_tokens, stem)
+        with log_path.open("wb") as log_f:
+            log_f.write(f"=== command: {' '.join(cmd)} ===\n".encode())
+            env = os.environ.copy()
+            env["PYTHONUNBUFFERED"] = "1"
+            # cwd = repo root so `-m evaluator.dcc_orchestrate` resolves and its
+            # `from scripts.dcc import vllm` / `from evaluator import hf_intake`
+            # imports work.
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(ROOT),
+                stdout=log_f,
+                stderr=subprocess.STDOUT,
+                env=env,
+                start_new_session=True,
+            )
+        _RUNNING[stem] = proc
+        _INFLIGHT[combo] = stem
+        return stem, False
+
+
+def _dcc_phase(log_path: Path) -> str | None:
+    """The latest ``PHASE:`` marker the orchestrator wrote to the run log, or
+    None for a non-DCC run (the runner writes no such markers)."""
+    if not log_path.is_file():
+        return None
+    phase: str | None = None
+    try:
+        for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            s = line.strip()
+            if s.startswith("PHASE:"):
+                phase = s[len("PHASE:"):].strip()
+    except OSError:
+        return None
+    return phase
+
+
 def get_status(slug: str) -> dict:
     """Run status from the results artifact + the process registry.
 
@@ -368,6 +480,10 @@ def get_status(slug: str) -> dict:
 
     log_path = RESULTS_DIR / f"{slug}.log"
     rel_log = f"evaluator/results/{slug}.log"
+    # DCC orchestration writes phase markers (provisioning -> serving ->
+    # evaluating -> tearing-down); None for a gateway run, which the template
+    # simply doesn't render.
+    phase = _dcc_phase(log_path)
 
     proc = _RUNNING.get(slug)
     if proc is not None and proc.poll() is None:
@@ -377,6 +493,7 @@ def get_status(slug: str) -> dict:
             "total": total,
             "message": status_message(log_path),
             "log_path": rel_log,
+            "phase": phase,
         }
     if proc is not None:  # exited without a complete file
         return {
@@ -385,6 +502,7 @@ def get_status(slug: str) -> dict:
             "total": total,
             "message": status_message(log_path, failed=True),
             "log_path": rel_log,
+            "phase": phase,
         }
     if path.is_file():
         # partial file, no registered process (e.g. Flask restarted mid-run)
@@ -394,6 +512,7 @@ def get_status(slug: str) -> dict:
             "total": total,
             "message": status_message(log_path, failed=True),
             "log_path": rel_log,
+            "phase": phase,
         }
     return {"status": "not_found", "progress": 0, "total": 0, "message": ""}
 

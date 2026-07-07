@@ -192,17 +192,39 @@ def register_routes(app):
 
         from frontend.eval_launch import (
             get_launch_options,
+            start_dcc_run,
             start_run,
+            validate_dcc_params,
             validate_hf_candidate,
             validate_launch,
         )
 
-        # Candidate source: a gateway model (runs now) or a Hugging Face model
-        # (validated now; served on the DCC in a later milestone).
+        # Candidate source: a gateway model (runs on the gateway) or a Hugging
+        # Face model (served + evaluated + torn down on the DCC via the
+        # orchestrator). The HF branch validates servability first — an
+        # unservable model never starts a GPU job — then the run params.
         if request.form.get("source") == "hf":
-            hf_result = validate_hf_candidate(request.form.get("hf_repo", "").strip())
-            return render_template("eval_run_new.html",
-                                   hf_result=hf_result, **get_launch_options())
+            hf_repo = request.form.get("hf_repo", "").strip()
+
+            # Servability first: an unservable model never starts a GPU job — show
+            # the reason inline (before parsing the other params, so a bad model
+            # reports its reason rather than a max_tokens error).
+            hf_result = validate_hf_candidate(hf_repo)
+            if not hf_result["ok"]:
+                return render_template("eval_run_new.html",
+                                       hf_result=hf_result, **get_launch_options())
+
+            judge = request.form.get("judge", "")
+            suite_key = request.form.get("suite", "")
+            try:
+                max_tokens = int(request.form.get("max_tokens", ""))
+            except ValueError:
+                return "max_tokens must be an integer", 400
+            error = validate_dcc_params(hf_repo, judge, suite_key, max_tokens)
+            if error is not None:
+                return error, 400
+            slug, _already = start_dcc_run(hf_repo, judge, suite_key, max_tokens)
+            return redirect(url_for("eval_run_detail", slug=slug, status="running"))
 
         candidate = request.form.get("candidate", "")
         judge = request.form.get("judge", "")

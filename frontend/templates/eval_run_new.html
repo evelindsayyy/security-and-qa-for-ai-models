@@ -31,7 +31,7 @@
       <datalist id="hf_repo_suggestions">
         {% for repo in suggested_hf_repos %}<option value="{{ repo }}"></option>{% endfor %}
       </datalist>
-      <span class="form-hint">HF models are served on the DCC GPU — serving wires in next; for now we validate the model before any run.</span>
+      <span class="form-hint">HF models are validated, then served on the DCC GPU, evaluated, and torn down — all from ▶ Start run.</span>
     </fieldset>
 
     <label>Judge model
