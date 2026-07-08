@@ -558,8 +558,24 @@ def delete_safety(
         owner_user_id=owner_user_id,
     )
     merged_path = merged_result_path(OUTPUT_DIR, slug, profile, owner_user_id=owner_scope)
+    run_id: str | None = None
     db_keys: tuple[str, str] | None = None
-    if merged_path.is_file():
+    db_available = False
+    db_row_existed = False
+    try:
+        from frontend import safety_db_data
+
+        db_available = safety_db_data.available()
+        if db_available:
+            run_id = safety_db_data.resolve_delete_run_id(
+                slug, profile, visibility=visibility, owner_user_id=owner_user_id
+            )
+            if run_id is not None:
+                db_row_existed = True
+    except Exception:
+        pass
+
+    if merged_path.is_file() and not run_id:
         try:
             data = json.loads(merged_path.read_text(encoding="utf-8"))
             gateway_model_id = data.get("gateway_model_id")
@@ -605,30 +621,27 @@ def delete_safety(
             removed_disk = True
 
     removed_db = False
-    db_available = False
-    db_row_existed = False
     db_exc: BaseException | None = None
     try:
         from frontend import safety_db_data
         from frontend.delete_db import db_delete_error
 
-        db_available = safety_db_data.available()
         if db_available:
             try:
-                db_row_existed = (
-                    safety_db_data.resolve_delete_keys(
-                        slug, profile, visibility=visibility, owner_user_id=owner_user_id
-                    )
-                    is not None
-                )
-            except Exception:
-                pass
-            try:
-                if db_keys:
+                if run_id:
+                    removed_db = safety_db_data.delete_run_by_id(run_id)
+                if not removed_db and db_keys:
                     removed_db = safety_db_data.delete_run(*db_keys)
                 if not removed_db:
                     removed_db = safety_db_data.delete_run_by_slug(
                         slug, profile, visibility=visibility, owner_user_id=owner_user_id
+                    )
+                if not removed_db and not db_row_existed:
+                    db_row_existed = (
+                        safety_db_data.resolve_delete_run_id(
+                            slug, profile, visibility=visibility, owner_user_id=owner_user_id
+                        )
+                        is not None
                     )
             except Exception as exc:
                 db_exc = exc
