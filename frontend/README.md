@@ -85,23 +85,6 @@ curl -s localhost:5000/api/scans/distilbert-base-uncased/status | python3 -m jso
 
 POST returns **202** with `job_id` and `status_url`; poll status, then GET detail.
 
-## Staleness indicators
-
-List pages attach a `staleness` dict to each row (`attach_staleness` in `staleness.py`). Only **stale** rows render the orange **!**; hover shows `Needs rerun — <reasons>`.
-
-Tweak thresholds in `staleness.py` when tooling or suites change.
-
-| Pillar | Flagged stale when |
-|--------|-------------------|
-| **Safety** | Completed before `CURRENT_SPEC_CUTOFF` (2026-07-01); any `missing_suites`; garak `probe_id` count &lt; `SAFETY_EXPECTED_GARAK_PROBES` (26); status not complete |
-| **Scanner** | `scanned_file_count == 0`; scanned before cutoff; status not complete |
-| **Eval** | Completed before cutoff; suite not in curated `SUITES` (custom `custom_*` exempt) |
-| **Benchmarks** | Completed before cutoff (reference baseline slugs exempt) |
-
-**Permanent delete:** removes the Postgres row and on-disk artifacts under the pillar output dir. When a DSN is reachable, list/detail reads come **only** from Postgres — deleted runs do not reappear from leftover JSON.
-
-**OSS gateway scans:** `oss_gateway_hf.py` maps Llama 3.3 / 4 Maverick / 4 Scout to non-gated HF mirrors; `model_rollup.py` attaches those scan results to the matching gateway row on `/models`.
-
 ### Host Flask (development)
 
 UI without containerizing the app; pillar jobs still use Docker unless `FRONTEND_LAUNCH_MODE=host`:
