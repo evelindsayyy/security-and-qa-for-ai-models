@@ -21,7 +21,7 @@ Concise map for humans and agents working in this repo. Public docs: [`README.md
 job → JSON artifact → auto-sync (DSN set) → Postgres → UI / api/
 ```
 
-UI modules (`*_data.py`) read Postgres via `*_db_data.py` when a DSN is reachable; otherwise they fall back to on-disk artifacts (`frontend/db_fallback.py`).
+UI modules (`*_data.py`) read **only from Postgres** via `*_db_data.py` when a DSN is reachable; disk JSON is used **only** when no DSN is configured (`frontend/db_fallback.py`). Deletes remove both the Postgres row and on-disk artifacts.
 
 ## Auth and public/private isolation
 
@@ -37,7 +37,9 @@ Public and private runs of the same model never collide on disk or share a URL (
 
 | Module | Role |
 |--------|------|
-| `frontend/db_fallback.py` | Postgres-with-disk-fallback dispatch |
+| `frontend/db_fallback.py` | Postgres-only reads when DSN reachable; disk fallback offline only |
+| `frontend/staleness.py` | Per-pillar up-to-date / needs-rerun rules for list pages |
+| `frontend/delete_db.py` | Shared DB-delete error surfacing for permanent deletes |
 | `frontend/launch_registry.py` | In-flight job liveness (`check_inflight_combo`) |
 | `frontend/run_paths.py` | Public/private path scoping |
 | `frontend/path_safety.py` | Slug validation |

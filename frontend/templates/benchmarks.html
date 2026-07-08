@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_benchmark_docker, start_button, delete_button with context %}
+{% from '_macros.html' import expandable, cli_benchmark_docker, start_button, delete_button, rerun_button, staleness_badge with context %}
 
 {% block title %}Benchmark results{% endblock %}
 
@@ -137,6 +137,7 @@
           <td class="col-nowrap"><span class="badge {{ badge_class }}">{{ r.kind_label }}</span></td>
           <td>
             <span class="model">{{ r.model }}</span>
+            {{ staleness_badge(r.staleness) }}
             {% if r.is_latest and r.older_run_count %}
             <span class="dim bench-older-hint" title="Older runs hidden — enable Show all runs to see them">
               +{{ r.older_run_count }} older
@@ -160,6 +161,7 @@
           <td class="col-nowrap dim">{{ r.timestamp }}</td>
           <td class="col-long">{{ expandable(r.filename, clamp=1) }}</td>
           <td class="col-actions" onclick="event.stopPropagation()">
+            {{ rerun_button(url_for('benchmark_run_new', from=r.slug), 'Rerun', 'btn-primary btn-sm' if r.staleness and r.staleness.stale else 'btn-secondary btn-sm') }}
             {{ delete_button(url_for('benchmark_delete_private' if view_mode == 'private' else 'benchmark_delete', slug=r.slug), 'Delete', classes='btn-danger btn-sm') }}
           </td>
         </tr>

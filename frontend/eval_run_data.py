@@ -437,7 +437,11 @@ def get_runs_data() -> dict:
             _get_runs_data_files,
         )
     )
-    data.update(_build_eval_comparison_section(data.get("runs") or []))
+    runs = data.get("runs") or []
+    from frontend.staleness import attach_staleness
+
+    attach_staleness(runs, "eval")
+    data.update(_build_eval_comparison_section(runs))
     return data
 
 
@@ -549,13 +553,9 @@ def get_run_detail(
         from frontend import eval_db_data
 
         if eval_db_data.available():
-            detail = eval_db_data.get_run_detail_db(
+            return eval_db_data.get_run_detail_db(
                 slug, visibility=visibility, owner_user_id=owner_user_id
             )
-            if detail is not None:
-                return detail
-            # slug not loaded into the DB yet (e.g. a just-finished run) —
-            # fall through to the file.
     except Exception:
         pass
     return _get_run_detail_files(slug, visibility=visibility, owner_user_id=owner_user_id)
@@ -594,13 +594,29 @@ def delete_eval_run(
     """
     from dbutils.run_meta import read_run_meta_for_pillar
     from dbutils.visibility import artifact_visible
+    from frontend.delete_db import db_delete_error
     from frontend.eval_launch import is_eval_run_in_progress
 
     if not is_safe_slug(slug):
         return f"invalid slug: {slug!r}"
-    meta = read_run_meta_for_pillar(RESULTS_DIR / slug, pillar="eval")
-    if not artifact_visible(meta, view_mode=visibility, user_id=owner_user_id):
-        return f"no eval run found for slug {slug!r}"
+
+    exists = False
+    try:
+        from frontend import eval_db_data
+
+        if eval_db_data.available():
+            exists = (
+                eval_db_data.get_run_detail_db(
+                    slug, visibility=visibility, owner_user_id=owner_user_id
+                )
+                is not None
+            )
+    except Exception:
+        pass
+    if not exists:
+        meta = read_run_meta_for_pillar(RESULTS_DIR / slug, pillar="eval")
+        if not artifact_visible(meta, view_mode=visibility, user_id=owner_user_id):
+            return f"no eval run found for slug {slug!r}"
     if is_eval_run_in_progress(slug):
         return "cannot delete while the run is still in progress"
 
@@ -615,15 +631,37 @@ def delete_eval_run(
                 return f"could not delete {path.name}: {exc}"
 
     removed_db = False
+    db_available = False
+    db_row_existed = False
+    db_exc: BaseException | None = None
     try:
         from frontend import eval_db_data
 
-        if eval_db_data.available():
-            removed_db = eval_db_data.delete_run(
-                slug, visibility=visibility, owner_user_id=owner_user_id
+        db_available = eval_db_data.available()
+        if db_available:
+            db_row_existed = (
+                eval_db_data.get_run_detail_db(
+                    slug, visibility=visibility, owner_user_id=owner_user_id
+                )
+                is not None
             )
-    except Exception:
-        pass
+            try:
+                removed_db = eval_db_data.delete_run(
+                    slug, visibility=visibility, owner_user_id=owner_user_id
+                )
+            except Exception as exc:
+                db_exc = exc
+    except Exception as exc:
+        db_exc = exc
+
+    err = db_delete_error(
+        db_available=db_available,
+        db_row_existed=db_row_existed,
+        removed_db=removed_db,
+        db_exc=db_exc,
+    )
+    if err:
+        return err
 
     if removed_files == 0 and not removed_db:
         return f"no eval run found for slug {slug!r}"

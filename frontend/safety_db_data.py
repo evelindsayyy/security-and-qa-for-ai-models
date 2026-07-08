@@ -16,10 +16,8 @@ from frontend.path_safety import is_safe_slug
 from frontend.safety_data import (
     OUTPUT_DIR,
     _build_safety_detail,
-    _summarize_merged,
     _summarize_merged_data,
 )
-from safety.merged_paths import iter_merged_result_paths
 
 load_repo_env()
 
@@ -207,15 +205,17 @@ def _visibility_params(
 
 
 def get_safety_data_db() -> dict:
-    """DB-preferred merge of every known safety run (DB rows + not-yet-loaded files)."""
-    from dbutils.run_meta import read_run_meta
-    from dbutils.visibility import artifact_visible
-    from frontend.read_context import read_context
+    """Every known safety run, straight from Postgres.
+
+    Postgres is the single source of truth when a DSN is reachable — we do NOT
+    merge in on-disk artifacts here. Merging disk rows is what let a deleted
+    run reappear (the DB row was gone but a stale JSON on the VM resurrected
+    it). Not-yet-ingested runs surface once auto-sync loads them; disk is only
+    consulted when no DSN is configured (see safety_data.get_safety_data)."""
     from frontend.safety_data import _SUITE_ORDER as _SO
     from frontend.safety_data import _suite_label
 
     vis_clause, vis_params = _visibility_params()
-    view_mode, user_id = read_context()
 
     with _connect() as conn:
         with conn.cursor() as cur:
@@ -226,27 +226,7 @@ def get_safety_data_db() -> dict:
             _summarize_db_run(row, findings_by_run.get(row[0], []))
             for row in run_rows
         ]
-    db_rows = [r for r in db_rows if r is not None]
-
-    seen_keys = {(r["slug"], r["profile"]) for r in db_rows}
-    file_rows: list[dict] = []
-    if OUTPUT_DIR.exists():
-        sources = [iter_merged_result_paths(OUTPUT_DIR)]
-        if view_mode == "private" and user_id:
-            sources.append(iter_merged_result_paths(OUTPUT_DIR, owner_user_id=user_id))
-        for source in sources:
-            for path, slug, profile in source:
-                if (slug, profile) in seen_keys:
-                    continue
-                seen_keys.add((slug, profile))
-                meta = read_run_meta(path.parent)
-                if not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
-                    continue
-                row = _summarize_merged(path, slug, profile)
-                if row is not None:
-                    file_rows.append(row)
-
-    rows = db_rows + file_rows
+    rows = [r for r in db_rows if r is not None]
     rows.sort(key=lambda r: (r["composite_score"], r["summary_pass_rate"]))
 
     return {
@@ -283,11 +263,15 @@ def get_safety_detail_db(
 
 
 def resolve_delete_keys(
-    gateway_model_id: str, *, visibility: str | None = None, owner_user_id: str | None = None
+    gateway_model_id: str,
+    profile: str = "base",
+    *,
+    visibility: str | None = None,
+    owner_user_id: str | None = None,
 ) -> tuple[str, str] | None:
     """Map UI slug to ``(gateway_model_id, completed_at)`` for the latest Postgres row
     matching ``visibility``/``owner_user_id`` (defaults to the ambient session's scope)."""
-    if not is_safe_slug(gateway_model_id):
+    if not is_safe_slug(gateway_model_id) or not is_safe_slug(profile):
         return None
 
     vis_clause, vis_params = _visibility_params(visibility=visibility, owner_user_id=owner_user_id)
@@ -295,7 +279,10 @@ def resolve_delete_keys(
 
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, {"gateway_model_id": gateway_model_id, **vis_params})
+            cur.execute(
+                sql,
+                {"gateway_model_id": gateway_model_id, "redteam_profile": profile, **vis_params},
+            )
             run_row = cur.fetchone()
             if run_row is None:
                 return None
@@ -311,11 +298,17 @@ def resolve_delete_keys(
 
 
 def delete_run_by_slug(
-    gateway_model_id: str, *, visibility: str | None = None, owner_user_id: str | None = None
+    gateway_model_id: str,
+    profile: str = "base",
+    *,
+    visibility: str | None = None,
+    owner_user_id: str | None = None,
 ) -> bool:
     """Delete the latest Postgres safety row for a gateway model slug (scoped
     to ``visibility``/``owner_user_id`` — see scan_db_data.delete_run_by_slug)."""
-    keys = resolve_delete_keys(gateway_model_id, visibility=visibility, owner_user_id=owner_user_id)
+    keys = resolve_delete_keys(
+        gateway_model_id, profile, visibility=visibility, owner_user_id=owner_user_id
+    )
     if keys is None:
         return False
     return delete_run(*keys)

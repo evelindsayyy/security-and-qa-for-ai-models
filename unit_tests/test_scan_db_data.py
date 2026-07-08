@@ -110,13 +110,12 @@ class AvailabilityTest(unittest.TestCase):
             data = scan_data.get_scans_data()
         self.assertIn("has_scans", data)
 
-    def test_detail_dispatcher_falls_back_when_slug_not_in_db(self) -> None:
-        sentinel = {"slug": "from-files"}
+    def test_detail_returns_none_when_slug_not_in_db(self) -> None:
         with mock.patch.object(scan_db_data, "available", return_value=True), \
              mock.patch.object(scan_db_data, "get_scan_detail_db", return_value=None), \
-             mock.patch.object(scan_data, "_get_scan_detail_files", return_value=sentinel):
+             mock.patch.object(scan_data, "_get_scan_detail_files", return_value={"slug": "from-files"}):
             detail = scan_data.get_scan_detail("some-slug")
-        self.assertIs(detail, sentinel)
+        self.assertIsNone(detail)
 
     def test_dispatcher_survives_db_exceptions(self) -> None:
         with mock.patch.object(scan_db_data, "available", side_effect=RuntimeError("db down")):
@@ -134,12 +133,8 @@ def _fake_empty_connection():
     return conn
 
 
-class GetScansDataDbFileFallbackTest(unittest.TestCase):
-    """Regression coverage: get_scans_data_db()'s file-merge branch must use
-    the pillar-aware read_run_meta_for_pillar (scan's auth fields live in
-    scan_meta.json, not run_meta.json) — using the generic reader here
-    always saw an empty sidecar for scan artifacts and silently dropped
-    every not-yet-ingested private scan from the list page."""
+class GetScansDataDbPostgresOnlyTest(unittest.TestCase):
+    """When DSN is reachable, get_scans_data_db() must not merge disk artifacts."""
 
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -154,37 +149,18 @@ class GetScansDataDbFileFallbackTest(unittest.TestCase):
         connect_patcher.start()
         self.addCleanup(connect_patcher.stop)
 
-    def _write_private_scan(self, owner_user_id: str) -> None:
-        scan_dir = self.out / ".private" / owner_user_id / "gpt2"
+    def _write_disk_scan(self) -> None:
+        scan_dir = self.out / "gpt2"
         scan_dir.mkdir(parents=True)
         (scan_dir / "scan_result.json").write_text(
             json.dumps(_scan_data_dict()), encoding="utf-8"
         )
-        (scan_dir / "scan_meta.json").write_text(
-            json.dumps({"visibility": "private", "owner_user_id": owner_user_id}),
-            encoding="utf-8",
-        )
 
-    def test_not_yet_ingested_private_scan_appears_for_its_owner(self) -> None:
-        self._write_private_scan("owner-a")
-        from frontend import read_context as read_context_module
-
-        with mock.patch.object(
-            read_context_module, "read_context", return_value=("private", "owner-a")
-        ):
-            data = scan_db_data.get_scans_data_db()
-        self.assertTrue(data["has_scans"])
-        self.assertEqual([r["slug"] for r in data["scans"]], ["gpt2"])
-
-    def test_not_yet_ingested_private_scan_hidden_from_a_different_owner(self) -> None:
-        self._write_private_scan("owner-a")
-        from frontend import read_context as read_context_module
-
-        with mock.patch.object(
-            read_context_module, "read_context", return_value=("private", "owner-b")
-        ):
-            data = scan_db_data.get_scans_data_db()
+    def test_disk_scan_not_merged_when_db_empty(self) -> None:
+        self._write_disk_scan()
+        data = scan_db_data.get_scans_data_db()
         self.assertFalse(data["has_scans"])
+        self.assertEqual(data["scans"], [])
 
 
 if __name__ == "__main__":

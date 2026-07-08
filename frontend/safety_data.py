@@ -81,6 +81,9 @@ def _summarize_merged_data(data: dict, slug: str, profile: str = "base") -> dict
     }
     tier = (data.get("composite_tier") or "low").lower()
     profile = data.get("redteam_profile") or profile
+    from frontend.staleness import garak_probe_count_from_data
+
+    garak_probe_count = garak_probe_count_from_data(data)
 
     return {
         "slug": slug,
@@ -108,6 +111,7 @@ def _summarize_merged_data(data: dict, slug: str, profile: str = "base") -> dict
         "category_breakdown": _category_breakdown(_parse_findings(findings)),
         "completed_at": data.get("completed_at") or "—",
         "status": data.get("status") or "unknown",
+        "garak_probe_count": garak_probe_count,
     }
 
 
@@ -350,8 +354,12 @@ def get_safety_data() -> dict:
         safety_db_data.get_safety_data_db,
         _get_safety_data_files,
     )
-    data["has_safety"] = bool(data.get("models"))
-    data.update(_build_safety_comparison_section(data.get("models") or []))
+    models = data.get("models") or []
+    from frontend.staleness import attach_staleness
+
+    attach_staleness(models, "safety")
+    data["has_safety"] = bool(models)
+    data.update(_build_safety_comparison_section(models))
     return data
 
 
@@ -488,11 +496,9 @@ def get_safety_detail(
         from frontend import safety_db_data
 
         if safety_db_data.available():
-            detail = safety_db_data.get_safety_detail_db(
+            return safety_db_data.get_safety_detail_db(
                 slug, profile, visibility=visibility, owner_user_id=owner_user_id
             )
-            if detail is not None:
-                return detail
     except Exception:
         pass
     return _get_safety_detail_files(
@@ -599,18 +605,41 @@ def delete_safety(
             removed_disk = True
 
     removed_db = False
+    db_available = False
+    db_row_existed = False
+    db_exc: BaseException | None = None
     try:
         from frontend import safety_db_data
+        from frontend.delete_db import db_delete_error
 
-        if safety_db_data.available():
-            if db_keys:
-                removed_db = safety_db_data.delete_run(*db_keys)
-            if not removed_db:
-                removed_db = safety_db_data.delete_run_by_slug(
-                    slug, visibility=visibility, owner_user_id=owner_user_id
+        db_available = safety_db_data.available()
+        if db_available:
+            db_row_existed = (
+                safety_db_data.resolve_delete_keys(
+                    slug, profile, visibility=visibility, owner_user_id=owner_user_id
                 )
-    except Exception:
-        pass
+                is not None
+            )
+            try:
+                if db_keys:
+                    removed_db = safety_db_data.delete_run(*db_keys)
+                if not removed_db:
+                    removed_db = safety_db_data.delete_run_by_slug(
+                        slug, profile, visibility=visibility, owner_user_id=owner_user_id
+                    )
+            except Exception as exc:
+                db_exc = exc
+    except Exception as exc:
+        db_exc = exc
+
+    err = db_delete_error(
+        db_available=db_available,
+        db_row_existed=db_row_existed,
+        removed_db=removed_db,
+        db_exc=db_exc,
+    )
+    if err:
+        return err
 
     if not removed_disk and not removed_db:
         return f"no safety result found for {slug!r}/{profile!r}"

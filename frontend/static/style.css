@@ -300,6 +300,18 @@ header nav a:hover {
 }
 .badge-best { background: #dff1df; color: #1f6b1f; margin-left: 0.35rem; }
 .badge-warn { background: #fde2c8; color: #a35200; max-width: none; }
+.staleness-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.staleness-fresh { background: #e8f5e8; color: #2a7a2a; }
+.staleness-stale { background: #fde2c8; color: #a35200; }
 .status-ok,
 .status-fail,
 .status-skip {
@@ -853,7 +865,8 @@ span.is-disabled {
 .btn-danger.btn-sm { padding: 0.2rem 0.55rem; font-size: 12px; }
 .inline-delete-form { margin: 0; }
 .detail-delete-form { margin: 0 0 1rem; }
-.run-table .col-actions { width: 5.5rem; text-align: right; white-space: nowrap; }
+.run-table .col-actions { width: 9rem; text-align: right; white-space: nowrap; }
+.run-table .col-actions .btn-sm + .btn-sm { margin-left: 0.25rem; }
 
 .refresh-form { display: inline-block; margin-left: 0.5rem; vertical-align: middle; }
 

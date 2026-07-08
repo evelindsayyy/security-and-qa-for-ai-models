@@ -88,11 +88,20 @@ uv run python -m gateway
 {% endmacro %}
 
 {# Rerun link — prefills the pillar launch form from a completed run. #}
-{% macro rerun_button(url, label='Rerun') %}
+{% macro rerun_button(url, label='Rerun', classes='btn-secondary btn-sm') %}
 {% if is_logged_in %}
-<a class="btn-secondary btn-sm" href="{{ url }}">{{ label }}</a>
+<a class="{{ classes }}" href="{{ url }}">{{ label }}</a>
 {% else %}
-<span class="btn-secondary btn-sm is-disabled" aria-disabled="true" title="Sign in to rerun">{{ label }}</span>
+<span class="{{ classes }} is-disabled" aria-disabled="true" title="Sign in to rerun">{{ label }}</span>
+{% endif %}
+{% endmacro %}
+
+{# Up-to-date / needs-rerun indicator for pillar list rows. #}
+{% macro staleness_badge(staleness) %}
+{% if staleness %}
+<span class="staleness-badge {% if staleness.stale %}staleness-stale{% else %}staleness-fresh{% endif %}"
+      title="{% if staleness.stale %}{{ staleness.reasons | join('; ') }}{% else %}Up to date with current specs{% endif %}"
+      aria-label="{{ staleness.label }}">{{ staleness.label }}</span>
 {% endif %}
 {% endmacro %}
 

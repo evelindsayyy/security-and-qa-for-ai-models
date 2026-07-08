@@ -114,9 +114,11 @@ class DeleteSafetyTest(unittest.TestCase):
                 "frontend.safety_data.ROOT", out
             ), mock.patch("frontend.safety_launch.inflight_safety_keys", return_value=set()), mock.patch(
                 "frontend.safety_db_data.available", return_value=True
+            ), mock.patch(
+                "frontend.safety_db_data.resolve_delete_keys", return_value=None
             ), mock.patch("frontend.safety_db_data.delete_run_by_slug", return_value=True) as db_del:
                 self.assertIsNone(delete_safety(slug, profile))
-            db_del.assert_called_once_with(slug, visibility="public", owner_user_id=None)
+            db_del.assert_called_once_with(slug, profile, visibility="public", owner_user_id=None)
 
     def test_deletes_legacy_merged_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
