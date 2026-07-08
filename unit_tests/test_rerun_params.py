@@ -54,6 +54,27 @@ class SafetyRerunParamsTest(unittest.TestCase):
         ):
             self.assertIsNone(safety_data.get_safety_rerun_params("nope"))
 
+    def test_maps_db_slug_to_catalog_display_name(self) -> None:
+        from frontend import safety_db_data
+
+        detail = {
+            "gateway_model_id": "llama-4-scout",
+            "display_name": "Llama 4 Scout",
+            "profile": "base",
+        }
+        with (
+            self._patch_out,
+            mock.patch.object(safety_db_data, "available", return_value=True),
+            mock.patch.object(safety_data, "get_safety_detail", return_value=detail),
+            mock.patch.object(
+                safety_data,
+                "_gateway_catalog_id_for_slug",
+                return_value="Llama 4 Scout",
+            ),
+        ):
+            params = safety_data.get_safety_rerun_params("llama-4-scout", "base")
+        self.assertEqual(params["gateway_model"], "Llama 4 Scout")
+
 
 class EvalRerunParamsTest(unittest.TestCase):
     def setUp(self) -> None:

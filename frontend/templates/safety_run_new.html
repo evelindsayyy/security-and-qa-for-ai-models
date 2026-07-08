@@ -28,7 +28,7 @@
         {% for group in gateway_groups %}
         <optgroup label="{{ group.label }}">
           {% for m in group.models %}
-          <option value="{{ m }}" {% if m == 'GPT 4.1 Mini' %}selected{% endif %}>{{ m }}</option>
+          <option value="{{ m }}">{{ m }}</option>
           {% endfor %}
         </optgroup>
         {% endfor %}

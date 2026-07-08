@@ -461,6 +461,20 @@ def _build_safety_reference_scores(models: list[dict]) -> dict:
     }
 
 
+def _gateway_catalog_id_for_slug(slug: str) -> str | None:
+    """Map a normalized gateway_model_id to the exact catalog dropdown id."""
+    from gateway.catalog import get_gateway_catalog
+    from safety.gateway_ids import normalize_gateway_model_id
+
+    target = normalize_gateway_model_id(slug)
+    for section in get_gateway_catalog().get("by_category", []):
+        for m in section.get("models", []):
+            mid = m.get("id", "")
+            if normalize_gateway_model_id(mid) == target:
+                return mid
+    return None
+
+
 def get_safety_rerun_params(
     slug: str,
     profile: str = "base",
@@ -474,8 +488,14 @@ def get_safety_rerun_params(
     )
     if detail is None:
         return None
+    gateway_id = detail.get("gateway_model_id") or slug
+    gateway_model = (
+        _gateway_catalog_id_for_slug(gateway_id)
+        or detail.get("display_name")
+        or gateway_id
+    )
     return {
-        "gateway_model": detail.get("gateway_model_id") or detail.get("model"),
+        "gateway_model": gateway_model,
         "redteam_profile": profile,
         "run_policy": True,
         "run_redteam": True,

@@ -197,6 +197,52 @@ class LaunchRoutesTest(unittest.TestCase):
         self.assertIsInstance(argv, list)
         self.assertIn("gpt2", argv)
 
+    def test_start_spawns_even_when_postgres_has_reusable_run(self) -> None:
+        from dbutils.run_access import ReusableRun
+
+        fake_proc = mock.Mock()
+        fake_proc.poll.return_value = None
+        fake_proc.pid = 424243
+        reused = ReusableRun(
+            run_id="scan-uuid", pillar="scan", visibility="public", slug="gpt2"
+        )
+        data = {
+            "hf_repo": "gpt2",
+            "run_modelscan": "on",
+            "run_fickling": "on",
+            "run_modelaudit": "on",
+            "run_deps": "on",
+            "run_secrets": "on",
+        }
+        with mock.patch("frontend.run_launch.try_lookup_reusable", return_value=reused), \
+             mock.patch.object(scan_launch.subprocess, "Popen", return_value=fake_proc) as popen:
+            r = self.client.post("/scans/start", data=data)
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("status=running", r.headers["Location"])
+        self.assertNotIn("status=reused", r.headers["Location"])
+        popen.assert_called_once()
+
+    def test_start_returns_503_on_output_dir_error(self) -> None:
+        from frontend.output_dirs import OutputDirError
+
+        data = {
+            "hf_repo": "gpt2",
+            "run_modelscan": "on",
+            "run_fickling": "on",
+            "run_modelaudit": "on",
+            "run_deps": "on",
+            "run_secrets": "on",
+        }
+        with mock.patch("frontend.run_launch.try_lookup_reusable", return_value=None), \
+             mock.patch("frontend.scan_launch.validate_launch", return_value=None), \
+             mock.patch(
+                 "frontend.scan_launch.start_run",
+                 side_effect=OutputDirError("cannot write to /tmp/x"),
+             ):
+            r = self.client.post("/scans/start", data=data)
+        self.assertEqual(r.status_code, 503)
+        self.assertIn(b"cannot write", r.data)
+
     def test_status_endpoint_returns_json(self) -> None:
         r = self.client.get("/scans/nonexistent-slug/status")
         self.assertEqual(r.status_code, 200)

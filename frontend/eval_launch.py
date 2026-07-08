@@ -316,7 +316,7 @@ def start_run(
     Caller must have passed validate_launch first; this function assumes
     allowlisted inputs.
     """
-    from frontend.run_launch import build_launch_plan, persist_run_meta_dir, reused_slug
+    from frontend.run_launch import build_launch_plan, persist_run_meta_dir
 
     force_private = suite_key.startswith(CUSTOM_PREFIX)
     plan = build_launch_plan(
@@ -327,9 +327,7 @@ def start_run(
         suite_key=suite_key,
         max_tokens=max_tokens,
     )
-    if plan.reused:
-        stem = reused_slug(plan) or predict_stem(suite_key, candidate)
-        return stem, True, plan.visibility
+    # Explicit browser Start/Rerun must always spawn a fresh run (see scan_launch).
 
     combo = (
         candidate, judge, suite_key, max_tokens,

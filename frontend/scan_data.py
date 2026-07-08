@@ -714,8 +714,24 @@ def delete_scan(
 
     scan_dir = run_paths.scoped_dir(OUTPUT_DIR / slug, visibility=visibility, owner_user_id=owner_user_id)
     result_path = scan_dir / "scan_result.json"
+    run_id: str | None = None
     db_keys: tuple[str, str] | None = None
-    if result_path.is_file():
+    db_available = False
+    db_row_existed = False
+    try:
+        from frontend import scan_db_data
+
+        db_available = scan_db_data.available()
+        if db_available:
+            run_id = scan_db_data.resolve_delete_run_id(
+                slug, visibility=visibility, owner_user_id=owner_user_id
+            )
+            if run_id is not None:
+                db_row_existed = True
+    except Exception:
+        pass
+
+    if result_path.is_file() and not run_id:
         try:
             data = json.loads(result_path.read_text(encoding="utf-8"))
             meta = data.get("scan_metadata") or {}
@@ -731,30 +747,27 @@ def delete_scan(
         wipe_dir(scan_dir)
 
     removed_db = False
-    db_available = False
-    db_row_existed = False
     db_exc: BaseException | None = None
     try:
         from frontend import scan_db_data
         from frontend.delete_db import db_delete_error
 
-        db_available = scan_db_data.available()
         if db_available:
             try:
-                db_row_existed = (
-                    scan_db_data.resolve_delete_keys(
-                        slug, visibility=visibility, owner_user_id=owner_user_id
-                    )
-                    is not None
-                )
-            except Exception:
-                pass
-            try:
-                if db_keys:
+                if run_id:
+                    removed_db = scan_db_data.delete_run_by_id(run_id)
+                if not removed_db and db_keys:
                     removed_db = scan_db_data.delete_run(*db_keys)
                 if not removed_db:
                     removed_db = scan_db_data.delete_run_by_slug(
                         slug, visibility=visibility, owner_user_id=owner_user_id
+                    )
+                if not removed_db and not db_row_existed:
+                    db_row_existed = (
+                        scan_db_data.resolve_delete_run_id(
+                            slug, visibility=visibility, owner_user_id=owner_user_id
+                        )
+                        is not None
                     )
             except Exception as exc:
                 db_exc = exc

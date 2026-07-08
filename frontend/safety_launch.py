@@ -383,7 +383,7 @@ def start_run(
     garak_probes: str | None = None,
 ) -> tuple[str, bool, str]:
     """Returns (run_key, already_running, visibility)."""
-    from frontend.run_launch import build_launch_plan, persist_run_meta_dir, reused_run_key
+    from frontend.run_launch import build_launch_plan, persist_run_meta_dir
 
     plan = build_launch_plan(
         "safety",
@@ -396,9 +396,7 @@ def start_run(
         skip_promptfoo=skip_promptfoo,
         garak_probes=garak_probes,
     )
-    if plan.reused:
-        run_key = reused_run_key(plan) or f"{normalize_gateway_model_id(model)}/{redteam_profile}"
-        return run_key, True, plan.visibility
+    # Explicit browser Start/Rerun must always spawn a fresh run (see scan_launch).
 
     slug = normalize_gateway_model_id(model)
     run_key = f"{slug}/{redteam_profile}"

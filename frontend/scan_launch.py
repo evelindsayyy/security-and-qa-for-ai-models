@@ -238,7 +238,7 @@ def start_run(
 ) -> tuple[str, bool, str]:
     """Returns (slug, already_running, visibility) — callers need visibility
     to redirect to the correctly-scoped URL, even while still in progress."""
-    from frontend.run_launch import build_launch_plan, persist_run_meta_scan, reused_slug
+    from frontend.run_launch import build_launch_plan, persist_run_meta_scan
 
     hf_repo = _normalize_hf_repo(hf_repo)
     plan = build_launch_plan(
@@ -250,9 +250,9 @@ def start_run(
         skip_deps=skip_deps,
         skip_secrets=skip_secrets,
     )
-    if plan.reused:
-        slug = reused_slug(plan) or safe_dir_name(hf_repo)
-        return slug, True, plan.visibility
+    # Unlike benchmark launches, always start a fresh subprocess when the user
+    # clicks Start — Postgres reuse dedupe is for catalog links only; blocking
+    # reruns here sent users back to an old result with status=reused.
 
     slug = safe_dir_name(hf_repo)
     combo = (
