@@ -1,0 +1,316 @@
+[[AdvancedFormat]]
+
+[[Block:Rater 01]]
+
+[[Question:DB]]
+[[ID:intro]]
+<h3>Which AI Answer Is Better? (~25 min)</h3><p>Thanks for helping out! In each question, an AI was asked to do a small task — write an email, explain an idea, or rewrite a notice — and you'll see two AI answers to the same task. Just pick the one you think is better (clearer, more correct, or more helpful), or choose "About the same" if they're equally good. There are no right answers and you don't need any special background — go with your honest first impression. It takes about 25 minutes (feel free to do it in two sittings). Your picks help us check how well an automated AI grader matches real people's judgment. Thank you!</p>
+
+[[PageBreak]]
+
+[[Question:TE:SingleLine]]
+[[ID:rater]]
+Your name or email (so we can thank you — not shared):
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_001]]
+<p><strong>Task:</strong> Draft a professional email to Professor A requesting a 2-day extension on the CS 201 assignment due this Friday, because you were sick this week. Offer to provide documentation. Include a clear subject line.</p><p><strong>Response 1</strong><br>Subject: Request for Extension on CS 201 Assignment Due This Friday<br><br>Dear Professor A,<br><br>I hope this message finds you well. I am writing to request a 2-day extension on the CS 201 assignment, which is due this Friday. Unfortunately, I was unwell this week and found it challenging to complete the assignment on time.<br><br>I would be happy to provide any necessary medical documentation to support my request. Please let me know if you need further information or documentation from me.<br><br>Thank you for your understanding and support.<br><br>Best regards,<br><br>[Your Full Name]  <br>[Your Student ID]  <br>[Your Contact Information]</p><br><p><strong>Response 2</strong><br>Subject: Request for 2-Day Extension on CS 201 Assignment Due to Illness<br><br>Dear Professor A,<br><br>I hope this message finds you well. I am writing to request a two-day extension on the CS 201 assignment originally due this Friday. Unfortunately, I was unwell this past week, which impacted my ability to complete the work on time.<br><br>If needed, I am happy to provide documentation to verify my illness. I appreciate your understanding and consideration of my request.<br><br>Thank you very much for your time.<br><br>Best regards,  <br>[Your Name]  <br>[Your Student ID]</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_002]]
+<p><strong>Task:</strong> Draft a professional email to Professor A requesting a 2-day extension on the CS 201 assignment due this Friday, because you were sick this week. Offer to provide documentation. Include a clear subject line.</p><p><strong>Response 1</strong><br>Subject: Request for 2-Day Extension on CS 201 Assignment Due to Illness<br><br>Dear Professor A,<br><br>I hope this message finds you well. I am writing to kindly request a two-day extension on the upcoming CS 201 assignment, which is due this Friday. Unfortunately, I was unwell this week and was unable to work on the assignment as planned.<br><br>I am happy to provide any necessary documentation to verify my illness if required. I appreciate your understanding and consideration, and I will ensure the assignment is completed promptly within the extended timeframe.<br><br>Thank you very much for your support.<br><br>Best regards,  <br>[Your Full Name]  <br>[Your Student ID]  <br>[Your Contact Information]</p><br><p><strong>Response 2</strong><br>Subject: Request for Extension on CS 201 Assignment Due This Friday<br><br>Dear Professor A,<br><br>I hope this message finds you well. I am writing to request a 2-day extension on the CS 201 assignment, which is due this Friday. Unfortunately, I was unwell this week and found it challenging to complete the assignment on time.<br><br>I would be happy to provide any necessary medical documentation to support my request. Please let me know if you need further information or documentation from me.<br><br>Thank you for your understanding and support.<br><br>Best regards,<br><br>[Your Full Name]  <br>[Your Student ID]  <br>[Your Contact Information]</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_003]]
+<p><strong>Task:</strong> Draft an email to the Duke OIT Service Desk reporting that you cannot connect to the eduroam Wi-Fi on your laptop. Include the troubleshooting you've already tried so they can help faster.</p><p><strong>Response 1</strong><br>Subject: Issue Connecting to eduroam Wi-Fi on Laptop<br><br>Dear Duke OIT Service Desk,<br><br>I hope this message finds you well. I am writing to report an issue I am experiencing with connecting to the eduroam Wi-Fi network on my laptop. Despite following the standard procedures, I have been unable to establish a connection.<br><br>Here are the steps I have already taken to troubleshoot the issue:<br><br>1. <strong>Restarted the Laptop</strong>: I restarted both my laptop and the router to ensure there were no temporary glitches.<br>2. <strong>Checked Network Settings</strong>: I verified that the eduroam network is enabled and that my laptop is set to automatically obtain an IP address.<br>3. <strong>Updated Drivers</strong>: I ensured that all necessary drivers, particularly the wireless adapter drivers, are up to date.<br>4. <strong>Contacted IT Support at My Institution</strong>: I reached out to my institution’s IT support team, but they suggested checking if the issue persists after contacting Duke OIT for further assistance.<br><br>Unfortunately, none of these steps have resolved the issue. I am currently unable to access the internet via eduroam, which is causing delays in my work.<br><br>Could you please assist me in resolving this issue as soon as possible? If there are any specific details or logs you need from my end, please let me know.<br><br>Thank you for your prompt attention to this matter.<br><br>Best regards,<br><br>[Your Full Name]  <br>[Your Duke NetID]  <br>[Your Department/Program]  <br>[Your Contact Information]  <br>[Your Laptop Model and OS Version]</p><br><p><strong>Response 2</strong><br>Subject: Unable to Connect to eduroam Wi-Fi on Laptop<br><br>Dear Duke OIT Service Desk,<br><br>I am currently unable to connect to the eduroam Wi-Fi network on my laptop. I have attempted the following troubleshooting steps without success:<br><br>- Restarted my laptop  <br>- Verified that my Wi-Fi is turned on  <br>- Confirmed that I am selecting the correct eduroam network  <br>- Entered my Duke NetID and password carefully  <br>- Removed and re-added the eduroam network profile  <br>- Ensured my device’s software and network drivers are up to date  <br><br>Despite these efforts, my laptop still will not connect to eduroam. Could you please assist me in resolving this issue?<br><br>Thank you for your help.<br><br>Best regards,  <br>[Your Name]  <br>[Your Duke NetID]  <br>[Your Contact Information]</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_004]]
+<p><strong>Task:</strong> Draft an email to the Duke OIT Service Desk reporting that you cannot connect to the eduroam Wi-Fi on your laptop. Include the troubleshooting you've already tried so they can help faster.</p><p><strong>Response 1</strong><br>Subject: Unable to Connect to Eduroam Wi-Fi on Laptop<br><br>Dear Duke OIT Service Desk,<br><br>I am experiencing difficulty connecting my laptop to the eduroam Wi-Fi network. I have already attempted the following troubleshooting steps:<br><br>- Restarted my laptop<br>- Removed and re-added the eduroam network profile<br>- Verified that my login credentials are correct<br>- Ensured that my device's Wi-Fi drivers are up to date<br>- Restarted my Wi-Fi adapter<br>- Tried connecting to eduroam on different locations within campus<br><br>Despite these efforts, I am still unable to establish a connection. Could you please assist me in resolving this issue?<br><br>Thank you for your help.<br><br>Best regards,  <br>[Your Name]  <br>[Your Department or Affiliation]  <br>[Your Contact Information]</p><br><p><strong>Response 2</strong><br>Subject: Issue Connecting to eduroam Wi-Fi on Laptop<br><br>Dear Duke OIT Service Desk,<br><br>I hope this message finds you well. I am writing to report an issue I am experiencing with connecting to the eduroam Wi-Fi network on my laptop. Despite following the standard procedures, I have been unable to establish a connection.<br><br>Here are the steps I have already taken to troubleshoot the issue:<br><br>1. <strong>Restarted the Laptop</strong>: I restarted both my laptop and the router to ensure there were no temporary glitches.<br>2. <strong>Checked Network Settings</strong>: I verified that the eduroam network is enabled and that my laptop is set to automatically obtain an IP address.<br>3. <strong>Updated Drivers</strong>: I ensured that all necessary drivers, particularly the wireless adapter drivers, are up to date.<br>4. <strong>Contacted IT Support at My Institution</strong>: I reached out to my institution’s IT support team, but they suggested checking if the issue persists after contacting Duke OIT for further assistance.<br><br>Unfortunately, none of these steps have resolved the issue. I am currently unable to access the internet via eduroam, which is causing delays in my work.<br><br>Could you please assist me in resolving this issue as soon as possible? If there are any specific details or logs you need from my end, please let me know.<br><br>Thank you for your prompt attention to this matter.<br><br>Best regards,<br><br>[Your Full Name]  <br>[Your Duke NetID]  <br>[Your Department/Program]  <br>[Your Contact Information]  <br>[Your Laptop Model and OS Version]</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_005]]
+<p><strong>Task:</strong> Draft an email to your academic advisor, Professor B, requesting a short meeting to discuss adding a Machine Learning &amp; AI minor. Suggest a couple of times.</p><p><strong>Response 1</strong><br>Subject: Request for Meeting to Discuss Adding a Machine Learning &amp; AI Minor<br><br>Dear Professor B,<br><br>I hope this message finds you well. I am writing to request a brief meeting with you to discuss my interest in adding a Machine Learning &amp; AI minor to my current degree program. Given your expertise and guidance, I believe this would be a valuable addition to my academic journey.<br><br>Could we schedule a meeting at your earliest convenience? I have a few suggestions:<br><br>1. Next Tuesday, March 14th, from 2:00 PM to 3:00 PM.<br>2. Thursday, March 16th, from 10:00 AM to 11:00 AM.<br><br>Please let me know which time works best for you, or if there is another time that might be more convenient. I look forward to discussing this opportunity further.<br><br>Thank you for your time and consideration.<br><br>Best regards,<br><br>[Your Full Name]  <br>[Your Student ID]  <br>[Your Major/Program]  <br>[Your Contact Information]</p><br><p><strong>Response 2</strong><br>Subject: Request for Meeting to Discuss Adding Machine Learning &amp; AI Minor<br><br>Dear Professor B,<br><br>I hope this message finds you well. I am interested in adding a Machine Learning &amp; AI minor to my academic plan and would appreciate the opportunity to discuss this with you.<br><br>Would you be available for a short meeting sometime this week? I am available on Wednesday afternoon or Thursday morning, but I am happy to accommodate your schedule if those times do not work.<br><br>Thank you for your time and guidance.<br><br>Best regards,  <br>[Your Name]</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_006]]
+<p><strong>Task:</strong> Draft an email to your academic advisor, Professor B, requesting a short meeting to discuss adding a Machine Learning &amp; AI minor. Suggest a couple of times.</p><p><strong>Response 1</strong><br>Subject: Request for Meeting to Discuss Adding Machine Learning &amp; AI Minor<br><br>Dear Professor B,<br><br>I hope this message finds you well. I am interested in adding a Machine Learning &amp; AI minor to my academic program and would appreciate the opportunity to discuss this with you.<br><br>Could we schedule a brief meeting at your convenience? I am available on Tuesday or Thursday afternoons between 2:00 PM and 4:00 PM. Please let me know if any of these times work for you or if there is a more suitable time.<br><br>Thank you very much for your guidance.<br><br>Best regards,  <br>[Your Name]  <br>[Your Student ID]</p><br><p><strong>Response 2</strong><br>Subject: Request for Meeting to Discuss Adding a Machine Learning &amp; AI Minor<br><br>Dear Professor B,<br><br>I hope this message finds you well. I am writing to request a brief meeting with you to discuss my interest in adding a Machine Learning &amp; AI minor to my current degree program. Given your expertise and guidance, I believe this would be a valuable addition to my academic journey.<br><br>Could we schedule a meeting at your earliest convenience? I have a few suggestions:<br><br>1. Next Tuesday, March 14th, from 2:00 PM to 3:00 PM.<br>2. Thursday, March 16th, from 10:00 AM to 11:00 AM.<br><br>Please let me know which time works best for you, or if there is another time that might be more convenient. I look forward to discussing this opportunity further.<br><br>Thank you for your time and consideration.<br><br>Best regards,<br><br>[Your Full Name]  <br>[Your Student ID]  <br>[Your Major/Program]  <br>[Your Contact Information]</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_007]]
+<p><strong>Task:</strong> Draft a brief, polite email to your TA asking where to submit the final project and what file format is expected.</p><p><strong>Response 1</strong><br>Subject: Final Project Submission Details<br><br>Hi [TA's Name],<br><br>I hope this message finds you well. I am writing to inquire about the submission process for our final project. Could you please let me know where we should upload the project and what file format is expected?<br><br>Thank you very much for your assistance!<br><br>Best regards,<br>[Your Name]</p><br><p><strong>Response 2</strong><br>Subject: Question About Final Project Submission<br><br>Dear [TA's Name],<br><br>I hope you’re doing well. I wanted to ask where we should submit the final project and what file format is expected.<br><br>Thank you for your help!<br><br>Best regards,  <br>[Your Name]</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_008]]
+<p><strong>Task:</strong> Draft a brief, polite email to your TA asking where to submit the final project and what file format is expected.</p><p><strong>Response 1</strong><br>Subject: Inquiry About Final Project Submission<br><br>Dear [TA's Name],<br><br>I hope you're doing well. Could you please let me know where I should submit the final project and what file format is preferred? <br><br>Thank you very much for your assistance.<br><br>Best regards,  <br>[Your Name]</p><br><p><strong>Response 2</strong><br>Subject: Final Project Submission Details<br><br>Hi [TA's Name],<br><br>I hope this message finds you well. I am writing to inquire about the submission process for our final project. Could you please let me know where we should upload the project and what file format is expected?<br><br>Thank you very much for your assistance!<br><br>Best regards,<br>[Your Name]</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_009]]
+<p><strong>Task:</strong> Draft a friendly email to your project teammate A proposing to move your weekly meeting from Tuesday at 3pm to Thursday at 3pm this week, and asking if that works.</p><p><strong>Response 1</strong><br>Subject: Suggested Change for Our Weekly Meeting Time<br><br>Hi A,<br><br>I hope you're doing well!<br><br>I wanted to touch base about our upcoming weekly meeting. I noticed that my schedule has shifted slightly this week, and I think moving our meeting from Tuesday at 3pm to Thursday at 3pm would be more convenient for me. Would this work for you?<br><br>Let me know what you think!<br><br>Best,<br>[Your Name]</p><br><p><strong>Response 2</strong><br>Subject: Proposal to Reschedule This Week’s Meeting<br><br>Hi A,<br><br>I hope you’re doing well! I wanted to check if it would be possible to move our weekly meeting from Tuesday at 3pm to Thursday at 3pm this week. Please let me know if that works for you.<br><br>Thanks so much!<br><br>Best,  <br>[Your Name]</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_010]]
+<p><strong>Task:</strong> Draft a friendly email to your project teammate A proposing to move your weekly meeting from Tuesday at 3pm to Thursday at 3pm this week, and asking if that works.</p><p><strong>Response 1</strong><br>Subject: Quick Change to Our Meeting Time This Week<br><br>Hi [Teammate A],<br><br>I hope you're doing well! I was wondering if we could move our weekly meeting from Tuesday at 3pm to Thursday at 3pm this week. Would that work for you?<br><br>Please let me know if that time is convenient or if there's a better slot. Thanks so much!<br><br>Looking forward to catching up.<br><br>Best,  <br>[Your Name]</p><br><p><strong>Response 2</strong><br>Subject: Suggested Change for Our Weekly Meeting Time<br><br>Hi A,<br><br>I hope you're doing well!<br><br>I wanted to touch base about our upcoming weekly meeting. I noticed that my schedule has shifted slightly this week, and I think moving our meeting from Tuesday at 3pm to Thursday at 3pm would be more convenient for me. Would this work for you?<br><br>Let me know what you think!<br><br>Best,<br>[Your Name]</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_017]]
+<p><strong>Task:</strong> Rewrite the following in plain language for a general student audience, keeping all the facts: "Students must remit payment of all outstanding account balances prior to the commencement of the registration period; failure to do so will result in the placement of a financial hold precluding enrollment."</p><p><strong>Response 1</strong><br>Before you can register for classes, you need to pay any money that still owes on your account. If you don't pay, the school will put a hold on your account, which means you won't be able to enroll in classes.</p><br><p><strong>Response 2</strong><br>Students must pay any outstanding balances on their accounts before the registration period starts. If they do not, a financial hold will be placed on their account, and they will not be allowed to register for classes.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_018]]
+<p><strong>Task:</strong> Rewrite the following in plain language for a general student audience, keeping all the facts: "Students must remit payment of all outstanding account balances prior to the commencement of the registration period; failure to do so will result in the placement of a financial hold precluding enrollment."</p><p><strong>Response 1</strong><br>Students must pay any remaining money they owe before they can register for classes. If they do not pay on time, a financial hold will be placed on their account, which will prevent them from enrolling in courses.</p><br><p><strong>Response 2</strong><br>Before you can register for classes, you need to pay any money that still owes on your account. If you don't pay, the school will put a hold on your account, which means you won't be able to enroll in classes.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_019]]
+<p><strong>Task:</strong> Rewrite this IT instruction in plain language, keeping the steps: "To remediate the authentication failure, users should purge cached credentials from the operating system keychain and subsequently re-establish the multi-factor enrollment via the designated self-service portal."</p><p><strong>Response 1</strong><br>To fix the authentication problem, users should:<br><br>1. Clear out any saved login information from their device's keychain.<br>2. Then, go to the official self-service portal to set up multi-factor authentication again.</p><br><p><strong>Response 2</strong><br>To fix the login problem, follow these steps:<br><br>1. Delete the saved passwords from your computer’s keychain.<br>2. Then, go to the self-service portal and set up your multi-factor authentication again.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_020]]
+<p><strong>Task:</strong> Rewrite this IT instruction in plain language, keeping the steps: "To remediate the authentication failure, users should purge cached credentials from the operating system keychain and subsequently re-establish the multi-factor enrollment via the designated self-service portal."</p><p><strong>Response 1</strong><br>To fix the login problem, users should delete any saved passwords from their computer's keychain. After that, they need to set up the multi-factor authentication again using the self-service portal.</p><br><p><strong>Response 2</strong><br>To fix the authentication problem, users should:<br><br>1. Clear out any saved login information from their device's keychain.<br>2. Then, go to the official self-service portal to set up multi-factor authentication again.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_021]]
+<p><strong>Task:</strong> Rewrite this notice in plain language for students, keeping the deadline and consequence: "Submission of the enrollment verification form is required no later than the fourteenth (14th) calendar day of the semester; non-submission will render the student ineligible for the associated tuition adjustment."</p><p><strong>Response 1</strong><br>You must submit the enrollment verification form by the 14th day of the semester. If you don't submit it, you won't be eligible for the tuition adjustment.</p><br><p><strong>Response 2</strong><br>Please submit your enrollment verification form by the 14th day of the semester. If you do not submit it by then, you will not qualify for the tuition adjustment.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_022]]
+<p><strong>Task:</strong> Rewrite this notice in plain language for students, keeping the deadline and consequence: "Submission of the enrollment verification form is required no later than the fourteenth (14th) calendar day of the semester; non-submission will render the student ineligible for the associated tuition adjustment."</p><p><strong>Response 1</strong><br>Please submit the enrollment verification form by the 14th day of the semester. If you don't submit it by then, you won't be able to get the tuition adjustment.</p><br><p><strong>Response 2</strong><br>You must submit the enrollment verification form by the 14th day of the semester. If you don't submit it, you won't be eligible for the tuition adjustment.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_023]]
+<p><strong>Task:</strong> Rewrite this research-consent sentence in plain language, keeping the meaning: "Participation in this study is wholly voluntary, and the participant may elect to withdraw consent at any juncture without incurring any penalty or forfeiture of benefits to which they are otherwise entitled."</p><p><strong>Response 1</strong><br>Taking part in this study is completely voluntary, and you can choose to stop at any time without facing any penalties or losing any rights or benefits you are entitled to.</p><br><p><strong>Response 2</strong><br>Taking part in this study is completely your choice, and you can stop at any time without any penalty or loss of benefits you would normally receive.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_024]]
+<p><strong>Task:</strong> Rewrite this research-consent sentence in plain language, keeping the meaning: "Participation in this study is wholly voluntary, and the participant may elect to withdraw consent at any juncture without incurring any penalty or forfeiture of benefits to which they are otherwise entitled."</p><p><strong>Response 1</strong><br>Joining this study is completely your choice. You can decide to stop participating at any time without any penalty or losing any benefits you would normally receive.</p><br><p><strong>Response 2</strong><br>Taking part in this study is completely voluntary, and you can choose to stop at any time without facing any penalties or losing any rights or benefits you are entitled to.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_025]]
+<p><strong>Task:</strong> Rewrite this financial-aid clause in plain language for a general audience, keeping the condition: "Continued eligibility for need-based aid is contingent upon the maintenance of satisfactory academic progress as defined by the institution's published standards."</p><p><strong>Response 1</strong><br>To keep receiving financial aid based on need, you must meet the school's standards for doing well in your classes.</p><br><p><strong>Response 2</strong><br>To keep receiving need-based financial aid, you must continue to meet the school's academic progress requirements as outlined in their official guidelines.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_026]]
+<p><strong>Task:</strong> Rewrite this financial-aid clause in plain language for a general audience, keeping the condition: "Continued eligibility for need-based aid is contingent upon the maintenance of satisfactory academic progress as defined by the institution's published standards."</p><p><strong>Response 1</strong><br>To keep receiving need-based financial aid, students must continue to meet the school's standards for good academic progress, as outlined in the school's published policies.</p><br><p><strong>Response 2</strong><br>To keep receiving financial aid based on need, you must meet the school's standards for doing well in your classes.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_033]]
+<p><strong>Task:</strong> I'm a beginner and I keep mixing up a for loop and a while loop in Python. Can you explain the difference and when I'd use each?</p><p><strong>Response 1</strong><br>Certainly! Both `for` loops and `while` loops are control flow statements in Python, but they serve different purposes and are used in different scenarios.<br><br>### For Loop<br><br>A `for` loop is used when you want to iterate over a sequence (like a list, tuple, dictionary, set, or string) or any other iterable object. The basic syntax of a `for` loop is:<br><br>```python<br>for item in iterable:<br>    # do something with item<br>```<br><br><strong>When to Use:</strong><br>- When you know in advance how many times you want to loop.<br>- When you want to iterate over a collection of items.<br><br><strong>Example:</strong><br>```python<br>fruits = ["apple", "banana", "cherry"]<br>for fruit in fruits:<br>    print(fruit)<br>```<br><br>### While Loop<br><br>A `while` loop is used when you want to repeat a block of code as long as a certain condition is true. The basic syntax of a `while` loop is:<br><br>```python<br>while condition:<br>    # do something<br>```<br><br><strong>When to Use:</strong><br>- When you don't know in advance how many times you need to loop.<br>- When you want to continue looping until a specific condition is met.<br><br><strong>Example:</strong><br>```python<br>count = 0<br>while count &lt; 5:<br>    print(count)<br>    count += 1<br>```<br><br>### Key Differences<br><br>1. <strong>Control Over Iteration:</strong><br>   - <strong>For Loop:</strong> Provides a structured way to iterate over a sequence or collection.<br>   - <strong>While Loop:</strong> Continues to execute as long as a condition remains true.<br><br>2. <strong>Termination Condition:</strong><br>   - <strong>For Loop:</strong> The number of iterations is determined by the length of the sequence or the range specified.<br>   - <strong>While Loop:</strong> The loop continues until the condition becomes false, which must be explicitly checked within the loop.<br><br>3. <strong>Use Case:</strong><br>   - <strong>For Loop:</strong> Ideal for iterating over collections or ranges.<br>   - <strong>While Loop:</strong> Useful for indefinite loops where the number of iterations is not known beforehand.<br><br>Understanding these differences will help you choose the right loop for your needs. Practice both types of loops with different examples to get more comfortable with them!</p><br><p><strong>Response 2</strong><br>Certainly! Here's a simple explanation of the difference between a <strong>for loop</strong> and a <strong>while loop</strong> in Python, and when to use each:<br><br>### For Loop<br>- <strong>What it is:</strong> A for loop is used to iterate over a sequence (like a list, tuple, string, or range).<br>- <strong>How it works:</strong> It runs the block of code a fixed number of times, once for each item in the sequence.<br>- <strong>When to use:</strong> Use a for loop when you know in advance how many times you want to repeat something or when you want to iterate over items in a collection.<br><br><strong>Example:</strong><br>```python<br>for i in range(5):  # i goes from 0 to 4<br>    print(i)<br>```<br><br>### While Loop<br>- <strong>What it is:</strong> A while loop runs as long as a condition is true.<br>- <strong>How it works:</strong> It keeps repeating the block of code until the condition becomes false.<br>- <strong>When to use:</strong> Use a while loop when you want to repeat something but don’t know in advance how many times it will run — it depends on a condition.<br><br><strong>Example:</strong><br>```python<br>count = 0<br>while count &lt; 5:<br>    print(count)<br>    count += 1<br>```<br><br>### Summary<br>| Loop Type | Use When...                          | Example Use Case                      |<br>|-----------|------------------------------------|-------------------------------------|<br>| for loop  | You know the number of iterations or want to loop over a sequence | Loop through a list of names        |<br>| while loop| You want to repeat until a condition changes (unknown iterations) | Keep asking user input until they type "exit" |<br><br>Let me know if you want me to show you examples for a specific task!</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_034]]
+<p><strong>Task:</strong> I'm a beginner and I keep mixing up a for loop and a while loop in Python. Can you explain the difference and when I'd use each?</p><p><strong>Response 1</strong><br>Certainly! Here's a simple explanation of the difference between a `for` loop and a `while` loop in Python, along with when to use each:<br><br><strong>For Loop:</strong><br>- Used when you know in advance how many times you want to iterate.<br>- It iterates over a sequence (like a list, tuple, string, or range).<br>- Syntax example:<br>  ```python<br>  for item in sequence:<br>      # do something with item<br>  ```<br>- Example:<br>  ```python<br>  for i in range(5):<br>      print(i)<br>  ```<br>  This prints numbers 0 through 4.<br><br><strong>When to use:</strong><br>- When you have a collection of items to process.<br>- When you know the number of iterations beforehand.<br><br>---<br><br><strong>While Loop:</strong><br>- Used when you want to repeat an action until a certain condition becomes false.<br>- It checks the condition before each iteration.<br>- Syntax example:<br>  ```python<br>  while condition:<br>      # do something<br>  ```<br>- Example:<br>  ```python<br>  count = 0<br>  while count &lt; 5:<br>      print(count)<br>      count += 1<br>  ```<br>  This also prints numbers 0 through 4.<br><br><strong>When to use:</strong><br>- When the number of iterations isn't known beforehand.<br>- When you want to keep looping until some condition changes.<br><br>---<br><br><strong>Summary:</strong><br>- Use a <strong>`for` loop</strong> when iterating over a known collection or range.<br>- Use a <strong>`while` loop</strong> when looping until a condition changes, especially if the number of iterations isn't predetermined.<br><br>Let me know if you'd like to see more examples!</p><br><p><strong>Response 2</strong><br>Certainly! Both `for` loops and `while` loops are control flow statements in Python, but they serve different purposes and are used in different scenarios.<br><br>### For Loop<br><br>A `for` loop is used when you want to iterate over a sequence (like a list, tuple, dictionary, set, or string) or any other iterable object. The basic syntax of a `for` loop is:<br><br>```python<br>for item in iterable:<br>    # do something with item<br>```<br><br><strong>When to Use:</strong><br>- When you know in advance how many times you want to loop.<br>- When you want to iterate over a collection of items.<br><br><strong>Example:</strong><br>```python<br>fruits = ["apple", "banana", "cherry"]<br>for fruit in fruits:<br>    print(fruit)<br>```<br><br>### While Loop<br><br>A `while` loop is used when you want to repeat a block of code as long as a certain condition is true. The basic syntax of a `while` loop is:<br><br>```python<br>while condition:<br>    # do something<br>```<br><br><strong>When to Use:</strong><br>- When you don't know in advance how many times you need to loop.<br>- When you want to continue looping until a specific condition is met.<br><br><strong>Example:</strong><br>```python<br>count = 0<br>while count &lt; 5:<br>    print(count)<br>    count += 1<br>```<br><br>### Key Differences<br><br>1. <strong>Control Over Iteration:</strong><br>   - <strong>For Loop:</strong> Provides a structured way to iterate over a sequence or collection.<br>   - <strong>While Loop:</strong> Continues to execute as long as a condition remains true.<br><br>2. <strong>Termination Condition:</strong><br>   - <strong>For Loop:</strong> The number of iterations is determined by the length of the sequence or the range specified.<br>   - <strong>While Loop:</strong> The loop continues until the condition becomes false, which must be explicitly checked within the loop.<br><br>3. <strong>Use Case:</strong><br>   - <strong>For Loop:</strong> Ideal for iterating over collections or ranges.<br>   - <strong>While Loop:</strong> Useful for indefinite loops where the number of iterations is not known beforehand.<br><br>Understanding these differences will help you choose the right loop for your needs. Practice both types of loops with different examples to get more comfortable with them!</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_035]]
+<p><strong>Task:</strong> What's the difference between the mean and the median, and when should I use one over the other?</p><p><strong>Response 1</strong><br>The mean and median are both measures of central tendency used to describe the center of a dataset, but they differ in how they calculate this center and in their sensitivity to outliers.<br><br><strong>Mean:</strong><br>- The mean is calculated by summing all the values in the dataset and then dividing by the number of values.<br>- It is sensitive to every value in the dataset, including outliers (extreme values).<br>- Formula: Mean = Σ_i=1^n x_i/n, where x_i represents each value in the dataset and n is the total number of values.<br><br><strong>Median:</strong><br>- The median is the middle value in a dataset when the values are arranged in order. If there is an even number of observations, the median is the average of the two middle numbers.<br>- It is less sensitive to outliers because it only depends on the position of the values rather than their actual values.<br>- Formula: For an odd number of observations, the median is the (n+1/2)-th value. For an even number of observations, it is the average of the (n/2)-th and (n/2 + 1)-th values.<br><br><strong>When to Use Each:</strong><br><br>- <strong>Use the Mean:</strong><br>  - When you want to use all the data points equally.<br>  - When the data is normally distributed (symmetric) and there are no significant outliers.<br>  - In financial calculations like average returns or in scenarios where the distribution is uniform.<br><br>- <strong>Use the Median:</strong><br>  - When you want to be less affected by outliers or extreme values.<br>  - When the data is skewed (not symmetrically distributed).<br>  - In real-world applications where extreme values might distort the mean, such as income levels or real estate prices.<br><br>In summary, the choice between using the mean or median depends on the nature of your data and what aspect of the data you want to highlight.</p><br><p><strong>Response 2</strong><br>The <strong>mean</strong> is the average of a set of numbers, calculated by adding all the values together and then dividing by the number of values. The <strong>median</strong> is the middle value when the numbers are arranged in order; if there is an even number of values, the median is the average of the two middle numbers.<br><br><strong>Key differences:</strong><br>- The mean takes into account every value, so it can be affected by extremely high or low values (outliers).<br>- The median is more robust to outliers and skewed data because it depends only on the middle position.<br><br><strong>When to use each:</strong><br>- Use the <strong>mean</strong> when your data is roughly symmetric and does not have outliers, as it provides a good overall average.<br>- Use the <strong>median</strong> when your data is skewed or contains outliers, as it better represents the typical value without being distorted by extreme values.<br><br>In summary, the mean is sensitive to all values, while the median gives a better central tendency measure for skewed or non-normal distributions.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_036]]
+<p><strong>Task:</strong> What's the difference between the mean and the median, and when should I use one over the other?</p><p><strong>Response 1</strong><br>The <strong>mean</strong> and <strong>median</strong> are both measures of central tendency that describe the typical value in a dataset, but they are calculated differently and are useful in different situations:<br><br>- <strong>Mean (Average):</strong>  <br>  - Calculated by adding all the values and dividing by the number of values.  <br>  - Sensitive to extremely high or low values (outliers).  <br>  - Best used when the data is symmetrically distributed without outliers.<br><br>- <strong>Median:</strong>  <br>  - The middle value when the data is ordered from smallest to largest.  <br>  - Not affected by outliers or skewed data.  <br>  - Best used when the data is skewed or contains outliers.<br><br><strong>When to use which:</strong><br><br>- Use the <strong>mean</strong> when your data is approximately symmetric and free of outliers, as it provides a good overall average.<br>- Use the <strong>median</strong> when your data is skewed or contains outliers, as it better represents the typical value without being distorted by extreme values.<br><br><strong>Summary:</strong>  <br>Choose the mean for symmetric, outlier-free data; choose the median for skewed data or data with outliers.</p><br><p><strong>Response 2</strong><br>The mean and median are both measures of central tendency used to describe the center of a dataset, but they differ in how they calculate this center and in their sensitivity to outliers.<br><br><strong>Mean:</strong><br>- The mean is calculated by summing all the values in the dataset and then dividing by the number of values.<br>- It is sensitive to every value in the dataset, including outliers (extreme values).<br>- Formula: Mean = Σ_i=1^n x_i/n, where x_i represents each value in the dataset and n is the total number of values.<br><br><strong>Median:</strong><br>- The median is the middle value in a dataset when the values are arranged in order. If there is an even number of observations, the median is the average of the two middle numbers.<br>- It is less sensitive to outliers because it only depends on the position of the values rather than their actual values.<br>- Formula: For an odd number of observations, the median is the (n+1/2)-th value. For an even number of observations, it is the average of the (n/2)-th and (n/2 + 1)-th values.<br><br><strong>When to Use Each:</strong><br><br>- <strong>Use the Mean:</strong><br>  - When you want to use all the data points equally.<br>  - When the data is normally distributed (symmetric) and there are no significant outliers.<br>  - In financial calculations like average returns or in scenarios where the distribution is uniform.<br><br>- <strong>Use the Median:</strong><br>  - When you want to be less affected by outliers or extreme values.<br>  - When the data is skewed (not symmetrically distributed).<br>  - In real-world applications where extreme values might distort the mean, such as income levels or real estate prices.<br><br>In summary, the choice between using the mean or median depends on the nature of your data and what aspect of the data you want to highlight.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_037]]
+<p><strong>Task:</strong> I need to find the average of these numbers: 4, 8, 6, 10. Can you walk me through how to do it, not just give the answer?</p><p><strong>Response 1</strong><br>Certainly! To find the average of the numbers 4, 8, 6, and 10, follow these steps:<br><br>1. <strong>Add all the numbers together</strong>: <br>   <br>   4 + 8 + 6 + 10 = 28<br>   <br><br>2. <strong>Count the total number of values</strong>:<br>   There are 4 numbers in total.<br><br>3. <strong>Divide the sum by the count of numbers</strong>:<br>   <br>   28/4 = 7<br>   <br><br>So, the average of the numbers 4, 8, 6, and 10 is 7.</p><br><p><strong>Response 2</strong><br>Sure! To find the average (also called the mean) of a set of numbers, you follow these steps:<br><br>1. <strong>Add all the numbers together.</strong>  <br>   For your numbers: 4 + 8 + 6 + 10  <br>   Let's add them step-by-step:  <br>   4 + 8 = 12  <br>   12 + 6 = 18  <br>   18 + 10 = 28<br><br>2. <strong>Count how many numbers there are.</strong>  <br>   You have 4 numbers: 4, 8, 6, and 10.<br><br>3. <strong>Divide the sum by the number of numbers.</strong>  <br>   So, divide 28 (the sum) by 4 (the count):  <br>   28 ÷ 4 = 7<br><br>So, the average of the numbers 4, 8, 6, and 10 is <strong>7</strong>.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_038]]
+<p><strong>Task:</strong> I need to find the average of these numbers: 4, 8, 6, 10. Can you walk me through how to do it, not just give the answer?</p><p><strong>Response 1</strong><br>Certainly! To find the average of the numbers 4, 8, 6, and 10, follow these steps:<br><br>1. <strong>Add all the numbers together</strong>:  <br>   4 + 8 + 6 + 10 = 28<br><br>2. <strong>Count how many numbers there are</strong>:  <br>   There are 4 numbers.<br><br>3. <strong>Divide the total sum by the number of numbers</strong>:  <br>   28 ÷ 4 = 7<br><br>So, the average of the numbers 4, 8, 6, and 10 is <strong>7</strong>.</p><br><p><strong>Response 2</strong><br>Certainly! To find the average of the numbers 4, 8, 6, and 10, follow these steps:<br><br>1. <strong>Add all the numbers together</strong>: <br>   <br>   4 + 8 + 6 + 10 = 28<br>   <br><br>2. <strong>Count the total number of values</strong>:<br>   There are 4 numbers in total.<br><br>3. <strong>Divide the sum by the count of numbers</strong>:<br>   <br>   28/4 = 7<br>   <br><br>So, the average of the numbers 4, 8, 6, and 10 is 7.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_039]]
+<p><strong>Task:</strong> My recursive function never stops and crashes. Someone said I need a 'base case' — what is that and why do I need it?</p><p><strong>Response 1</strong><br>A base case in a recursive function is a condition that stops the recursion from continuing indefinitely. Without a base case, the function will keep calling itself over and over again, leading to an infinite loop that eventually causes your program to crash due to exceeding the call stack limit.<br><br>Here’s a simple example to illustrate:<br><br>### Example: Factorial Function<br><br>The factorial of a number `n` (denoted as `n!`) is the product of all positive integers less than or equal to `n`. The factorial function can be defined recursively as follows:<br><br>- Base case: If `n` is 0 or 1, then `n! = 1`.<br>- Recursive case: Otherwise, `n! = n * (n-1)!`.<br><br>Here’s how you can implement this in Python:<br><br>```python<br>def factorial(n):<br>    # Base case<br>    if n == 0 or n == 1:<br>        return 1<br>    # Recursive case<br>    else:<br>        return n * factorial(n - 1)<br><br># Example usage<br>print(factorial(5))  # Output should be 120<br>```<br><br>In this example, the base case is when `n` is 0 or 1. When the function reaches this point, it stops calling itself and returns the result. This prevents the function from going into an infinite loop.<br><br>### Why Do You Need a Base Case?<br><br>1. <strong>Termination</strong>: The base case ensures that the recursion will eventually terminate.<br>2. <strong>Avoiding Infinite Loops</strong>: Without a base case, the function will continue to call itself with the same arguments repeatedly, leading to an infinite loop.<br>3. <strong>Stack Overflow</strong>: Each recursive call adds a layer to the call stack. If there is no base case, the call stack can overflow, causing the program to crash.<br><br>By including a base case, you ensure that your recursive function will eventually reach a stopping point and avoid these issues.</p><br><p><strong>Response 2</strong><br>A base case in a recursive function is a condition that stops the recursion from continuing indefinitely. It defines the simplest scenario where the function can return a result without calling itself again. Without a base case, the function keeps calling itself forever, causing a crash or a stack overflow.<br><br>Think of recursion like a set of nested boxes: each recursive call opens a smaller box. The base case is the smallest box that you can open and find the answer inside, so you stop opening more boxes.<br><br>For example, in a function that calculates the factorial of a number:<br><br>```python<br>def factorial(n):<br>    if n == 0:          # This is the base case<br>        return 1<br>    else:<br>        return n * factorial(n - 1)<br>```<br><br>Here, when `n` reaches 0, the function returns 1 and stops calling itself. Without this base case, the function would keep calling `factorial(n - 1)` forever.<br><br>So, you need a base case to ensure your recursive function eventually stops and produces a result.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_040]]
+<p><strong>Task:</strong> My recursive function never stops and crashes. Someone said I need a 'base case' — what is that and why do I need it?</p><p><strong>Response 1</strong><br>A base case is a condition in a recursive function that stops the recursion. It defines the simplest instance of the problem that can be solved directly without further recursion. Without a base case, the function keeps calling itself indefinitely, leading to infinite recursion and eventually crashing your program.<br><br>You need a base case to ensure that your recursive calls eventually terminate, allowing the function to return a result and preventing your program from running forever. Make sure to include a clear and correct base case in your recursive function to fix the issue.</p><br><p><strong>Response 2</strong><br>A base case in a recursive function is a condition that stops the recursion from continuing indefinitely. Without a base case, the function will keep calling itself over and over again, leading to an infinite loop that eventually causes your program to crash due to exceeding the call stack limit.<br><br>Here’s a simple example to illustrate:<br><br>### Example: Factorial Function<br><br>The factorial of a number `n` (denoted as `n!`) is the product of all positive integers less than or equal to `n`. The factorial function can be defined recursively as follows:<br><br>- Base case: If `n` is 0 or 1, then `n! = 1`.<br>- Recursive case: Otherwise, `n! = n * (n-1)!`.<br><br>Here’s how you can implement this in Python:<br><br>```python<br>def factorial(n):<br>    # Base case<br>    if n == 0 or n == 1:<br>        return 1<br>    # Recursive case<br>    else:<br>        return n * factorial(n - 1)<br><br># Example usage<br>print(factorial(5))  # Output should be 120<br>```<br><br>In this example, the base case is when `n` is 0 or 1. When the function reaches this point, it stops calling itself and returns the result. This prevents the function from going into an infinite loop.<br><br>### Why Do You Need a Base Case?<br><br>1. <strong>Termination</strong>: The base case ensures that the recursion will eventually terminate.<br>2. <strong>Avoiding Infinite Loops</strong>: Without a base case, the function will continue to call itself with the same arguments repeatedly, leading to an infinite loop.<br>3. <strong>Stack Overflow</strong>: Each recursive call adds a layer to the call stack. If there is no base case, the call stack can overflow, causing the program to crash.<br><br>By including a base case, you ensure that your recursive function will eventually reach a stopping point and avoid these issues.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_041]]
+<p><strong>Task:</strong> I'm confused about GROUP BY in SQL. What does it actually do?</p><p><strong>Response 1</strong><br>Certainly! The `GROUP BY` clause in SQL is used to arrange rows that have the same values in specified columns into groups. This allows you to perform aggregate functions (like `COUNT`, `SUM`, `AVG`, `MAX`, and `MIN`) on these groups.<br><br>Here’s a simple example to illustrate how `GROUP BY` works:<br><br>Suppose you have a table called `Orders` with the following data:<br><br>| OrderID | CustomerID | Amount |<br>|---------|------------|--------|<br>| 1       | 101        | 200    |<br>| 2       | 101        | 300    |<br>| 3       | 102        | 150    |<br>| 4       | 101        | 250    |<br><br>If you want to find the total amount spent by each customer, you would use `GROUP BY` like this:<br><br>```sql<br>SELECT CustomerID, SUM(Amount) AS TotalSpent<br>FROM Orders<br>GROUP BY CustomerID;<br>```<br><br>This query will return:<br><br>| CustomerID | TotalSpent |<br>|------------|------------|<br>| 101        | 750        |<br>| 102        | 150        |<br><br>In this example:<br>- The `GROUP BY CustomerID` clause groups the rows by `CustomerID`.<br>- The `SUM(Amount)` function calculates the total amount for each group of `CustomerID`.<br><br>So, `GROUP BY` helps you summarize data by creating groups based on one or more columns, and then performing calculations on those groups.</p><br><p><strong>Response 2</strong><br>The `GROUP BY` clause in SQL is used to arrange identical data into groups. It groups rows that have the same values in specified columns into summary rows, like "find the total sales for each product" or "count the number of employees in each department."<br><br>Here's what it does:<br><br>- It collects rows with the same values in the specified column(s).<br>- It allows you to perform aggregate functions (like `COUNT()`, `SUM()`, `AVG()`, `MAX()`, `MIN()`) on each group.<br>- The result is one row per group.<br><br><strong>Example:</strong><br><br>Suppose you have a table `Sales`:<br><br>| Product | Amount |<br>|---------|--------|<br>| Apple   | 100    |<br>| Banana  | 150    |<br>| Apple   | 200    |<br>| Banana  | 100    |<br><br>If you want to find the total sales amount per product, you can use:<br><br>```sql<br>SELECT Product, SUM(Amount) AS TotalSales<br>FROM Sales<br>GROUP BY Product;<br>```<br><br>Result:<br><br>| Product | TotalSales |<br>|---------|------------|<br>| Apple   | 300        |<br>| Banana  | 250        |<br><br>So, `GROUP BY` groups the rows by product, and then `SUM(Amount)` calculates the total for each group.<br><br><strong>In short:</strong> `GROUP BY` groups rows sharing the same values in specified columns so you can aggregate data per group.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
+[[Question:MC:SingleAnswer]]
+[[ID:itm_042]]
+<p><strong>Task:</strong> I'm confused about GROUP BY in SQL. What does it actually do?</p><p><strong>Response 1</strong><br>Great question! In SQL, the `GROUP BY` clause is used to organize rows in a table into groups based on one or more columns. It allows you to perform aggregate functions (like `SUM()`, `COUNT()`, `AVG()`, `MIN()`, `MAX()`) on each group of data.<br><br><strong>What it does:</strong><br>- It groups rows that have the same values in the specified columns.<br>- After grouping, you can apply aggregate functions to each group to get summarized data.<br><br><strong>Example:</strong><br>Suppose you have a table `Sales`:<br><br>| Product | Quantity | Price |<br>|---------|----------|--------|<br>| Apple   | 10       | 1.00   |<br>| Banana  | 5        | 0.50   |<br>| Apple   | 7        | 1.00   |<br>| Banana  | 8        | 0.50   |<br><br>If you want to find out how many units of each product were sold, you can write:<br><br>```sql<br>SELECT Product, SUM(Quantity) AS TotalQuantity<br>FROM Sales<br>GROUP BY Product;<br>```<br><br><strong>Result:</strong><br><br>| Product | TotalQuantity |<br>|---------|----------------|<br>| Apple   | 17             |<br>| Banana  | 13             |<br><br>Here, `GROUP BY Product` groups all rows with the same product name, and `SUM(Quantity)` calculates the total for each group.<br><br><strong>In summary:</strong><br>- `GROUP BY` creates groups of rows sharing common values.<br>- It is typically used with aggregate functions to produce summarized data per group.<br><br>Let me know if you'd like more examples or clarification!</p><br><p><strong>Response 2</strong><br>Certainly! The `GROUP BY` clause in SQL is used to arrange rows that have the same values in specified columns into groups. This allows you to perform aggregate functions (like `COUNT`, `SUM`, `AVG`, `MAX`, and `MIN`) on these groups.<br><br>Here’s a simple example to illustrate how `GROUP BY` works:<br><br>Suppose you have a table called `Orders` with the following data:<br><br>| OrderID | CustomerID | Amount |<br>|---------|------------|--------|<br>| 1       | 101        | 200    |<br>| 2       | 101        | 300    |<br>| 3       | 102        | 150    |<br>| 4       | 101        | 250    |<br><br>If you want to find the total amount spent by each customer, you would use `GROUP BY` like this:<br><br>```sql<br>SELECT CustomerID, SUM(Amount) AS TotalSpent<br>FROM Orders<br>GROUP BY CustomerID;<br>```<br><br>This query will return:<br><br>| CustomerID | TotalSpent |<br>|------------|------------|<br>| 101        | 750        |<br>| 102        | 150        |<br><br>In this example:<br>- The `GROUP BY CustomerID` clause groups the rows by `CustomerID`.<br>- The `SUM(Amount)` function calculates the total amount for each group of `CustomerID`.<br><br>So, `GROUP BY` helps you summarize data by creating groups based on one or more columns, and then performing calculations on those groups.</p><p><strong>Which answer is better?</strong></p><hr>
+[[Choices]]
+Response 1
+Response 2
+About the same
+
+[[PageBreak]]
+
