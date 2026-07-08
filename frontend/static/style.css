@@ -208,13 +208,13 @@ header nav a:hover {
 }
 
 .run-table tbody tr {
-  transition: background-color 0.12s ease;
+  transition: background-color 0.2s ease;
 }
 .run-table tbody tr:hover {
-  background: #e8edf3;
+  background: #f6f8fa;
 }
 .run-table tbody tr.row-link:hover {
-  background: #dde4ee;
+  background: #f2f5f8;
 }
 .run-table tbody tr.row-link {
   cursor: pointer;
@@ -229,14 +229,14 @@ header nav a:hover {
 .run-table tbody tr.row-link:focus-visible {
   outline: 2px solid var(--duke-blue);
   outline-offset: -2px;
-  background: #dde4ee;
+  background: #f2f5f8;
 }
-.run-table tr.row-best { background: #f3faf3; }
-.run-table tr.row-best:hover { background: #d8edd8; }
-.run-table tr.row-best.row-link:hover { background: #c9e4c9; }
-.run-table tr.row-warn { background: #fdf6f0; }
-.run-table tr.row-warn:hover { background: #f5e0cc; }
-.run-table tr.row-warn.row-link:hover { background: #efcfb0; }
+.run-table tr.row-best { background: #f8fbf8; }
+.run-table tr.row-best:hover { background: #f0f6f0; }
+.run-table tr.row-best.row-link:hover { background: #eaf2ea; }
+.run-table tr.row-warn { background: #fdf9f6; }
+.run-table tr.row-warn:hover { background: #faf3ed; }
+.run-table tr.row-warn.row-link:hover { background: #f7efe8; }
 
 /* detail pages — finding rows expand inline */
 .run-table tbody tr.finding-row { cursor: pointer; }
@@ -300,6 +300,16 @@ header nav a:hover {
 }
 .badge-best { background: #dff1df; color: #1f6b1f; margin-left: 0.35rem; }
 .badge-warn { background: #fde2c8; color: #a35200; max-width: none; }
+.staleness-warn {
+  display: inline-block;
+  margin-left: 0.4rem;
+  color: #c97d2e;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: middle;
+  cursor: default;
+}
 .status-ok,
 .status-fail,
 .status-skip {
@@ -851,9 +861,35 @@ span.is-disabled {
 }
 .btn-danger:hover { background: #fdf0f1; }
 .btn-danger.btn-sm { padding: 0.2rem 0.55rem; font-size: 12px; }
+
+/* List-row action buttons — same box size for Rerun (filled/outline) and Delete */
+.run-table .col-actions .btn-sm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4.1rem;
+  padding: 0.22rem 0.5rem;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  border-radius: 6px;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+.run-table .col-actions .btn-primary.btn-sm {
+  padding: 0.22rem 0.5rem;
+  border: 1px solid transparent;
+}
+.run-table .col-actions .btn-secondary.btn-sm {
+  padding: 0.22rem 0.5rem;
+}
+.run-table .col-actions .btn-danger.btn-sm {
+  padding: 0.22rem 0.5rem;
+}
 .inline-delete-form { margin: 0; }
 .detail-delete-form { margin: 0 0 1rem; }
-.run-table .col-actions { width: 5.5rem; text-align: right; white-space: nowrap; }
+.run-table .col-actions { width: 9rem; text-align: right; white-space: nowrap; }
+.run-table .col-actions .btn-sm + .btn-sm { margin-left: 0.25rem; }
 
 .refresh-form { display: inline-block; margin-left: 0.5rem; vertical-align: middle; }
 

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import cli_safety_docker, cli_safety_host, start_button, delete_button, tier_label, pillar_guide_callout with context %}
+{% from '_macros.html' import cli_safety_docker, cli_safety_host, start_button, delete_button, rerun_button, staleness_badge, tier_label, pillar_guide_callout with context %}
 
 {% block title %}Safety red-team{% endblock %}
 
@@ -74,7 +74,7 @@
             tabindex="0"
             role="link"
             aria-label="Open safety results for {{ m.gateway_model_id }} ({{ m.profile }})">
-          <td><span class="model">{{ m.gateway_model_id }}</span></td>
+          <td><span class="model">{{ m.gateway_model_id }}</span> {{ staleness_badge(m.staleness) }}</td>
           <td class="col-nowrap"><span class="badge">{{ m.profile }}</span></td>
           <td class="col-nowrap">{{ tier_label(m.tier) }}</td>
           <td class="num overall {{ m.pass_rate_class }}">{{ m.pass_rate_display }}</td>
@@ -84,6 +84,7 @@
           <td class="num dim">{{ m.n_failed }}</td>
           <td class="col-nowrap dim">{{ m.completed_at[:10] if m.completed_at != "—" else "—" }}</td>
           <td class="col-actions" onclick="event.stopPropagation()">
+            {{ rerun_button(url_for('safety_run_new', from=m.slug, profile=m.profile), 'Rerun', 'btn-primary btn-sm' if m.staleness and m.staleness.stale else 'btn-secondary btn-sm') }}
             {{ delete_button(url_for('safety_delete_private' if view_mode == 'private' else 'safety_delete', slug=m.slug, profile=m.profile), 'Delete', classes='btn-danger btn-sm') }}
           </td>
         </tr>

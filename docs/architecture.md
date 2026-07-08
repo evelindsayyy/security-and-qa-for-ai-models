@@ -157,7 +157,7 @@ While a job runs, status routes return a log tail (`message` or `log` field) for
 | **`frontend/*_launch.py`** | `subprocess.Popen` + `threading`; spawns Docker or host CLI from UI start routes |
 | **`dbutils/run_lock.py`** | File lock coordinating UI launchers and scan/safety CLI |
 | **Ingest** | Per-pillar `*/db/` loaders + `dbutils/post_run.py` — auto-sync after each successful run when DSN set; bulk via `python -m api.ingest` |
-| **Postgres** | Optional read path when DSN is set; disk JSON remains source of truth |
+| **Postgres** | Authoritative read path when DSN is set and reachable; disk JSON is offline fallback only |
 | **`api/`** | JSON reads under `/api`; ingest orchestrator in `api/ingest.py` (CLI, not a route) |
 
 ### Ingest
@@ -168,7 +168,7 @@ While a job runs, status routes return a log tail (`message` or `log` field) for
 
 Pillars define the contract in code (`scanner/schemas.py`, `safety/schemas.py`, `evaluator/schemas.py`, etc.) — same logical shapes as the Postgres tables. Flow: **job → JSON file → optional ingest → Postgres or disk read → UI**. Detail: [`data-model.md`](data-model.md).
 
-**Persistence approach:** versioned **SQL schema files** plus **psycopg** loaders in each pillar's `db/` directory. Shared helpers in [`dbutils/`](../dbutils/README.md). Unified dry-run/apply: `python -m api.ingest`. Ingest is idempotent (`ON CONFLICT DO NOTHING`); the UI reads Postgres when a DSN is set, else disk.
+**Persistence approach:** versioned **SQL schema files** plus **psycopg** loaders in each pillar's `db/` directory. Shared helpers in [`dbutils/`](../dbutils/README.md). Unified dry-run/apply: `python -m api.ingest`. Ingest is idempotent (`ON CONFLICT DO NOTHING`); when a DSN is reachable the UI reads **only Postgres** (no disk re-merge); disk is used when the DB is unavailable. Permanent deletes remove both Postgres rows and on-disk artifacts.
 
 ## Inference: two backends
 
@@ -191,12 +191,11 @@ chat call is identical.
 | Benchmark | B | `/benchmarks`, `/benchmarks/reference` | Duke Gateway | Planned | `benchmark_runs` |
 | Cross-pillar | — | `/models`, `/compare` | — | — | Union via `frontend/model_rollup.py` (no `models` table yet) |
 
-All four pillars have optional Postgres ingest. When a DSN is set and reachable, the UI reads Postgres for every pillar (merged
-with artifacts not yet loaded); otherwise it reads artifacts directly.
+All four pillars have optional Postgres ingest. When a DSN is set and reachable, the UI reads **only Postgres** for every pillar; disk JSON is consulted only when the database is unreachable. List pages show an orange **!** on stale rows (rules in `frontend/staleness.py`) plus **Rerun** and **Delete** actions.
 
 ## Why JSON → Postgres
 
-Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [Key concepts](#key-concepts)). Artifacts provide an audit trail and offline fallback when the database is unreachable. Ingest is idempotent (keyed on run id). Large outputs stay gitignored; only small fixtures are committed.
+Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [Key concepts](#key-concepts)). Artifacts provide an audit trail and offline fallback when the database is unreachable. Ingest is idempotent (keyed on run id). Large outputs stay gitignored; only small fixtures are committed. Deletes purge both Postgres and disk artifacts.
 
 ## Components
 

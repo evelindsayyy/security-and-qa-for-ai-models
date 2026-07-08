@@ -513,7 +513,11 @@ def get_scans_data() -> dict:
     data = get_data_with_db_fallback(
         scan_db_data.available, scan_db_data.get_scans_data_db, _get_scans_data_files
     )
-    data.update(_build_scan_comparison_section(data.get("scans") or []))
+    scans = data.get("scans") or []
+    from frontend.staleness import attach_staleness
+
+    attach_staleness(scans, "scan")
+    data.update(_build_scan_comparison_section(scans))
     return data
 
 
@@ -664,11 +668,9 @@ def get_scan_detail(
         from frontend import scan_db_data
 
         if scan_db_data.available():
-            detail = scan_db_data.get_scan_detail_db(
+            return scan_db_data.get_scan_detail_db(
                 slug, visibility=visibility, owner_user_id=owner_user_id
             )
-            if detail is not None:
-                return detail
     except Exception:
         pass
     return _get_scan_detail_files(slug, visibility=visibility, owner_user_id=owner_user_id)
@@ -729,18 +731,44 @@ def delete_scan(
         wipe_dir(scan_dir)
 
     removed_db = False
+    db_available = False
+    db_row_existed = False
+    db_exc: BaseException | None = None
     try:
         from frontend import scan_db_data
+        from frontend.delete_db import db_delete_error
 
-        if scan_db_data.available():
-            if db_keys:
-                removed_db = scan_db_data.delete_run(*db_keys)
-            if not removed_db:
-                removed_db = scan_db_data.delete_run_by_slug(
-                    slug, visibility=visibility, owner_user_id=owner_user_id
+        db_available = scan_db_data.available()
+        if db_available:
+            try:
+                db_row_existed = (
+                    scan_db_data.resolve_delete_keys(
+                        slug, visibility=visibility, owner_user_id=owner_user_id
+                    )
+                    is not None
                 )
-    except Exception:
-        pass
+            except Exception:
+                pass
+            try:
+                if db_keys:
+                    removed_db = scan_db_data.delete_run(*db_keys)
+                if not removed_db:
+                    removed_db = scan_db_data.delete_run_by_slug(
+                        slug, visibility=visibility, owner_user_id=owner_user_id
+                    )
+            except Exception as exc:
+                db_exc = exc
+    except Exception as exc:
+        db_exc = exc
+
+    err = db_delete_error(
+        db_available=db_available,
+        db_row_existed=db_row_existed,
+        removed_db=removed_db,
+        db_exc=db_exc,
+    )
+    if err:
+        return err
 
     if not removed_disk and not removed_db:
         return f"no scan result found for slug {slug!r}"

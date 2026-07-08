@@ -19,7 +19,6 @@ from frontend.benchmark_data import (
     _attach_per_subject,
     _format_ts,
     _paginate_detail_items,
-    _summarize_file,
 )
 
 load_repo_env()
@@ -220,34 +219,18 @@ def _visibility_params(
 
 
 def get_benchmarks_data_db() -> dict:
-    """DB-preferred merge of every known benchmark run (DB rows + not-yet-loaded files)."""
-    from dbutils.run_meta import read_run_meta
-    from dbutils.visibility import artifact_visible
-    from frontend.read_context import read_context
+    """Every known benchmark run, straight from Postgres.
 
+    Postgres is the single source of truth when a DSN is reachable — we do NOT
+    merge in on-disk artifacts here. Disk is only consulted when no DSN is
+    configured (see benchmark_data.get_benchmarks_data)."""
     vis_clause, vis_params = _visibility_params()
-    view_mode, user_id = read_context()
 
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(_LIST_SQL.format(visibility_filter=vis_clause), vis_params)
             run_rows = cur.fetchall()
-    db_rows = [_summarize_db_run(row) for row in run_rows]
-
-    seen_slugs = {r["slug"] for r in db_rows}
-    file_rows: list[dict] = []
-    if PRIMARY_DIR.is_dir():
-        for path in sorted(list(PRIMARY_DIR.glob("*.json")) + list(PRIMARY_DIR.glob("*.jsonl"))):
-            if path.stem in seen_slugs:
-                continue
-            meta = read_run_meta(PRIMARY_DIR / path.stem)
-            if not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
-                continue
-            row = _summarize_file(path)
-            if row is not None:
-                file_rows.append(row)
-
-    rows = db_rows + file_rows
+    rows = [_summarize_db_run(row) for row in run_rows]
     rows.sort(key=lambda r: r["timestamp_raw"], reverse=True)
     kinds = sorted({r["kind_label"] for r in rows})
     models = sorted({r["model"] for r in rows if r["model"] and not r["model"].startswith("—")})

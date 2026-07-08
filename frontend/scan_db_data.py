@@ -208,15 +208,12 @@ def _visibility_params(
 
 
 def get_scans_data_db() -> dict:
-    """DB-preferred merge of every known scan (DB rows + not-yet-loaded files)."""
-    from dbutils.run_meta import read_run_meta_for_pillar
-    from dbutils.visibility import artifact_visible
-    from frontend import run_paths
-    from frontend.read_context import read_context
-    from frontend.scan_data import _summarize_scan
+    """Every known scan, straight from Postgres.
 
+    Postgres is the single source of truth when a DSN is reachable — we do NOT
+    merge in on-disk artifacts here. Disk is only consulted when no DSN is
+    configured (see scan_data.get_scans_data)."""
     vis_clause, vis_params = _visibility_params()
-    view_mode, user_id = read_context()
 
     with _connect() as conn:
         with conn.cursor() as cur:
@@ -227,25 +224,7 @@ def get_scans_data_db() -> dict:
             _summarize_db_scan(row, findings_by_scan.get(row[0], []))
             for row in scan_rows
         ]
-    db_rows = [r for r in db_rows if r is not None]
-
-    seen_slugs = {r["slug"] for r in db_rows}
-    file_rows: list[dict] = []
-    for slug_dir in run_paths.iter_visible_slug_dirs(
-        OUTPUT_DIR, view_mode=view_mode, owner_user_id=user_id
-    ):
-        path = slug_dir / "scan_result.json"
-        slug = slug_dir.name
-        if not path.is_file() or slug in seen_slugs:
-            continue
-        meta = read_run_meta_for_pillar(slug_dir, pillar="scan")
-        if not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
-            continue
-        row = _summarize_scan(path, slug)
-        if row is not None:
-            file_rows.append(row)
-
-    rows = db_rows + file_rows
+    rows = [r for r in db_rows if r is not None]
     rows.sort(key=lambda r: r["overall_risk_score"], reverse=True)
     tiers = sorted({r["severity_tier"] for r in rows})
     tier_summary = ", ".join(tiers) if tiers else ""

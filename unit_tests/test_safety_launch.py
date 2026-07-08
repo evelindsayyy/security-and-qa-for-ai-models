@@ -198,6 +198,8 @@ class GetStatusTest(unittest.TestCase):
 class LaunchRoutesTest(unittest.TestCase):
     def setUp(self) -> None:
         _isolate_safety_output(self)
+        safety_launch._RUNNING.clear()
+        safety_launch._INFLIGHT.clear()
         patcher = mock.patch.object(
             safety_launch,
             "_eligible_gateway_models",
@@ -224,19 +226,35 @@ class LaunchRoutesTest(unittest.TestCase):
         self.assertEqual(r.status_code, 400)
 
     def test_start_valid_spawns_and_redirects(self) -> None:
+        from frontend.run_launch import LaunchPlan
+
         fake_proc = mock.Mock()
         fake_proc.poll.return_value = None
         fake_proc.pid = 424242
+        fresh_plan = LaunchPlan(
+            config={"gateway_model": "gpt-5.5"},
+            config_fingerprint="test-fp",
+            visibility="public",
+            owner_user_id=None,
+            owner_netid=None,
+            reused=None,
+        )
         with mock.patch.object(
             safety_launch.subprocess, "Popen", return_value=fake_proc
-        ) as popen:
+        ) as popen, mock.patch(
+            "frontend.run_launch.build_launch_plan", return_value=fresh_plan
+        ), mock.patch.object(safety_launch, "is_safety_inflight", return_value=False), mock.patch.object(
+            safety_launch, "check_inflight_combo", return_value=None
+        ), mock.patch.object(safety_launch.docker_launch, "use_docker", return_value=False), mock.patch(
+            "dbutils.run_lock.try_acquire", return_value=True
+        ):
             r = self.client.post("/safety/start", data={
                 "gateway_model": "gpt-5.5",
                 "run_policy": "1",
                 "run_redteam": "1",
                 "run_garak": "1",
             })
-        self.assertEqual(r.status_code, 302)
+        self.assertEqual(r.status_code, 302, r.data[:500] if r.data else r.status_code)
         self.assertIn("status=running", r.headers["Location"])
         popen.assert_called_once()
         self.assertIsInstance(popen.call_args.args[0], list)
