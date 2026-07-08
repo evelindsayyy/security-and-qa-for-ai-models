@@ -225,9 +225,11 @@ def render_qualtrics(r: int, items: list[dict], resp) -> str:
         r1, r2 = display_models(it, slot)
         qid = it["item_id"].replace("-", "_")
         body = (f"<p><strong>Task:</strong> {_q(it['prompt'])}</p>"
+                f"<br>"                                    # line between the task and Response 1
                 f"<p><strong>Response 1</strong><br>{_q(_resp_plain(resp, it['source'], r1))}</p>"
-                f"<br>"
+                f"<br>"                                    # line between the two responses
                 f"<p><strong>Response 2</strong><br>{_q(_resp_plain(resp, it['source'], r2))}</p>"
+                f"<br>"                                    # line between Response 2 and the question
                 f"<p><strong>Which answer is better?</strong></p><hr>")
         out += ["[[Question:MC:SingleAnswer]]", f"[[ID:{qid}]]", body,
                 "[[Choices]]", "Response 1", "Response 2", "About the same", "",
