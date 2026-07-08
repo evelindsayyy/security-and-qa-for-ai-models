@@ -191,7 +191,7 @@ chat call is identical.
 | Benchmark | B | `/benchmarks`, `/benchmarks/reference` | Duke Gateway | Planned | `benchmark_runs` |
 | Cross-pillar | — | `/models`, `/compare` | — | — | Union via `frontend/model_rollup.py` (no `models` table yet) |
 
-All four pillars have optional Postgres ingest. When a DSN is set and reachable, the UI reads **only Postgres** for every pillar; disk JSON is consulted only when the database is unreachable. List pages show staleness badges and Rerun/Delete actions (`frontend/staleness.py`).
+All four pillars have optional Postgres ingest. When a DSN is set and reachable, the UI reads **only Postgres** for every pillar; disk JSON is consulted only when the database is unreachable. List pages show an orange **!** on stale rows (rules in `frontend/staleness.py`) plus **Rerun** and **Delete** actions.
 
 ## Why JSON → Postgres
 

@@ -1520,12 +1520,15 @@ def delete_benchmark(
 
         db_available = benchmark_db_data.available()
         if db_available:
-            db_row_existed = (
-                benchmark_db_data.get_benchmark_detail_db(
-                    slug, visibility=visibility, owner_user_id=owner_user_id
+            try:
+                db_row_existed = (
+                    benchmark_db_data.get_benchmark_detail_db(
+                        slug, visibility=visibility, owner_user_id=owner_user_id
+                    )
+                    is not None
                 )
-                is not None
-            )
+            except Exception:
+                pass
             try:
                 removed_db = benchmark_db_data.delete_run(
                     slug, visibility=visibility, owner_user_id=owner_user_id

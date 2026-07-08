@@ -740,12 +740,15 @@ def delete_scan(
 
         db_available = scan_db_data.available()
         if db_available:
-            db_row_existed = (
-                scan_db_data.resolve_delete_keys(
-                    slug, visibility=visibility, owner_user_id=owner_user_id
+            try:
+                db_row_existed = (
+                    scan_db_data.resolve_delete_keys(
+                        slug, visibility=visibility, owner_user_id=owner_user_id
+                    )
+                    is not None
                 )
-                is not None
-            )
+            except Exception:
+                pass
             try:
                 if db_keys:
                     removed_db = scan_db_data.delete_run(*db_keys)

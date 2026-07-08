@@ -614,12 +614,15 @@ def delete_safety(
 
         db_available = safety_db_data.available()
         if db_available:
-            db_row_existed = (
-                safety_db_data.resolve_delete_keys(
-                    slug, profile, visibility=visibility, owner_user_id=owner_user_id
+            try:
+                db_row_existed = (
+                    safety_db_data.resolve_delete_keys(
+                        slug, profile, visibility=visibility, owner_user_id=owner_user_id
+                    )
+                    is not None
                 )
-                is not None
-            )
+            except Exception:
+                pass
             try:
                 if db_keys:
                     removed_db = safety_db_data.delete_run(*db_keys)

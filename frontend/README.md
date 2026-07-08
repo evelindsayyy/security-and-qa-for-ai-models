@@ -31,7 +31,7 @@ Launch pages: `/scans/new`, `/safety/new`, `/eval-run/new`, `/benchmarks/new` �
 
 Cross-pillar pages: `/models` (catalog + aggregate ranking), `/models/<slug>` (detail + AI/rules recommendations), `/compare?models=slug1,slug2` (head-to-head charts). API: `GET /api/models`, `GET /api/models/<slug>` — see [`../api/README.md`](../api/README.md).
 
-Pillar list pages use **List / Compare** tabs (suite×model or tool×model matrices). Each list row shows an **up-to-date / needs-rerun** badge (`frontend/staleness.py`) and **Rerun** + **Delete** actions. Reference guides: `/safety/reference`, `/eval-run/reference`, `/scans/reference`, `/benchmarks/reference` (preferred-model score tables where data exists).
+Pillar list pages use **List / Compare** tabs (suite×model or tool×model matrices). Stale rows show an orange **!** (hover for why); up-to-date rows show nothing. **Rerun** (filled when stale) and **Delete** sit on each row. Rules live in [`staleness.py`](staleness.py) — see [Staleness indicators](#staleness-indicators) below. Reference guides: `/safety/reference`, `/eval-run/reference`, `/scans/reference`, `/benchmarks/reference`.
 
 ## Modules
 
@@ -42,7 +42,8 @@ Pillar list pages use **List / Compare** tabs (suite×model or tool×model matri
 | `model_summary.py` | Gateway-backed AI summaries (cached); rules-v1 fallback |
 | `recommendation_rules.py` | Rules-v1 analyst summaries (fallback) |
 | `reference_constants.py` | Preferred reference model ordering |
-| `staleness.py` | Per-pillar staleness rules (date, probe count, 0-file scans, etc.) |
+| `staleness.py` | Per-pillar “needs rerun” rules; constants `CURRENT_SPEC_CUTOFF`, `SAFETY_EXPECTED_GARAK_PROBES` |
+| `oss_gateway_hf.py` | HF mirror repos for open-weight gateway models → catalog scan rollup |
 | `delete_db.py` | DB-delete error surfacing for permanent deletes |
 | `db_fallback.py` | Postgres-only when DSN reachable; disk fallback offline only |
 | `launch_registry.py` | Shared in-flight job liveness |
@@ -83,6 +84,23 @@ curl -s localhost:5000/api/scans/distilbert-base-uncased/status | python3 -m jso
 ```
 
 POST returns **202** with `job_id` and `status_url`; poll status, then GET detail.
+
+## Staleness indicators
+
+List pages attach a `staleness` dict to each row (`attach_staleness` in `staleness.py`). Only **stale** rows render the orange **!**; hover shows `Needs rerun — <reasons>`.
+
+Tweak thresholds in `staleness.py` when tooling or suites change.
+
+| Pillar | Flagged stale when |
+|--------|-------------------|
+| **Safety** | Completed before `CURRENT_SPEC_CUTOFF` (2026-07-01); any `missing_suites`; garak `probe_id` count &lt; `SAFETY_EXPECTED_GARAK_PROBES` (26); status not complete |
+| **Scanner** | `scanned_file_count == 0`; scanned before cutoff; status not complete |
+| **Eval** | Completed before cutoff; suite not in curated `SUITES` (custom `custom_*` exempt) |
+| **Benchmarks** | Completed before cutoff (reference baseline slugs exempt) |
+
+**Permanent delete:** removes the Postgres row and on-disk artifacts under the pillar output dir. When a DSN is reachable, list/detail reads come **only** from Postgres — deleted runs do not reappear from leftover JSON.
+
+**OSS gateway scans:** `oss_gateway_hf.py` maps Llama 3.3 / 4 Maverick / 4 Scout to non-gated HF mirrors; `model_rollup.py` attaches those scan results to the matching gateway row on `/models`.
 
 ### Host Flask (development)
 

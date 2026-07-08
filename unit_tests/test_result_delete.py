@@ -74,6 +74,8 @@ class DeleteScanTest(unittest.TestCase):
             with mock.patch("frontend.scan_data.OUTPUT_DIR", out), mock.patch(
                 "frontend.scan_launch.inflight_scan_slugs", return_value=set()
             ), mock.patch("frontend.scan_db_data.available", return_value=True), mock.patch(
+                "frontend.scan_db_data.resolve_delete_keys", return_value=None
+            ), mock.patch(
                 "frontend.scan_db_data.delete_run_by_slug", return_value=True
             ) as db_del:
                 self.assertIsNone(delete_scan(slug))

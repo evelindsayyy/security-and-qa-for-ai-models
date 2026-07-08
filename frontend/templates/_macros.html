@@ -96,12 +96,13 @@ uv run python -m gateway
 {% endif %}
 {% endmacro %}
 
-{# Up-to-date / needs-rerun indicator for pillar list rows. #}
+{# Stale-run indicator — orange ! with tooltip; nothing when up to date. #}
 {% macro staleness_badge(staleness) %}
-{% if staleness %}
-<span class="staleness-badge {% if staleness.stale %}staleness-stale{% else %}staleness-fresh{% endif %}"
-      title="{% if staleness.stale %}{{ staleness.reasons | join('; ') }}{% else %}Up to date with current specs{% endif %}"
-      aria-label="{{ staleness.label }}">{{ staleness.label }}</span>
+{% if staleness and staleness.stale %}
+<span class="staleness-warn"
+      title="{{ staleness.label }}{% if staleness.reasons %} — {{ staleness.reasons | join('; ') }}{% endif %}"
+      aria-label="{{ staleness.label }}"
+      role="img">!</span>
 {% endif %}
 {% endmacro %}
 
