@@ -24,7 +24,7 @@
       <label class="src-opt"><input type="radio" name="source" value="gateway" checked> Gateway model</label>
       <select name="candidate" id="candidate">
         {% for m in candidates %}
-        <option value="{{ m }}" {% if m == 'gpt-5-chat' %}selected{% endif %}>{{ m }}</option>
+        <option value="{{ m }}">{{ m }}</option>
         {% endfor %}
       </select>
 
@@ -106,7 +106,7 @@
         <label class="src-opt"><input type="radio" name="source" value="gateway" checked> Gateway model</label>
         <select name="candidate" id="candidate_c">
           {% for m in candidates %}
-          <option value="{{ m }}" {% if m == 'gpt-5-chat' %}selected{% endif %}>{{ m }}</option>
+          <option value="{{ m }}">{{ m }}</option>
           {% endfor %}
         </select>
 

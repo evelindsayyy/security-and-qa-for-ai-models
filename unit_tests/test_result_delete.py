@@ -74,12 +74,41 @@ class DeleteScanTest(unittest.TestCase):
             with mock.patch("frontend.scan_data.OUTPUT_DIR", out), mock.patch(
                 "frontend.scan_launch.inflight_scan_slugs", return_value=set()
             ), mock.patch("frontend.scan_db_data.available", return_value=True), mock.patch(
-                "frontend.scan_db_data.resolve_delete_keys", return_value=None
+                "frontend.scan_db_data.resolve_delete_run_id", return_value="scan-uuid"
             ), mock.patch(
-                "frontend.scan_db_data.delete_run_by_slug", return_value=True
+                "frontend.scan_db_data.delete_run_by_id", return_value=True
             ) as db_del:
                 self.assertIsNone(delete_scan(slug))
-            db_del.assert_called_once_with(slug, visibility="public", owner_user_id=None)
+            db_del.assert_called_once_with("scan-uuid")
+
+    def test_scan_delete_surfaces_db_failure_after_disk_removed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            slug = "TinyLlama--TinyLlama-1.1B-Chat-v1.0"
+            scan_dir = out / slug
+            scan_dir.mkdir()
+            (scan_dir / "scan_result.json").write_text(
+                json.dumps({
+                    "model_id": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+                    "scan_metadata": {"scanned_at": "2026-06-29T09:58:34-04:00"},
+                }),
+                encoding="utf-8",
+            )
+            with mock.patch("frontend.scan_data.OUTPUT_DIR", out), mock.patch(
+                "frontend.scan_launch.inflight_scan_slugs", return_value=set()
+            ), mock.patch("frontend.scan_db_data.available", return_value=True), mock.patch(
+                "frontend.scan_db_data.resolve_delete_run_id", return_value="scan-uuid"
+            ), mock.patch(
+                "frontend.scan_db_data.delete_run_by_id", return_value=False
+            ), mock.patch(
+                "frontend.scan_db_data.delete_run", return_value=False
+            ), mock.patch(
+                "frontend.scan_db_data.delete_run_by_slug", return_value=False
+            ):
+                err = delete_scan(slug)
+            self.assertIsNotNone(err)
+            self.assertIn("not removed", err or "")
+            self.assertFalse(scan_dir.exists())
 
 
 class DeleteSafetyTest(unittest.TestCase):

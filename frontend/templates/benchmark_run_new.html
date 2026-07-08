@@ -60,7 +60,7 @@
         <label>Model
           <select name="model" id="model">
             {% for m in models %}
-            <option value="{{ m }}" {% if m == 'GPT 4.1 Mini' %}selected{% endif %}>{{ m }}</option>
+            <option value="{{ m }}">{{ m }}</option>
             {% endfor %}
           </select>
           <span class="form-hint">exact gateway id — see <a href="{{ url_for('models_catalog') }}">model catalog</a></span>
