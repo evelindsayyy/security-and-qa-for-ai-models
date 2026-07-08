@@ -44,6 +44,7 @@ def _hub_context() -> dict:
     safety_worst_tier = "—"
     benchmark_has = False
     benchmark_count = 0
+    benchmark_latest = None
 
     try:
         from frontend.scan_data import get_scans_data
@@ -81,11 +82,12 @@ def _hub_context() -> dict:
         pass
 
     try:
-        from frontend.benchmark_data import get_benchmarks_data
+        from frontend.benchmark_data import get_benchmark_latest_for_hub, get_benchmarks_data
 
         bench = get_benchmarks_data()
         benchmark_has = bench["has_runs"]
         benchmark_count = len(bench["runs"])
+        benchmark_latest = get_benchmark_latest_for_hub(bench.get("all_runs") or bench.get("runs"))
     except Exception:
         pass
 
@@ -107,6 +109,7 @@ def _hub_context() -> dict:
         "safety_worst_tier": safety_worst_tier,
         "benchmark_has": benchmark_has,
         "benchmark_count": benchmark_count,
+        "benchmark_latest": benchmark_latest,
     }
 
 
