@@ -262,15 +262,14 @@ def get_safety_detail_db(
     return _build_safety_detail(slug, data, profile)
 
 
-def resolve_delete_keys(
+def _resolve_delete_row(
     gateway_model_id: str,
     profile: str = "base",
     *,
     visibility: str | None = None,
     owner_user_id: str | None = None,
-) -> tuple[str, str] | None:
-    """Map UI slug to ``(gateway_model_id, completed_at)`` for the latest Postgres row
-    matching ``visibility``/``owner_user_id`` (defaults to the ambient session's scope)."""
+) -> tuple[str, str, str] | None:
+    """Map UI slug to ``(run_id, gateway_model_id, completed_at)`` for the latest row."""
     if not is_safe_slug(gateway_model_id) or not is_safe_slug(profile):
         return None
 
@@ -286,15 +285,47 @@ def resolve_delete_keys(
             run_row = cur.fetchone()
             if run_row is None:
                 return None
+            run_id = run_row[0]
             model_id = run_row[1]
             completed_at = run_row[14]
-            if not model_id or completed_at is None:
+            if not run_id or not model_id or completed_at is None:
                 return None
             if hasattr(completed_at, "isoformat"):
                 completed_at = completed_at.isoformat()
             else:
                 completed_at = str(completed_at)
-            return model_id, completed_at
+            return run_id, model_id, completed_at
+
+
+def resolve_delete_keys(
+    gateway_model_id: str,
+    profile: str = "base",
+    *,
+    visibility: str | None = None,
+    owner_user_id: str | None = None,
+) -> tuple[str, str] | None:
+    """Map UI slug to ``(gateway_model_id, completed_at)`` for the latest Postgres row
+    matching ``visibility``/``owner_user_id`` (defaults to the ambient session's scope)."""
+    row = _resolve_delete_row(
+        gateway_model_id, profile, visibility=visibility, owner_user_id=owner_user_id
+    )
+    if row is None:
+        return None
+    return row[1], row[2]
+
+
+def resolve_delete_run_id(
+    gateway_model_id: str,
+    profile: str = "base",
+    *,
+    visibility: str | None = None,
+    owner_user_id: str | None = None,
+) -> str | None:
+    """Return the Postgres ``safety_runs.id`` for the latest scoped row, if any."""
+    row = _resolve_delete_row(
+        gateway_model_id, profile, visibility=visibility, owner_user_id=owner_user_id
+    )
+    return row[0] if row else None
 
 
 def delete_run_by_slug(
@@ -306,12 +337,28 @@ def delete_run_by_slug(
 ) -> bool:
     """Delete the latest Postgres safety row for a gateway model slug (scoped
     to ``visibility``/``owner_user_id`` — see scan_db_data.delete_run_by_slug)."""
-    keys = resolve_delete_keys(
+    run_id = resolve_delete_run_id(
         gateway_model_id, profile, visibility=visibility, owner_user_id=owner_user_id
     )
-    if keys is None:
+    if run_id is None:
         return False
-    return delete_run(*keys)
+    return delete_run_by_id(run_id)
+
+
+def delete_run_by_id(run_id: str) -> bool:
+    """Delete one safety_runs row by primary key (findings cascade)."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM public.safety_runs
+                WHERE id = %(run_id)s::uuid
+                """,
+                {"run_id": run_id},
+            )
+            deleted = cur.rowcount > 0
+        conn.commit()
+    return deleted
 
 
 def delete_run(gateway_model_id: str, completed_at: str) -> bool:
