@@ -27,8 +27,9 @@ class RaterAllocationTest(unittest.TestCase):
     def setUp(self) -> None:
         self.pool = brs.load_pool()
         self.items = brs.select_items(self.pool)
-        self.trios = brs.rater_trios()
-        self.rater_items, self.item_trio = brs.assign(self.items, self.trios)
+        self.partitions = brs.complementary_partitions()
+        self.rater_items, self.item_trio = brs.assign(self.items)
+        self.src = {it["item_id"]: it["source"] for it in self.pool}
 
     def test_pool_is_108(self) -> None:
         self.assertEqual(len(self.pool), 108)
@@ -54,10 +55,14 @@ class RaterAllocationTest(unittest.TestCase):
         self.assertTrue(all(c == 2 for c in by_source.values()))
         self.assertEqual(len(by_source), 30)  # 30 prompts
 
-    def test_20_trios_of_3_distinct_raters(self) -> None:
-        self.assertEqual(len(self.trios), 20)  # C(6,3)
-        for t in self.trios:
-            self.assertEqual(len(set(t)), 3)
+    def test_10_complementary_partitions(self) -> None:
+        parts = self.partitions
+        self.assertEqual(len(parts), 10)                    # C(6,3)/2
+        for half_a, half_b in parts:
+            self.assertEqual(len(half_a), 3)
+            self.assertEqual(len(half_b), 3)
+            self.assertEqual(set(half_a) | set(half_b), set(range(6)))   # a partition
+            self.assertEqual(set(half_a) & set(half_b), set())          # disjoint
 
     def test_each_rater_has_exactly_30(self) -> None:
         for r in range(brs.N_RATERS):
@@ -66,6 +71,19 @@ class RaterAllocationTest(unittest.TestCase):
     def test_each_item_gets_exactly_3_labels(self) -> None:
         self.assertEqual(len(self.item_trio), brs.N_ITEMS)  # all 60 covered
         self.assertTrue(all(len(t) == brs.LABELS_PER_ITEM for t in self.item_trio.values()))
+
+    def test_no_rater_sees_a_prompt_twice(self) -> None:
+        # the bug the mentor caught: a rater must never get both opponent-items
+        # of one prompt.
+        for r in range(brs.N_RATERS):
+            sources = [it["source"] for it in self.rater_items[r]]
+            self.assertEqual(len(sources), len(set(sources)),
+                             f"rater {r} sees a prompt more than once")
+
+    def test_each_rater_sees_both_opponents(self) -> None:
+        for r in range(brs.N_RATERS):
+            opps = {it["opponent_model"] for it in self.rater_items[r]}
+            self.assertEqual(len(opps), 2, f"rater {r} sees only one opponent")
 
     def test_total_labels(self) -> None:
         total = sum(len(self.rater_items[r]) for r in range(brs.N_RATERS))

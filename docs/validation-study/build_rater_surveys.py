@@ -5,20 +5,23 @@ Supersedes the 12-team disjoint design (build_versions.py) for the case the Code
 team chose: **the team labels it themselves — 6 committed raters, 30 questions
 each (~25 min), every question labeled by exactly 3 people.**
 
-Design — OVERLAPPING trio blocks:
+Design — COMPLEMENTARY-partition blocks (no rater sees a prompt twice):
   * Item pool  = the frozen 108 comparisons in item_pool.jsonl (54 prompts × 2
                  opponents; every comparison includes the DPO target Qwen2.5-7B).
   * Selection  = a balanced **60** — 5 prompts per task type × both opponents, via
                  round-robin over task types (30 Mini + 30 Nano).
   * Redundancy = **3 labels per item** (odd → clean majority for Fleiss' κ).
-  * Raters     = **6**. There are exactly C(6,3)=20 trios; each of the 60 items is
-                 assigned to one trio (3 items per trio). Each rater sits in
-                 C(5,2)=10 trios → rates exactly 30 items. Perfectly balanced:
-                 every item gets 3 labels, every rater does 30.
-  * Order      = A/B display order counterbalanced within each rater's survey
-                 (slot parity); the same item lands at different slots across its
-                 3 raters, so order is decorrelated from the item (position-bias
-                 probe stays clean).
+  * Raters     = **6**. Each prompt's TWO opponent-comparisons (vs Mini, vs Nano)
+                 go to the two COMPLEMENTARY halves of the raters — 3 label one,
+                 the other 3 label the other. There are 10 such partitions, 3
+                 prompts each. Every item still gets 3 labels and every rater does
+                 exactly 30 — but **no rater ever sees the same prompt twice**
+                 (each sees all 30 prompts once, one opponent apiece). Fixing an
+                 earlier trio design where a rater could get both opponents of a
+                 prompt back-to-back (the identical target answer, order flipped).
+  * Order      = task types round-robin'd within each survey; A/B display order
+                 counterbalanced by slot parity, and an item lands at different
+                 slots across its 3 raters, so order is decorrelated from the item.
 
 Deterministic (no randomness) → reproducible + reviewable. Reads the already-
 generated item_pool.jsonl + responses.jsonl; does NOT touch build_versions.py or
@@ -114,23 +117,66 @@ def select_items(pool: list[dict], n_items: int = N_ITEMS) -> list[dict]:
     return [it for it in pool if it["source"] in picked_set]
 
 
-def rater_trios(n_raters: int = N_RATERS) -> list[tuple[int, ...]]:
-    """All C(n_raters, 3) trios, in a fixed deterministic order."""
-    return [tuple(t) for t in combinations(range(n_raters), LABELS_PER_ITEM)]
+def complementary_partitions(
+    n_raters: int = N_RATERS,
+) -> list[tuple[tuple[int, ...], tuple[int, ...]]]:
+    """The 10 ways to split the 6 raters into two complementary trios
+    (half_a, half_b). Rater 0 is always in half_a (a fixed canonical order)."""
+    full = set(range(n_raters))
+    parts = []
+    for trio in combinations(range(n_raters), n_raters // 2):
+        if 0 in trio:
+            parts.append((trio, tuple(sorted(full - set(trio)))))
+    return parts
 
 
-def assign(items: list[dict], trios: list[tuple[int, ...]]) -> tuple[dict, dict]:
-    """Assign each item to one trio (equal items per trio) and fan it out to that
-    trio's 3 raters. Returns (rater -> [items], item_id -> trio)."""
-    per_trio = len(items) // len(trios)
+def _mix_order(items: list[dict]) -> list[dict]:
+    """Round-robin by task type so a rater's survey isn't all-email-then-all-plain."""
+    by_type: "OrderedDict[str, list[dict]]" = OrderedDict()
+    for it in items:
+        by_type.setdefault(it["task_type"], []).append(it)
+    queues = [list(v) for v in by_type.values()]
+    out: list[dict] = []
+    while queues:
+        for q in queues:
+            out.append(q.pop(0))
+        queues = [q for q in queues if q]
+    return out
+
+
+def assign(
+    items: list[dict],
+    partitions: list[tuple[tuple[int, ...], tuple[int, ...]]] | None = None,
+) -> tuple[dict, dict]:
+    """Assign each PROMPT's two opponent-comparisons to the two COMPLEMENTARY
+    halves of a rater partition, so **no rater ever sees the same prompt twice**.
+
+    A prompt contributes 2 items (vs Mini, vs Nano); 3 raters label one, the
+    complementary 3 label the other. 10 partitions × 3 prompts. Every item still
+    gets 3 labels and every rater still does 30 — but each rater now sees 30
+    DISTINCT prompts (one opponent apiece). Returns (rater -> [items], task-type
+    mixed; item_id -> the trio of 3 raters who label it)."""
+    if partitions is None:
+        partitions = complementary_partitions(N_RATERS)
+    by_prompt: "OrderedDict[str, list[dict]]" = OrderedDict()
+    for it in items:
+        by_prompt.setdefault(it["source"], []).append(it)
+    prompts = list(by_prompt.values())               # each is [item_mini, item_nano]
+    per_part = len(prompts) // len(partitions)        # 30 // 10 = 3
+
     rater_items: dict[int, list[dict]] = {r: [] for r in range(N_RATERS)}
     item_trio: dict[str, tuple[int, ...]] = {}
-    for i, it in enumerate(items):
-        trio = trios[i // per_trio]
-        item_trio[it["item_id"]] = trio
-        for r in trio:
-            rater_items[r].append(it)
-    return rater_items, item_trio
+    for j, pair in enumerate(prompts):
+        half_a, half_b = partitions[j // per_part]
+        # alternate which opponent goes to half_a so each rater gets a Mini/Nano mix
+        a_item, b_item = (pair[0], pair[1]) if j % 2 == 0 else (pair[1], pair[0])
+        item_trio[a_item["item_id"]] = half_a
+        item_trio[b_item["item_id"]] = half_b
+        for r in half_a:
+            rater_items[r].append(a_item)
+        for r in half_b:
+            rater_items[r].append(b_item)
+    return {r: _mix_order(v) for r, v in rater_items.items()}, item_trio
 
 
 def display_models(it: dict, slot: int) -> tuple[str, str]:
@@ -240,8 +286,7 @@ def render_qualtrics(r: int, items: list[dict], resp) -> str:
 def main() -> int:
     pool = load_pool()
     items = select_items(pool)
-    trios = rater_trios()
-    rater_items, item_trio = assign(items, trios)
+    rater_items, item_trio = assign(items)
     resp = load_responses()
 
     # rater_map.csv — the per-rater join key (rater, item, order, models).
@@ -270,9 +315,13 @@ def main() -> int:
           "- Opponent split: " + ", ".join(f"{k} {v}" for k, v in sorted(by_opp.items()))
           + f" (every comparison includes the DPO target {DPO_TARGET}).",
           f"- **{N_RATERS} raters**, **{QUESTIONS_PER_RATER} questions each** (~25 min); "
-          f"each comparison labeled by exactly **{LABELS_PER_ITEM}** raters (a trio) → "
-          "clean odd majority for Fleiss' κ.",
-          f"- Judge = {JUDGE} (cross-family). Order counterbalanced within each survey.",
+          f"each comparison labeled by exactly **{LABELS_PER_ITEM}** raters → clean "
+          "odd majority for Fleiss' κ.",
+          "- A prompt's two opponent-comparisons go to **complementary halves** of "
+          "the raters, so **no rater ever sees the same prompt twice** (each sees "
+          "all 30 prompts once, one opponent apiece).",
+          f"- Judge = {JUDGE} (cross-family). Task types round-robin'd; A/B order "
+          "counterbalanced within each survey.",
           "", "| rater | questions | rendered file | Qualtrics import |",
           "|---|---|---|---|"]
     for r in range(N_RATERS):
@@ -286,14 +335,19 @@ def main() -> int:
 
     # invariants
     per_rater = {r: len(rater_items[r]) for r in range(N_RATERS)}
-    labels = Counter()
-    for trio in item_trio.values():
-        for _r in trio:
-            labels[_r] += 1
     each_item_3 = all(len(t) == LABELS_PER_ITEM for t in item_trio.values())
-    print(f"selected {len(items)} items ({dict(by_opp)}), {len(trios)} trios")
+    max_dupe = max(
+        max(Counter(it["source"] for it in rater_items[r]).values())
+        for r in range(N_RATERS)
+    )
+    opp_bal = {r: dict(Counter(it["opponent_model"] for it in rater_items[r]))
+               for r in range(N_RATERS)}
+    print(f"selected {len(items)} items ({dict(by_opp)}), "
+          f"{len(complementary_partitions())} complementary partitions")
     print(f"questions per rater: {per_rater}")
     print(f"every item has exactly {LABELS_PER_ITEM} labels: {each_item_3}")
+    print(f"max times any rater sees one prompt: {max_dupe} (must be 1)")
+    print(f"opponent split per rater: {opp_bal}")
     print(f"total labels: {sum(per_rater.values())} (= {len(items)} items × {LABELS_PER_ITEM})")
     return 0
 

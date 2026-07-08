@@ -12,208 +12,62 @@ Thanks for helping out! In each question, an AI was asked to do a small task —
 
 ---
 
-### Item 1 — the AI was asked to draft an email  ·  _itm-004_
+### Item 1 — the AI was asked to draft an email  ·  _itm-002_
 
-*Draft an email to the Duke OIT Service Desk reporting that you cannot connect to the eduroam Wi-Fi on your laptop. Include the troubleshooting you've already tried so they can help faster.*
-
-**Response 1**
-> Subject: Issue Connecting to eduroam Wi-Fi on Laptop
->
-> Dear Duke OIT Service Desk,
->
-> I hope this message finds you well. I am writing to report an issue I am experiencing with connecting to the eduroam Wi-Fi network on my laptop. Despite following the standard procedures, I have been unable to establish a connection.
->
-> Here are the steps I have already taken to troubleshoot the issue:
->
-> 1. **Restarted the Laptop**: I restarted both my laptop and the router to ensure there were no temporary glitches.
-> 2. **Checked Network Settings**: I verified that the eduroam network is enabled and that my laptop is set to automatically obtain an IP address.
-> 3. **Updated Drivers**: I ensured that all necessary drivers, particularly the wireless adapter drivers, are up to date.
-> 4. **Contacted IT Support at My Institution**: I reached out to my institution’s IT support team, but they suggested checking if the issue persists after contacting Duke OIT for further assistance.
->
-> Unfortunately, none of these steps have resolved the issue. I am currently unable to access the internet via eduroam, which is causing delays in my work.
->
-> Could you please assist me in resolving this issue as soon as possible? If there are any specific details or logs you need from my end, please let me know.
->
-> Thank you for your prompt attention to this matter.
->
-> Best regards,
->
-> [Your Full Name]  
-> [Your Duke NetID]  
-> [Your Department/Program]  
-> [Your Contact Information]  
-> [Your Laptop Model and OS Version]
-
-**Response 2**
-> Subject: Unable to Connect to Eduroam Wi-Fi on Laptop
->
-> Dear Duke OIT Service Desk,
->
-> I am experiencing difficulty connecting my laptop to the eduroam Wi-Fi network. I have already attempted the following troubleshooting steps:
->
-> - Restarted my laptop
-> - Removed and re-added the eduroam network profile
-> - Verified that my login credentials are correct
-> - Ensured that my device's Wi-Fi drivers are up to date
-> - Restarted my Wi-Fi adapter
-> - Tried connecting to eduroam on different locations within campus
->
-> Despite these efforts, I am still unable to establish a connection. Could you please assist me in resolving this issue?
->
-> Thank you for your help.
->
-> Best regards,  
-> [Your Name]  
-> [Your Department or Affiliation]  
-> [Your Contact Information]
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 2 — the AI was asked to draft an email  ·  _itm-005_
-
-*Draft an email to your academic advisor, Professor B, requesting a short meeting to discuss adding a Machine Learning & AI minor. Suggest a couple of times.*
+*Draft a professional email to Professor A requesting a 2-day extension on the CS 201 assignment due this Friday, because you were sick this week. Offer to provide documentation. Include a clear subject line.*
 
 **Response 1**
-> Subject: Request for Meeting to Discuss Adding Machine Learning & AI Minor
+> Subject: Request for Extension on CS 201 Assignment Due This Friday
 >
-> Dear Professor B,
+> Dear Professor A,
 >
-> I hope this message finds you well. I am interested in adding a Machine Learning & AI minor to my academic plan and would appreciate the opportunity to discuss this with you.
+> I hope this message finds you well. I am writing to request a 2-day extension on the CS 201 assignment, which is due this Friday. Unfortunately, I was unwell this week and found it challenging to complete the assignment on time.
 >
-> Would you be available for a short meeting sometime this week? I am available on Wednesday afternoon or Thursday morning, but I am happy to accommodate your schedule if those times do not work.
+> I would be happy to provide any necessary medical documentation to support my request. Please let me know if you need further information or documentation from me.
 >
-> Thank you for your time and guidance.
->
-> Best regards,  
-> [Your Name]
-
-**Response 2**
-> Subject: Request for Meeting to Discuss Adding a Machine Learning & AI Minor
->
-> Dear Professor B,
->
-> I hope this message finds you well. I am writing to request a brief meeting with you to discuss my interest in adding a Machine Learning & AI minor to my current degree program. Given your expertise and guidance, I believe this would be a valuable addition to my academic journey.
->
-> Could we schedule a meeting at your earliest convenience? I have a few suggestions:
->
-> 1. Next Tuesday, March 14th, from 2:00 PM to 3:00 PM.
-> 2. Thursday, March 16th, from 10:00 AM to 11:00 AM.
->
-> Please let me know which time works best for you, or if there is another time that might be more convenient. I look forward to discussing this opportunity further.
->
-> Thank you for your time and consideration.
+> Thank you for your understanding and support.
 >
 > Best regards,
 >
 > [Your Full Name]  
 > [Your Student ID]  
-> [Your Major/Program]  
-> [Your Contact Information]
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 3 — the AI was asked to draft an email  ·  _itm-006_
-
-*Draft an email to your academic advisor, Professor B, requesting a short meeting to discuss adding a Machine Learning & AI minor. Suggest a couple of times.*
-
-**Response 1**
-> Subject: Request for Meeting to Discuss Adding a Machine Learning & AI Minor
->
-> Dear Professor B,
->
-> I hope this message finds you well. I am writing to request a brief meeting with you to discuss my interest in adding a Machine Learning & AI minor to my current degree program. Given your expertise and guidance, I believe this would be a valuable addition to my academic journey.
->
-> Could we schedule a meeting at your earliest convenience? I have a few suggestions:
->
-> 1. Next Tuesday, March 14th, from 2:00 PM to 3:00 PM.
-> 2. Thursday, March 16th, from 10:00 AM to 11:00 AM.
->
-> Please let me know which time works best for you, or if there is another time that might be more convenient. I look forward to discussing this opportunity further.
->
-> Thank you for your time and consideration.
->
-> Best regards,
->
-> [Your Full Name]  
-> [Your Student ID]  
-> [Your Major/Program]  
 > [Your Contact Information]
 
 **Response 2**
-> Subject: Request for Meeting to Discuss Adding Machine Learning & AI Minor
+> Subject: Request for 2-Day Extension on CS 201 Assignment Due to Illness
 >
-> Dear Professor B,
+> Dear Professor A,
 >
-> I hope this message finds you well. I am interested in adding a Machine Learning & AI minor to my academic program and would appreciate the opportunity to discuss this with you.
+> I hope this message finds you well. I am writing to kindly request a two-day extension on the upcoming CS 201 assignment, which is due this Friday. Unfortunately, I was unwell this week and was unable to work on the assignment as planned.
 >
-> Could we schedule a brief meeting at your convenience? I am available on Tuesday or Thursday afternoons between 2:00 PM and 4:00 PM. Please let me know if any of these times work for you or if there is a more suitable time.
+> I am happy to provide any necessary documentation to verify my illness if required. I appreciate your understanding and consideration, and I will ensure the assignment is completed promptly within the extended timeframe.
 >
-> Thank you very much for your guidance.
+> Thank you very much for your support.
 >
 > Best regards,  
-> [Your Name]  
-> [Your Student ID]
+> [Your Full Name]  
+> [Your Student ID]  
+> [Your Contact Information]
 
 **Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
 
 ---
 
-### Item 4 — the AI was asked to rewrite something in plain language  ·  _itm-019_
+### Item 2 — the AI was asked to rewrite something in plain language  ·  _itm-018_
 
-*Rewrite this IT instruction in plain language, keeping the steps: "To remediate the authentication failure, users should purge cached credentials from the operating system keychain and subsequently re-establish the multi-factor enrollment via the designated self-service portal."*
+*Rewrite the following in plain language for a general student audience, keeping all the facts: "Students must remit payment of all outstanding account balances prior to the commencement of the registration period; failure to do so will result in the placement of a financial hold precluding enrollment."*
 
 **Response 1**
-> To fix the login problem, follow these steps:
->
-> 1. Delete the saved passwords from your computer’s keychain.
-> 2. Then, go to the self-service portal and set up your multi-factor authentication again.
+> Students must pay any remaining money they owe before they can register for classes. If they do not pay on time, a financial hold will be placed on their account, which will prevent them from enrolling in courses.
 
 **Response 2**
-> To fix the authentication problem, users should:
->
-> 1. Clear out any saved login information from their device's keychain.
-> 2. Then, go to the official self-service portal to set up multi-factor authentication again.
+> Before you can register for classes, you need to pay any money that still owes on your account. If you don't pay, the school will put a hold on your account, which means you won't be able to enroll in classes.
 
 **Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
 
 ---
 
-### Item 5 — the AI was asked to rewrite something in plain language  ·  _itm-020_
-
-*Rewrite this IT instruction in plain language, keeping the steps: "To remediate the authentication failure, users should purge cached credentials from the operating system keychain and subsequently re-establish the multi-factor enrollment via the designated self-service portal."*
-
-**Response 1**
-> To fix the authentication problem, users should:
->
-> 1. Clear out any saved login information from their device's keychain.
-> 2. Then, go to the official self-service portal to set up multi-factor authentication again.
-
-**Response 2**
-> To fix the login problem, users should delete any saved passwords from their computer's keychain. After that, they need to set up the multi-factor authentication again using the self-service portal.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 6 — the AI was asked to rewrite something in plain language  ·  _itm-021_
-
-*Rewrite this notice in plain language for students, keeping the deadline and consequence: "Submission of the enrollment verification form is required no later than the fourteenth (14th) calendar day of the semester; non-submission will render the student ineligible for the associated tuition adjustment."*
-
-**Response 1**
-> Please submit your enrollment verification form by the 14th day of the semester. If you do not submit it by then, you will not qualify for the tuition adjustment.
-
-**Response 2**
-> You must submit the enrollment verification form by the 14th day of the semester. If you don't submit it, you won't be eligible for the tuition adjustment.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 7 — the AI was asked to help a confused student  ·  _itm-034_
+### Item 3 — the AI was asked to help a confused student  ·  _itm-034_
 
 *I'm a beginner and I keep mixing up a for loop and a while loop in Python. Can you explain the difference and when I'd use each?*
 
@@ -334,11 +188,200 @@ Thanks for helping out! In each question, an AI was asked to do a small task —
 
 ---
 
-### Item 8 — the AI was asked to help a confused student  ·  _itm-035_
+### Item 4 — the AI was asked to summarize a passage  ·  _itm-049_
+
+*Duke OIT will perform scheduled maintenance on the campus VPN service on Saturday, March 14, from 6:00 AM to 10:00 AM. During this window, Cisco AnyConnect connections to vpn.duke.edu may be intermittently unavailable, and active sessions could be disconnected without warning. Users who rely on the VPN for off-campus access to restricted systems, including the library's licensed databases and departmental file shares, should plan to complete time-sensitive work outside the maintenance window. No action is required from end users; existing client software will reconnect automatically once the service is restored. Questions can be directed to the OIT Service Desk at 919-684-2200.*
+
+**Response 1**
+> Duke OIT will perform scheduled maintenance on the campus VPN service on Saturday, March 14, from 6:00 AM to 10:00 AM. During this time, Cisco AnyConnect connections to vpn.duke.edu may be intermittently unavailable, and active sessions might be disconnected without warning. Users who need VPN access for off-campus work, such as accessing library databases or departmental file shares, should plan to complete urgent tasks outside this maintenance window. No action is needed from users; the VPN client will automatically reconnect once the service is restored. For questions, contact the OIT Service Desk at 919-684-2200.
+
+**Response 2**
+> Duke OIT will perform scheduled maintenance on the campus VPN service on Saturday, March 14, from 6:00 AM to 10:00 AM. During this window, Cisco AnyConnect connections to vpn.duke.edu may be intermittently unavailable, and active sessions could be disconnected without warning. 
+>
+> **Key Points:**
+> - **Maintenance Window:** 6:00 AM to 10:00 AM on March 14, 2023.
+> - **Impact:** Cisco AnyConnect connections to vpn.duke.edu may be unavailable or disconnected.
+> - **Affecting:** Users relying on the VPN for off-campus access to restricted systems, such as the library's licensed databases and departmental file shares.
+> - **Recommendation:** Plan to complete time-sensitive work outside the maintenance window.
+> - **Automatic Reconnection:** Existing client software will reconnect automatically once the service is restored.
+> - **Contact Information:** For any questions, contact the OIT Service Desk at 919-684-2200.
+>
+> No action is required from end users.
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 5 — the AI was asked to answer an IT question  ·  _itm-062_
+
+*How do I reset my Duke NetID password?*
+
+**Response 1**
+> To reset your Duke NetID password, follow these steps:
+>
+> 1. Go to the Duke IT Self-Service website at https://selfservice.duke.edu/.
+> 2. Click on "Forgot Your NetID or Password?" under the Sign In section.
+> 3. Enter your NetID and select the method you used to verify your identity (e.g., email, phone).
+> 4. Follow the prompts to reset your password.
+>
+> If you encounter any issues or need further assistance, you can contact Duke IT Support at 919-684-2020 or via their online support form.
+
+**Response 2**
+> To reset your Duke NetID password, follow these steps:
+>
+> 1. Visit the Duke NetID Password Reset page: [https://password.duke.edu](https://password.duke.edu)
+> 2. Click on the "Reset Password" link.
+> 3. Enter your Duke NetID and follow the prompts.
+> 4. You may be asked to verify your identity using your registered email address or security questions.
+> 5. Once verified, you'll be able to create a new password.
+>
+> If you encounter any issues or cannot access your account, contact Duke University's OIT Service Desk at 919-684-2200 or visit their support website for further assistance.
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 6 — the AI was asked to answer a Duke policy question  ·  _itm-086_
+
+*I teach a class with 30 students. I want to keep their gradebook in my personal Google Drive so I can access it from home. Is that OK under Duke's data policy?*
+
+**Response 1**
+> To determine whether storing student grade information on your personal Google Drive complies with Duke University's data policy, you should review Duke's policies on data security and acceptable storage practices. Generally, institutions have specific guidelines regarding the storage of student data, especially if it contains personally identifiable information or grades.
+>
+> I recommend:
+> 1. Consulting Duke University's official data security and privacy policies, which are often available on the university's website or IT support pages.
+> 2. Contacting the university's IT or data security office directly for guidance on storing sensitive student information outside of official university systems.
+> 3. Using approved university platforms or systems for maintaining gradebooks, such as the university's learning management system (LMS), if available.
+>
+> In many cases, storing sensitive student data on personal cloud services like Google Drive may not meet institutional security standards unless proper safeguards are in place. Always verify with your institution's policies to ensure compliance and protect student privacy.
+
+**Response 2**
+> Duke University has specific guidelines regarding the storage and handling of student data. Generally, storing student information in personal Google Drive may not be compliant with Duke’s data policies, especially if the data includes personally identifiable information (PII) such as grades, names, and other sensitive details.
+>
+> To ensure compliance, consider the following options:
+>
+> 1. **Duke Google Workspace**: Use Duke’s Google Workspace for Education, which is designed to comply with university data policies. This platform allows you to store and manage student data securely.
+>
+> 2. **Duke Data Management Services**: Contact Duke’s Information Technology Services (ITS) or the Office of Information Technology (OIT) for guidance on secure data management practices and tools.
+>
+> 3. **Classroom Tools**: Utilize tools provided by Duke, such as Canvas, which are designed to handle student data securely and comply with relevant policies.
+>
+> 4. **Local Storage**: Store the gradebook on a local server or network drive managed by Duke, ensuring that appropriate security measures are in place.
+>
+> Always consult with your department or IT support to ensure that any method you choose complies with Duke’s data policies and best practices.
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 7 — the AI was asked to draft an email  ·  _itm-003_
+
+*Draft an email to the Duke OIT Service Desk reporting that you cannot connect to the eduroam Wi-Fi on your laptop. Include the troubleshooting you've already tried so they can help faster.*
+
+**Response 1**
+> Subject: Issue Connecting to eduroam Wi-Fi on Laptop
+>
+> Dear Duke OIT Service Desk,
+>
+> I hope this message finds you well. I am writing to report an issue I am experiencing with connecting to the eduroam Wi-Fi network on my laptop. Despite following the standard procedures, I have been unable to establish a connection.
+>
+> Here are the steps I have already taken to troubleshoot the issue:
+>
+> 1. **Restarted the Laptop**: I restarted both my laptop and the router to ensure there were no temporary glitches.
+> 2. **Checked Network Settings**: I verified that the eduroam network is enabled and that my laptop is set to automatically obtain an IP address.
+> 3. **Updated Drivers**: I ensured that all necessary drivers, particularly the wireless adapter drivers, are up to date.
+> 4. **Contacted IT Support at My Institution**: I reached out to my institution’s IT support team, but they suggested checking if the issue persists after contacting Duke OIT for further assistance.
+>
+> Unfortunately, none of these steps have resolved the issue. I am currently unable to access the internet via eduroam, which is causing delays in my work.
+>
+> Could you please assist me in resolving this issue as soon as possible? If there are any specific details or logs you need from my end, please let me know.
+>
+> Thank you for your prompt attention to this matter.
+>
+> Best regards,
+>
+> [Your Full Name]  
+> [Your Duke NetID]  
+> [Your Department/Program]  
+> [Your Contact Information]  
+> [Your Laptop Model and OS Version]
+
+**Response 2**
+> Subject: Unable to Connect to eduroam Wi-Fi on Laptop
+>
+> Dear Duke OIT Service Desk,
+>
+> I am currently unable to connect to the eduroam Wi-Fi network on my laptop. I have attempted the following troubleshooting steps without success:
+>
+> - Restarted my laptop  
+> - Verified that my Wi-Fi is turned on  
+> - Confirmed that I am selecting the correct eduroam network  
+> - Entered my Duke NetID and password carefully  
+> - Removed and re-added the eduroam network profile  
+> - Ensured my device’s software and network drivers are up to date  
+>
+> Despite these efforts, my laptop still will not connect to eduroam. Could you please assist me in resolving this issue?
+>
+> Thank you for your help.
+>
+> Best regards,  
+> [Your Name]  
+> [Your Duke NetID]  
+> [Your Contact Information]
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 8 — the AI was asked to rewrite something in plain language  ·  _itm-020_
+
+*Rewrite this IT instruction in plain language, keeping the steps: "To remediate the authentication failure, users should purge cached credentials from the operating system keychain and subsequently re-establish the multi-factor enrollment via the designated self-service portal."*
+
+**Response 1**
+> To fix the login problem, users should delete any saved passwords from their computer's keychain. After that, they need to set up the multi-factor authentication again using the self-service portal.
+
+**Response 2**
+> To fix the authentication problem, users should:
+>
+> 1. Clear out any saved login information from their device's keychain.
+> 2. Then, go to the official self-service portal to set up multi-factor authentication again.
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 9 — the AI was asked to help a confused student  ·  _itm-035_
 
 *What's the difference between the mean and the median, and when should I use one over the other?*
 
 **Response 1**
+> The mean and median are both measures of central tendency used to describe the center of a dataset, but they differ in how they calculate this center and in their sensitivity to outliers.
+>
+> **Mean:**
+> - The mean is calculated by summing all the values in the dataset and then dividing by the number of values.
+> - It is sensitive to every value in the dataset, including outliers (extreme values).
+> - Formula: \(\text{Mean} = \frac{\sum_{i=1}^{n} x_i}{n}\), where \(x_i\) represents each value in the dataset and \(n\) is the total number of values.
+>
+> **Median:**
+> - The median is the middle value in a dataset when the values are arranged in order. If there is an even number of observations, the median is the average of the two middle numbers.
+> - It is less sensitive to outliers because it only depends on the position of the values rather than their actual values.
+> - Formula: For an odd number of observations, the median is the \(\left(\frac{n+1}{2}\right)\)-th value. For an even number of observations, it is the average of the \(\left(\frac{n}{2}\right)\)-th and \(\left(\frac{n}{2} + 1\right)\)-th values.
+>
+> **When to Use Each:**
+>
+> - **Use the Mean:**
+>   - When you want to use all the data points equally.
+>   - When the data is normally distributed (symmetric) and there are no significant outliers.
+>   - In financial calculations like average returns or in scenarios where the distribution is uniform.
+>
+> - **Use the Median:**
+>   - When you want to be less affected by outliers or extreme values.
+>   - When the data is skewed (not symmetrically distributed).
+>   - In real-world applications where extreme values might distort the mean, such as income levels or real estate prices.
+>
+> In summary, the choice between using the mean or median depends on the nature of your data and what aspect of the data you want to highlight.
+
+**Response 2**
 > The **mean** is the average of a set of numbers, calculated by adding all the values together and then dividing by the number of values. The **median** is the middle value when the numbers are arranged in order; if there is an even number of values, the median is the average of the two middle numbers.
 >
 > **Key differences:**
@@ -351,295 +394,24 @@ Thanks for helping out! In each question, an AI was asked to do a small task —
 >
 > In summary, the mean is sensitive to all values, while the median gives a better central tendency measure for skewed or non-normal distributions.
 
-**Response 2**
-> The mean and median are both measures of central tendency used to describe the center of a dataset, but they differ in how they calculate this center and in their sensitivity to outliers.
->
-> **Mean:**
-> - The mean is calculated by summing all the values in the dataset and then dividing by the number of values.
-> - It is sensitive to every value in the dataset, including outliers (extreme values).
-> - Formula: \(\text{Mean} = \frac{\sum_{i=1}^{n} x_i}{n}\), where \(x_i\) represents each value in the dataset and \(n\) is the total number of values.
->
-> **Median:**
-> - The median is the middle value in a dataset when the values are arranged in order. If there is an even number of observations, the median is the average of the two middle numbers.
-> - It is less sensitive to outliers because it only depends on the position of the values rather than their actual values.
-> - Formula: For an odd number of observations, the median is the \(\left(\frac{n+1}{2}\right)\)-th value. For an even number of observations, it is the average of the \(\left(\frac{n}{2}\right)\)-th and \(\left(\frac{n}{2} + 1\right)\)-th values.
->
-> **When to Use Each:**
->
-> - **Use the Mean:**
->   - When you want to use all the data points equally.
->   - When the data is normally distributed (symmetric) and there are no significant outliers.
->   - In financial calculations like average returns or in scenarios where the distribution is uniform.
->
-> - **Use the Median:**
->   - When you want to be less affected by outliers or extreme values.
->   - When the data is skewed (not symmetrically distributed).
->   - In real-world applications where extreme values might distort the mean, such as income levels or real estate prices.
->
-> In summary, the choice between using the mean or median depends on the nature of your data and what aspect of the data you want to highlight.
-
 **Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
 
 ---
 
-### Item 9 — the AI was asked to help a confused student  ·  _itm-036_
-
-*What's the difference between the mean and the median, and when should I use one over the other?*
-
-**Response 1**
-> The mean and median are both measures of central tendency used to describe the center of a dataset, but they differ in how they calculate this center and in their sensitivity to outliers.
->
-> **Mean:**
-> - The mean is calculated by summing all the values in the dataset and then dividing by the number of values.
-> - It is sensitive to every value in the dataset, including outliers (extreme values).
-> - Formula: \(\text{Mean} = \frac{\sum_{i=1}^{n} x_i}{n}\), where \(x_i\) represents each value in the dataset and \(n\) is the total number of values.
->
-> **Median:**
-> - The median is the middle value in a dataset when the values are arranged in order. If there is an even number of observations, the median is the average of the two middle numbers.
-> - It is less sensitive to outliers because it only depends on the position of the values rather than their actual values.
-> - Formula: For an odd number of observations, the median is the \(\left(\frac{n+1}{2}\right)\)-th value. For an even number of observations, it is the average of the \(\left(\frac{n}{2}\right)\)-th and \(\left(\frac{n}{2} + 1\right)\)-th values.
->
-> **When to Use Each:**
->
-> - **Use the Mean:**
->   - When you want to use all the data points equally.
->   - When the data is normally distributed (symmetric) and there are no significant outliers.
->   - In financial calculations like average returns or in scenarios where the distribution is uniform.
->
-> - **Use the Median:**
->   - When you want to be less affected by outliers or extreme values.
->   - When the data is skewed (not symmetrically distributed).
->   - In real-world applications where extreme values might distort the mean, such as income levels or real estate prices.
->
-> In summary, the choice between using the mean or median depends on the nature of your data and what aspect of the data you want to highlight.
-
-**Response 2**
-> The **mean** and **median** are both measures of central tendency that describe the typical value in a dataset, but they are calculated differently and are useful in different situations:
->
-> - **Mean (Average):**  
->   - Calculated by adding all the values and dividing by the number of values.  
->   - Sensitive to extremely high or low values (outliers).  
->   - Best used when the data is symmetrically distributed without outliers.
->
-> - **Median:**  
->   - The middle value when the data is ordered from smallest to largest.  
->   - Not affected by outliers or skewed data.  
->   - Best used when the data is skewed or contains outliers.
->
-> **When to use which:**
->
-> - Use the **mean** when your data is approximately symmetric and free of outliers, as it provides a good overall average.
-> - Use the **median** when your data is skewed or contains outliers, as it better represents the typical value without being distorted by extreme values.
->
-> **Summary:**  
-> Choose the mean for symmetric, outlier-free data; choose the median for skewed data or data with outliers.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 10 — the AI was asked to help a confused student  ·  _itm-037_
-
-*I need to find the average of these numbers: 4, 8, 6, 10. Can you walk me through how to do it, not just give the answer?*
-
-**Response 1**
-> Sure! To find the average (also called the mean) of a set of numbers, you follow these steps:
->
-> 1. **Add all the numbers together.**  
->    For your numbers: 4 + 8 + 6 + 10  
->    Let's add them step-by-step:  
->    4 + 8 = 12  
->    12 + 6 = 18  
->    18 + 10 = 28
->
-> 2. **Count how many numbers there are.**  
->    You have 4 numbers: 4, 8, 6, and 10.
->
-> 3. **Divide the sum by the number of numbers.**  
->    So, divide 28 (the sum) by 4 (the count):  
->    28 ÷ 4 = 7
->
-> So, the average of the numbers 4, 8, 6, and 10 is **7**.
-
-**Response 2**
-> Certainly! To find the average of the numbers 4, 8, 6, and 10, follow these steps:
->
-> 1. **Add all the numbers together**: 
->    \[
->    4 + 8 + 6 + 10 = 28
->    \]
->
-> 2. **Count the total number of values**:
->    There are 4 numbers in total.
->
-> 3. **Divide the sum by the count of numbers**:
->    \[
->    \frac{28}{4} = 7
->    \]
->
-> So, the average of the numbers 4, 8, 6, and 10 is 7.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 11 — the AI was asked to help a confused student  ·  _itm-038_
-
-*I need to find the average of these numbers: 4, 8, 6, 10. Can you walk me through how to do it, not just give the answer?*
-
-**Response 1**
-> Certainly! To find the average of the numbers 4, 8, 6, and 10, follow these steps:
->
-> 1. **Add all the numbers together**: 
->    \[
->    4 + 8 + 6 + 10 = 28
->    \]
->
-> 2. **Count the total number of values**:
->    There are 4 numbers in total.
->
-> 3. **Divide the sum by the count of numbers**:
->    \[
->    \frac{28}{4} = 7
->    \]
->
-> So, the average of the numbers 4, 8, 6, and 10 is 7.
-
-**Response 2**
-> Certainly! To find the average of the numbers 4, 8, 6, and 10, follow these steps:
->
-> 1. **Add all the numbers together**:  
->    4 + 8 + 6 + 10 = 28
->
-> 2. **Count how many numbers there are**:  
->    There are 4 numbers.
->
-> 3. **Divide the total sum by the number of numbers**:  
->    28 ÷ 4 = 7
->
-> So, the average of the numbers 4, 8, 6, and 10 is **7**.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 12 — the AI was asked to help a confused student  ·  _itm-039_
-
-*My recursive function never stops and crashes. Someone said I need a 'base case' — what is that and why do I need it?*
-
-**Response 1**
-> A base case in a recursive function is a condition that stops the recursion from continuing indefinitely. It defines the simplest scenario where the function can return a result without calling itself again. Without a base case, the function keeps calling itself forever, causing a crash or a stack overflow.
->
-> Think of recursion like a set of nested boxes: each recursive call opens a smaller box. The base case is the smallest box that you can open and find the answer inside, so you stop opening more boxes.
->
-> For example, in a function that calculates the factorial of a number:
->
-> ```python
-> def factorial(n):
->     if n == 0:          # This is the base case
->         return 1
->     else:
->         return n * factorial(n - 1)
-> ```
->
-> Here, when `n` reaches 0, the function returns 1 and stops calling itself. Without this base case, the function would keep calling `factorial(n - 1)` forever.
->
-> So, you need a base case to ensure your recursive function eventually stops and produces a result.
-
-**Response 2**
-> A base case in a recursive function is a condition that stops the recursion from continuing indefinitely. Without a base case, the function will keep calling itself over and over again, leading to an infinite loop that eventually causes your program to crash due to exceeding the call stack limit.
->
-> Here’s a simple example to illustrate:
->
-> ### Example: Factorial Function
->
-> The factorial of a number `n` (denoted as `n!`) is the product of all positive integers less than or equal to `n`. The factorial function can be defined recursively as follows:
->
-> - Base case: If `n` is 0 or 1, then `n! = 1`.
-> - Recursive case: Otherwise, `n! = n * (n-1)!`.
->
-> Here’s how you can implement this in Python:
->
-> ```python
-> def factorial(n):
->     # Base case
->     if n == 0 or n == 1:
->         return 1
->     # Recursive case
->     else:
->         return n * factorial(n - 1)
->
-> # Example usage
-> print(factorial(5))  # Output should be 120
-> ```
->
-> In this example, the base case is when `n` is 0 or 1. When the function reaches this point, it stops calling itself and returns the result. This prevents the function from going into an infinite loop.
->
-> ### Why Do You Need a Base Case?
->
-> 1. **Termination**: The base case ensures that the recursion will eventually terminate.
-> 2. **Avoiding Infinite Loops**: Without a base case, the function will continue to call itself with the same arguments repeatedly, leading to an infinite loop.
-> 3. **Stack Overflow**: Each recursive call adds a layer to the call stack. If there is no base case, the call stack can overflow, causing the program to crash.
->
-> By including a base case, you ensure that your recursive function will eventually reach a stopping point and avoid these issues.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 13 — the AI was asked to summarize a passage  ·  _itm-049_
-
-*Duke OIT will perform scheduled maintenance on the campus VPN service on Saturday, March 14, from 6:00 AM to 10:00 AM. During this window, Cisco AnyConnect connections to vpn.duke.edu may be intermittently unavailable, and active sessions could be disconnected without warning. Users who rely on the VPN for off-campus access to restricted systems, including the library's licensed databases and departmental file shares, should plan to complete time-sensitive work outside the maintenance window. No action is required from end users; existing client software will reconnect automatically once the service is restored. Questions can be directed to the OIT Service Desk at 919-684-2200.*
-
-**Response 1**
-> Duke OIT will perform scheduled maintenance on the campus VPN service on Saturday, March 14, from 6:00 AM to 10:00 AM. During this window, Cisco AnyConnect connections to vpn.duke.edu may be intermittently unavailable, and active sessions could be disconnected without warning. 
->
-> **Key Points:**
-> - **Maintenance Window:** 6:00 AM to 10:00 AM on March 14, 2023.
-> - **Impact:** Cisco AnyConnect connections to vpn.duke.edu may be unavailable or disconnected.
-> - **Affecting:** Users relying on the VPN for off-campus access to restricted systems, such as the library's licensed databases and departmental file shares.
-> - **Recommendation:** Plan to complete time-sensitive work outside the maintenance window.
-> - **Automatic Reconnection:** Existing client software will reconnect automatically once the service is restored.
-> - **Contact Information:** For any questions, contact the OIT Service Desk at 919-684-2200.
->
-> No action is required from end users.
-
-**Response 2**
-> Duke OIT will perform scheduled maintenance on the campus VPN service on Saturday, March 14, from 6:00 AM to 10:00 AM. During this time, Cisco AnyConnect connections to vpn.duke.edu may be intermittently unavailable, and active sessions might be disconnected without warning. Users who need VPN access for off-campus work, such as accessing library databases or departmental file shares, should plan to complete urgent tasks outside this maintenance window. No action is needed from users; the VPN client will automatically reconnect once the service is restored. For questions, contact the OIT Service Desk at 919-684-2200.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 14 — the AI was asked to summarize a passage  ·  _itm-050_
-
-*Duke OIT will perform scheduled maintenance on the campus VPN service on Saturday, March 14, from 6:00 AM to 10:00 AM. During this window, Cisco AnyConnect connections to vpn.duke.edu may be intermittently unavailable, and active sessions could be disconnected without warning. Users who rely on the VPN for off-campus access to restricted systems, including the library's licensed databases and departmental file shares, should plan to complete time-sensitive work outside the maintenance window. No action is required from end users; existing client software will reconnect automatically once the service is restored. Questions can be directed to the OIT Service Desk at 919-684-2200.*
-
-**Response 1**
-> Duke OIT will perform scheduled maintenance on the campus VPN service on Saturday, March 14, from 6:00 AM to 10:00 AM. During this time, Cisco AnyConnect connections to vpn.duke.edu may be intermittently unavailable, and active sessions could be disconnected without warning. If you rely on the VPN for off-campus access to restricted systems, please plan accordingly and complete any time-sensitive work outside this window. No action is needed on your part, as the client software will reconnect automatically once the service is back up. For questions, contact the OIT Service Desk at 919-684-2200.
-
-**Response 2**
-> Duke OIT will perform scheduled maintenance on the campus VPN service on Saturday, March 14, from 6:00 AM to 10:00 AM. During this window, Cisco AnyConnect connections to vpn.duke.edu may be intermittently unavailable, and active sessions could be disconnected without warning. 
->
-> **Key Points:**
-> - **Maintenance Window:** 6:00 AM to 10:00 AM on March 14, 2023.
-> - **Impact:** Cisco AnyConnect connections to vpn.duke.edu may be unavailable or disconnected.
-> - **Affecting:** Users relying on the VPN for off-campus access to restricted systems, such as the library's licensed databases and departmental file shares.
-> - **Recommendation:** Plan to complete time-sensitive work outside the maintenance window.
-> - **Automatic Reconnection:** Existing client software will reconnect automatically once the service is restored.
-> - **Contact Information:** For any questions, contact the OIT Service Desk at 919-684-2200.
->
-> No action is required from end users.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 15 — the AI was asked to summarize a passage  ·  _itm-051_
+### Item 10 — the AI was asked to summarize a passage  ·  _itm-052_
 
 *Under Duke's data classification policy, university data is grouped into three sensitivity levels: Public, Sensitive, and Restricted. Public data may be freely shared and carries no handling requirements. Sensitive data — which includes most student education records and non-public operational information — must be stored only in Duke-approved services such as Duke Box or Duke OneDrive and may not be placed in personal cloud accounts. Restricted data, the highest tier, covers information whose disclosure could cause significant harm, such as Social Security numbers, financial account numbers, and protected health information; it requires encryption in transit and at rest and is subject to additional access controls. When a dataset combines multiple elements, it inherits the classification of its most sensitive component.*
 
 **Response 1**
+> Based on Duke's data classification policy:
+>
+> - **Public Data:** Can be shared freely without special handling.
+> - **Sensitive Data:** Includes most student records and non-public operational info; must be stored only in approved services like Duke Box or Duke OneDrive and not in personal cloud accounts.
+> - **Restricted Data:** Contains highly sensitive information such as Social Security numbers, financial account details, and protected health information; requires encryption both during transfer and storage, along with strict access controls.
+>
+> When a dataset contains multiple elements, it adopts the highest sensitivity level among those elements.
+
+**Response 2**
 > Under Duke's data classification policy, university data is categorized into three sensitivity levels:
 >
 > 1. **Public Data**: This type of data can be freely shared and does not require any special handling.
@@ -648,115 +420,11 @@ Thanks for helping out! In each question, an AI was asked to do a small task —
 >
 > When a dataset contains elements from different sensitivity levels, the entire dataset will be classified according to the most sensitive component within it.
 
-**Response 2**
-> Duke's data classification policy categorizes university data into three sensitivity levels:
->
-> 1. **Public**: Data that can be freely shared without any handling restrictions.
->
-> 2. **Sensitive**: Includes most student education records and non-public operational information. This data must be stored only in Duke-approved services like Duke Box or Duke OneDrive and cannot be stored in personal cloud accounts.
->
-> 3. **Restricted**: The highest sensitivity level, covering information such as Social Security numbers, financial account numbers, and protected health information. Restricted data requires encryption both in transit and at rest and is subject to additional access controls.
->
-> Additionally, if a dataset contains multiple types of data, it is classified according to the most sensitive element within it.
-
 **Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
 
 ---
 
-### Item 16 — the AI was asked to summarize a passage  ·  _itm-058_
-
-*The Office of Information Technology has issued a security advisory following a rise in targeted phishing emails aimed at Duke community members. The recent messages impersonate Duke departments and ask recipients to log in through a linked page to 'verify' their account or review a shared document; the linked pages closely mimic the real Duke single sign-on screen. OIT reminds users that Duke will never ask for a NetID password by email and that legitimate logins always occur at the official shib.oit.duke.edu address. Recipients who receive a suspicious message should not click any links, should report it using the 'Report Phishing' button in Outlook, and should change their NetID password immediately if they entered credentials. Enabling Duo multifactor authentication significantly reduces the risk that a stolen password alone can compromise an account.*
-
-**Response 1**
-> The Office of Information Technology has issued a security alert about an increase in targeted phishing emails impersonating Duke departments. These messages ask recipients to log in via a link to verify their account or review a shared document, with the linked pages closely resembling the official Duke login page. 
->
-> Duke OIT emphasizes that they will never request your NetID password via email, and legitimate login pages are always at shib.oit.duke.edu. If you receive a suspicious email, do not click any links. Instead, report it using the 'Report Phishing' button in Outlook. If you entered your credentials on a suspicious page, change your NetID password immediately. 
->
-> Additionally, enabling Duo multifactor authentication greatly enhances your account security by adding an extra layer of protection beyond just your password.
-
-**Response 2**
-> The Office of Information Technology (OIT) has issued a security advisory due to an increase in targeted phishing emails aimed at Duke community members. These emails impersonate Duke departments and ask recipients to log in through a linked page to 'verify' their account or review a shared document. The linked pages closely resemble the real Duke single sign-on screen.
->
-> Here are some key points from the advisory:
->
-> 1. **Duke Will Never Ask for Your NetID Password via Email**: Legitimate communications from Duke will not request your NetID password.
-> 2. **Official Login Address**: Always log in at the official shib.oit.duke.edu address.
-> 3. **What to Do if You Receive a Suspicious Message**:
->    - Do not click any links.
->    - Use the 'Report Phishing' button in Outlook to report the message.
->    - Change your NetID password immediately if you entered any credentials.
-> 4. **Multifactor Authentication**: Enabling Duo multifactor authentication significantly reduces the risk that a stolen password alone can compromise your account.
->
-> If you have any concerns or need further assistance, contact the OIT Help Desk.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 17 — the AI was asked to answer an IT question  ·  _itm-061_
-
-*How do I reset my Duke NetID password?*
-
-**Response 1**
-> To reset your Duke NetID password, follow these steps:
->
-> 1. Go to the Duke IT Self-Service website at https://selfservice.duke.edu/.
-> 2. Click on "Forgot Your NetID or Password?" under the Sign In section.
-> 3. Enter your NetID and select the method you used to verify your identity (e.g., email, phone).
-> 4. Follow the prompts to reset your password.
->
-> If you encounter any issues or need further assistance, you can contact Duke IT Support at 919-684-2020 or via their online support form.
-
-**Response 2**
-> To reset your Duke NetID password, follow these steps:
->
-> 1. Go to the Duke University NetID password reset page: https://netid.duke.edu/password-reset
-> 2. Enter your Duke NetID username.
-> 3. Follow the prompts to verify your identity. This may include answering security questions or receiving a verification code via your registered email or phone number.
-> 4. Create a new password that meets Duke's password requirements.
-> 5. Confirm the new password and submit.
->
-> If you encounter any issues, you can contact Duke's IT Help Desk for assistance:
->
-> - Phone: 919-684-2200
-> - Email: help@duke.edu
->
-> Make sure to have your Duke ID or other identification ready when contacting support.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 18 — the AI was asked to answer an IT question  ·  _itm-062_
-
-*How do I reset my Duke NetID password?*
-
-**Response 1**
-> To reset your Duke NetID password, follow these steps:
->
-> 1. Visit the Duke NetID Password Reset page: [https://password.duke.edu](https://password.duke.edu)
-> 2. Click on the "Reset Password" link.
-> 3. Enter your Duke NetID and follow the prompts.
-> 4. You may be asked to verify your identity using your registered email address or security questions.
-> 5. Once verified, you'll be able to create a new password.
->
-> If you encounter any issues or cannot access your account, contact Duke University's OIT Service Desk at 919-684-2200 or visit their support website for further assistance.
-
-**Response 2**
-> To reset your Duke NetID password, follow these steps:
->
-> 1. Go to the Duke IT Self-Service website at https://selfservice.duke.edu/.
-> 2. Click on "Forgot Your NetID or Password?" under the Sign In section.
-> 3. Enter your NetID and select the method you used to verify your identity (e.g., email, phone).
-> 4. Follow the prompts to reset your password.
->
-> If you encounter any issues or need further assistance, you can contact Duke IT Support at 919-684-2020 or via their online support form.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 19 — the AI was asked to answer an IT question  ·  _itm-063_
+### Item 11 — the AI was asked to answer an IT question  ·  _itm-064_
 
 *I'm trying to connect to the Duke VPN but it keeps failing. What should I do?*
 
@@ -784,39 +452,6 @@ Thanks for helping out! In each question, an AI was asked to do a small task —
 > By following these steps, you should be able to identify and potentially resolve the issue preventing you from connecting to the Duke VPN.
 
 **Response 2**
-> If you're having trouble connecting to the Duke VPN, try the following steps:
->
-> 1. **Check Your Internet Connection:** Make sure you have a stable internet connection.
->
-> 2. **Verify Your Credentials:** Ensure you are using the correct Duke NetID and password.
->
-> 3. **Use the Correct VPN Client:** Duke typically uses Cisco AnyConnect for VPN access. Make sure you have the latest version installed.
->
-> 4. **Restart the VPN Client:** Close the VPN application completely and reopen it.
->
-> 5. **Restart Your Device:** Sometimes a simple reboot can resolve connection issues.
->
-> 6. **Check for Updates:** Ensure your operating system and VPN client are up to date.
->
-> 7. **Disable Conflicting Software:** Temporarily disable any firewall, antivirus, or other VPN software that might interfere.
->
-> 8. **Try a Different Network:** If possible, connect from another internet connection to rule out network issues.
->
-> 9. **Clear VPN Profiles:** Remove any saved VPN profiles and set up the connection again.
->
-> 10. **Consult Duke’s IT Support:** If the problem persists, contact Duke's Technology Services Help Desk at help.duke.edu or call (919) 684-2200 for assistance.
->
-> If you provide any error messages you’re seeing, I can offer more specific advice.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 20 — the AI was asked to answer an IT question  ·  _itm-064_
-
-*I'm trying to connect to the Duke VPN but it keeps failing. What should I do?*
-
-**Response 1**
 > If you're having trouble connecting to the Duke VPN, try the following steps:
 >
 > 1. **Check Your Internet Connection:** Ensure your device is connected to the internet and that your connection is stable.
@@ -837,34 +472,165 @@ Thanks for helping out! In each question, an AI was asked to do a small task —
 >
 > You can find support contact information on the Duke IT website or through your student/staff portal.
 
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 12 — the AI was asked to answer a Duke policy question  ·  _itm-087_
+
+*I want to use ChatGPT to help me draft feedback comments on student essays. Can I paste in the essay content and the student's name?*
+
+**Response 1**
+> Yes, you can paste the student's name and the essay content here, and I can help you draft feedback comments based on the essay. Just let me know any specific areas you'd like the feedback to focus on (e.g., grammar, argument strength, organization) if you have preferences!
+
 **Response 2**
-> Here are some steps you can follow to troubleshoot and resolve issues connecting to the Duke University Virtual Private Network (VPN):
->
-> 1. **Check Your Internet Connection**: Ensure that your internet connection is stable and working properly.
->
-> 2. **Restart Your Device**: Sometimes, simply restarting your computer or mobile device can resolve connectivity issues.
->
-> 3. **Update Your Software**: Make sure that your Duke VPN client software is up-to-date. Check for any available updates and install them if necessary.
->
-> 4. **Verify Your Credentials**: Double-check that you are using the correct username and password. If you have recently changed your password, make sure to use the updated credentials.
->
-> 5. **Check Server Status**: Visit Duke’s IT website or contact their support team to check if there are any known issues with the Duke VPN servers.
->
-> 6. **Clear Cache and Cookies**: Clearing the cache and cookies in your web browser might help if you are using a web-based version of the Duke VPN.
->
-> 7. **Disable Firewall/Antivirus Temporarily**: Sometimes, firewall or antivirus settings can interfere with the connection. Try temporarily disabling these security measures to see if it resolves the issue.
->
-> 8. **Use a Different Device**: Try connecting from a different device to see if the problem persists. This can help determine if the issue is specific to one device.
->
-> 9. **Contact IT Support**: If none of the above steps work, reach out to Duke’s IT support team for further assistance. They can provide more specific guidance based on your situation.
->
-> By following these steps, you should be able to identify and potentially resolve the issue preventing you from connecting to the Duke VPN.
+> Yes, you can certainly paste in the essay content and the student's name when using ChatGPT to draft feedback comments. However, keep in mind that while ChatGPT can provide useful suggestions and comments, it's important to review and refine the feedback to ensure it is appropriate and constructive for the specific context of the student and the assignment. Always consider the tone and the goals of your feedback to make sure it is beneficial for the student's learning.
 
 **Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
 
 ---
 
-### Item 21 — the AI was asked to answer an IT question  ·  _itm-065_
+### Item 13 — the AI was asked to draft an email  ·  _itm-006_
+
+*Draft an email to your academic advisor, Professor B, requesting a short meeting to discuss adding a Machine Learning & AI minor. Suggest a couple of times.*
+
+**Response 1**
+> Subject: Request for Meeting to Discuss Adding a Machine Learning & AI Minor
+>
+> Dear Professor B,
+>
+> I hope this message finds you well. I am writing to request a brief meeting with you to discuss my interest in adding a Machine Learning & AI minor to my current degree program. Given your expertise and guidance, I believe this would be a valuable addition to my academic journey.
+>
+> Could we schedule a meeting at your earliest convenience? I have a few suggestions:
+>
+> 1. Next Tuesday, March 14th, from 2:00 PM to 3:00 PM.
+> 2. Thursday, March 16th, from 10:00 AM to 11:00 AM.
+>
+> Please let me know which time works best for you, or if there is another time that might be more convenient. I look forward to discussing this opportunity further.
+>
+> Thank you for your time and consideration.
+>
+> Best regards,
+>
+> [Your Full Name]  
+> [Your Student ID]  
+> [Your Major/Program]  
+> [Your Contact Information]
+
+**Response 2**
+> Subject: Request for Meeting to Discuss Adding Machine Learning & AI Minor
+>
+> Dear Professor B,
+>
+> I hope this message finds you well. I am interested in adding a Machine Learning & AI minor to my academic program and would appreciate the opportunity to discuss this with you.
+>
+> Could we schedule a brief meeting at your convenience? I am available on Tuesday or Thursday afternoons between 2:00 PM and 4:00 PM. Please let me know if any of these times work for you or if there is a more suitable time.
+>
+> Thank you very much for your guidance.
+>
+> Best regards,  
+> [Your Name]  
+> [Your Student ID]
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 14 — the AI was asked to rewrite something in plain language  ·  _itm-021_
+
+*Rewrite this notice in plain language for students, keeping the deadline and consequence: "Submission of the enrollment verification form is required no later than the fourteenth (14th) calendar day of the semester; non-submission will render the student ineligible for the associated tuition adjustment."*
+
+**Response 1**
+> Please submit your enrollment verification form by the 14th day of the semester. If you do not submit it by then, you will not qualify for the tuition adjustment.
+
+**Response 2**
+> You must submit the enrollment verification form by the 14th day of the semester. If you don't submit it, you won't be eligible for the tuition adjustment.
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 15 — the AI was asked to help a confused student  ·  _itm-037_
+
+*I need to find the average of these numbers: 4, 8, 6, 10. Can you walk me through how to do it, not just give the answer?*
+
+**Response 1**
+> Certainly! To find the average of the numbers 4, 8, 6, and 10, follow these steps:
+>
+> 1. **Add all the numbers together**: 
+>    \[
+>    4 + 8 + 6 + 10 = 28
+>    \]
+>
+> 2. **Count the total number of values**:
+>    There are 4 numbers in total.
+>
+> 3. **Divide the sum by the count of numbers**:
+>    \[
+>    \frac{28}{4} = 7
+>    \]
+>
+> So, the average of the numbers 4, 8, 6, and 10 is 7.
+
+**Response 2**
+> Sure! To find the average (also called the mean) of a set of numbers, you follow these steps:
+>
+> 1. **Add all the numbers together.**  
+>    For your numbers: 4 + 8 + 6 + 10  
+>    Let's add them step-by-step:  
+>    4 + 8 = 12  
+>    12 + 6 = 18  
+>    18 + 10 = 28
+>
+> 2. **Count how many numbers there are.**  
+>    You have 4 numbers: 4, 8, 6, and 10.
+>
+> 3. **Divide the sum by the number of numbers.**  
+>    So, divide 28 (the sum) by 4 (the count):  
+>    28 ÷ 4 = 7
+>
+> So, the average of the numbers 4, 8, 6, and 10 is **7**.
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 16 — the AI was asked to summarize a passage  ·  _itm-053_
+
+*The Duke Compute Cluster (DCC) is a shared high-performance computing environment available to Duke researchers. Jobs are submitted through the Slurm scheduler rather than run interactively on login nodes, which are reserved for editing, compiling, and lightweight tasks. Each research group is allocated storage under /work, while home directories are limited to 25 GB and are not intended for large datasets. Free, lower-priority access is available to all users through the common partition, and groups that have purchased dedicated nodes receive higher scheduling priority on their own partitions. Users running large or long jobs should request appropriate resources in their submission scripts; jobs that exceed requested memory or time limits are terminated by the scheduler.*
+
+**Response 1**
+> The Duke Compute Cluster (DCC) is a shared high-performance computing resource for Duke researchers. Key points include:
+>
+> - Jobs must be submitted via the Slurm scheduler; interactive use of login nodes is limited to lightweight tasks like editing and compiling.
+> - Each research group has storage allocated under /work; home directories have a 25 GB limit and are not meant for large datasets.
+> - All users have free, lower-priority access through the common partition.
+> - Research groups with dedicated nodes get higher scheduling priority on their own partitions.
+> - Users should specify appropriate resource requests (memory, time) in job submission scripts.
+> - Jobs exceeding requested resource limits are terminated by the scheduler.
+
+**Response 2**
+> The Duke Compute Cluster (DCC) is a high-performance computing environment accessible to Duke researchers. Here’s a summary of its key features:
+>
+> 1. **Job Submission**: Jobs are submitted via the Slurm scheduler, not run interactively on login nodes.
+> 2. **Login Nodes**: These are reserved for editing, compiling, and performing lightweight tasks.
+> 3. **Storage Allocation**:
+>    - Research groups get storage under `/work`.
+>    - Home directories are limited to 25 GB and are not suitable for large datasets.
+> 4. **Access Levels**:
+>    - All users have free, lower-priority access through the common partition.
+>    - Groups with dedicated nodes have higher scheduling priority on their own partitions.
+> 5. **Resource Management**:
+>    - Users must request appropriate resources in their job submission scripts.
+>    - Jobs exceeding memory or time limits are terminated by the scheduler.
+>
+> This setup ensures efficient use of computational resources and supports both general and specialized research needs.
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 17 — the AI was asked to answer an IT question  ·  _itm-065_
 
 *How do I set up Duo Mobile for multi-factor authentication?*
 
@@ -930,11 +696,428 @@ Thanks for helping out! In each question, an AI was asked to do a small task —
 
 ---
 
-### Item 22 — the AI was asked to answer an IT question  ·  _itm-069_
+### Item 18 — the AI was asked to answer a Duke policy question  ·  _itm-089_
+
+*As a TA, can I store scanned copies of student exams in Duke Box if I keep the folder private?*
+
+**Response 1**
+> At Duke University, storing student exams or any student educational records must comply with FERPA (Family Educational Rights and Privacy Act) regulations. While Duke Box is a secure cloud storage service provided by the university, simply keeping the folder private may not be sufficient to ensure compliance.
+>
+> As a TA, you should:
+>
+> 1. Ensure that the folder is shared only with authorized individuals (e.g., yourself, the instructor, or other authorized staff).
+> 2. Avoid sharing links publicly or with unauthorized users.
+> 3. Follow any additional departmental or university policies regarding handling and storage of student records.
+> 4. Consider encrypting sensitive files if possible.
+> 5. Delete the files once they are no longer needed for legitimate educational purposes.
+>
+> If you are unsure, it is best to consult your course instructor or Duke’s Office of Information Technology or the Registrar’s Office for specific guidance.
+>
+> In summary, you can store scanned copies of student exams in Duke Box if the folder is kept private and access is strictly controlled, but always ensure you follow FERPA guidelines and Duke’s policies.
+
+**Response 2**
+> Yes, as a Teaching Assistant, you can store scanned copies of student exams in Duke Box if you keep the folder private. This ensures that only authorized individuals with proper permissions can access the documents, maintaining confidentiality and adhering to privacy policies. Make sure to follow your institution's guidelines for managing sensitive information.
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 19 — the AI was asked to draft an email  ·  _itm-008_
+
+*Draft a brief, polite email to your TA asking where to submit the final project and what file format is expected.*
+
+**Response 1**
+> Subject: Final Project Submission Details
+>
+> Hi [TA's Name],
+>
+> I hope this message finds you well. I am writing to inquire about the submission process for our final project. Could you please let me know where we should upload the project and what file format is expected?
+>
+> Thank you very much for your assistance!
+>
+> Best regards,
+> [Your Name]
+
+**Response 2**
+> Subject: Inquiry About Final Project Submission
+>
+> Dear [TA's Name],
+>
+> I hope you're doing well. Could you please let me know where I should submit the final project and what file format is preferred? 
+>
+> Thank you very much for your assistance.
+>
+> Best regards,  
+> [Your Name]
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 20 — the AI was asked to rewrite something in plain language  ·  _itm-024_
+
+*Rewrite this research-consent sentence in plain language, keeping the meaning: "Participation in this study is wholly voluntary, and the participant may elect to withdraw consent at any juncture without incurring any penalty or forfeiture of benefits to which they are otherwise entitled."*
+
+**Response 1**
+> Joining this study is completely your choice. You can decide to stop participating at any time without any penalty or losing any benefits you would normally receive.
+
+**Response 2**
+> Taking part in this study is completely voluntary, and you can choose to stop at any time without facing any penalties or losing any rights or benefits you are entitled to.
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 21 — the AI was asked to help a confused student  ·  _itm-040_
+
+*My recursive function never stops and crashes. Someone said I need a 'base case' — what is that and why do I need it?*
+
+**Response 1**
+> A base case in a recursive function is a condition that stops the recursion from continuing indefinitely. Without a base case, the function will keep calling itself over and over again, leading to an infinite loop that eventually causes your program to crash due to exceeding the call stack limit.
+>
+> Here’s a simple example to illustrate:
+>
+> ### Example: Factorial Function
+>
+> The factorial of a number `n` (denoted as `n!`) is the product of all positive integers less than or equal to `n`. The factorial function can be defined recursively as follows:
+>
+> - Base case: If `n` is 0 or 1, then `n! = 1`.
+> - Recursive case: Otherwise, `n! = n * (n-1)!`.
+>
+> Here’s how you can implement this in Python:
+>
+> ```python
+> def factorial(n):
+>     # Base case
+>     if n == 0 or n == 1:
+>         return 1
+>     # Recursive case
+>     else:
+>         return n * factorial(n - 1)
+>
+> # Example usage
+> print(factorial(5))  # Output should be 120
+> ```
+>
+> In this example, the base case is when `n` is 0 or 1. When the function reaches this point, it stops calling itself and returns the result. This prevents the function from going into an infinite loop.
+>
+> ### Why Do You Need a Base Case?
+>
+> 1. **Termination**: The base case ensures that the recursion will eventually terminate.
+> 2. **Avoiding Infinite Loops**: Without a base case, the function will continue to call itself with the same arguments repeatedly, leading to an infinite loop.
+> 3. **Stack Overflow**: Each recursive call adds a layer to the call stack. If there is no base case, the call stack can overflow, causing the program to crash.
+>
+> By including a base case, you ensure that your recursive function will eventually reach a stopping point and avoid these issues.
+
+**Response 2**
+> A base case is a condition in a recursive function that stops the recursion. It defines the simplest instance of the problem that can be solved directly without further recursion. Without a base case, the function keeps calling itself indefinitely, leading to infinite recursion and eventually crashing your program.
+>
+> You need a base case to ensure that your recursive calls eventually terminate, allowing the function to return a result and preventing your program from running forever. Make sure to include a clear and correct base case in your recursive function to fix the issue.
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 22 — the AI was asked to summarize a passage  ·  _itm-056_
+
+*Duke University Libraries has expanded access to its interlibrary loan service for the upcoming semester. Students, faculty, and staff can now request articles and book chapters not held in Duke's collections at no cost, with most digital articles delivered within 24 to 48 hours directly to the requester's email. Physical books borrowed from partner institutions typically arrive within one to two weeks and can be picked up at Perkins Library or, on request, routed to the Ford Library or the Marine Lab. The service is accessed through the library website using NetID login. There is no limit on the number of requests, though the library asks that users cancel requests they no longer need so that resources can be redirected.*
+
+**Response 1**
+> Duke University Libraries has expanded its interlibrary loan service for the upcoming semester. Students, faculty, and staff can now request articles and book chapters not available in Duke's collections at no cost. Digital articles are typically delivered within 24 to 48 hours via email. Physical books from partner institutions usually arrive within one to two weeks and can be picked up at Perkins Library or routed to the Ford Library or Marine Lab upon request. Access is available through the library website using your NetID login. There is no limit on the number of requests, but users are encouraged to cancel any requests they no longer need to help optimize resource sharing.
+
+**Response 2**
+> Duke University Libraries has expanded access to its interlibrary loan service for the upcoming semester. Here are the key details:
+>
+> - **Service Availability**: Students, faculty, and staff can now request articles and book chapters not held in Duke's collections at no cost.
+> - **Digital Articles**: Most digital articles will be delivered within 24 to 48 hours directly to the requester's email.
+> - **Physical Books**: Physical books borrowed from partner institutions typically arrive within one to two weeks and can be picked up at Perkins Library or, upon request, at the Ford Library or the Marine Lab.
+> - **Access**: The service is accessed through the library website using NetID login.
+> - **Request Limits**: There is no limit on the number of requests, but the library asks that users cancel requests they no longer need to ensure resources are available for others.
+>
+> For more information, you can visit the library website or contact the reference desk.
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 23 — the AI was asked to answer an IT question  ·  _itm-068_
+
+*I'm getting a Duo prompt on my phone but I'm not trying to log in. What does this mean?*
+
+**Response 1**
+> If you're receiving a Duo prompt on your phone but didn't initiate the login process, it could be due to several reasons:
+>
+> 1. **Someone Else Using Your Account**: Another person might be trying to access your account.
+> 2. **Automatic Approvals**: If you have automatic approvals set up for certain devices or trusted locations, this might trigger a prompt.
+> 3. **Security Settings**: Your security settings might be configured to send a notification even if no actual login attempt is happening.
+>
+> To address this:
+>
+> - **Check Recent Activity**: Log into your account and review recent activity to see if there are any unauthorized attempts.
+> - **Review Security Settings**: Go to your Duo settings and check if there are any automatic approvals or other security features that might be causing the prompt.
+> - **Contact Support**: If you're unsure or if the issue persists, contact your organization’s IT support or Duo support for assistance.
+>
+> If you find that someone else is trying to access your account, change your password immediately and inform the relevant parties.
+
+**Response 2**
+> If you're receiving a Duo prompt on your phone but you're not attempting to log in, it could mean a few things:
+>
+> 1. **Accidental Trigger:** Someone might have accidentally initiated a login attempt on your account.
+> 2. **Unauthorized Access Attempt:** Someone may be trying to access your account without your permission and triggering the Duo prompt.
+> 3. **Phishing or Scam:** Be cautious if the prompt looks suspicious or unexpected, as it could be a phishing attempt.
+>
+> **What you should do:**
+> - Do **not approve** the prompt if you did not initiate the login.
+> - Check your account activity for any unauthorized access.
+> - Change your account password immediately to secure your account.
+> - Enable additional security measures if available, such as two-factor authentication.
+> - Contact your account provider or IT support if you're unsure or suspect unauthorized activity.
+>
+> Always verify the source of such prompts before taking any action.
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 24 — the AI was asked to answer a Duke policy question  ·  _itm-092_
+
+*I just received an email from someone claiming to be 'Duke IT Support' asking me to click a link to reset my NetID password because of a security incident. The email looks somewhat legitimate but I'm not sure. What should I do?*
+
+**Response 1**
+> It's best to exercise caution. Do not click any links or provide any personal information. Instead, independently verify the request by contacting Duke IT Support directly through their official website or known contact methods. They can confirm whether the password reset request is legitimate. Remember, legitimate organizations typically do not ask you to click links in unsolicited emails to reset passwords.
+
+**Response 2**
+> It sounds like you might be dealing with a phishing attempt. Here are some steps you can take:
+>
+> 1. **Do Not Click the Link**: Avoid clicking any links in the email, as they could lead to malicious websites designed to steal your information.
+>
+> 2. **Verify the Email**: Check if there is a Duke IT Support contact number or another way to reach out for verification. You can find official contact details on the Duke University IT Services website.
+>
+> 3. **Contact Duke IT Support Directly**: Call or email Duke IT Support using a verified phone number or email address to inquire about the alleged security incident. They will be able to confirm whether this is a genuine request or a scam.
+>
+> 4. **Report the Email**: Forward the email to Duke’s IT Security team and also report it to your institution’s IT department. This helps them track and prevent such incidents.
+>
+> 5. **Check Your Account**: If you’re still unsure, log into your NetID account through the official Duke login page (https://netid.duke.edu) to check if there are any actual security alerts or prompts to change your password.
+>
+> 6. **Change Your Password**: If you decide to proceed based on official confirmation, change your NetID password immediately through the official Duke login page.
+>
+> 7. **Be Wary of Future Emails**: Stay vigilant and be cautious of similar emails in the future. Phishing attempts often use urgency and fear to prompt quick actions.
+>
+> Taking these steps will help ensure your account remains secure.
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 25 — the AI was asked to draft an email  ·  _itm-009_
+
+*Draft a friendly email to your project teammate A proposing to move your weekly meeting from Tuesday at 3pm to Thursday at 3pm this week, and asking if that works.*
+
+**Response 1**
+> Subject: Suggested Change for Our Weekly Meeting Time
+>
+> Hi A,
+>
+> I hope you're doing well!
+>
+> I wanted to touch base about our upcoming weekly meeting. I noticed that my schedule has shifted slightly this week, and I think moving our meeting from Tuesday at 3pm to Thursday at 3pm would be more convenient for me. Would this work for you?
+>
+> Let me know what you think!
+>
+> Best,
+> [Your Name]
+
+**Response 2**
+> Subject: Proposal to Reschedule This Week’s Meeting
+>
+> Hi A,
+>
+> I hope you’re doing well! I wanted to check if it would be possible to move our weekly meeting from Tuesday at 3pm to Thursday at 3pm this week. Please let me know if that works for you.
+>
+> Thanks so much!
+>
+> Best,  
+> [Your Name]
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 26 — the AI was asked to rewrite something in plain language  ·  _itm-025_
+
+*Rewrite this financial-aid clause in plain language for a general audience, keeping the condition: "Continued eligibility for need-based aid is contingent upon the maintenance of satisfactory academic progress as defined by the institution's published standards."*
+
+**Response 1**
+> To keep receiving need-based financial aid, you must continue to meet the school's academic progress requirements as outlined in their official guidelines.
+
+**Response 2**
+> To keep receiving financial aid based on need, you must meet the school's standards for doing well in your classes.
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 27 — the AI was asked to help a confused student  ·  _itm-041_
+
+*I'm confused about GROUP BY in SQL. What does it actually do?*
+
+**Response 1**
+> Certainly! The `GROUP BY` clause in SQL is used to arrange rows that have the same values in specified columns into groups. This allows you to perform aggregate functions (like `COUNT`, `SUM`, `AVG`, `MAX`, and `MIN`) on these groups.
+>
+> Here’s a simple example to illustrate how `GROUP BY` works:
+>
+> Suppose you have a table called `Orders` with the following data:
+>
+> | OrderID | CustomerID | Amount |
+> |---------|------------|--------|
+> | 1       | 101        | 200    |
+> | 2       | 101        | 300    |
+> | 3       | 102        | 150    |
+> | 4       | 101        | 250    |
+>
+> If you want to find the total amount spent by each customer, you would use `GROUP BY` like this:
+>
+> ```sql
+> SELECT CustomerID, SUM(Amount) AS TotalSpent
+> FROM Orders
+> GROUP BY CustomerID;
+> ```
+>
+> This query will return:
+>
+> | CustomerID | TotalSpent |
+> |------------|------------|
+> | 101        | 750        |
+> | 102        | 150        |
+>
+> In this example:
+> - The `GROUP BY CustomerID` clause groups the rows by `CustomerID`.
+> - The `SUM(Amount)` function calculates the total amount for each group of `CustomerID`.
+>
+> So, `GROUP BY` helps you summarize data by creating groups based on one or more columns, and then performing calculations on those groups.
+
+**Response 2**
+> The `GROUP BY` clause in SQL is used to arrange identical data into groups. It groups rows that have the same values in specified columns into summary rows, like "find the total sales for each product" or "count the number of employees in each department."
+>
+> Here's what it does:
+>
+> - It collects rows with the same values in the specified column(s).
+> - It allows you to perform aggregate functions (like `COUNT()`, `SUM()`, `AVG()`, `MAX()`, `MIN()`) on each group.
+> - The result is one row per group.
+>
+> **Example:**
+>
+> Suppose you have a table `Sales`:
+>
+> | Product | Amount |
+> |---------|--------|
+> | Apple   | 100    |
+> | Banana  | 150    |
+> | Apple   | 200    |
+> | Banana  | 100    |
+>
+> If you want to find the total sales amount per product, you can use:
+>
+> ```sql
+> SELECT Product, SUM(Amount) AS TotalSales
+> FROM Sales
+> GROUP BY Product;
+> ```
+>
+> Result:
+>
+> | Product | TotalSales |
+> |---------|------------|
+> | Apple   | 300        |
+> | Banana  | 250        |
+>
+> So, `GROUP BY` groups the rows by product, and then `SUM(Amount)` calculates the total for each group.
+>
+> **In short:** `GROUP BY` groups rows sharing the same values in specified columns so you can aggregate data per group.
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 28 — the AI was asked to summarize a passage  ·  _itm-057_
+
+*The Office of Information Technology has issued a security advisory following a rise in targeted phishing emails aimed at Duke community members. The recent messages impersonate Duke departments and ask recipients to log in through a linked page to 'verify' their account or review a shared document; the linked pages closely mimic the real Duke single sign-on screen. OIT reminds users that Duke will never ask for a NetID password by email and that legitimate logins always occur at the official shib.oit.duke.edu address. Recipients who receive a suspicious message should not click any links, should report it using the 'Report Phishing' button in Outlook, and should change their NetID password immediately if they entered credentials. Enabling Duo multifactor authentication significantly reduces the risk that a stolen password alone can compromise an account.*
+
+**Response 1**
+> The Office of Information Technology (OIT) at Duke has issued a security advisory about an increase in targeted phishing emails. These emails impersonate Duke departments and prompt recipients to log in via a linked page to "verify" their account or review a shared document. The fake login pages closely resemble the official Duke single sign-on screen.
+>
+> Key points to remember:
+> - Duke will never ask for your NetID password by email.
+> - Legitimate logins always occur at the official address: shib.oit.duke.edu.
+> - If you receive a suspicious email, do not click any links.
+> - Report phishing emails using the "Report Phishing" button in Outlook.
+> - If you entered your credentials on a suspicious site, change your NetID password immediately.
+> - Enabling Duo multifactor authentication greatly reduces the risk of account compromise even if your password is stolen.
+>
+> Stay vigilant and protect your Duke account by following these guidelines.
+
+**Response 2**
+> The Office of Information Technology (OIT) has issued a security advisory due to an increase in targeted phishing emails aimed at Duke community members. These emails impersonate Duke departments and ask recipients to log in through a linked page to 'verify' their account or review a shared document. The linked pages closely resemble the real Duke single sign-on screen.
+>
+> Here are some key points from the advisory:
+>
+> 1. **Duke Will Never Ask for Your NetID Password via Email**: Legitimate communications from Duke will not request your NetID password.
+> 2. **Official Login Address**: Always log in at the official shib.oit.duke.edu address.
+> 3. **What to Do if You Receive a Suspicious Message**:
+>    - Do not click any links.
+>    - Use the 'Report Phishing' button in Outlook to report the message.
+>    - Change your NetID password immediately if you entered any credentials.
+> 4. **Multifactor Authentication**: Enabling Duo multifactor authentication significantly reduces the risk that a stolen password alone can compromise your account.
+>
+> If you have any concerns or need further assistance, contact the OIT Help Desk.
+
+**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
+
+---
+
+### Item 29 — the AI was asked to answer an IT question  ·  _itm-069_
 
 *How do I connect to eduroam wifi on my Mac?*
 
 **Response 1**
+> To connect to eduroam Wi-Fi on your Mac, follow these steps:
+>
+> 1. **Open System Preferences**:
+>    - Click on the Apple menu () in the top-left corner of your screen.
+>    - Select "System Preferences."
+>
+> 2. **Go to Network**:
+>    - In the System Preferences window, click on "Network."
+>
+> 3. **Select Wi-Fi**:
+>    - On the left side of the Network preferences pane, select "Wi-Fi."
+>
+> 4. **Set Wi-Fi to Join Existing Networks**:
+>    - Ensure that the "Join existing networks" option is checked.
+>
+> 5. **Find eduroam Network**:
+>    - If you have not connected to eduroam before, it may not appear in the list of available networks. Click the lock icon at the bottom left of the Network preferences pane to make changes, then enter your administrator password if prompted.
+>    - Click the "+" button to add a new network.
+>    - Enter "eduroam" as the network name and click "Add."
+>
+> 6. **Connect to eduroam**:
+>    - Once added, the eduroam network should appear in the list of available networks.
+>    - Click on the eduroam network to highlight it.
+>    - Click the "Join" button.
+>
+> 7. **Enter Your Credentials**:
+>    - You will be prompted to enter your eduroam username and password. The username typically follows the format `yourusername@yourinstitution.edu`.
+>    - Enter your credentials and click "Join."
+>
+> 8. **Wait for Authentication**:
+>    - After entering your credentials, you may need to wait for authentication. This process can take a few minutes.
+>
+> 9. **Connect to the Internet**:
+>    - Once authenticated, you should be able to access the internet through eduroam.
+>
+> If you encounter any issues during this process, check with your institution’s IT support or refer to your institution’s specific eduroam setup instructions, as the exact steps might vary slightly depending on your institution’s configuration.
+
+**Response 2**
 > To connect to eduroam Wi-Fi on your Mac, follow these steps:
 >
 > 1. **Make sure you have your credentials ready:**  
@@ -965,287 +1148,15 @@ Thanks for helping out! In each question, an AI was asked to do a small task —
 >
 > If you want, I can guide you through installing a configuration profile if your institution provides one.
 
-**Response 2**
-> To connect to eduroam Wi-Fi on your Mac, follow these steps:
->
-> 1. **Open System Preferences**:
->    - Click on the Apple menu () in the top-left corner of your screen.
->    - Select "System Preferences."
->
-> 2. **Go to Network**:
->    - In the System Preferences window, click on "Network."
->
-> 3. **Select Wi-Fi**:
->    - On the left side of the Network preferences pane, select "Wi-Fi."
->
-> 4. **Set Wi-Fi to Join Existing Networks**:
->    - Ensure that the "Join existing networks" option is checked.
->
-> 5. **Find eduroam Network**:
->    - If you have not connected to eduroam before, it may not appear in the list of available networks. Click the lock icon at the bottom left of the Network preferences pane to make changes, then enter your administrator password if prompted.
->    - Click the "+" button to add a new network.
->    - Enter "eduroam" as the network name and click "Add."
->
-> 6. **Connect to eduroam**:
->    - Once added, the eduroam network should appear in the list of available networks.
->    - Click on the eduroam network to highlight it.
->    - Click the "Join" button.
->
-> 7. **Enter Your Credentials**:
->    - You will be prompted to enter your eduroam username and password. The username typically follows the format `yourusername@yourinstitution.edu`.
->    - Enter your credentials and click "Join."
->
-> 8. **Wait for Authentication**:
->    - After entering your credentials, you may need to wait for authentication. This process can take a few minutes.
->
-> 9. **Connect to the Internet**:
->    - Once authenticated, you should be able to access the internet through eduroam.
->
-> If you encounter any issues during this process, check with your institution’s IT support or refer to your institution’s specific eduroam setup instructions, as the exact steps might vary slightly depending on your institution’s configuration.
-
 **Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
 
 ---
 
-### Item 23 — the AI was asked to answer an IT question  ·  _itm-070_
-
-*How do I connect to eduroam wifi on my Mac?*
-
-**Response 1**
-> To connect to eduroam Wi-Fi on your Mac, follow these steps:
->
-> 1. **Open System Preferences**:
->    - Click on the Apple menu () in the top-left corner of your screen.
->    - Select "System Preferences."
->
-> 2. **Go to Network**:
->    - In the System Preferences window, click on "Network."
->
-> 3. **Select Wi-Fi**:
->    - On the left side of the Network preferences pane, select "Wi-Fi."
->
-> 4. **Set Wi-Fi to Join Existing Networks**:
->    - Ensure that the "Join existing networks" option is checked.
->
-> 5. **Find eduroam Network**:
->    - If you have not connected to eduroam before, it may not appear in the list of available networks. Click the lock icon at the bottom left of the Network preferences pane to make changes, then enter your administrator password if prompted.
->    - Click the "+" button to add a new network.
->    - Enter "eduroam" as the network name and click "Add."
->
-> 6. **Connect to eduroam**:
->    - Once added, the eduroam network should appear in the list of available networks.
->    - Click on the eduroam network to highlight it.
->    - Click the "Join" button.
->
-> 7. **Enter Your Credentials**:
->    - You will be prompted to enter your eduroam username and password. The username typically follows the format `yourusername@yourinstitution.edu`.
->    - Enter your credentials and click "Join."
->
-> 8. **Wait for Authentication**:
->    - After entering your credentials, you may need to wait for authentication. This process can take a few minutes.
->
-> 9. **Connect to the Internet**:
->    - Once authenticated, you should be able to access the internet through eduroam.
->
-> If you encounter any issues during this process, check with your institution’s IT support or refer to your institution’s specific eduroam setup instructions, as the exact steps might vary slightly depending on your institution’s configuration.
-
-**Response 2**
-> To connect to eduroam Wi-Fi on your Mac, follow these steps:
->
-> 1. Open **System Preferences**:
->    - Click on the Apple menu () in the top-left corner.
->    - Select **System Preferences**.
->
-> 2. Go to **Network**:
->    - Click on **Network**.
->
-> 3. Select Wi-Fi:
->    - In the list on the left, choose **Wi-Fi**.
->    - Make sure Wi-Fi is turned on (the toggle should be green).
->
-> 4. Connect to eduroam:
->    - Click the **Network Name** drop-down menu and select **eduroam**.
->    - If eduroam is not listed, click **Join Other Network** and enter **eduroam**.
->
-> 5. Enter your credentials:
->    - When prompted, enter your institution's email address or username (e.g., username@yourinstitution.edu).
->    - For the password, use your eduroam password.
->
-> 6. Configure security settings:
->    - Under **Security**, select **WPA2 Enterprise** or **WPA3 Enterprise** if available.
->    - Click **Authentication Settings**:
->      - Enter your **Identity** (your username or email).
->      - Leave **Anonymous Identity** blank unless instructed otherwise.
->      - Enter your **Password**.
->    - Click **OK**.
->
-> 7. Trust the certificate:
->    - You may see a prompt about a server certificate.
->    - Verify the certificate details with your institution's IT guidelines.
->    - If trusted, click **Continue** or **Trust**.
->
-> 8. Finalize:
->    - Click **Connect**.
->    - Once connected, you should see the Wi-Fi icon indicating a successful connection.
->
-> **Additional Tips:**
-> - If you encounter issues, delete any previous eduroam profiles:
->   - Go to **Keychain Access** (Applications > Utilities).
->   - Search for **eduroam** and delete related certificates or profiles.
-> - Restart your Mac if needed.
-> - Ensure you have the latest network configuration files from your institution, as some universities provide specific setup instructions or configuration profiles.
->
-> If you need specific instructions for your institution, check their IT support website for detailed guides or configuration files.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 24 — the AI was asked to answer a Duke policy question  ·  _itm-085_
-
-*I teach a class with 30 students. I want to keep their gradebook in my personal Google Drive so I can access it from home. Is that OK under Duke's data policy?*
-
-**Response 1**
-> Under Duke University's data policies, storing student grade information in your personal Google Drive is generally not permitted unless the Google Drive account is managed and secured by Duke (e.g., a Duke Google Workspace account). Student educational records are considered FERPA-protected data, and Duke requires that such data be stored only on approved, secure platforms that comply with FERPA and Duke’s data security standards.
->
-> If your personal Google Drive is not part of Duke’s managed environment, storing gradebooks there would likely violate Duke’s data policy. Instead, you should use Duke-approved tools such as Duke’s Learning Management System (LMS), Box@Duke, or other secure, university-provided storage solutions.
->
-> To be sure, you can consult Duke’s IT security guidelines or contact Duke’s Office of Information Technology or the Duke Privacy Office for clarification and recommended practices.
-
-**Response 2**
-> Duke University has specific guidelines regarding the storage and handling of student data. Generally, storing student information in personal Google Drive may not be compliant with Duke’s data policies, especially if the data includes personally identifiable information (PII) such as grades, names, and other sensitive details.
->
-> To ensure compliance, consider the following options:
->
-> 1. **Duke Google Workspace**: Use Duke’s Google Workspace for Education, which is designed to comply with university data policies. This platform allows you to store and manage student data securely.
->
-> 2. **Duke Data Management Services**: Contact Duke’s Information Technology Services (ITS) or the Office of Information Technology (OIT) for guidance on secure data management practices and tools.
->
-> 3. **Classroom Tools**: Utilize tools provided by Duke, such as Canvas, which are designed to handle student data securely and comply with relevant policies.
->
-> 4. **Local Storage**: Store the gradebook on a local server or network drive managed by Duke, ensuring that appropriate security measures are in place.
->
-> Always consult with your department or IT support to ensure that any method you choose complies with Duke’s data policies and best practices.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 25 — the AI was asked to answer a Duke policy question  ·  _itm-086_
-
-*I teach a class with 30 students. I want to keep their gradebook in my personal Google Drive so I can access it from home. Is that OK under Duke's data policy?*
-
-**Response 1**
-> Duke University has specific guidelines regarding the storage and handling of student data. Generally, storing student information in personal Google Drive may not be compliant with Duke’s data policies, especially if the data includes personally identifiable information (PII) such as grades, names, and other sensitive details.
->
-> To ensure compliance, consider the following options:
->
-> 1. **Duke Google Workspace**: Use Duke’s Google Workspace for Education, which is designed to comply with university data policies. This platform allows you to store and manage student data securely.
->
-> 2. **Duke Data Management Services**: Contact Duke’s Information Technology Services (ITS) or the Office of Information Technology (OIT) for guidance on secure data management practices and tools.
->
-> 3. **Classroom Tools**: Utilize tools provided by Duke, such as Canvas, which are designed to handle student data securely and comply with relevant policies.
->
-> 4. **Local Storage**: Store the gradebook on a local server or network drive managed by Duke, ensuring that appropriate security measures are in place.
->
-> Always consult with your department or IT support to ensure that any method you choose complies with Duke’s data policies and best practices.
-
-**Response 2**
-> To determine whether storing student grade information on your personal Google Drive complies with Duke University's data policy, you should review Duke's policies on data security and acceptable storage practices. Generally, institutions have specific guidelines regarding the storage of student data, especially if it contains personally identifiable information or grades.
->
-> I recommend:
-> 1. Consulting Duke University's official data security and privacy policies, which are often available on the university's website or IT support pages.
-> 2. Contacting the university's IT or data security office directly for guidance on storing sensitive student information outside of official university systems.
-> 3. Using approved university platforms or systems for maintaining gradebooks, such as the university's learning management system (LMS), if available.
->
-> In many cases, storing sensitive student data on personal cloud services like Google Drive may not meet institutional security standards unless proper safeguards are in place. Always verify with your institution's policies to ensure compliance and protect student privacy.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 26 — the AI was asked to answer a Duke policy question  ·  _itm-087_
-
-*I want to use ChatGPT to help me draft feedback comments on student essays. Can I paste in the essay content and the student's name?*
-
-**Response 1**
-> Yes, you can paste the student's name and the essay content here, and I can help you draft feedback comments based on the essay. Just let me know any specific areas you'd like the feedback to focus on (e.g., grammar, argument strength, organization) if you have preferences!
-
-**Response 2**
-> Yes, you can certainly paste in the essay content and the student's name when using ChatGPT to draft feedback comments. However, keep in mind that while ChatGPT can provide useful suggestions and comments, it's important to review and refine the feedback to ensure it is appropriate and constructive for the specific context of the student and the assignment. Always consider the tone and the goals of your feedback to make sure it is beneficial for the student's learning.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 27 — the AI was asked to answer a Duke policy question  ·  _itm-088_
-
-*I want to use ChatGPT to help me draft feedback comments on student essays. Can I paste in the essay content and the student's name?*
-
-**Response 1**
-> Yes, you can certainly paste in the essay content and the student's name when using ChatGPT to draft feedback comments. However, keep in mind that while ChatGPT can provide useful suggestions and comments, it's important to review and refine the feedback to ensure it is appropriate and constructive for the specific context of the student and the assignment. Always consider the tone and the goals of your feedback to make sure it is beneficial for the student's learning.
-
-**Response 2**
-> Yes, you can paste the essay content along with the student's name, and I can help you draft feedback comments based on that information. Please ensure that any sensitive or personally identifiable information is handled appropriately.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 28 — the AI was asked to answer a Duke policy question  ·  _itm-092_
-
-*I just received an email from someone claiming to be 'Duke IT Support' asking me to click a link to reset my NetID password because of a security incident. The email looks somewhat legitimate but I'm not sure. What should I do?*
-
-**Response 1**
-> It's best to exercise caution. Do not click any links or provide any personal information. Instead, independently verify the request by contacting Duke IT Support directly through their official website or known contact methods. They can confirm whether the password reset request is legitimate. Remember, legitimate organizations typically do not ask you to click links in unsolicited emails to reset passwords.
-
-**Response 2**
-> It sounds like you might be dealing with a phishing attempt. Here are some steps you can take:
->
-> 1. **Do Not Click the Link**: Avoid clicking any links in the email, as they could lead to malicious websites designed to steal your information.
->
-> 2. **Verify the Email**: Check if there is a Duke IT Support contact number or another way to reach out for verification. You can find official contact details on the Duke University IT Services website.
->
-> 3. **Contact Duke IT Support Directly**: Call or email Duke IT Support using a verified phone number or email address to inquire about the alleged security incident. They will be able to confirm whether this is a genuine request or a scam.
->
-> 4. **Report the Email**: Forward the email to Duke’s IT Security team and also report it to your institution’s IT department. This helps them track and prevent such incidents.
->
-> 5. **Check Your Account**: If you’re still unsure, log into your NetID account through the official Duke login page (https://netid.duke.edu) to check if there are any actual security alerts or prompts to change your password.
->
-> 6. **Change Your Password**: If you decide to proceed based on official confirmation, change your NetID password immediately through the official Duke login page.
->
-> 7. **Be Wary of Future Emails**: Stay vigilant and be cautious of similar emails in the future. Phishing attempts often use urgency and fear to prompt quick actions.
->
-> Taking these steps will help ensure your account remains secure.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 29 — the AI was asked to answer a Duke policy question  ·  _itm-093_
+### Item 30 — the AI was asked to answer a Duke policy question  ·  _itm-093_
 
 *I'm a graduate researcher with audio recordings of human-subjects interviews from my IRB-approved study. Can I keep them on my personal laptop while I transcribe them?*
 
 **Response 1**
-> Yes, you can keep the audio recordings on your personal laptop for transcription purposes, but it's important to ensure that you comply with your institution's policies and the requirements set by your Institutional Review Board (IRB). Here are some steps to consider:
->
-> 1. **Data Security**: Ensure that the data is stored securely on your personal laptop. Use strong passwords or encryption to protect the files.
->
-> 2. **Access Controls**: Limit access to the files to only those who need them for the research. This might mean using file permissions or other security measures.
->
-> 3. **Backup**: Make sure to back up the data regularly to prevent loss in case of hardware failure or other issues.
->
-> 4. **De-identification**: If possible, de-identify the data before storing it on your personal device. This means removing any personally identifiable information (PII) to further protect the privacy of your participants.
->
-> 5. **Compliance**: Check your institution’s guidelines on handling sensitive data. Some institutions may have specific recommendations or restrictions on where such data can be stored.
->
-> 6. **Secure Network**: When transferring data to or from your personal laptop, use secure methods like encrypted USB drives or secure file transfer protocols.
->
-> 7. **Disposal**: Have a plan for securely disposing of the data once it is no longer needed for your research.
->
-> By following these guidelines, you can help ensure that you are handling the data responsibly and in compliance with ethical standards and legal requirements.
-
-**Response 2**
 > Whether you can keep your IRB-approved study's audio recordings of human-subject interviews on your personal laptop depends on your institution's data security policies and the IRB requirements. Here are some key considerations:
 >
 > 1. **Check Your IRB Approval and Consent Forms:**  
@@ -1270,23 +1181,6 @@ Thanks for helping out! In each question, an AI was asked to do a small task —
 >
 > **Summary:**  
 > You may be able to keep audio recordings on your personal laptop temporarily while transcribing if you follow strict security protocols and your IRB/institution allows it. However, best practice is to store sensitive human-subject data on secure, institutionally approved servers or encrypted drives. Always verify with your IRB and institutional policies before proceeding.
-
-**Which is better?**  ◦ Response 1   ◦ Response 2   ◦ About the same
-
----
-
-### Item 30 — the AI was asked to answer a Duke policy question  ·  _itm-094_
-
-*I'm a graduate researcher with audio recordings of human-subjects interviews from my IRB-approved study. Can I keep them on my personal laptop while I transcribe them?*
-
-**Response 1**
-> It's important to prioritize the confidentiality and security of your research data, especially when it involves human subjects. Generally, storing sensitive audio recordings on your personal laptop may pose security risks unless proper safeguards are in place. 
->
-> You should consult your institution's IRB guidelines and data management policies to determine acceptable storage practices. Many institutions require that identifiable data be stored on secure, encrypted servers or institutional devices with restricted access. 
->
-> If your IRB approval specifies secure storage, consider using encrypted external drives or secure institutional cloud services for transcription work. Additionally, ensure your personal laptop has up-to-date security measures, such as encryption, strong passwords, and antivirus software, and avoid storing identifiable data long-term on personal devices.
->
-> Always document your data handling procedures and consult with your institution's research compliance office or data security team for specific guidance.
 
 **Response 2**
 > Yes, you can keep the audio recordings on your personal laptop for transcription purposes, but it's important to ensure that you comply with your institution's policies and the requirements set by your Institutional Review Board (IRB). Here are some steps to consider:
@@ -1315,35 +1209,35 @@ Thanks for helping out! In each question, an AI was asked to do a small task —
 
 | item_id | task type | Response 1 model | Response 2 model |
 |---|---|---|---|
-| itm-004 | email | Qwen2.5-7B-Instruct | GPT 4.1 Nano |
-| itm-005 | email | GPT 4.1 Mini | Qwen2.5-7B-Instruct |
-| itm-006 | email | Qwen2.5-7B-Instruct | GPT 4.1 Nano |
-| itm-019 | plain | GPT 4.1 Mini | Qwen2.5-7B-Instruct |
-| itm-020 | plain | Qwen2.5-7B-Instruct | GPT 4.1 Nano |
-| itm-021 | plain | GPT 4.1 Mini | Qwen2.5-7B-Instruct |
+| itm-002 | email | Qwen2.5-7B-Instruct | GPT 4.1 Nano |
+| itm-018 | plain | GPT 4.1 Nano | Qwen2.5-7B-Instruct |
 | itm-034 | tutoring | Qwen2.5-7B-Instruct | GPT 4.1 Nano |
-| itm-035 | tutoring | GPT 4.1 Mini | Qwen2.5-7B-Instruct |
-| itm-036 | tutoring | Qwen2.5-7B-Instruct | GPT 4.1 Nano |
-| itm-037 | tutoring | GPT 4.1 Mini | Qwen2.5-7B-Instruct |
-| itm-038 | tutoring | Qwen2.5-7B-Instruct | GPT 4.1 Nano |
-| itm-039 | tutoring | GPT 4.1 Mini | Qwen2.5-7B-Instruct |
-| itm-049 | summarization | Qwen2.5-7B-Instruct | GPT 4.1 Mini |
-| itm-050 | summarization | GPT 4.1 Nano | Qwen2.5-7B-Instruct |
-| itm-051 | summarization | Qwen2.5-7B-Instruct | GPT 4.1 Mini |
-| itm-058 | summarization | GPT 4.1 Nano | Qwen2.5-7B-Instruct |
-| itm-061 | it_support | Qwen2.5-7B-Instruct | GPT 4.1 Mini |
-| itm-062 | it_support | GPT 4.1 Nano | Qwen2.5-7B-Instruct |
-| itm-063 | it_support | Qwen2.5-7B-Instruct | GPT 4.1 Mini |
-| itm-064 | it_support | GPT 4.1 Nano | Qwen2.5-7B-Instruct |
-| itm-065 | it_support | Qwen2.5-7B-Instruct | GPT 4.1 Mini |
-| itm-069 | it_support | GPT 4.1 Mini | Qwen2.5-7B-Instruct |
-| itm-070 | it_support | Qwen2.5-7B-Instruct | GPT 4.1 Nano |
-| itm-085 | policy_qa | GPT 4.1 Mini | Qwen2.5-7B-Instruct |
-| itm-086 | policy_qa | Qwen2.5-7B-Instruct | GPT 4.1 Nano |
+| itm-049 | summarization | GPT 4.1 Mini | Qwen2.5-7B-Instruct |
+| itm-062 | it_support | Qwen2.5-7B-Instruct | GPT 4.1 Nano |
+| itm-086 | policy_qa | GPT 4.1 Nano | Qwen2.5-7B-Instruct |
+| itm-003 | email | Qwen2.5-7B-Instruct | GPT 4.1 Mini |
+| itm-020 | plain | GPT 4.1 Nano | Qwen2.5-7B-Instruct |
+| itm-035 | tutoring | Qwen2.5-7B-Instruct | GPT 4.1 Mini |
+| itm-052 | summarization | GPT 4.1 Nano | Qwen2.5-7B-Instruct |
+| itm-064 | it_support | Qwen2.5-7B-Instruct | GPT 4.1 Nano |
 | itm-087 | policy_qa | GPT 4.1 Mini | Qwen2.5-7B-Instruct |
-| itm-088 | policy_qa | Qwen2.5-7B-Instruct | GPT 4.1 Nano |
+| itm-006 | email | Qwen2.5-7B-Instruct | GPT 4.1 Nano |
+| itm-021 | plain | GPT 4.1 Mini | Qwen2.5-7B-Instruct |
+| itm-037 | tutoring | Qwen2.5-7B-Instruct | GPT 4.1 Mini |
+| itm-053 | summarization | GPT 4.1 Mini | Qwen2.5-7B-Instruct |
+| itm-065 | it_support | Qwen2.5-7B-Instruct | GPT 4.1 Mini |
+| itm-089 | policy_qa | GPT 4.1 Mini | Qwen2.5-7B-Instruct |
+| itm-008 | email | Qwen2.5-7B-Instruct | GPT 4.1 Nano |
+| itm-024 | plain | GPT 4.1 Nano | Qwen2.5-7B-Instruct |
+| itm-040 | tutoring | Qwen2.5-7B-Instruct | GPT 4.1 Nano |
+| itm-056 | summarization | GPT 4.1 Nano | Qwen2.5-7B-Instruct |
+| itm-068 | it_support | Qwen2.5-7B-Instruct | GPT 4.1 Nano |
 | itm-092 | policy_qa | GPT 4.1 Nano | Qwen2.5-7B-Instruct |
-| itm-093 | policy_qa | Qwen2.5-7B-Instruct | GPT 4.1 Mini |
-| itm-094 | policy_qa | GPT 4.1 Nano | Qwen2.5-7B-Instruct |
+| itm-009 | email | Qwen2.5-7B-Instruct | GPT 4.1 Mini |
+| itm-025 | plain | GPT 4.1 Mini | Qwen2.5-7B-Instruct |
+| itm-041 | tutoring | Qwen2.5-7B-Instruct | GPT 4.1 Mini |
+| itm-057 | summarization | GPT 4.1 Mini | Qwen2.5-7B-Instruct |
+| itm-069 | it_support | Qwen2.5-7B-Instruct | GPT 4.1 Mini |
+| itm-093 | policy_qa | GPT 4.1 Mini | Qwen2.5-7B-Instruct |
 
 _The model behind each response is the join key for the DPO dataset. Order is counterbalanced by item for the position-bias analysis._

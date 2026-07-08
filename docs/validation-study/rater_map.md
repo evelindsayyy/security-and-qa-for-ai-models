@@ -7,8 +7,9 @@
 - **60 comparisons** selected from the 108-item pool (item_pool.jsonl), balanced across task types.
 - Task-type mix: email 10, it_support 10, plain 10, policy_qa 10, summarization 10, tutoring 10.
 - Opponent split: GPT 4.1 Mini 30, GPT 4.1 Nano 30 (every comparison includes the DPO target Qwen2.5-7B-Instruct).
-- **6 raters**, **30 questions each** (~25 min); each comparison labeled by exactly **3** raters (a trio) → clean odd majority for Fleiss' κ.
-- Judge = Llama 4 Maverick (cross-family). Order counterbalanced within each survey.
+- **6 raters**, **30 questions each** (~25 min); each comparison labeled by exactly **3** raters → clean odd majority for Fleiss' κ.
+- A prompt's two opponent-comparisons go to **complementary halves** of the raters, so **no rater ever sees the same prompt twice** (each sees all 30 prompts once, one opponent apiece).
+- Judge = Llama 4 Maverick (cross-family). Task types round-robin'd; A/B order counterbalanced within each survey.
 
 | rater | questions | rendered file | Qualtrics import |
 |---|---|---|---|
@@ -21,9 +22,9 @@
 
 ## Per-rater item lists
 
-- **Rater 01** — itm-001, itm-002, itm-003, itm-004, itm-005, itm-006, itm-007, itm-008, itm-009, itm-010, itm-017, itm-018, itm-019, itm-020, itm-021, itm-022, itm-023, itm-024, itm-025, itm-026, itm-033, itm-034, itm-035, itm-036, itm-037, itm-038, itm-039, itm-040, itm-041, itm-042
-- **Rater 02** — itm-001, itm-002, itm-003, itm-004, itm-005, itm-006, itm-007, itm-008, itm-009, itm-010, itm-017, itm-018, itm-049, itm-050, itm-051, itm-052, itm-053, itm-054, itm-055, itm-056, itm-057, itm-058, itm-061, itm-062, itm-063, itm-064, itm-065, itm-066, itm-067, itm-068
-- **Rater 03** — itm-001, itm-002, itm-003, itm-019, itm-020, itm-021, itm-022, itm-023, itm-024, itm-025, itm-026, itm-033, itm-049, itm-050, itm-051, itm-052, itm-053, itm-054, itm-055, itm-056, itm-057, itm-069, itm-070, itm-085, itm-086, itm-087, itm-088, itm-089, itm-090, itm-091
-- **Rater 04** — itm-004, itm-005, itm-006, itm-019, itm-020, itm-021, itm-034, itm-035, itm-036, itm-037, itm-038, itm-039, itm-049, itm-050, itm-051, itm-058, itm-061, itm-062, itm-063, itm-064, itm-065, itm-069, itm-070, itm-085, itm-086, itm-087, itm-088, itm-092, itm-093, itm-094
-- **Rater 05** — itm-007, itm-008, itm-009, itm-022, itm-023, itm-024, itm-034, itm-035, itm-036, itm-040, itm-041, itm-042, itm-052, itm-053, itm-054, itm-058, itm-061, itm-062, itm-066, itm-067, itm-068, itm-069, itm-070, itm-085, itm-089, itm-090, itm-091, itm-092, itm-093, itm-094
-- **Rater 06** — itm-010, itm-017, itm-018, itm-025, itm-026, itm-033, itm-037, itm-038, itm-039, itm-040, itm-041, itm-042, itm-055, itm-056, itm-057, itm-063, itm-064, itm-065, itm-066, itm-067, itm-068, itm-086, itm-087, itm-088, itm-089, itm-090, itm-091, itm-092, itm-093, itm-094
+- **Rater 01** — itm-001, itm-018, itm-033, itm-050, itm-061, itm-086, itm-004, itm-019, itm-036, itm-051, itm-064, itm-087, itm-005, itm-022, itm-037, itm-054, itm-065, itm-090, itm-008, itm-023, itm-040, itm-055, itm-068, itm-091, itm-009, itm-026, itm-041, itm-058, itm-069, itm-094
+- **Rater 02** — itm-001, itm-018, itm-033, itm-049, itm-062, itm-085, itm-004, itm-019, itm-036, itm-052, itm-063, itm-088, itm-005, itm-022, itm-038, itm-053, itm-066, itm-089, itm-008, itm-023, itm-039, itm-056, itm-067, itm-092, itm-009, itm-026, itm-042, itm-057, itm-070, itm-093
+- **Rater 03** — itm-001, itm-017, itm-034, itm-050, itm-061, itm-085, itm-004, itm-020, itm-035, itm-051, itm-063, itm-088, itm-005, itm-021, itm-037, itm-054, itm-066, itm-089, itm-007, itm-024, itm-040, itm-055, itm-067, itm-092, itm-010, itm-025, itm-041, itm-058, itm-070, itm-093
+- **Rater 04** — itm-002, itm-018, itm-034, itm-049, itm-062, itm-086, itm-003, itm-020, itm-035, itm-052, itm-064, itm-087, itm-006, itm-021, itm-037, itm-053, itm-065, itm-089, itm-008, itm-024, itm-040, itm-056, itm-068, itm-092, itm-009, itm-025, itm-041, itm-057, itm-069, itm-093
+- **Rater 05** — itm-002, itm-017, itm-034, itm-050, itm-062, itm-085, itm-003, itm-019, itm-035, itm-051, itm-064, itm-088, itm-006, itm-022, itm-038, itm-054, itm-065, itm-090, itm-007, itm-023, itm-039, itm-056, itm-068, itm-091, itm-010, itm-025, itm-042, itm-057, itm-070, itm-094
+- **Rater 06** — itm-002, itm-017, itm-033, itm-049, itm-061, itm-086, itm-003, itm-020, itm-036, itm-052, itm-063, itm-087, itm-006, itm-021, itm-038, itm-053, itm-066, itm-090, itm-007, itm-024, itm-039, itm-055, itm-067, itm-091, itm-010, itm-026, itm-042, itm-058, itm-069, itm-094
