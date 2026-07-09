@@ -322,10 +322,11 @@ def _postprocess_runs(runs: list[dict]) -> dict:
 def _get_runs_data_files() -> dict:
     """Comparison data: aggregate every results JSONL in the evaluator output dir."""
     from frontend.read_context import artifact_path_visible
+    from dbutils import fs_safe
 
     if not RESULTS_DIR.exists():
         return {"has_runs": False, "results_dir": str(RESULTS_DIR), "runs": []}
-    files = [p for p in RESULTS_DIR.glob("*.jsonl") if "_trace" not in p.name]
+    files = [p for p in fs_safe.glob(RESULTS_DIR, "*.jsonl") if "_trace" not in p.name]
     files = [p for p in files if artifact_path_visible(RESULTS_DIR / p.stem, pillar="eval")]
     runs = [r for r in (_aggregate_file(p) for p in files) if r is not None]
     return _postprocess_runs(runs)

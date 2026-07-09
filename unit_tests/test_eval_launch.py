@@ -426,5 +426,34 @@ class CustomRouteTest(unittest.TestCase):
         self.assertIn("custom_", r.headers["Location"])
 
 
+class UnreadableEvalOutputTest(unittest.TestCase):
+    def test_all_suite_keys_tolerates_unreadable_custom_dir(self) -> None:
+        with mock.patch("dbutils.fs_safe.is_dir", return_value=False):
+            keys = eval_launch._all_suite_keys()
+        self.assertIn("it_support_v1", keys)
+
+    def test_wipe_prior_runs_skips_unreadable_glob_match(self) -> None:
+        root = _isolate_eval_output(self)
+        good = root / "20260101_120000_gpt-5-chat_it-support.jsonl"
+        good.write_text('{"x":1}\n', encoding="utf-8")
+
+        real_glob = Path.glob
+
+        def patched_glob(self, pattern):
+            for match in real_glob(self, pattern):
+                if "bad" in match.name:
+                    raise PermissionError("denied")
+                yield match
+
+        bad = root / "20260101_bad_gpt-5-chat_it-support.jsonl"
+        bad.write_text('{"x":1}\n', encoding="utf-8")
+        with mock.patch.object(Path, "glob", patched_glob):
+            eval_launch._wipe_prior_runs(
+                "it_support_v1", "gpt-5-chat", visibility="public", owner_user_id=None
+            )
+        self.assertTrue(good.is_file())
+        self.assertTrue(bad.is_file())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -338,6 +338,77 @@ class PrivatePublicIsolationTest(unittest.TestCase):
         self.assertEqual(scan_launch.get_status("gpt2")["status"], "not_found")
 
 
+class UnreadableOutputDirTest(unittest.TestCase):
+    """Regression: one root-owned sibling must not 500 /scans/new for everyone."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        root = Path(self._tmp.name)
+        for attr, value in (
+            ("ROOT", root),
+            ("SCAN_OUTPUT", root / "scanner" / "output"),
+            ("DOCKER_COMPOSE_FILE", root / "scanner" / "docker" / "compose.yml"),
+        ):
+            patcher = mock.patch.object(scan_launch, attr, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.out = root / "scanner" / "output"
+        self.out.mkdir(parents=True)
+
+    def _write_good_scan(self, slug: str) -> None:
+        d = self.out / slug
+        d.mkdir(parents=True)
+        (d / "scan_result.json").write_text(
+            json.dumps({"model_id": slug.replace("--", "/"), "overall_risk_score": 1}),
+            encoding="utf-8",
+        )
+
+    def test_existing_slugs_skips_unreadable_sibling(self) -> None:
+        self._write_good_scan("microsoft--phi-2")
+        bad = self.out / "TinyLlama--TinyLlama-1.1B-Chat-v1.0"
+        bad.mkdir()
+        try:
+            os.chmod(bad, 0)
+            slugs = scan_launch._existing_scan_slugs(visibility="public")
+        finally:
+            os.chmod(bad, 0o755)
+        self.assertIn("microsoft--phi-2", slugs)
+        self.assertNotIn("TinyLlama--TinyLlama-1.1B-Chat-v1.0", slugs)
+
+    def test_inflight_slugs_skips_unreadable_sibling(self) -> None:
+        self._write_good_scan("microsoft--phi-2")
+        bad = self.out / "TinyLlama--TinyLlama-1.1B-Chat-v1.0"
+        bad.mkdir()
+        try:
+            os.chmod(bad, 0)
+            slugs = scan_launch.inflight_scan_slugs()
+        finally:
+            os.chmod(bad, 0o755)
+        self.assertIsInstance(slugs, set)
+
+    def test_scan_run_new_returns_200_with_unreadable_sibling(self) -> None:
+        from frontend import create_app
+
+        self._write_good_scan("microsoft--phi-2")
+        bad = self.out / "TinyLlama--TinyLlama-1.1B-Chat-v1.0"
+        bad.mkdir()
+        env_patch = mock.patch.dict(os.environ, {"AUTH_ENABLED": "0"})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        client = create_app({"TESTING": True}).test_client()
+        with client.session_transaction() as sess:
+            sess["user"] = {"id": "u-test", "netid": "testuser", "display_name": "Test"}
+        try:
+            os.chmod(bad, 0)
+            with mock.patch("frontend.scan_data.get_scan_rerun_params", return_value={"hf_repo": "microsoft/phi-2"}):
+                r = client.get("/scans/new?from=microsoft--phi-2")
+        finally:
+            os.chmod(bad, 0o755)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"microsoft/phi-2", r.data)
+
+
 class PrivateRouteTest(unittest.TestCase):
     """A private-mode launch must redirect to the /private URL, never the
     public one — the second half of the reported bug."""

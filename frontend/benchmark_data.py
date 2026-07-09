@@ -628,11 +628,15 @@ def is_reference_slug(slug: str) -> bool:
 
 
 def _load_reference_summaries() -> list[dict]:
+    from dbutils import fs_safe
+
     ref = _reference_dir()
     if ref is None:
         return []
     rows: list[dict] = []
-    for path in sorted(list(ref.glob("*.json")) + list(ref.glob("*.jsonl"))):
+    for path in sorted(
+        list(fs_safe.glob(ref, "*.json")) + list(fs_safe.glob(ref, "*.jsonl"))
+    ):
         row = _summarize_file(path)
         if row is None:
             continue
@@ -1335,6 +1339,7 @@ def get_benchmark_latest_for_hub(all_runs: list[dict] | None = None) -> dict | N
 
 def _get_benchmarks_data_files() -> dict:
     from frontend.read_context import artifact_path_visible
+    from dbutils import fs_safe
 
     dirs = _candidate_dirs()
     if not dirs:
@@ -1348,7 +1353,7 @@ def _get_benchmarks_data_files() -> dict:
     rows: list[dict] = []
     seen: set[str] = set()
     for d in dirs:
-        for path in sorted(list(d.glob("*.json")) + list(d.glob("*.jsonl"))):
+        for path in sorted(list(fs_safe.glob(d, "*.json")) + list(fs_safe.glob(d, "*.jsonl"))):
             if path.stem in seen:
                 continue
             if not artifact_path_visible(d / path.stem, pillar="benchmark"):

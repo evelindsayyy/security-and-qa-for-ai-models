@@ -21,7 +21,9 @@ def lock_path(output_dir: Path | str) -> Path:
 
 
 def _read_lock(path: Path) -> dict[str, Any] | None:
-    if not path.is_file():
+    from dbutils import fs_safe
+
+    if not fs_safe.is_file(path):
         return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -50,10 +52,12 @@ def pid_alive(pid: int) -> bool:
 
 def is_active(path: Path | str) -> bool:
     """True when the lock file exists and the holder appears to be running."""
+    from dbutils import fs_safe
+
     p = Path(path)
     data = _read_lock(p)
     if not data:
-        if p.is_file():
+        if fs_safe.is_file(p):
             p.unlink(missing_ok=True)
         return False
     pid = int(data.get("pid") or 0)

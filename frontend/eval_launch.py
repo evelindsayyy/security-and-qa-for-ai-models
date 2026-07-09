@@ -164,9 +164,11 @@ def _suite_cfg(suite_key: str) -> dict | None:
 
 def _all_suite_keys() -> list[str]:
     """Curated suite keys plus any saved custom suites."""
+    from dbutils import fs_safe
+
     custom = []
-    if CUSTOM_SUITES_DIR.is_dir():
-        custom = sorted(p.stem for p in CUSTOM_SUITES_DIR.glob(f"{CUSTOM_PREFIX}*.jsonl"))
+    if fs_safe.is_dir(CUSTOM_SUITES_DIR):
+        custom = sorted(p.stem for p in fs_safe.glob(CUSTOM_SUITES_DIR, f"{CUSTOM_PREFIX}*.jsonl"))
     return list(SUITES) + custom
 
 
@@ -294,9 +296,10 @@ def _wipe_prior_runs(
     Wiping on launch keeps exactly one run per model+suite per scope.
     """
     from dbutils.run_meta import read_run_meta_for_pillar
+    from dbutils import fs_safe
 
     suffix = f"_{suite_key}_{_safe_slug(candidate)}"
-    for path in RESULTS_DIR.glob(f"*{suffix}*"):
+    for path in fs_safe.glob(RESULTS_DIR, f"*{suffix}*"):
         if path.suffix not in (".jsonl", ".log"):
             continue
         stem = _stem_from_artifact_path(path)
