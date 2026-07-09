@@ -100,33 +100,115 @@ def model_family(model: str) -> str:
 # form can't produce the judge-prompt/rubric mismatch the runner rejects.
 # `description` + `example` are the plain-language blurbs shown in the on-page
 # suite tooltips (surfaced via get_launch_options) — content only, no contract.
+# `scoring` is "judge" (LLM-as-judge vs a reference) or "execution" (the answer
+# is checked by RUNNING it — text-to-SQL / JSON / numeric). The runner reads
+# scoring=execution from the suite's own metadata line and auto-skips the judge,
+# so for execution suites the rubric below is never loaded — any existing file
+# satisfies build_command's argv. See _INERT_RUBRIC.
+_RUBRICS = EVALUATOR / "tasks" / "rubrics"
+_SYS = EVALUATOR / "prompts" / "system"
+# Placeholder rubric for execution suites: passed to the runner but never read
+# (the judge is auto-skipped for scoring=execution). Points at a file that
+# always exists so build_command's --rubric flag resolves.
+_INERT_RUBRIC = _RUBRICS / "it_support.yaml"
+
 SUITES: dict[str, dict] = {
     "it_support_v1": {
         "label": "IT support (12 questions, locked)",
         "description": "Common Duke IT help-desk questions — passwords, VPN, "
                        "email, and account access.",
         "example": "How do I reset my NetID password?",
+        "scoring": "judge",
         "suite": EVALUATOR / "tasks" / "it_support_v1.jsonl",
-        "rubric": EVALUATOR / "tasks" / "rubrics" / "it_support.yaml",
-        "system_prompt": EVALUATOR / "prompts" / "system" / "it_support_v1.txt",
+        "rubric": _RUBRICS / "it_support.yaml",
+        "system_prompt": _SYS / "it_support_v1.txt",
     },
     "policy_qa_v1.1": {
         "label": "Duke policy Q&A (12 questions, draft)",
         "description": "Questions about Duke policy, answered with citations to "
                        "the source.",
         "example": "What is Duke's policy on sharing student data with a vendor?",
+        "scoring": "judge",
         "suite": EVALUATOR / "tasks" / "policy_qa_v1.1.jsonl",
-        "rubric": EVALUATOR / "tasks" / "rubrics" / "policy_qa_v1.yaml",
-        "system_prompt": EVALUATOR / "prompts" / "system" / "it_support_v1.txt",
+        "rubric": _RUBRICS / "policy_qa_v1.yaml",
+        "system_prompt": _SYS / "it_support_v1.txt",
     },
     "summarization_v1": {
         "label": "Document summarization (6 docs, pilot)",
         "description": "Summarize a document faithfully and concisely, without "
                        "adding or dropping key facts.",
         "example": "Summarize a two-page policy memo into three sentences.",
+        "scoring": "judge",
         "suite": EVALUATOR / "tasks" / "summarization_v1.jsonl",
-        "rubric": EVALUATOR / "tasks" / "rubrics" / "summarization_v1.yaml",
-        "system_prompt": EVALUATOR / "prompts" / "system" / "summarization_v1.txt",
+        "rubric": _RUBRICS / "summarization_v1.yaml",
+        "system_prompt": _SYS / "summarization_v1.txt",
+    },
+    # --- Execution-scored suites (checked by RUNNING the answer) --------------
+    "sql_duke_v2": {
+        "label": "Text-to-SQL (14 questions, execution-scored)",
+        "description": "Write a SQL query over a Duke-flavored schema. Scored by "
+                       "running the query against a throwaway database and "
+                       "comparing the rows — no LLM judge.",
+        "example": "List the 3 departments with the most enrolled students.",
+        "scoring": "execution",
+        "suite": EVALUATOR / "tasks" / "sql_duke_v2.jsonl",
+        "rubric": _RUBRICS / "sql_duke_v1.yaml",   # inert (judge auto-skipped)
+        "system_prompt": _SYS / "sql_v1.txt",
+    },
+    "json_duke_v1": {
+        "label": "Structured JSON output (6 questions, execution-scored)",
+        "description": "Return a single JSON value in exactly the shape asked. "
+                       "Scored by parsing and comparing the JSON — no LLM judge.",
+        "example": 'Return {"open": true, "closes_at": "17:00"} for the library.',
+        "scoring": "execution",
+        "suite": EVALUATOR / "tasks" / "json_duke_v1.jsonl",
+        "rubric": _INERT_RUBRIC,                     # inert (judge auto-skipped)
+        "system_prompt": _SYS / "json_v1.txt",
+    },
+    "numeric_duke_v1": {
+        "label": "Numeric answers (6 questions, execution-scored)",
+        "description": "Answer a word problem with a single number. Scored by "
+                       "extracting the number and tolerance-comparing to the "
+                       "gold answer — no LLM judge.",
+        "example": "A shuttle leaves every 12 min from 7:00am — how many trips "
+                   "by noon?",
+        "scoring": "execution",
+        "suite": EVALUATOR / "tasks" / "numeric_duke_v1.jsonl",
+        "rubric": _INERT_RUBRIC,                     # inert (judge auto-skipped)
+        "system_prompt": _SYS / "numeric_v1.txt",
+    },
+    # --- More judge-scored task domains --------------------------------------
+    "email_drafting_v1": {
+        "label": "Email drafting (5 scenarios, judge-scored)",
+        "description": "Draft a professional email for a Duke scenario. Scored "
+                       "by the LLM-as-judge against a reference draft.",
+        "example": "Email a professor to request a deadline extension.",
+        "scoring": "judge",
+        "suite": EVALUATOR / "tasks" / "email_drafting_v1.jsonl",
+        "rubric": _RUBRICS / "email_drafting_v1.yaml",
+        "system_prompt": _SYS / "generic_v1.txt",
+    },
+    "tutoring_v1": {
+        "label": "Tutoring (5 scenarios, judge-scored)",
+        "description": "Help a stuck student without just handing over the "
+                       "answer. Scored by the LLM-as-judge (pedagogy weighted "
+                       "highest) against a reference.",
+        "example": "A student can't see why their loop runs one time too many.",
+        "scoring": "judge",
+        "suite": EVALUATOR / "tasks" / "tutoring_v1.jsonl",
+        "rubric": _RUBRICS / "tutoring_v1.yaml",
+        "system_prompt": _SYS / "generic_v1.txt",
+    },
+    "plain_language_v1": {
+        "label": "Plain-language rewriting (5 passages, judge-scored)",
+        "description": "Rewrite a dense, bureaucratic passage for a general "
+                       "audience without losing meaning. Scored by the "
+                       "LLM-as-judge against a reference.",
+        "example": "Rewrite a paragraph of financial-aid policy in plain English.",
+        "scoring": "judge",
+        "suite": EVALUATOR / "tasks" / "plain_language_v1.jsonl",
+        "rubric": _RUBRICS / "plain_language_v1.yaml",
+        "system_prompt": _SYS / "generic_v1.txt",
     },
 }
 
@@ -135,6 +217,8 @@ SUITES: dict[str, dict] = {
 JUDGE_PROMPT = EVALUATOR / "prompts" / "judge" / "reference_based_v2.txt"
 
 MAX_TOKENS_MIN, MAX_TOKENS_MAX = 50, 4000
+SCAN_ALLOWED_TIERS = frozenset({"low"})
+SCAN_COMPLETE_STATUSES = frozenset({"complete", "completed"})
 
 # --- Custom ("bring your own") question sets -------------------------------
 # Users who don't like our reference suites can supply their own questions +
@@ -242,10 +326,14 @@ def validate_dcc_params(
 
 
 # Suggested open-weight models for the HF-model launcher field (datalist hints).
+# PUBLIC / ungated only: hf_intake.validate rejects gated or private repos (no HF
+# token is used anywhere), so suggesting a gated model — e.g. Meta Llama or Gemma
+# — would just hand the user a repo that fails validation. Every id here is a
+# public, ungated, vLLM-servable model that fits a single a5000.
 SUGGESTED_HF_REPOS: tuple[str, ...] = (
     "Qwen/Qwen2.5-7B-Instruct",
-    "mistralai/Mistral-7B-Instruct-v0.3",
-    "meta-llama/Llama-3.2-1B-Instruct",
+    "Qwen/Qwen2.5-1.5B-Instruct",
+    "microsoft/Phi-3-mini-4k-instruct",
     "gpt2",
 )
 
@@ -267,6 +355,74 @@ def validate_hf_candidate(repo_id: str) -> dict:
         "architectures": info.architectures if info else None,
         "num_params": info.num_params if info else None,
     }
+
+
+def _scan_result_path(repo_id: str) -> Path:
+    """Published scanner artifact for an HF repo id."""
+    from scanner.paths import output_dir
+
+    return output_dir(repo_id) / "scan_result.json"
+
+
+def validate_hf_scan_gate(repo_id: str) -> dict:
+    """Require a completed low-risk artifact scan before serving an HF model.
+
+    This is the cross-pillar handshake: evaluator never downloads or serves a
+    Hugging Face model on the DCC until the scanner pillar has produced a clear
+    ``scan_result.json`` for the same repo id. The gate is intentionally
+    conservative for MVP launch: only completed ``low`` scans pass.
+    """
+    path = _scan_result_path(repo_id)
+    base = {
+        "repo_id": repo_id,
+        "path": str(path),
+        "status": None,
+        "severity_tier": None,
+        "overall_risk_score": None,
+    }
+    if not path.is_file():
+        return {
+            **base,
+            "ok": False,
+            "error": (
+                "security scan required before serving this Hugging Face model; "
+                f"run the scanner first, then retry. Expected {path}"
+            ),
+        }
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as e:  # noqa: BLE001
+        return {
+            **base,
+            "ok": False,
+            "error": f"security scan result is unreadable: {type(e).__name__}: {e}",
+        }
+
+    status = str(data.get("status") or "unknown").lower()
+    tier = str(data.get("severity_tier") or "unknown").lower()
+    score = data.get("overall_risk_score")
+    out = {
+        **base,
+        "status": status,
+        "severity_tier": tier,
+        "overall_risk_score": score,
+    }
+    if status not in SCAN_COMPLETE_STATUSES:
+        return {
+            **out,
+            "ok": False,
+            "error": f"security scan is not complete yet (status={status})",
+        }
+    if tier not in SCAN_ALLOWED_TIERS:
+        return {
+            **out,
+            "ok": False,
+            "error": (
+                "security scan did not clear this model "
+                f"(tier={tier}, score={score}); DCC serving is blocked"
+            ),
+        }
+    return {**out, "ok": True, "error": None}
 
 
 def _container_rel(path: Path) -> str:
@@ -464,8 +620,10 @@ def _dcc_phase(log_path: Path) -> str | None:
 def get_status(slug: str) -> dict:
     """Run status from the results artifact + the process registry.
 
-    complete: file has one row per suite question
-    running:  process alive (or file growing)
+    done:     file has one row per suite question
+    queued / provisioning / serving / evaluating / tearing-down:
+              DCC process is alive and phase markers are available
+    running:  non-DCC process alive (or file growing)
     failed:   process exited non-zero, or exited with an incomplete file
     """
     if not is_safe_slug(slug):
@@ -482,7 +640,7 @@ def get_status(slug: str) -> dict:
 
     if total and progress >= total:
         return {
-            "status": "complete",
+            "status": "done",
             "progress": progress,
             "total": total,
             "message": "",
@@ -498,8 +656,16 @@ def get_status(slug: str) -> dict:
 
     proc = _RUNNING.get(slug)
     if proc is not None and proc.poll() is None:
+        status = phase or "running"
+        if phase is None and log_path.is_file():
+            try:
+                head = log_path.read_text(encoding="utf-8", errors="replace")[:500]
+            except OSError:
+                head = ""
+            if "evaluator.dcc_orchestrate" in head:
+                status = "queued"
         return {
-            "status": "running",
+            "status": status,
             "progress": progress,
             "total": total,
             "message": status_message(log_path),
@@ -604,6 +770,7 @@ def get_launch_options() -> dict:
                 "key": k,
                 "label": v["label"],
                 "n": suite_question_count(k),
+                "scoring": v.get("scoring", "judge"),
                 "description": v.get("description", ""),
                 "example": v.get("example", ""),
             }

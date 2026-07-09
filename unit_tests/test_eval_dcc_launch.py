@@ -12,8 +12,11 @@ Run from repo root:
 
 from __future__ import annotations
 
+import json
 import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 os.environ.setdefault("FRONTEND_LAUNCH_MODE", "host")
@@ -31,6 +34,14 @@ _BAD = hf_intake.ValidationResult(
 
 _REPO = "Qwen/Qwen2.5-7B-Instruct"
 _JUDGE = "Llama 4 Maverick"
+_SCAN_OK = {
+    "ok": True,
+    "repo_id": _REPO,
+    "status": "complete",
+    "severity_tier": "low",
+    "overall_risk_score": 0,
+    "path": "scanner/output/Qwen--Qwen2.5-7B-Instruct/scan_result.json",
+}
 
 
 def _client():
@@ -48,6 +59,7 @@ class _Base(unittest.TestCase):
 class DccLaunchRouteTest(_Base):
     def test_valid_hf_launches_dcc_and_redirects(self) -> None:
         with mock.patch.object(hf_intake, "validate", return_value=_GOOD), \
+             mock.patch.object(eval_launch, "validate_hf_scan_gate", return_value=_SCAN_OK), \
              mock.patch.object(eval_launch, "start_dcc_run",
                                return_value=("stem123", False)) as sr:
             r = _client().post("/eval-run/start",
@@ -57,6 +69,19 @@ class DccLaunchRouteTest(_Base):
         self.assertEqual(r.status_code, 302)
         sr.assert_called_once()
         self.assertEqual(sr.call_args[0][0], _REPO)  # candidate = the HF repo
+
+    def test_missing_scan_blocks_hf_launch(self) -> None:
+        blocked = {**_SCAN_OK, "ok": False, "error": "security scan required"}
+        with mock.patch.object(hf_intake, "validate", return_value=_GOOD), \
+             mock.patch.object(eval_launch, "validate_hf_scan_gate", return_value=blocked), \
+             mock.patch.object(eval_launch, "start_dcc_run") as sr:
+            r = _client().post("/eval-run/start",
+                               data={"source": "hf", "hf_repo": _REPO,
+                                     "judge": _JUDGE, "suite": "it_support_v1",
+                                     "max_tokens": "2000"})
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"security scan required", r.data)
+        sr.assert_not_called()
 
     def test_invalid_hf_shows_reason_no_launch(self) -> None:
         with mock.patch.object(hf_intake, "validate", return_value=_BAD), \
@@ -71,6 +96,7 @@ class DccLaunchRouteTest(_Base):
 
     def test_bad_judge_rejected_400_no_launch(self) -> None:
         with mock.patch.object(hf_intake, "validate", return_value=_GOOD), \
+             mock.patch.object(eval_launch, "validate_hf_scan_gate", return_value=_SCAN_OK), \
              mock.patch.object(eval_launch, "start_dcc_run") as sr:
             r = _client().post("/eval-run/start",
                                data={"source": "hf", "hf_repo": _REPO,
@@ -82,7 +108,9 @@ class DccLaunchRouteTest(_Base):
     def test_gateway_path_unchanged(self) -> None:
         with mock.patch.object(eval_launch, "start_run",
                                return_value=("slug1", False)) as sr, \
-             mock.patch.object(eval_launch, "validate_launch", return_value=None):
+             mock.patch.object(eval_launch, "validate_launch", return_value=None), \
+             mock.patch("frontend.pipeline.require_ready_for_downstream",
+                        return_value=None):
             r = _client().post("/eval-run/start",
                                data={"candidate": "gpt-5-chat", "judge": _JUDGE,
                                      "suite": "it_support_v1", "max_tokens": "2000"})
@@ -109,6 +137,44 @@ class DccValidateParamsTest(_Base):
     def test_bad_max_tokens_rejected(self) -> None:
         self.assertIsNotNone(
             eval_launch.validate_dcc_params(_REPO, _JUDGE, "it_support_v1", 999999))
+
+
+class HfScanGateTest(_Base):
+    def _scan_path(self, data: dict | None):
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        path = Path(td.name) / "scan_result.json"
+        if data is not None:
+            path.write_text(json.dumps(data), encoding="utf-8")
+        return path
+
+    def test_scan_gate_allows_completed_low_scan(self) -> None:
+        path = self._scan_path({
+            "status": "complete",
+            "severity_tier": "low",
+            "overall_risk_score": 0,
+        })
+        with mock.patch.object(eval_launch, "_scan_result_path", return_value=path):
+            out = eval_launch.validate_hf_scan_gate(_REPO)
+        self.assertTrue(out["ok"], out["error"])
+
+    def test_scan_gate_blocks_missing_scan(self) -> None:
+        path = self._scan_path(None)
+        with mock.patch.object(eval_launch, "_scan_result_path", return_value=path):
+            out = eval_launch.validate_hf_scan_gate(_REPO)
+        self.assertFalse(out["ok"])
+        self.assertIn("security scan required", out["error"])
+
+    def test_scan_gate_blocks_high_risk_scan(self) -> None:
+        path = self._scan_path({
+            "status": "complete",
+            "severity_tier": "critical",
+            "overall_risk_score": 95,
+        })
+        with mock.patch.object(eval_launch, "_scan_result_path", return_value=path):
+            out = eval_launch.validate_hf_scan_gate(_REPO)
+        self.assertFalse(out["ok"])
+        self.assertIn("blocked", out["error"])
 
 
 class DccBuildCommandTest(_Base):
@@ -147,8 +213,18 @@ class DccPhaseStatusTest(_Base):
         eval_launch._RUNNING[stem] = fake
         self.addCleanup(lambda: eval_launch._RUNNING.pop(stem, None))
         st = eval_launch.get_status(stem)
-        self.assertEqual(st["status"], "running")
+        self.assertEqual(st["status"], "serving")
         self.assertEqual(st.get("phase"), "serving")
+
+    def test_status_done_when_results_complete(self) -> None:
+        stem = "20260707T000002Z_it_support_v1_Qwen-Qwen2.5-7B-Instruct"
+        path = eval_launch.RESULTS_DIR / f"{stem}.jsonl"
+        eval_launch.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(["{}"] * 12) + "\n", encoding="utf-8")
+        self.addCleanup(lambda: path.unlink(missing_ok=True))
+        with mock.patch.object(eval_launch, "suite_question_count", return_value=12):
+            st = eval_launch.get_status(stem)
+        self.assertEqual(st["status"], "done")
 
 
 if __name__ == "__main__":
