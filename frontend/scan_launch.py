@@ -190,6 +190,15 @@ def validate_launch(
     slug = safe_dir_name(hf_repo)
     if is_scan_inflight(hf_repo):
         return f"a scan for {hf_repo!r} is already running — wait for it to finish or open the progress page"
+    from frontend.purge_rerun import purge_scan_for_launch
+    from frontend.read_context import read_context
+
+    visibility, owner_user_id = read_context()
+    err = purge_scan_for_launch(
+        slug, visibility=visibility, owner_user_id=owner_user_id
+    )
+    if err:
+        return err
     return prepare_output_dir(_output_dir_for_slug(slug))
 
 

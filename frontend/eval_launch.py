@@ -26,6 +26,7 @@ from pathlib import Path
 from frontend import docker_launch
 from frontend.launch_registry import check_inflight_combo
 from frontend.log_status import run_log_payload, status_message
+from frontend.output_dirs import OutputDirError
 from frontend.path_safety import is_safe_slug
 from frontend.run_paths import inflight_scope_key
 
@@ -341,12 +342,16 @@ def start_run(
         if existing:
             return existing, True, plan.visibility
 
-        # Fresh run — drop prior outputs for this model+suite (same scope
-        # only) so the table shows one current result instead of
-        # accumulating stale runs.
-        _wipe_prior_runs(
-            suite_key, candidate, visibility=plan.visibility, owner_user_id=plan.owner_user_id
+        from frontend.purge_rerun import purge_eval_for_launch
+
+        err = purge_eval_for_launch(
+            suite_key,
+            candidate,
+            visibility=plan.visibility,
+            owner_user_id=plan.owner_user_id,
         )
+        if err:
+            raise OutputDirError(err)
 
         if docker_launch.use_docker():
             docker_launch.ensure_stack("evaluator")

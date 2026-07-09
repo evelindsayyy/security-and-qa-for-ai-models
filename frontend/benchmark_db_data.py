@@ -277,3 +277,28 @@ def delete_run(
             deleted = cur.rowcount > 0
         conn.commit()
     return deleted
+
+
+def delete_runs_for_combo(
+    benchmark_key: str,
+    model: str,
+    *,
+    visibility: str | None = None,
+    owner_user_id: str | None = None,
+) -> int:
+    """Delete every benchmark run for one (benchmark, model) in the given scope."""
+    vis_clause, vis_params = _visibility_params(visibility=visibility, owner_user_id=owner_user_id)
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                DELETE FROM public.benchmark_runs AS b
+                WHERE b.benchmark_key = %(benchmark_key)s
+                  AND b.gateway_model_id = %(model)s
+                  AND ({vis_clause})
+                """,
+                {"benchmark_key": benchmark_key, "model": model, **vis_params},
+            )
+            deleted = cur.rowcount
+        conn.commit()
+    return deleted

@@ -326,6 +326,18 @@ def validate_launch(
             f"a safety run for {model!r} (profile {redteam_profile}) is already running — "
             "wait for it to finish or open the progress page"
         )
+    from frontend.purge_rerun import purge_safety_for_launch
+    from frontend.read_context import read_context
+
+    visibility, owner_user_id = read_context()
+    err = purge_safety_for_launch(
+        slug,
+        redteam_profile,
+        visibility=visibility,
+        owner_user_id=owner_user_id,
+    )
+    if err:
+        return err
     return _prepare_output_dirs(slug, redteam_profile)
 
 
