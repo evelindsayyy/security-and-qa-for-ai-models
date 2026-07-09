@@ -1,3 +1,7 @@
+# Frontend build artifacts
+frontend/assets/node_modules/
+frontend/static/dist/
+
 # Ignore the python & local virtual environment
 venv/
 .venv/

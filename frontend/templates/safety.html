@@ -1,20 +1,27 @@
 {% extends "base.html" %}
-{% from '_macros.html' import cli_safety_docker, cli_safety_host, start_button, delete_button, rerun_button, staleness_badge, tier_label, pillar_guide_callout with context %}
+{% from '_macros.html' import cli_safety_docker, cli_safety_host, start_button, delete_button, rerun_button, staleness_badge, tier_label, page_header, list_compare_tabs, empty_state with context %}
 
 {% block title %}Safety red-team{% endblock %}
 
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span class="breadcrumb-current">Safety</span>
+{% endblock %}
+
 {% block content %}
 <div class="eval-comparison">
-  <h1>Safety red-team</h1>
-  <p>{{ start_button(url_for('safety_run_new'), '▶ Start a new run') }}</p>
+  {% set actions %}{{ start_button(url_for('safety_run_new'), '▶ Start safety run') }}{% endset %}
+  {{ page_header('Safety red-team', 'Policy probes, Promptfoo adversarial plugins, and Garak attack modules.', actions) }}
 
-  {{ pillar_guide_callout(
-       'Reference scores & safety guide',
-       'How policy probes, red-team plugins, and garak modules combine into the composite tier.',
-       url_for('safety_reference')
-     ) }}
+  {% if guide_rows %}
+  {% with title="Safety reference & guide", intro="How suites combine into composite tier and pass rates." %}
+  {% include '_safety_guide.html' %}
+  {% endwith %}
+  <p class="mb-6 text-sm"><a href="{{ url_for('safety_reference') }}">Full reference page →</a></p>
+  {% endif %}
 
-  <details class="key" open>
+  <details class="key card p-4 mb-6">
     <summary>How to read this</summary>
     <dl class="legend-grid">
       <dt><span class="tier tier-low">Tier</span></dt>
@@ -31,19 +38,9 @@
   </details>
 
   {% if not has_safety %}
-    <p class="sub">
-      No results yet. Use <b>Start a new run</b> above, or from repo root:
-      <code>{{ cli_safety_docker() }}</code>
-      <span class="dim">(host: <code>{{ cli_safety_host() }}</code>)</span>
-    </p>
+    {{ empty_state('No safety results yet.', cli_safety_docker()) }}
   {% else %}
-    <h2>Runs</h2>
-    <div class="bench-view-tabs" role="tablist" aria-label="Safety results view">
-      <button type="button" class="bench-view-tab is-active" data-view="list" role="tab" aria-selected="true">List</button>
-      {% if has_comparison %}
-      <button type="button" class="bench-view-tab" data-view="compare" role="tab" aria-selected="false">Compare</button>
-      {% endif %}
-    </div>
+    {{ list_compare_tabs(has_comparison) }}
 
     <div id="pillar-view-list" class="bench-view-panel" role="tabpanel">
     <p class="sub">
@@ -104,7 +101,6 @@
       {% include '_pillar_comparison_matrix.html' %}
       {% endwith %}
     </div>
-    <script src="{{ url_for('static', filename='pillar-view-tabs.js') }}"></script>
     {% endif %}
   {% endif %}
 </div>

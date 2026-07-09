@@ -148,7 +148,7 @@ def _run_tuple_to_data(run_row: tuple, findings_json: list[dict]) -> dict:
         tool_results,
         started_at,
         completed_at,
-    ) = run_row
+    ) = run_row[:16]
     return {
         "gateway_model_id": gateway_model_id,
         "redteam_profile": redteam_profile or "base",

@@ -96,14 +96,45 @@ class ScanStalenessTest(unittest.TestCase):
             "scanner_version": scanner.__version__,
             "tool_status": {
                 "modelscan": {},
-                "fickling": {},
                 "modelaudit": {},
-                "dependencies": {},
                 "secrets": {},
+            },
+            "tool_applicability": {
+                "modelscan": True,
+                "modelaudit": True,
+                "secrets": True,
+                "fickling": False,
+                "dependencies": False,
             },
         }
         result = staleness_for("scan", row)
         self.assertFalse(result["stale"])
+
+    def test_not_stale_safetensors_only_without_fickling(self) -> None:
+        """Safetensors-only repos should not flag missing fickling."""
+        import scanner
+        from dbutils.staleness_spec import scan_tool_applicability
+
+        applicability = scan_tool_applicability(["model.safetensors", "config.json"])
+        self.assertFalse(applicability["fickling"])
+        self.assertFalse(applicability["dependencies"])
+
+        row = {
+            "scanned_file_count": 2,
+            "scanned_at": "2026-08-01T12:00:00+00:00",
+            "status": "complete",
+            "scanner_version": scanner.__version__,
+            "config_json": {},
+            "tool_status": {
+                "modelscan": {},
+                "modelaudit": {},
+                "secrets": {},
+            },
+            "tool_applicability": applicability,
+        }
+        result = staleness_for("scan", row)
+        self.assertFalse(result["stale"])
+        self.assertFalse(any("fickling" in r for r in result["reasons"]))
 
 
 class EvalStalenessTest(unittest.TestCase):
@@ -139,10 +170,15 @@ class AttachStalenessTest(unittest.TestCase):
             "scanner_version": scanner.__version__,
             "tool_status": {
                 "modelscan": {},
-                "fickling": {},
                 "modelaudit": {},
-                "dependencies": {},
                 "secrets": {},
+            },
+            "tool_applicability": {
+                "modelscan": True,
+                "modelaudit": True,
+                "secrets": True,
+                "fickling": False,
+                "dependencies": False,
             },
         }]
         attach_staleness(rows, "scan")

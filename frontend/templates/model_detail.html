@@ -1,45 +1,65 @@
 {% extends "base.html" %}
-{% from '_macros.html' import cli_eval_docker, start_button, tier_label with context %}
+{% from '_macros.html' import cli_eval_docker, start_button, tier_label, page_header, stat_card, section_header, expandable with context %}
 
-{% block title %}{% if missing %}Model not found{% else %}{{ model }} — model detail{% endif %}{% endblock %}
+{% block title %}{% if missing %}Model not found{% else %}{{ model }} — nutrition label{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span><a href="{{ url_for('models_catalog') }}">Model catalog</a></span>
+<span class="text-text-subtle">›</span>
+<span class="font-medium text-text">{{ model }}</span>
+{% endblock %}
 
 {% block content %}
 <div class="eval-comparison">
   {% if missing %}
-    <h1>Model not found</h1>
+    <h1 class="page-title">Model not found</h1>
     <p class="sub empty">No gateway model or rollup data for <code>{{ slug }}</code>.</p>
     <p><a href="{{ url_for('models_catalog') }}">← model catalog</a></p>
   {% else %}
-    <p class="back"><a href="{{ url_for('models_catalog') }}">← model catalog</a></p>
-    <h1>{{ model }}</h1>
-    {% if gateway_profile %}
-    <p class="sub dim">Gateway profile: {{ gateway_profile }}</p>
-    {% endif %}
-    <p class="sub">
-      {% if rollup.aggregate is not none %}aggregate score <b>{{ "%.0f"|format(rollup.aggregate) }}</b> / 100 · {% endif %}
-      {% if n_runs %}{{ n_runs }} eval run{{ "" if n_runs == 1 else "s" }}{% endif %}
-      {% if best_overall is not none %}· best eval <b>{{ "%.2f"|format(best_overall) }}</b> / 5{% endif %}
-      {% if total_cost_usd %}· eval cost ${{ "%.4f"|format(total_cost_usd) }}{% endif %}
-    </p>
+    {{ page_header(model, gateway_profile or 'Cross-pillar nutrition label') }}
+    <div class="nutrition-grid mb-6">
+      {{ stat_card('Aggregate', '%.0f'|format(rollup.aggregate) if rollup.aggregate is not none else '—', '/ 100') }}
+      {{ stat_card('Scan', rollup.scan.tier if rollup.scan else '—', 'risk ' ~ rollup.scan.overall_risk_score if rollup.scan else '') }}
+      {{ stat_card('Safety', rollup.safety.tier if rollup.safety else '—', '%.0f%% pass'|format(rollup.safety.pass_rate * 100) if rollup.safety else '') }}
+      {{ stat_card('Eval best', '%.2f'|format(best_overall) if best_overall is not none else '—', '/ 5') }}
+    </div>
 
-    <section class="key">
-      <h2>Recommendation
-        <span class="dim" title="Evidence-backed guidance — does not replace OIT sign-off">
-          ({% if recommendation.source == 'ai' %}AI summary{% else %}rules v1{% endif %})
-        </span>
-      </h2>
-      <p>{{ recommendation.summary }}</p>
-      {% if recommendation.tradeoffs %}
-      <ul>
-        {% for t in recommendation.tradeoffs %}
-        <li>{{ t }}</li>
+    <section class="key card p-4">
+      {{ section_header('Recommendation', 'Evidence-backed guidance — does not replace OIT sign-off') }}
+      {% if recommendation.sections %}
+      <div class="recommendation-chips">
+        {% for s in recommendation.sections %}
+        <span class="recommendation-chip">{{ s.label }}</span>
         {% endfor %}
-      </ul>
+      </div>
+      <dl class="recommendation-sections">
+        {% for s in recommendation.sections %}
+        <div class="recommendation-section">
+          <dt>{{ s.label }}</dt>
+          <dd>{{ s.text }}</dd>
+        </div>
+        {% endfor %}
+      </dl>
       {% endif %}
+      <details class="guide-panel mt-4">
+        <summary>Full summary ({{ 'AI' if recommendation.source == 'ai' else 'rules v1' }})</summary>
+        <div class="guide-panel-content">
+          {{ expandable(recommendation.summary, clamp=6) }}
+          {% if recommendation.tradeoffs %}
+          <ul class="mt-3 list-disc pl-5 text-sm text-text-muted">
+            {% for t in recommendation.tradeoffs %}
+            <li>{{ t }}</li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+        </div>
+      </details>
     </section>
 
-    <section class="key pillar-missing-ctas">
-      <h2>Pillar coverage</h2>
+    <section class="key">
+      {{ section_header('Pillar coverage') }}
       <ul class="pillar-cta-list">
         <li>
           <span class="dim">Scan:</span>
@@ -90,7 +110,8 @@
     </section>
 
     {% if runs %}
-    <h2>Eval runs</h2>
+    {{ section_header('Eval runs') }}
+    <div class="table-wrap">
     <table class="run-table">
       <thead>
         <tr>
@@ -121,6 +142,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
     {% else %}
     <p class="sub empty">No eval runs yet. {{ start_button(url_for('eval_run_new'), 'Start an eval run', classes='') }} or CLI: <code>{{ cli_eval_docker() }}</code></p>
     {% endif %}

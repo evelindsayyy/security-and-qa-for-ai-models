@@ -1,33 +1,29 @@
 {% extends "base.html" %}
+{% from '_macros.html' import back_link, page_header, section_header with context %}
 
 {% block title %}Eval reference{% endblock %}
 
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span><a href="{{ url_for('eval_run') }}">Eval</a></span>
+<span class="text-text-subtle">›</span>
+<span class="font-semibold text-text">Reference</span>
+{% endblock %}
+
 {% block content %}
 <div class="eval-comparison">
-  <p class="back"><a href="{{ url_for('eval_run') }}">← all eval runs</a></p>
-  {% if has_reference %}
-  <aside class="benchmark-reference-callout benchmark-reference-callout--compact" aria-label="Eval reference and guide">
-    <div class="benchmark-reference-callout-text">
-      <p class="benchmark-reference-callout-title">Reference &amp; eval guide</p>
-      <p class="benchmark-reference-callout-desc">
-        LLM-as-judge suites for Duke IT tasks — rubric dimensions, overall score, and cost/quality tradeoffs.
-      </p>
-    </div>
-  </aside>
-  {% endif %}
-  <h1>Eval reference</h1>
-  <p class="sub">
-    Task suites and scoring on this site.
-    {% if has_example %}Sample detail: <a href="{{ url_for('eval_run_detail', slug=example_slug) }}">{{ example_model }} · {{ example_suite }}</a>.{% endif %}
-  </p>
+  {{ back_link(url_for('eval_run'), 'all eval runs') }}
+  {{ page_header('Eval reference & guide', 'LLM-as-judge suites for Duke IT tasks — rubric dimensions and overall score.') }}
 
-  {% with title="How each eval suite works", intro="What each suite measures and how rubric scores roll up to the overall headline." %}
+  {% if guide_rows %}
+  {% with title="Eval reference & guide", intro="What each suite measures and how rubric scores roll up to the overall headline." %}
   {% include '_eval_guide.html' %}
   {% endwith %}
+  {% endif %}
 
   {% if has_reference_scores %}
-  <h2 class="reference-scores-heading">Reference scores</h2>
-  <p class="sub dim">Preferred gateway models from public runs — use as orientation, not a leaderboard.</p>
+  {{ section_header('Reference scores', 'Preferred gateway models from public runs — orientation, not a leaderboard.') }}
   {% include '_pillar_reference_scores.html' %}
   {% endif %}
 </div>

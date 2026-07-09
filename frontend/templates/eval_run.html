@@ -1,20 +1,27 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button, rerun_button, staleness_badge, pillar_guide_callout with context %}
+{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button, rerun_button, staleness_badge, page_header, list_compare_tabs, empty_state with context %}
 
-{% block title %}Model comparison{% endblock %}
+{% block title %}Eval runs{% endblock %}
+
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span class="breadcrumb-current">Eval</span>
+{% endblock %}
 
 {% block content %}
 <div class="eval-comparison">
-  <h1>Model comparison</h1>
-  <p>{{ start_button(url_for('eval_run_new'), '▶ Start a new run') }}</p>
+  {% set actions %}{{ start_button(url_for('eval_run_new'), '▶ Start eval') }}{% endset %}
+  {{ page_header('Eval runs', 'LLM-as-judge task suites — rubric dimensions, overall score, cost/quality tradeoffs.', actions) }}
 
-  {{ pillar_guide_callout(
-       'Reference scores & eval guide',
-       'LLM-as-judge suites for Duke IT tasks — rubric dimensions, overall score, and cost/quality tradeoffs.',
-       url_for('eval_reference')
-     ) }}
+  {% if guide_rows %}
+  {% with title="Eval reference & guide", intro="Suite rubrics, scoring, and reference comparisons." %}
+  {% include '_eval_guide.html' %}
+  {% endwith %}
+  <p class="mb-6 text-sm"><a href="{{ url_for('eval_reference') }}">Full reference page →</a></p>
+  {% endif %}
 
-  <details class="key" open>
+  <details class="key card p-4 mb-6">
     <summary>How to read this</summary>
     <dl class="legend-grid">
       <dt>Score columns</dt>
@@ -35,18 +42,9 @@
   </details>
 
   {% if not has_runs %}
-    <p class="sub">
-      No runs yet. Use <b>Start a new run</b> above, or from repo root:
-      <code>{{ cli_eval_docker() }}</code>
-    </p>
+    {{ empty_state('No eval runs yet.', cli_eval_docker()) }}
   {% else %}
-    <h2>Runs</h2>
-    <div class="bench-view-tabs" role="tablist" aria-label="Eval results view">
-      <button type="button" class="bench-view-tab is-active" data-view="list" role="tab" aria-selected="true">List</button>
-      {% if has_comparison %}
-      <button type="button" class="bench-view-tab" data-view="compare" role="tab" aria-selected="false">Compare</button>
-      {% endif %}
-    </div>
+    {{ list_compare_tabs(has_comparison) }}
 
     <div id="pillar-view-list" class="bench-view-panel" role="tabpanel">
     <p class="sub">
@@ -233,7 +231,6 @@
       })();
     </script>
     {% if has_comparison %}
-    <script src="{{ url_for('static', filename='pillar-view-tabs.js') }}"></script>
     {% endif %}
   {% endif %}
 </div>

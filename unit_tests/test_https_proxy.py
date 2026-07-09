@@ -124,10 +124,6 @@ class TestOidcRedirectUri(unittest.TestCase):
             self.assertEqual(redirect_uri(), "https://8.8.8.8:5000/login")
 
     def test_forwarded_loopback_port_is_preserved(self):
-        # IDE port-forwards (VS Code Remote, JetBrains Gateway, …) assign an
-        # arbitrary local port that changes on every reconnect — there is no
-        # env var to pre-configure, so the app must always redirect back to
-        # whatever port the browser actually used.
         os.environ["APP_PORT"] = "5000"
         os.environ["CADDY_DOMAIN"] = ""
         os.environ["DUKE_OIDC_REDIRECT_URI"] = ""
@@ -137,6 +133,17 @@ class TestOidcRedirectUri(unittest.TestCase):
 
         with app.test_request_context("/auth/login", base_url="http://localhost:59187"):
             self.assertEqual(redirect_uri(), "http://localhost:59187/login")
+
+    def test_cursor_forwarded_port_51789(self):
+        os.environ["APP_PORT"] = "5000"
+        os.environ["CADDY_DOMAIN"] = ""
+        os.environ["DUKE_OIDC_REDIRECT_URI"] = ""
+        app = create_app({"TESTING": True, "SECRET_KEY": "test"})
+
+        from auth.oidc import redirect_uri
+
+        with app.test_request_context("/auth/login", base_url="http://localhost:51789"):
+            self.assertEqual(redirect_uri(), "http://localhost:51789/login")
 
     def test_forwarded_loopback_port_survives_reconnect_with_a_new_port(self):
         # Same server, same env — only the forwarded port changed (as it does
@@ -190,6 +197,17 @@ class TestOAuthCallbackRoutes(unittest.TestCase):
         rv = self.client.get("/auth/callback")
         self.assertEqual(rv.status_code, 302)
 
+    def test_auth_ping_returns_204(self):
+        rv = self.client.get("/auth/ping")
+        self.assertEqual(rv.status_code, 204)
+        self.assertEqual(rv.data, b"")
+
+    def test_auth_keepalive_returns_ping_page(self):
+        rv = self.client.get("/auth/keepalive")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"/auth/ping", rv.data)
+        self.assertIn(b"setInterval", rv.data)
+
 
 class TestOidcClientHasTimeout(unittest.TestCase):
     """No timeout on the Duke network calls means a slow/unreachable OIDC
@@ -237,7 +255,7 @@ class TestLoginSurvivesOAuthNetworkFailure(unittest.TestCase):
         from auth.routes import oauth
 
         fake_client = mock.Mock()
-        fake_client.authorize_redirect.side_effect = TimeoutError("Duke unreachable")
+        fake_client.create_authorization_url.side_effect = TimeoutError("Duke unreachable")
         with mock.patch.object(oauth, "create_client", return_value=fake_client):
             rv = self.client.get("/auth/login")
         self.assertEqual(rv.status_code, 502)
@@ -249,7 +267,7 @@ class TestLoginSurvivesOAuthNetworkFailure(unittest.TestCase):
         from auth.routes import oauth
 
         fake_client = mock.Mock()
-        fake_client.authorize_redirect.side_effect = TimeoutError("Duke unreachable")
+        fake_client.create_authorization_url.side_effect = TimeoutError("Duke unreachable")
         with mock.patch.object(oauth, "create_client", return_value=fake_client):
             rv = self.client.get("/auth/login")
         self.assertEqual(rv.status_code, 502)
@@ -258,6 +276,25 @@ class TestLoginSurvivesOAuthNetworkFailure(unittest.TestCase):
         # failed or slow login attempt is not allowed to take it down.
         rv = self.client.get("/hello")
         self.assertEqual(rv.status_code, 200)
+
+    def test_login_returns_bridge_page_before_duke_redirect(self):
+        from unittest import mock
+
+        from auth.routes import oauth
+
+        fake_client = mock.Mock()
+        fake_client.create_authorization_url.return_value = {
+            "url": "https://oauth.oit.duke.edu/oidc/authorize?state=test",
+            "state": "test",
+            "nonce": "n",
+        }
+        with mock.patch.object(oauth, "create_client", return_value=fake_client):
+            rv = self.client.get("/auth/login")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"Redirecting to Duke NetID", rv.data)
+        self.assertIn(b"oauth.oit.duke.edu", rv.data)
+        self.assertIn(b"/auth/ping", rv.data)
+        fake_client.save_authorize_data.assert_called_once()
 
     def test_public_page_not_blocked_while_login_is_still_in_flight(self):
         """A *slow* (not failed) Duke round-trip must not serialize behind
@@ -269,14 +306,17 @@ class TestLoginSurvivesOAuthNetworkFailure(unittest.TestCase):
         from unittest import mock
 
         from auth.routes import oauth
-        from flask import redirect
 
-        def slow_authorize_redirect(*_a, **_k):
+        def slow_create_authorization_url(*_a, **_k):
             time.sleep(1)
-            return redirect("https://oauth.oit.duke.edu/oidc/authorize?fake=1")
+            return {
+                "url": "https://oauth.oit.duke.edu/oidc/authorize?fake=1",
+                "state": "slow",
+                "nonce": "n",
+            }
 
         fake_client = mock.Mock()
-        fake_client.authorize_redirect.side_effect = slow_authorize_redirect
+        fake_client.create_authorization_url.side_effect = slow_create_authorization_url
 
         results = {}
 
@@ -297,7 +337,7 @@ class TestLoginSurvivesOAuthNetworkFailure(unittest.TestCase):
         public_duration, public_status = results["public"]
         login_duration, login_status = results["login"]
         self.assertEqual(public_status, 200)
-        self.assertEqual(login_status, 302)
+        self.assertEqual(login_status, 200)
         self.assertLess(public_duration, login_duration)
 
 

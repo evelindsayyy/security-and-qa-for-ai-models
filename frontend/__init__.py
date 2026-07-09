@@ -35,6 +35,10 @@ def create_app(test_config=None):
     register_auth(app)
     register_routes(app)
 
+    from frontend.vite_assets import register_vite_template_globals
+
+    register_vite_template_globals(app)
+
     # JSON API blueprint(s) under /api (Track A will add scans/safety here).
     # Lazy import keeps app composition free of any frontend<->api import cycle.
     from api import register_api

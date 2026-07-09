@@ -96,11 +96,11 @@ independent of anything this app computes.
 2. Is the browser's address bar showing `localhost:<port>` (not a LAN IP or
    a custom hostname)? If not, that's the entire problem — see above.
 3. If using an IDE's auto-forwarded port (VS Code Remote, JetBrains Gateway,
-   or similar): those tools tunnel an arbitrary local port and can silently
-   drop/reassign the forward (e.g. after the browser sits idle on Duke's
-   external Shibboleth/2FA page for 10–60+ seconds). Prefer a plain, stable
-   SSH tunnel on the exact registered port instead of relying on
-   auto-detection:
+   Cursor, or similar): login opens a small **keepalive window**
+   (`/auth/keepalive`) plus pings from the parent tab every second to keep
+   the tunnel warm while the Duke popup is on Shibboleth. If login still
+   fails after ~15s on a non-5000 localhost port, use **Sign in this tab
+   instead** (full-page redirect) or a stable SSH tunnel:
    ```bash
    # From your local machine — replace the host with the remote SSH target
    ssh -L 5000:localhost:5000 <user>@<remote-host>

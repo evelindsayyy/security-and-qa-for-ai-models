@@ -1,14 +1,21 @@
 {% extends "base.html" %}
+{% from '_macros.html' import rerun_callout with context %}
 
 {% block title %}Start an HF scan{% endblock %}
 
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span><a href="{{ url_for('scans') }}">Scans</a></span>
+<span class="text-text-subtle">›</span>
+<span class="font-medium text-text">Start scan</span>
+{% endblock %}
+
 {% block content %}
-<div class="eval-comparison">
+<div class="eval-comparison max-w-2xl">
   <p class="back"><a href="{{ url_for('scans') }}">← all scans</a></p>
-  <h1>Start an HF scan</h1>
-  {% if rerun %}
-  <p class="sub benchmark-rerun-hint">Pre-filled from a previous scan — starting will delete the prior results and replace them.</p>
-  {% endif %}
+  <h1 class="page-title">Start an HF scan</h1>
+  {% if rerun %}{{ rerun_callout() }}{% endif %}
   <p class="sub">
     Launches the scanner via Docker Compose
     (<code>{{ compose_file }}</code>) — same isolated image as the CLI in <code>docs/cli.md</code>.

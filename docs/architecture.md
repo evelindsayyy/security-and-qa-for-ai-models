@@ -14,6 +14,9 @@ Two nutrition-label pillars, two tracks:
 Every run produces structured JSON; optional ingest loads it into Postgres. The
 `frontend/` UI renders the nutrition label; `api/` exposes JSON REST for all four
 pillars (list, detail, status, POST jobs) — see [`api/README.md`](../api/README.md).
+The UI is **server-rendered Jinja** with **Vite-built Preact islands**
+(findings tables, comparison heatmap, live run progress, compare charts) under
+`frontend/assets/` → `frontend/static/dist/`.
 Teams and schedule: [`team-tracks.md`](team-tracks.md).
 
 ## How a run flows
@@ -205,7 +208,7 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 - **`benchmarks/`** (B) — public benchmarks (IFEval, TruthfulQA, MMLU, ToMi, consistency); ingest + UI read via [`benchmarks/db/`](../benchmarks/db/README.md) and `frontend/benchmark_db_data.py`.
 - **`api/`** — Flask REST under `/api`; see [`api/README.md`](../api/README.md).
 - **`auth/`** — Duke OIDC login, sessions, allowlist; see [`auth/README.md`](../auth/README.md).
-- **`frontend/`** — nutrition-label UI; `frontend/*_data.py` + launch helpers; cross-pillar rollup (`model_rollup.py`, `model_summary.py`, `recommendation_rules.py`); pillar List/Compare matrices and reference guides. See [`frontend/README.md`](../frontend/README.md).
+- **`frontend/`** — nutrition-label UI (Jinja shells + Preact islands); `frontend/*_data.py` + launch helpers; cross-pillar rollup (`model_rollup.py`, `model_summary.py`, `recommendation_rules.py`); pillar List/Compare matrices and reference guides. See [`frontend/README.md`](../frontend/README.md).
 
 ## Deployment and hosts
 

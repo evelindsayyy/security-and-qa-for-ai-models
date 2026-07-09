@@ -439,6 +439,7 @@ def get_runs_data() -> dict:
             eval_db_data.available,
             eval_db_data.get_runs_data_db,
             _get_runs_data_files,
+            pillar="eval",
         )
     )
     runs = data.get("runs") or []

@@ -12,6 +12,7 @@ Nutrition-label **UI and JSON API** (one Flask process). Browser **Start** butto
 uv sync --group dev
 cp .env.example .env             # DUKE_GATEWAY_KEY required
 ./docker/build-pillars.sh        # pillar images for Start buttons
+cd frontend/assets && npm ci && npm run build   # or: ./scripts/build-frontend.sh
 ```
 
 Postgres schema and backfill (optional): see [root README — Optional Postgres](../README.md#optional--postgres).
@@ -45,17 +46,33 @@ Pillar list pages use **List / Compare** tabs (suite×model or tool×model matri
 | `staleness.py` | Per-pillar “needs rerun” rules via `dbutils/staleness_spec.py` (scanner version, garak probes, suite files, etc.) |
 | `oss_gateway_hf.py` | HF mirror repos for open-weight gateway models → catalog scan rollup |
 | `delete_db.py` | DB-delete error surfacing for permanent deletes |
-| `db_fallback.py` | Postgres-only when DSN reachable; disk fallback offline only |
+| `db_fallback.py` | Postgres-only when DSN reachable; logs DB errors; disk fallback offline only |
+| `db_health.py` | Per-pillar read diagnostics (`source`, row counts) for `/api/health` |
+| `vite_assets.py` | Vite manifest helper — resolves hashed island bundles under `static/dist/` |
+| `overview.py` | Overview dashboard KPIs + activity feed |
 | `launch_registry.py` | Shared in-flight job liveness |
 | `docker_launch.py` | Browser-launched pillar Docker stacks |
-| `static/pillar-view-tabs.js` | List/Compare tab toggle on pillar pages |
-| `static/compare-panel.js` | Catalog model checkbox compare |
-| `static/findings-table.js` | Filterable findings tables |
-| `static/log-scroll.js` | Auto-scroll run logs |
-| `static/table-sort.js` | Client-side table sort |
-| `static/vendor/chart.umd.min.js` | Chart.js for `/compare` |
 
-While a job runs, its detail page polls status and shows a live log tail.
+### Frontend assets (`frontend/assets/`)
+
+Server-rendered **Jinja** shells + four **Preact** islands (Vite + TypeScript + Tailwind 3). Built output lands in `frontend/static/dist/` (gitignored; generated at image build and in CI).
+
+| Island | Role |
+|--------|------|
+| `FindingsPanel` | Filterable findings tables on detail pages |
+| `ComparisonHeatmap` | Pillar List/Compare matrices |
+| `LiveRunProgress` | Poll-based run progress + log tail |
+| `CompareCharts` | Chart.js charts on `/compare` |
+
+```bash
+cd frontend/assets
+npm ci              # once
+npm run build       # production bundle → ../static/dist/
+npm run dev         # watch rebuild (pair with python3 main.py --host)
+npm run test        # Vitest (FindingsPanel)
+```
+
+Production and `python3 main.py` run `npm run build` via `docker/run.sh` / `entrypoint.sh` when dist is missing. For live CSS/TS edits during host Flask dev, run `npm run dev` in a second terminal.
 
 Header: **Public | Private** view toggle · **Sign in with Duke NetID** (when `AUTH_ENABLED=1`).
 
@@ -87,10 +104,11 @@ POST returns **202** with `job_id` and `status_url`; poll status, then GET detai
 
 ### Host Flask (development)
 
-UI without containerizing the app; pillar jobs still use Docker unless `FRONTEND_LAUNCH_MODE=host`:
+UI without containerizing the app; pillar jobs still use Docker unless `FRONTEND_LAUNCH_MODE=host`. Run the asset watcher alongside for live rebuilds:
 
 ```bash
-python3 main.py --host
+cd frontend/assets && npm run dev    # terminal 1 — Vite watch
+python3 main.py --host               # terminal 2
 # Or: uv run flask --app frontend:create_app run --debug --port 5001
 ```
 
@@ -107,7 +125,7 @@ python3 main.py --host
     chown -R "$(id -u):$(id -g)" /out
   ```
 
-- **`db_available: false`** — check `POSTGRES_DSN`, schema apply, and network ([`docs/cli.md`](../docs/cli.md)).
+- **`db_available: false`** — check `POSTGRES_DSN`, schema apply, and network ([`docs/cli.md`](../docs/cli.md)). When DSN is set but reads fail, check `reads` in `/api/health` and logs for `Postgres read failed`; set `FRONTEND_DB_STRICT=1` to surface the exception.
 - **“Docker is required for browser-launched … runs”** — often a UID mismatch on `.docker-home` after CI deploy, or a stale web process. See [`docker/README.md`](../docker/README.md#troubleshooting). Quick fix: `./docker/run.sh up -d --force-recreate`.
 - **Skip Docker for jobs** — `FRONTEND_LAUNCH_MODE=host` in `.env` (legacy; safety may still use nested Docker).
 

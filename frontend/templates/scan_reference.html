@@ -1,33 +1,29 @@
 {% extends "base.html" %}
+{% from '_macros.html' import back_link, page_header, section_header with context %}
 
 {% block title %}Scan reference{% endblock %}
 
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span><a href="{{ url_for('scans') }}">Scans</a></span>
+<span class="text-text-subtle">›</span>
+<span class="font-semibold text-text">Reference</span>
+{% endblock %}
+
 {% block content %}
 <div class="eval-comparison">
-  <p class="back"><a href="{{ url_for('scans') }}">← all scans</a></p>
-  {% if has_reference %}
-  <aside class="benchmark-reference-callout benchmark-reference-callout--compact" aria-label="Scan reference and guide">
-    <div class="benchmark-reference-callout-text">
-      <p class="benchmark-reference-callout-title">Reference &amp; scan guide</p>
-      <p class="benchmark-reference-callout-desc">
-        How ModelScan, Fickling, ModelAudit, dependencies, and secrets combine into the risk tier — orientation, not certification.
-      </p>
-    </div>
-  </aside>
-  {% endif %}
-  <h1>Scan reference</h1>
-  <p class="sub">
-    HF artifact scanners and scoring on this site.
-    {% if has_example %}Sample detail: <a href="{{ url_for('scan_detail', slug=example_slug) }}">{{ example_model }}</a>.{% endif %}
-  </p>
+  {{ back_link(url_for('scans'), 'all scans') }}
+  {{ page_header('Scan reference & guide', 'How ModelScan, Fickling, ModelAudit, dependencies, and secrets combine into the risk tier.') }}
 
-  {% with title="How HF scanning works", intro="What each scanner checks and how findings feed the composite tier." %}
+  {% if guide_rows %}
+  {% with title="Scan reference & guide", intro="What each scanner checks and how findings feed the composite tier." %}
   {% include '_scan_guide.html' %}
   {% endwith %}
+  {% endif %}
 
   {% if has_reference_scores %}
-  <h2 class="reference-scores-heading">Reference scores</h2>
-  <p class="sub dim">Sample HF repos from public scans — use as orientation, not a leaderboard.</p>
+  {{ section_header('Reference scores', 'Sample HF repos from public scans — orientation, not a leaderboard.') }}
   {% include '_pillar_reference_scores.html' %}
   {% endif %}
 </div>

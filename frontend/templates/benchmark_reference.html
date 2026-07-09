@@ -1,32 +1,28 @@
 {% extends "base.html" %}
+{% from '_macros.html' import back_link, page_header, section_header with context %}
 
-{% block title %}Reference{% endblock %}
+{% block title %}Benchmark reference{% endblock %}
+
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span><a href="{{ url_for('benchmarks') }}">Benchmarks</a></span>
+<span class="text-text-subtle">›</span>
+<span class="font-semibold text-text">Reference</span>
+{% endblock %}
 
 {% block content %}
 <div class="eval-comparison">
-  <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmark results</a></p>
-  {% if has_reference %}
-  <aside class="benchmark-reference-callout benchmark-reference-callout--compact" aria-label="You are viewing benchmark reference scores">
-    <div class="benchmark-reference-callout-text">
-      <p class="benchmark-reference-callout-title">Reference scores for sample gateway models</p>
-      <p class="benchmark-reference-callout-desc">
-        Pilot-size runs on this site — use as orientation, not a leaderboard. Expand the guide below for what each benchmark tests.
-      </p>
-    </div>
-  </aside>
-  {% endif %}
-  <h1>Reference</h1>
-  <p class="sub">
-    Sample reference scores for
-    {% for m in reference_models %}{{ m }}{% if not loop.last %} · {% endif %}{% endfor %}
-    on default pilot sizes via the Duke gateway.
-  </p>
+  {{ back_link(url_for('benchmarks'), 'all benchmark results') }}
+  {{ page_header('Benchmark reference & guide', 'Pilot-size runs on this site — orientation, not a leaderboard.') }}
 
-  {% with title="How each benchmark works", intro="What each benchmark measures and how scores are computed on this site." %}
+  {% if guide_rows %}
+  {% with title="Benchmark reference & guide", intro="What each benchmark measures and how scores are computed on this site." %}
   {% include '_benchmark_guide.html' %}
   {% endwith %}
+  {% endif %}
 
-  <h2 class="reference-scores-heading">Reference scores</h2>
+  {{ section_header('Reference scores', 'Sample gateway models on default pilot sizes via the Duke gateway.') }}
   <div class="table-wrap">
   <table class="run-table reference-table">
     <thead>
@@ -45,7 +41,7 @@
                             'mmlu': 'badge-mmlu',
                             'tomi': 'badge-tomi',
                             'mbpp': 'badge-mbpp',
-                            'quality': 'badge-quality'}.get(row.key, 'badge-pilot') %}
+                            'quality': 'badge-pilot'}.get(row.key, 'badge-pilot') %}
       <tr>
         <td class="reference-benchmark-cell">
           <span class="badge {{ badge_class }}">{{ row.label }}</span>

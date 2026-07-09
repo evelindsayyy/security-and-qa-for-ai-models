@@ -23,6 +23,33 @@ _SCAN_SKIP_KEYS = {
     "secrets": "skip_secrets",
 }
 
+_PICKLE_SUFFIXES = (".bin", ".pt", ".pth", ".pkl", ".pickle", ".ckpt")
+_MANIFEST_MARKERS = (
+    "requirements",
+    "pyproject.toml",
+    "setup.py",
+    "setup.cfg",
+    "environment.yml",
+)
+
+
+def scan_tool_applicability(scanned_files: list[Any] | None) -> dict[str, bool]:
+    """Whether each scan tool could have produced results for this artifact set."""
+    files = [str(f).lower() for f in (scanned_files or [])]
+    has_pickle = any(
+        any(name.endswith(suffix) for suffix in _PICKLE_SUFFIXES) for name in files
+    )
+    has_manifest = any(
+        any(marker in name for marker in _MANIFEST_MARKERS) for name in files
+    )
+    return {
+        "modelscan": True,
+        "modelaudit": True,
+        "secrets": True,
+        "fickling": has_pickle,
+        "dependencies": has_manifest,
+    }
+
 
 def _sha256_hex(payload: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -66,7 +93,10 @@ def scan_staleness_reasons(row: dict[str, Any]) -> list[str]:
     config = row.get("config_json") if isinstance(row.get("config_json"), dict) else {}
     expected_tools = _scan_enabled_tools(config)
     tool_status = row.get("tool_status") or {}
+    applicability = row.get("tool_applicability") or {}
     for tool in expected_tools:
+        if applicability and not applicability.get(tool, True):
+            continue
         if tool not in tool_status:
             reasons.append(f"missing scanner: {tool}")
 

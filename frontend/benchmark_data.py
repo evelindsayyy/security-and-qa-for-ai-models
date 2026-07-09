@@ -1589,6 +1589,7 @@ def get_benchmarks_data() -> dict:
         benchmark_db_data.available,
         benchmark_db_data.get_benchmarks_data_db,
         _get_benchmarks_data_files,
+        pillar="benchmark",
     )
     ref = _build_reference_section()
     data["has_reference"] = ref.get("has_reference", False)

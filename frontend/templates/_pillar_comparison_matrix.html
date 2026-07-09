@@ -1,43 +1,22 @@
-{# Generic tool/suite × model matrix — expects comparison_models, comparison_rows, detail_endpoint #}
-<div class="table-wrap">
-<table class="run-table reference-table comparison-table">
-  <thead>
-    <tr>
-      <th>Tool / suite</th>
-      {% for m in comparison_models %}
-      <th class="num">{{ m }}</th>
-      {% endfor %}
-    </tr>
-  </thead>
-  <tbody>
-    {% for row in comparison_rows %}
-    <tr>
-      <td class="reference-benchmark-cell">
-        <span class="badge {{ row.badge_class }}">{{ row.label }}</span>
-      </td>
-      {% for m in comparison_models %}
-      {% set cell = row.cells.get(m) %}
-      <td class="num comparison-cell">
-        {% if cell %}
-        {% if detail_endpoint == 'safety_detail' and cell.slug %}
-        <a href="{{ url_for('safety_detail_private' if view_mode == 'private' else 'safety_detail', slug=cell.slug, profile=cell.profile or 'base') }}"
-           class="reference-score-link {{ cell.score_class }}">{{ cell.display }}</a>
-        {% elif detail_endpoint == 'eval_run_detail' and cell.slug %}
-        <a href="{{ url_for('eval_run_detail_private' if view_mode == 'private' else 'eval_run_detail', slug=cell.slug) }}"
-           class="reference-score-link {{ cell.score_class }}">{{ cell.display }}</a>
-        {% elif detail_endpoint == 'scan_detail' and cell.slug %}
-        <a href="{{ url_for('scan_detail_private' if view_mode == 'private' else 'scan_detail', slug=cell.slug) }}"
-           class="reference-score-link {{ cell.score_class }}">{{ cell.display }}</a>
-        {% else %}
-        <span class="reference-score-link {{ cell.score_class }}">{{ cell.display }}</span>
-        {% endif %}
-        {% else %}
-        <span class="dim">—</span>
-        {% endif %}
-      </td>
-      {% endfor %}
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-</div>
+{% from '_macros.html' import island_mount %}
+{% set ns = namespace(rows=[]) %}
+{% for row in comparison_rows %}
+  {% set ns.cells = {} %}
+  {% for m in comparison_models %}
+    {% set cell = row.cells.get(m) %}
+    {% if cell %}
+      {% if detail_endpoint == 'safety_detail' and cell.slug %}
+        {% set _url = url_for('safety_detail_private' if view_mode == 'private' else 'safety_detail', slug=cell.slug, profile=cell.profile or 'base') %}
+      {% elif detail_endpoint == 'eval_run_detail' and cell.slug %}
+        {% set _url = url_for('eval_run_detail_private' if view_mode == 'private' else 'eval_run_detail', slug=cell.slug) %}
+      {% elif detail_endpoint == 'scan_detail' and cell.slug %}
+        {% set _url = url_for('scan_detail_private' if view_mode == 'private' else 'scan_detail', slug=cell.slug) %}
+      {% else %}
+        {% set _url = none %}
+      {% endif %}
+      {% set _ = ns.cells.update({m: {'display': cell.display, 'score_class': cell.score_class, 'slug': _url}}) %}
+    {% endif %}
+  {% endfor %}
+  {% set _ = ns.rows.append({'key': row.key, 'label': row.label, 'badge_class': row.badge_class, 'cells': ns.cells}) %}
+{% endfor %}
+{{ island_mount('comparison-heatmap', {'models': comparison_models, 'rows': ns.rows}) }}

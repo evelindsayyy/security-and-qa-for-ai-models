@@ -382,6 +382,7 @@ def get_safety_data() -> dict:
         safety_db_data.available,
         safety_db_data.get_safety_data_db,
         _get_safety_data_files,
+        pillar="safety",
     )
     models = data.get("models") or []
     from frontend.staleness import attach_staleness

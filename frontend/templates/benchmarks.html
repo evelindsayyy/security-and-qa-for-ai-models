@@ -1,29 +1,27 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_benchmark_docker, start_button, delete_button, rerun_button, staleness_badge with context %}
+{% from '_macros.html' import expandable, cli_benchmark_docker, start_button, delete_button, rerun_button, staleness_badge, page_header, list_compare_tabs, empty_state with context %}
 
 {% block title %}Benchmark results{% endblock %}
 
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span class="breadcrumb-current">Benchmarks</span>
+{% endblock %}
+
 {% block content %}
 <div class="eval-comparison">
-  <h1>Benchmark results</h1>
-  <p class="benchmark-page-actions">
-    {{ start_button(url_for('benchmark_run_new'), '▶ Start a new run') }}
-  </p>
+  {% set actions %}{{ start_button(url_for('benchmark_run_new'), '▶ Start benchmark') }}{% endset %}
+  {{ page_header('Benchmark results', 'TruthfulQA · IFEval · MMLU · MBPP · QuALITY and more.', actions) }}
 
-  {% if has_reference %}
-  <aside class="benchmark-reference-callout" aria-label="Benchmark reference and guide">
-    <div class="benchmark-reference-callout-text">
-      <p class="benchmark-reference-callout-kicker">Start here</p>
-      <p class="benchmark-reference-callout-title">Reference scores &amp; benchmark guide</p>
-      <p class="benchmark-reference-callout-desc">
-        Sample pilot runs for gateway models, plus what each benchmark measures and how scores are computed on this site.
-      </p>
-    </div>
-    <a class="btn-reference" href="{{ url_for('benchmark_reference') }}">Open reference &amp; guide →</a>
-  </aside>
+  {% if guide_rows %}
+  {% with title="Benchmark reference & guide", intro="Pilot runs and scoring orientation per benchmark kind." %}
+  {% include '_benchmark_guide.html' %}
+  {% endwith %}
+  <p class="mb-6 text-sm"><a href="{{ url_for('benchmark_reference') }}">Full reference page →</a></p>
   {% endif %}
 
-  <details class="key" open>
+  <details class="key card p-4 mb-6">
     <summary>How to read this</summary>
     <dl class="legend-grid">
       <dt>Score</dt>

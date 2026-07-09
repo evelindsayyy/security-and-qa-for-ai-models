@@ -56,7 +56,7 @@ Pillar groups (`scanner`, `safety`, `benchmarks`) conflict — use Docker for pi
 
 ## CI / deploy
 
-lint (ruff) → unit-tests. On `main`: Buildah → GitLab registry → `deploy` job to VM (manual Play or `DEPLOY_AUTO=true`), target `/home/vcm/security-and-qa-for-ai-models`.
+lint (ruff) → frontend-build (npm ci + build + vitest) → unit-tests. On `main`: Buildah → GitLab registry → `deploy` job to VM (manual Play or `DEPLOY_AUTO=true`), target `/home/vcm/security-and-qa-for-ai-models`.
 
 Always start the production UI via `./docker/run.sh` or `python3 main.py` — never bare `docker compose` without the pinned project name `qa-ai-models`.
 
@@ -87,6 +87,7 @@ Flow diagram: [`docs/architecture.md`](docs/architecture.md#how-a-run-flows)
 uv sync --group dev
 cp .env.example .env
 ./docker/build-pillars.sh
+cd frontend/assets && npm ci && npm run build   # CI does this in frontend-build
 python3 main.py up -d --build
 curl -s http://127.0.0.1:5000/api/health | python3 -m json.tool
 ```
@@ -101,6 +102,7 @@ uv run python -m api.ingest --apply
 ## Test and lint
 
 ```bash
+cd frontend/assets && npm run test
 uv run ruff check .
 uv run python -m unittest discover -s unit_tests -q
 ```

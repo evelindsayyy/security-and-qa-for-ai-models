@@ -1,35 +1,35 @@
 <details class="tool-panel benchmark-guide-panel" open>
-  <summary>{{ title or "How HF scanning works" }}</summary>
+  <summary class="subsection-title">{{ title or "Scan reference & guide" }}</summary>
   <div class="benchmark-guide-body">
     {% if intro %}
-    <p class="sub">{{ intro }}</p>
+    <p class="body">{{ intro }}</p>
     {% else %}
-    <p class="sub">
+    <p class="body">
       Each scanner checks a different artifact risk surface. Results merge into a
       composite tier (worst severity wins, not averaged).
     </p>
     {% endif %}
 
-    {% for row in guide_rows %}
-    <article class="benchmark-guide-item" id="guide-{{ row.key }}">
-      <h3 class="benchmark-guide-heading">
-        <span class="badge {{ row.badge_class }}">{{ row.label }}</span>
-      </h3>
-      {% if row.about %}
-      <p>{{ row.about }}</p>
-      {% endif %}
-      <dl class="benchmark-guide-dl">
-        {% if row.procedure %}
-        <dt>What happens in a scan</dt>
-        <dd>{{ row.procedure }}</dd>
-        {% endif %}
-        {% if row.scoring %}
-        <dt>How it is scored</dt>
-        <dd>{{ row.scoring }}</dd>
-        {% endif %}
-      </dl>
-    </article>
-    {% endfor %}
+    <div class="guide-accordion">
+      {% for row in guide_rows %}
+      <details class="guide-accordion-item" id="guide-{{ row.key }}" open>
+        <summary>
+          <span class="badge {{ row.badge_class }}">{{ row.label }}</span>
+          {% if row.about %}<span class="guide-accordion-summary">{{ row.about }}</span>{% endif %}
+        </summary>
+        <dl class="benchmark-guide-dl">
+          {% if row.procedure %}
+          <dt>What happens in a scan</dt>
+          <dd>{{ row.procedure }}</dd>
+          {% endif %}
+          {% if row.scoring %}
+          <dt>How it is scored</dt>
+          <dd>{{ row.scoring }}</dd>
+          {% endif %}
+        </dl>
+      </details>
+      {% endfor %}
+    </div>
 
     {% if has_example and example_slug %}
     <p class="dim benchmark-guide-source">
