@@ -3,12 +3,65 @@
 {% block title %}Start an evaluation run{% endblock %}
 
 {% block content %}
+<style>
+  .eval-guide { border:1px solid #dfe3ee; border-radius:10px; background:#f6f8fd; padding:.75rem 1rem; margin:.4rem 0 1.1rem; }
+  .eval-guide > summary { cursor:pointer; font-weight:600; color:#1b2a5e; list-style:none; display:flex; align-items:center; gap:.45rem; }
+  .eval-guide > summary::-webkit-details-marker { display:none; }
+  .eval-guide-body { margin-top:.65rem; color:#444; font-size:.93rem; line-height:1.5; }
+  .eval-guide-steps { display:grid; grid-template-columns:repeat(3,1fr); gap:.6rem; margin:.55rem 0 .85rem; }
+  .eval-guide-steps b { color:#1b2a5e; }
+  .eval-guide-steps span { color:#7a8195; }
+  .eval-guide-pick { display:grid; grid-template-columns:1fr 1fr; gap:.6rem; }
+  .eval-guide-pick > div { background:#fff; border:1px solid #e2e6f0; border-radius:8px; padding:.5rem .7rem; }
+  .eval-guide-pick strong { display:block; color:#1b2a5e; margin-bottom:.15rem; }
+  .eval-guide-pick small { color:#7a8195; }
+
+  .suite-opt { display:flex; align-items:center; gap:.4rem; margin:.2rem 0; }
+  .suite-help { position:relative; display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; border:1px solid #b7bed0; color:#556; font-size:11px; line-height:1; cursor:help; }
+  .suite-tip { display:none; position:absolute; left:22px; top:50%; transform:translateY(-50%); z-index:20; width:250px; background:#1b2a5e; color:#fff; padding:.5rem .6rem; border-radius:6px; font-size:.8rem; line-height:1.45; box-shadow:0 2px 8px rgba(0,0,0,.15); }
+  .suite-tip em { color:#c9d3f0; font-style:italic; }
+  .suite-help:hover .suite-tip, .suite-help.tip-open .suite-tip { display:block; }
+
+  .qb-row { border:1px solid #e2e6f0; border-radius:8px; padding:.6rem .7rem; margin-bottom:.55rem; }
+  .qb-rowhead { display:flex; justify-content:space-between; align-items:center; font-size:.78rem; color:#8890a5; margin-bottom:.25rem; }
+  .qb-remove { background:none; border:none; color:#8890a5; font-size:1.15rem; line-height:1; cursor:pointer; padding:0 .2rem; }
+  .qb-remove:hover { color:#c0392b; }
+  .qb-field { display:block; font-size:.78rem; color:#555; margin-top:.4rem; }
+  .qb-field textarea { display:block; width:100%; margin-top:2px; box-sizing:border-box; }
+  .qb-actions { display:flex; align-items:center; justify-content:space-between; margin:.2rem 0 .5rem; }
+  .qb-add { background:#fff; border:1px solid #c3cadd; border-radius:8px; padding:.4rem .8rem; cursor:pointer; color:#1b2a5e; }
+  .qb-add:disabled { opacity:.5; cursor:not-allowed; }
+  .qb-count { color:#8890a5; font-size:.85rem; }
+  .qb-tip { font-size:.82rem; background:#eef4fb; border-radius:8px; padding:.5rem .65rem; margin:.4rem 0; color:#33447a; }
+  .qb-advanced { margin-top:.6rem; }
+  .qb-advanced > summary { cursor:pointer; color:#556; font-size:.85rem; }
+  .qb-advanced textarea { width:100%; box-sizing:border-box; }
+</style>
+
 <div class="eval-comparison">
   <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
   <h1>Start an evaluation run</h1>
+
+  <details class="eval-guide" open>
+    <summary><span>ⓘ</span> How this works — which should I pick?</summary>
+    <div class="eval-guide-body">
+      <p>An evaluation tests one model and has a second model grade the answers. You choose three things:</p>
+      <div class="eval-guide-steps">
+        <div><b>1 · Model</b><br><span>the one being tested</span></div>
+        <div><b>2 · What to test</b><br><span>a ready task or your own</span></div>
+        <div><b>3 · Judge</b><br><span>grades the answers</span></div>
+      </div>
+      <div class="eval-guide-pick">
+        <div><strong>Use a task suite</strong><small>to compare models on a standard Duke task — references already written.</small></div>
+        <div><strong>Bring your own questions</strong><small>for your specific use case — you provide the ideal answer for each.</small></div>
+      </div>
+    </div>
+  </details>
+
   {% if rerun %}
   <p class="sub benchmark-rerun-hint">Pre-filled from a previous run — starting will delete the prior results and replace them.</p>
   {% endif %}
+
   <p class="sub">
     Launches <code>evaluator/runner.py</code> via Docker Compose (default).
     One run at a time; an identical in-flight request returns the existing run.
@@ -34,7 +87,7 @@
       <datalist id="hf_repo_suggestions">
         {% for repo in suggested_hf_repos %}<option value="{{ repo }}"></option>{% endfor %}
       </datalist>
-      <span class="form-hint">HF models are served on the DCC GPU — serving wires in next; for now we validate the model before any run.</span>
+      <span class="form-hint">HF models are validated, then served on the DCC GPU, evaluated, and torn down — all from ▶ Start run.</span>
     </fieldset>
 
     <label>Judge model
@@ -49,11 +102,15 @@
     <fieldset>
       <legend>Task suite</legend>
       {% for s in suites %}
-      <label>
-        <input type="radio" name="suite" value="{{ s.key }}"
-               data-n="{{ s.n }}" {% if loop.first %}checked{% endif %}>
-        {{ s.label }}
-      </label>
+      <div class="suite-opt">
+        <label class="suite-label">
+          <input type="radio" name="suite" value="{{ s.key }}"
+                 data-n="{{ s.n }}" {% if loop.first %}checked{% endif %}>
+          {{ s.label }}
+        </label>
+        <span class="suite-help" tabindex="0" role="button" aria-label="About {{ s.label }}">?<span
+          class="suite-tip" role="tooltip">{{ s.description }}{% if s.example %}<br><em>e.g. {{ s.example }}</em>{% endif %}</span></span>
+      </div>
       {% endfor %}
     </fieldset>
 
@@ -80,7 +137,6 @@
     <div class="intake-result intake-ok">
       <h2>✅ {{ hf_result.repo_id }} — ready to evaluate</h2>
       <p>Architecture: {{ hf_result.architectures | join(', ') }}{% if hf_result.num_params %} · {{ '%.1f'|format(hf_result.num_params / 1e9) }}B params{% endif %}</p>
-      <p class="form-hint">Evaluation will run once DCC serving is wired (next milestone).</p>
     </div>
     {% else %}
     <div class="intake-result intake-error">
@@ -93,10 +149,9 @@
   <details class="custom-suite">
     <summary>Or bring your own questions</summary>
     <p class="form-hint">
-      Use your own question set when our reference suites don't fit your need.
-      One JSON object per line, each with a <code>question</code> and your own
-      <code>reference</code> answer (optional <code>id</code>). Up to
-      {{ custom_max_questions }} questions. Custom runs are ad-hoc — they're
+      Test the model on your own questions. Add a question and the ideal answer
+      you'd want back; the judge scores each model's reply against your ideal
+      answer. Up to {{ custom_max_questions }} questions. Custom runs are ad-hoc —
       scored the same way but kept out of the model-comparison table.
     </p>
     <form method="post" action="{{ url_for('eval_run_start_custom') }}" class="launch-form" id="custom-form">
@@ -128,18 +183,35 @@
         <input type="number" name="max_tokens" id="max_tokens_c" value="2000"
                min="{{ max_tokens_min }}" max="{{ max_tokens_max }}">
       </label>
-      <label>Questions (JSONL)
-        <textarea name="questions" rows="8" spellcheck="false"
-          placeholder='{"question": "How do I reset my NetID password?", "reference": "Go to oit.duke.edu ..."}
+
+      <fieldset class="qbuilder">
+        <legend>Your questions</legend>
+        <div id="qb-rows"></div>
+        <div class="qb-actions">
+          <button type="button" class="qb-add" id="qb-add">+ Add another question</button>
+          <span class="qb-count"><span id="qb-n">0</span> / {{ custom_max_questions }}</span>
+        </div>
+        <p class="qb-tip">A good ideal answer is a correct, complete reply you'd be happy to receive — that's the bar the model is graded against.</p>
+
+        <details class="qb-advanced">
+          <summary>Advanced — paste JSONL instead</summary>
+          <p class="form-hint">One JSON object per line, each with a <code>question</code> and a
+            <code>reference</code> (optional <code>id</code>). Pasting here overrides the builder above.</p>
+          <textarea id="questions_paste" rows="6" spellcheck="false"
+            placeholder='{"question": "How do I reset my NetID password?", "reference": "Go to oit.duke.edu ..."}
 {"question": "...", "reference": "..."}'></textarea>
-      </label>
+        </details>
+      </fieldset>
+
+      <input type="hidden" name="questions" id="questions_hidden">
+      <p class="form-warning" id="qb-error" style="display: none;">Add at least one question with an ideal answer, or paste JSONL under Advanced.</p>
 
       <p class="form-warning js-family-warning" style="display: none;">
         Judge and candidate are the same model family — the server will reject this.
       </p>
 
       <p class="cost-line">Estimated candidate cost: <b class="js-cost-preview">$—</b>
-        <span class="form-hint">gateway models only; based on the questions you paste</span>
+        <span class="form-hint">gateway models only; based on the questions you add</span>
       </p>
 
       <button type="submit" class="btn-primary">▶ Run custom set</button>
@@ -150,6 +222,7 @@
 <script>
   const PRICING = {{ pricing_json | safe }};
   const FAMILIES = {{ families | tojson }};
+  const MAX_Q = {{ custom_max_questions }};
   const RERUN = {{ rerun | default(none) | tojson }};
 
   function applyRerunPrefill() {
@@ -189,11 +262,66 @@
     return "other";
   }
 
-  // Wire one launch form (standard or custom). All lookups are scoped to the
-  // form element, so the two forms' identically-named source radios / fields
-  // never collide. countQuestions(form) yields n for the cost preview: the
-  // standard form reads the chosen suite's size; the custom form counts the
-  // non-empty lines the user pasted.
+  // --- Question builder (custom form) ----------------------------------------
+  // Repeating [question | ideal answer] rows. On submit the rows are assembled
+  // into the JSONL the backend already expects and written to the hidden
+  // `questions` field — unless the Advanced paste box has content (it wins). So
+  // the server (validate_custom_questions) stays the single source of truth.
+  const rowsEl = document.getElementById("qb-rows");
+  const nEl = document.getElementById("qb-n");
+  const addBtn = document.getElementById("qb-add");
+  const customForm = document.getElementById("custom-form");
+  const hiddenEl = document.getElementById("questions_hidden");
+  const pasteEl = document.getElementById("questions_paste");
+  const errEl = document.getElementById("qb-error");
+
+  function makeRow() {
+    const row = document.createElement("div");
+    row.className = "qb-row";
+    row.innerHTML =
+      '<div class="qb-rowhead"><span class="qb-idx"></span>'
+      + '<button type="button" class="qb-remove" aria-label="Remove question">×</button></div>'
+      + '<label class="qb-field">Question'
+      + '<textarea class="qb-q" rows="2" placeholder="How do I set up the Duke VPN on a Mac?"></textarea></label>'
+      + '<label class="qb-field">Ideal answer'
+      + '<textarea class="qb-a" rows="2" placeholder="The best answer you&#39;d want back…"></textarea></label>';
+    row.querySelector(".qb-remove").addEventListener("click", () => {
+      if (rowsEl.querySelectorAll(".qb-row").length > 1) { row.remove(); renumber(); }
+    });
+    return row;
+  }
+  function renumber() {
+    const rows = rowsEl.querySelectorAll(".qb-row");
+    rows.forEach((r, i) => { r.querySelector(".qb-idx").textContent = "Question " + (i + 1); });
+    nEl.textContent = rows.length;
+    addBtn.disabled = rows.length >= MAX_Q;
+  }
+  function addRow() {
+    if (rowsEl.querySelectorAll(".qb-row").length >= MAX_Q) return;
+    rowsEl.appendChild(makeRow());
+    renumber();
+  }
+  function assembleRows() {
+    const lines = [];
+    rowsEl.querySelectorAll(".qb-row").forEach((r) => {
+      const q = r.querySelector(".qb-q").value.trim();
+      const a = r.querySelector(".qb-a").value.trim();
+      if (q && a) lines.push(JSON.stringify({ question: q, reference: a }));
+    });
+    return lines.join("\n");
+  }
+  if (rowsEl) {
+    addBtn.addEventListener("click", addRow);
+    addRow();  // start with one empty row
+    customForm.addEventListener("submit", (e) => {
+      const paste = (pasteEl.value || "").trim();
+      hiddenEl.value = paste ? paste : assembleRows();
+      if (!hiddenEl.value) { e.preventDefault(); errEl.style.display = "block"; }
+      else { errEl.style.display = "none"; }
+    });
+  }
+
+  // --- Cost preview + cross-family guard (both forms) -------------------------
   function wireForm(form, countQuestions) {
     if (!form) return;
     const sel = (s) => form.querySelector(s);
@@ -209,7 +337,6 @@
       const maxTok = parseInt((sel('input[name="max_tokens"]') || {}).value || "0", 10);
       const n = countQuestions(form);
 
-      // Cost preview: gateway models only (HF models aren't priced here).
       if (costEl) {
         const rates = source === "gateway" ? PRICING[gwCand] : null;
         costEl.textContent = (rates && n && maxTok)
@@ -217,8 +344,6 @@
           : "$—";
       }
 
-      // Cross-family check: the candidate's family depends on the source. For
-      // an HF candidate, classify its repo id; an empty repo doesn't warn.
       const candFamily = source === "hf" ? modelFamily(hfRepo) : FAMILIES[gwCand];
       const hasCand = source === "hf" ? hfRepo.trim() !== "" : true;
       const clash = hasCand && candFamily === FAMILIES[judge];
@@ -235,10 +360,30 @@
     const s = form.querySelector('input[name="suite"]:checked');
     return s ? parseInt(s.dataset.n, 10) : 0;
   };
+  // Custom count: filled builder rows, or pasted JSONL lines if Advanced is used.
   const pastedCount = (form) => {
-    const t = form.querySelector('textarea[name="questions"]');
-    return t ? t.value.split("\n").filter(l => l.trim()).length : 0;
+    const paste = form.querySelector('#questions_paste');
+    if (paste && paste.value.trim()) {
+      return paste.value.split("\n").filter((l) => l.trim()).length;
+    }
+    let n = 0;
+    form.querySelectorAll(".qb-row").forEach((r) => {
+      if (r.querySelector(".qb-q").value.trim() && r.querySelector(".qb-a").value.trim()) n++;
+    });
+    return n;
   };
+
+  // Suite tooltips: reveal on hover AND keyboard focus. JS-driven (a toggled
+  // class) rather than CSS :focus so it works for keyboard users regardless of
+  // window-focus quirks, and stays testable.
+  document.querySelectorAll(".suite-help").forEach((h) => {
+    const open = () => h.classList.add("tip-open");
+    const close = () => h.classList.remove("tip-open");
+    h.addEventListener("focus", open);
+    h.addEventListener("blur", close);
+    h.addEventListener("mouseenter", open);
+    h.addEventListener("mouseleave", close);
+  });
 
   wireForm(document.getElementById("std-form"), suiteCount);
   wireForm(document.getElementById("custom-form"), pastedCount);

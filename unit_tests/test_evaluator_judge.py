@@ -97,6 +97,49 @@ class ParseScoresTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "not numeric"):
             _parse_scores(json.dumps(payload))
 
+    def test_score_above_scale_is_clamped(self) -> None:
+        payload = _valid_payload()
+        payload["accuracy"]["score"] = 9  # rubric scale is [1, 5]
+        scores = _parse_scores(json.dumps(payload), scales={d: (1, 5) for d in _IT_DIMS})
+        self.assertEqual(scores["accuracy"].score, 5.0)
+
+    def test_score_below_scale_is_clamped(self) -> None:
+        payload = _valid_payload()
+        payload["policy_adherence"]["score"] = -3
+        scores = _parse_scores(json.dumps(payload), scales={d: (1, 5) for d in _IT_DIMS})
+        self.assertEqual(scores["policy_adherence"].score, 1.0)
+
+    def test_fractional_score_is_rounded_to_int(self) -> None:
+        payload = _valid_payload()
+        payload["completeness"]["score"] = 3.9
+        scores = _parse_scores(json.dumps(payload), scales={d: (1, 5) for d in _IT_DIMS})
+        self.assertEqual(scores["completeness"].score, 4.0)
+
+    def test_score_respects_per_dimension_scale(self) -> None:
+        # tone is a 1-3 dimension: a 5 must clamp to 3, not 5
+        payload = _valid_payload()
+        payload["tone"]["score"] = 5
+        scores = _parse_scores(
+            json.dumps(payload),
+            scales={"accuracy": (1, 5), "completeness": (1, 5),
+                    "policy_adherence": (1, 5), "tone": (1, 3)})
+        self.assertEqual(scores["tone"].score, 3.0)
+
+    def test_no_clamp_when_scales_absent(self) -> None:
+        # backward compat: with no scales the score passes through unclamped
+        payload = _valid_payload()
+        payload["accuracy"]["score"] = 9
+        scores = _parse_scores(json.dumps(payload))
+        self.assertEqual(scores["accuracy"].score, 9.0)
+
+    def test_judge_cache_key_includes_max_tokens(self) -> None:
+        kw = dict(judge_model="m", judge_prompt_version="v1", question="q",
+                  candidate_response="r", rubric_version="rv1")
+        self.assertNotEqual(
+            judge._cache_key(**kw, max_tokens=600),
+            judge._cache_key(**kw, max_tokens=2000),
+        )
+
     def test_strip_fences_no_fence_passthrough(self) -> None:
         self.assertEqual(_strip_fences('{"a": 1}'), '{"a": 1}')
 

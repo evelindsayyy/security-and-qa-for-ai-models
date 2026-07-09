@@ -66,6 +66,56 @@ def _percentile(values: list[float], p: float) -> float:
     return s[f] + (s[c] - s[f]) * (k - f)
 
 
+def _execution_summary(path: Path) -> dict | None:
+    """Functional pass/fail for an execution (SQL/JSON/numeric) run, cached to a
+    ``<slug>_execution.json`` sidecar. None for a judge-scored suite (or any
+    error) — the dashboard just shows nothing when absent. Never raises.
+
+    Lazy + cached: the first view of an execution run runs the checks (fast,
+    in-memory) and writes the sidecar; later views read it. The sidecar is
+    ``.json`` (not ``.jsonl``) so the runs glob never mistakes it for a run.
+    """
+    sidecar = path.with_name(f"{path.stem}_execution.json")
+    if sidecar.is_file():
+        try:
+            data = json.loads(sidecar.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        return data if data.get("applicable") else None
+    try:
+        import execution_eval  # lazy: a bad import mustn't break the dashboard
+
+        summary = execution_eval.score_results_file(path)
+        summary["applicable"] = True
+    except Exception:
+        # not an execution suite, or scoring failed → cache a marker so we don't
+        # re-attempt on every page load.
+        summary = {"applicable": False}
+    try:
+        sidecar.write_text(json.dumps(summary), encoding="utf-8")
+    except Exception:
+        pass
+    return summary if summary.get("applicable") else None
+
+
+def _robustness_summary(rows: list, suite_version: str) -> dict | None:
+    """Robustness score-drop for a perturbation-suite run, or None if the suite
+    carries no perturbation metadata (every ordinary run). Never raises."""
+    try:
+        import robustness  # lazy, same reason
+
+        id_to_meta = robustness.suite_id_meta(suite_version)
+        if not id_to_meta:
+            return None
+        raw = [{"question_id": r.question_id, "overall": r.overall} for r in rows]
+        report = robustness.robustness_report(raw, id_to_meta)
+        if not any(m.get("n") for m in report["by_perturbation"].values()):
+            return None
+        return report
+    except Exception:
+        return None
+
+
 def _aggregate_file(path: Path) -> dict | None:
     """Read one results JSONL and return aggregate metrics. None on parse error."""
     try:
@@ -108,7 +158,7 @@ def _aggregate_file(path: Path) -> dict | None:
     empty_count = sum(1 for r in rows if not (r.candidate_response or "").strip())
     note = f"⚠ {empty_count}/{n} empty" if empty_count > 0 else ""
 
-    return {
+    data = {
         "filename": path.name,
         "slug": path.stem,  # used by /eval-run/<slug>
         "timestamp": first.timestamp,
@@ -128,6 +178,14 @@ def _aggregate_file(path: Path) -> dict | None:
         "total_cost_usd": total_cost,
         "note": note,
     }
+    # Execution accuracy — functional pass-rate, shown only for execution-scored
+    # (SQL/JSON/numeric) suites; None for judge-scored runs (the column shows —).
+    ex = _execution_summary(path)
+    if ex and ex.get("n"):
+        data["execution_pass_rate"] = ex["pass_rate"]
+        data["execution_passed"] = ex["passed"]
+        data["execution_n"] = ex["n"]
+    return data
 
 
 def _truncate(text: str, limit: int = 90) -> str:
@@ -220,6 +278,11 @@ def _get_run_detail_files(
     # Dimension columns for the detail table, rubric-ordered union over rows.
     dims = list(dict.fromkeys(d for r in rows for d in r.scores))
 
+    # Execution (functional) scoring for this run, if it's an execution suite —
+    # per-question pass/fail shown beside the judge's overall.
+    execution = _execution_summary(path)
+    exec_by_qid = {row["question_id"]: row for row in (execution or {}).get("rows", [])}
+
     # Per-question rows for the detail table.
     questions_rows: list[dict] = []
     for r in rows:
@@ -230,6 +293,7 @@ def _get_run_detail_files(
             status = "JUDGE_FAIL"
         else:
             status = "OK"
+        exec_row = exec_by_qid.get(r.question_id)
         questions_rows.append({
             "question_id": r.question_id,
             "question": _truncate(questions_by_id.get(r.question_id, ""), 90),
@@ -241,11 +305,15 @@ def _get_run_detail_files(
                 dim: scores[dim].rationale for dim in scores
             },
             "overall": r.overall,
+            "exec_passed": exec_row["passed"] if exec_row else None,
+            "exec_error": exec_row["error"] if exec_row else None,
             "latency_ms": r.operational.latency_ms,
             "cost_usd": r.operational.estimated_cost_usd,
             "status": status,
             "error": r.error,
         })
+
+    robustness = _robustness_summary(rows, first.adaptation.task_suite_version)
 
     return {
         "slug": slug,
@@ -273,6 +341,12 @@ def _get_run_detail_files(
         "total_prompt_tokens": total_prompt,
         "total_completion_tokens": total_completion,
         "questions": questions_rows,
+        "execution": (
+            {"pass_rate": execution["pass_rate"], "passed": execution["passed"],
+             "n": execution["n"], "check": execution.get("check")}
+            if execution and execution.get("n") else None
+        ),
+        "robustness": robustness,
     }
 
 
@@ -412,6 +486,7 @@ def attach_cost_perf(data: dict, weights: CostPerfWeights = BALANCED) -> dict:
                 "cost_norm": s.cost_norm,
                 "latency_norm": s.latency_norm,
                 "cost_per_response_usd": s.cost_per_response_usd,
+                "on_frontier": s.on_frontier,
                 "note": s.notes[0] if s.notes else "",
             }
 

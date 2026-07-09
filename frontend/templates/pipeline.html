@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Model pipeline{% endblock %}
+{% block content %}
+<h1>Model pipeline</h1>
+<p>Each model must clear its prerequisite pillars before eval or benchmark:
+gateway models clear <strong>safety red-teaming</strong>; Hugging Face repos
+clear <strong>security scanning</strong>.</p>
+
+{% if not has_rows %}
+  <p>No models yet. Add a gateway model or run a scan to populate this view.</p>
+{% else %}
+<table>
+  <thead>
+    <tr><th>Model</th><th>Source</th><th>Scan</th><th>Safety</th><th>Eval / Benchmark</th></tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.model }}</td>
+      <td>{{ r.source }}</td>
+      <td title="{{ r.scan.detail }}">{{ r.scan.state }}</td>
+      <td title="{{ r.safety.detail }}">{{ r.safety.state }}</td>
+      <td>
+        {% if r.eval_unlocked %}
+          <a href="{{ url_for('eval_run_new') }}">unlocked</a>
+        {% else %}
+          locked
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

@@ -100,6 +100,15 @@ def start_eval():
     if launch_err is not None:
         return validation_error(launch_err)
 
+    # Cross-pillar hard block: a gateway model must clear safety red-teaming
+    # before it can be evaluated (mirrors the HTML eval route). Lazy import
+    # keeps the api<->frontend composition free of an import cycle at load time.
+    from frontend import pipeline
+
+    gate_err = pipeline.require_ready_for_downstream(candidate, "gateway")
+    if gate_err is not None:
+        return validation_error(gate_err)
+
     slug, already, _visibility = eval_launch.start_run(candidate, judge, suite, max_tokens)
     return accepted(
         slug,

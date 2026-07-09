@@ -144,6 +144,40 @@ class ScoreCohortTest(unittest.TestCase):
         self.assertEqual(cp.score_cohort([], cp.BALANCED), [])
 
 
+class ParetoFrontierTest(unittest.TestCase):
+    @staticmethod
+    def _mixed() -> list[cp.ModelCost]:
+        # C is strictly worse than B on BOTH axes (lower quality, higher cost).
+        return [
+            cp.ModelCost("A-top-quality", 4.8, 5.0, 0.020, 3000),
+            cp.ModelCost("B-cheapest", 4.2, 5.0, 0.002, 900),
+            cp.ModelCost("C-dominated", 3.9, 5.0, 0.010, 1500),
+        ]
+
+    def test_dominated_model_excluded(self) -> None:
+        front = cp.pareto_frontier(self._mixed())
+        self.assertEqual(front, {"A-top-quality", "B-cheapest"})
+
+    def test_all_efficient_when_none_dominated(self) -> None:
+        # _cohort(): highest-quality, cheapest, and free-DCC each win an axis.
+        self.assertEqual(cp.pareto_frontier(_cohort()),
+                         {"strong-pricey", "cheap-decent", "dcc-local"})
+
+    def test_ties_keep_both(self) -> None:
+        tied = [cp.ModelCost("x", 4.0, 5.0, 0.01, 1000),
+                cp.ModelCost("y", 4.0, 5.0, 0.01, 1000)]
+        self.assertEqual(cp.pareto_frontier(tied), {"x", "y"})
+
+    def test_empty_frontier(self) -> None:
+        self.assertEqual(cp.pareto_frontier([]), set())
+
+    def test_score_cohort_marks_on_frontier(self) -> None:
+        by = {s.model: s for s in cp.score_cohort(self._mixed(), cp.BALANCED)}
+        self.assertTrue(by["A-top-quality"].on_frontier)
+        self.assertTrue(by["B-cheapest"].on_frontier)
+        self.assertFalse(by["C-dominated"].on_frontier)
+
+
 class PresetsTest(unittest.TestCase):
     def test_presets_exist_and_are_frozen(self) -> None:
         for w in (cp.BALANCED, cp.BUDGET, cp.QUALITY_FIRST):

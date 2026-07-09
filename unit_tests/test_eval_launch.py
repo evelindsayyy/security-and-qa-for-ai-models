@@ -133,6 +133,80 @@ class ModelFamilyTest(unittest.TestCase):
         self.assertEqual(eval_launch.model_family("Qwen/Qwen2.5-7B-Instruct"), "qwen")
 
 
+class SuiteMetadataTest(unittest.TestCase):
+    """Each task suite carries a plain-language description + example question,
+    surfaced by get_launch_options for the on-page suite tooltips."""
+
+    def setUp(self) -> None:
+        patcher = mock.patch.object(
+            eval_launch, "candidate_models",
+            return_value=eval_launch._CANDIDATE_FALLBACK)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_every_suite_has_description_and_example(self) -> None:
+        for key, cfg in eval_launch.SUITES.items():
+            self.assertTrue(cfg.get("description"), f"{key} missing description")
+            self.assertTrue(cfg.get("example"), f"{key} missing example")
+
+    def test_launch_options_surfaces_suite_blurbs(self) -> None:
+        opts = eval_launch.get_launch_options()
+        self.assertTrue(opts["suites"])
+        for s in opts["suites"]:
+            self.assertTrue(s.get("description"), f"{s['key']} blurb missing")
+            self.assertTrue(s.get("example"), f"{s['key']} example missing")
+
+
+# Suites whose answer is checked by RUNNING it (execution_eval), not by the LLM
+# judge. The runner auto-skips the judge for these (scoring=execution).
+_EXPECTED_EXECUTION_SUITES = frozenset(
+    {"sql_duke_v2", "json_duke_v1", "numeric_duke_v1"})
+
+
+class SuiteCoverageTest(unittest.TestCase):
+    """The launch form must surface the execution-scored suites (so the Exec
+    column has runs to show) alongside the judge suites, and every suite must
+    declare a scoring type with contract files that actually resolve."""
+
+    def setUp(self) -> None:
+        patcher = mock.patch.object(
+            eval_launch, "candidate_models",
+            return_value=eval_launch._CANDIDATE_FALLBACK)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_execution_suites_present_and_marked(self) -> None:
+        for key in _EXPECTED_EXECUTION_SUITES:
+            self.assertIn(key, eval_launch.SUITES, f"{key} not surfaced")
+            self.assertEqual(eval_launch.SUITES[key].get("scoring"), "execution",
+                             f"{key} not marked scoring=execution")
+
+    def test_every_suite_declares_a_known_scoring_type(self) -> None:
+        for key, cfg in eval_launch.SUITES.items():
+            self.assertIn(cfg.get("scoring"), ("judge", "execution"),
+                          f"{key} missing/invalid scoring")
+
+    def test_every_suite_contract_file_resolves(self) -> None:
+        # Guards against a typo'd rubric/prompt path — build_command reads all
+        # three, so a missing file would crash the launch (not the judge-skip).
+        for key, cfg in eval_launch.SUITES.items():
+            for field in ("suite", "rubric", "system_prompt"):
+                self.assertTrue(cfg[field].is_file(),
+                                f"{key}.{field} does not exist: {cfg[field]}")
+
+    def test_launch_options_surfaces_scoring(self) -> None:
+        by_key = {s["key"]: s.get("scoring")
+                  for s in eval_launch.get_launch_options()["suites"]}
+        self.assertEqual(by_key.get("sql_duke_v2"), "execution")
+        self.assertEqual(by_key.get("it_support_v1"), "judge")
+
+    def test_build_command_targets_the_execution_suite_file(self) -> None:
+        cmd = eval_launch.build_command(
+            "gpt-5-chat", "Llama 4 Maverick", "sql_duke_v2", 500, "stemX")
+        self.assertIn("--suite", cmd)
+        self.assertIn("sql_duke_v2", cmd[cmd.index("--suite") + 1])
+
+
 class BuildCommandTest(unittest.TestCase):
     def test_command_is_argv_list_with_expected_flags(self) -> None:
         cmd = eval_launch.build_command(
@@ -178,12 +252,12 @@ class GetStatusTest(unittest.TestCase):
         s = eval_launch.get_status("20990101T000000Z_it_support_v1_x")
         self.assertEqual(s["status"], "not_found")
 
-    def test_complete_when_rows_match_suite_size(self) -> None:
+    def test_done_when_rows_match_suite_size(self) -> None:
         slug = "20990101T000000Z_it_support_v1_x"
         n = eval_launch.suite_question_count("it_support_v1")
         (self.dir / f"{slug}.jsonl").write_text("{}\n" * n, encoding="utf-8")
         s = eval_launch.get_status(slug)
-        self.assertEqual(s["status"], "complete")
+        self.assertEqual(s["status"], "done")
         self.assertEqual(s["progress"], n)
 
     def test_running_while_registered_process_alive(self) -> None:
@@ -218,6 +292,15 @@ class LaunchRoutesTest(unittest.TestCase):
         )
         patcher.start()
         self.addCleanup(patcher.stop)
+
+        # The gateway eval path now requires a cleared safety gate; keep the
+        # existing spawn tests green by treating every model as cleared. The
+        # block behavior is exercised in test_start_blocked_when_safety_missing.
+        gate = mock.patch(
+            "frontend.pipeline.require_ready_for_downstream", return_value=None
+        )
+        gate.start()
+        self.addCleanup(gate.stop)
         # /eval-run/new and /eval-run/start require a signed-in, allowlisted
         # user — force the dev-auth bypass on regardless of the real .env
         # AUTH_ENABLED.
@@ -284,6 +367,20 @@ class LaunchRoutesTest(unittest.TestCase):
         r = self.client.get("/eval-run/nonexistent-slug/status")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.get_json()["status"], "not_found")
+
+    def test_start_blocked_when_safety_missing(self) -> None:
+        with mock.patch(
+            "frontend.pipeline.require_ready_for_downstream",
+            return_value="safety red-teaming required before this step",
+        ), mock.patch.object(eval_launch.subprocess, "Popen") as popen:
+            r = self.client.post("/eval-run/start", data={
+                "candidate": "GPT 4.1 Mini", "judge": "Llama 4 Maverick",
+                "suite": "it_support_v1", "max_tokens": "500",
+            })
+        self.assertEqual(r.status_code, 400)
+        self.assertIn(b"safety red-teaming required", r.data)
+        # The gate must short-circuit before any subprocess is spawned.
+        popen.assert_not_called()
 
     def test_delete_requires_login(self) -> None:
         with self.client.session_transaction() as sess:
@@ -400,6 +497,11 @@ class CustomRouteTest(unittest.TestCase):
         )
         cand.start()
         self.addCleanup(cand.stop)
+        gate = mock.patch(
+            "frontend.pipeline.require_ready_for_downstream", return_value=None
+        )
+        gate.start()
+        self.addCleanup(gate.stop)
         self.app = create_app({"TESTING": True, "SECRET_KEY": "test"})
         self.client = self.app.test_client()
         with self.client.session_transaction() as sess:

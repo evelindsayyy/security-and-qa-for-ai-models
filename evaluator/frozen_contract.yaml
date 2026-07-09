@@ -1,0 +1,52 @@
+# =============================================================================
+# FROZEN EVAL CONTRACT — Week 7, Day 4
+# =============================================================================
+# The artifacts below are LOCKED. Any change to a listed file breaks score
+# comparability across runs — new content must go in a NEW versioned file, not
+# an edit here. Enforced by unit_tests/test_contract_freeze.py (hash check).
+# To legitimately evolve the contract: add a new file + bump its version, then
+# add it to this manifest in a follow-up freeze.
+# =============================================================================
+freeze_date: "2026-07-02"
+schema_version: "1.1.0"
+artifact_count: 35
+artifacts:
+  # core
+  "schemas.py": "b24dfd540474e7ff66dcfb1b058f672312e05e0d63c81458bbea4102c38c0e7e"
+  "metrics.yaml": "e52ca0a223752b9a93cfa4f31a5013d07d6deea3f61b737c3053895b64700b42"
+  # suites
+  "tasks/email_drafting_hard_v1.jsonl": "f2ed0360c810c2ccbd4b17dd33e6a75aa97d725a8324277fbb3ede91f913e8bf"
+  "tasks/email_drafting_v1.jsonl": "4c0dcfc50537858d9ab5c72ac79df92b96446d731d7e924da9cfdd5aa4b0ac91"
+  "tasks/it_support_v1.jsonl": "46ea8ac7f19955a842230e8ff78ed10e63e8c63661bb3211a9bf5cfa2d69e7fe"
+  "tasks/json_duke_v1.jsonl": "4af9ca5227214d9f9c19a79f6a95667d90efabad85fb1ce043788139dd6937be"
+  "tasks/numeric_duke_v1.jsonl": "e951f33b85cacd503e09246fe48782518f94985286a119c13e5b616283b56c81"
+  "tasks/plain_language_hard_v1.jsonl": "a9383f0939895a21c0f607d2eab423d257ff41af21528898bbf1d7b5eb3a5e39"
+  "tasks/plain_language_v1.jsonl": "05af397453350194e6883a346bc764ae9b47bf5f6b97734dc113be381d4b1741"
+  "tasks/policy_qa_v1.1.jsonl": "54c33f753f274e06f9ae7138cd39532130c39d8e7e32d3e8b34008f12b9dc1f6"
+  "tasks/policy_qa_v1.jsonl": "6d91127c0f0f3bcaf3341b8486c9318967733cce14f243e054cdb0e6566cf43f"
+  "tasks/robustness_v1.jsonl": "df9f3c99191fb56880ea04c3d21447e8a7c3850d7b82e11d83b547f4e4dc2150"
+  "tasks/sql_duke_hard_v1.jsonl": "5b6c323b7fa3e0c97c7a754b5f681c8329016494d53442bea9cb861769b725ac"
+  "tasks/sql_duke_v1.jsonl": "d29fa90bf24d90a1e6838a4facf7ab702bf14176de112fc4b5478fe1e030f4ef"
+  "tasks/sql_duke_v2.jsonl": "1e5b84136cfe6229ac7fccf198fc1e7053dc038748a29a69abf11d26b32e1766"
+  "tasks/summarization_v1.jsonl": "8427d897063eb9cc2b3ba52516d0d22b0172f6fa8f2c911e3437b3292c054a90"
+  "tasks/tutoring_hard_v1.jsonl": "098cbb0a0911dc3b4a1e21765b8139c76c4ecbfd5e90c69dbf6423281eda9b8f"
+  "tasks/tutoring_v1.jsonl": "f09bde2ca18cf9c107ec9b6fca5af636df7730ecdbc8b67ce7341a89ddac65b9"
+  # rubrics
+  "tasks/rubrics/_shared_dimensions.yaml": "3461edace2374bb608fed34b658052cfa0e0751dcd9f3bb133e5cd741b8f8f65"
+  "tasks/rubrics/email_drafting_v1.yaml": "b279c66539f3c2a8e5db811154bfd8c8e2c962d4b309866ad8f561e758e82dec"
+  "tasks/rubrics/it_support.yaml": "ea2f716964751ac3e90e9e6ee4fb56661b392dbc4b77a5fd65bd12939afdf192"
+  "tasks/rubrics/it_support_v1.1.yaml": "f2e90bc61c76be104c9e3022226ac8c09b8b7ffd34214f8d034872c2bb0b5d9c"
+  "tasks/rubrics/plain_language_v1.yaml": "594847cc61400df980b056acb64bce8713ecd0219421e8755a65616142c2b39a"
+  "tasks/rubrics/policy_qa_v1.yaml": "ff3c48d0f9fbfb6ab6df584f53f546200c431907fa723f7b9be812c37c100e46"
+  "tasks/rubrics/sql_duke_v1.yaml": "98a20e33a00fd0544fd004d1c70ee87fe84659f4c6f5ef4eaac1f95db57c5990"
+  "tasks/rubrics/summarization_v1.yaml": "a0669598e71acfbc64143443197745852810a20e9999cd01423ce62ff65861df"
+  "tasks/rubrics/tutoring_v1.yaml": "a72c3f40b61709869c2c89cdf232c96aa4addefd6180c13fa07e423d13390f6b"
+  # prompts
+  "prompts/judge/reference_based_v1.txt": "1c4c20684be823d94a98cd28bae87d6213e7d517cdec3fdc8f93b107411caf0d"
+  "prompts/judge/reference_based_v2.txt": "f61c091a7164820893eddfb9cb1742d2a6cc4ac1348e3b2bb4bdc961bdaa3c80"
+  "prompts/system/generic_v1.txt": "e6546e0c2b3eecea52e79c65405685c3e3464f90bd9fdfe4638285158396ec8d"
+  "prompts/system/it_support_v1.txt": "2367c20699324d7ed8baf68cef515778f692b7295f7c8f6c01b0dcd08c4a39e9"
+  "prompts/system/json_v1.txt": "005ec607d0c0e246a2402a2608e01c8fd84c9f32c861870edb0fd9cbc1d25f39"
+  "prompts/system/numeric_v1.txt": "21e40d4c303e965fcb15cbd1f75799e60abaabb901b690122d5ff4a1dd224243"
+  "prompts/system/sql_v1.txt": "4b11b8e231008faff8d93c6c02110a99fb8351fc5f84d1e359fd6fc2f0d1c9d4"
+  "prompts/system/summarization_v1.txt": "a0661c66bb4165325240e9f45b44cba7a17fd2703800904430fe74dd857092cb"

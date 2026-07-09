@@ -59,7 +59,7 @@
           }
           const logText = s.message || s.log;
           if (logText) updateLog(logText);
-          if (s.status === "complete") { clearInterval(poll); location.href = location.pathname; }
+          if (s.status === "done" || s.status === "complete") { clearInterval(poll); location.href = location.pathname; }
           if (s.status === "failed") {
             clearInterval(poll);
             document.getElementById("fail-hint").style.display = "block";
@@ -89,6 +89,9 @@
       {% endif %}
       <span class="dim">mean latency {{ mean_latency_ms }} ms · p95 {{ p95_latency_ms }} ms</span>
       <span class="dim">total cost ${{ "%.4f"|format(total_cost_usd) }}</span>
+      {% if execution %}
+      <span class="summary-score" title="functional pass-rate — the execution oracle, not the judge">exec <b>{{ "%.0f%%"|format(execution.pass_rate * 100) }}</b> ({{ execution.passed }}/{{ execution.n }})</span>
+      {% endif %}
       <span class="dim">{{ ok }}/{{ n }} OK · {{ cand_fail }} cand_fail · {{ judge_fail }} judge_fail</span>
     </div>
 
@@ -102,6 +105,7 @@
           <th class="num">{{ dim|replace("_", " ") }}</th>
           {% endfor %}
           <th class="num">Overall</th>
+          <th class="num" title="functional pass/fail from the execution oracle">Exec</th>
           <th class="num">Latency</th>
           <th class="num">Cost</th>
           <th class="col-nowrap">Status</th>
@@ -116,6 +120,7 @@
           <td class="num">{{ "%.1f"|format(q.dim_scores[dim]) if q.dim_scores.get(dim) is not none else "—" }}</td>
           {% endfor %}
           <td class="num overall">{{ "%.2f"|format(q.overall) if q.overall is not none else "—" }}</td>
+          <td class="num">{% if q.exec_passed is not none %}{% if q.exec_passed %}<span class="status-ok">pass</span>{% else %}<span class="badge badge-warn" title="{{ q.exec_error }}">fail</span>{% endif %}{% else %}<span class="dim">—</span>{% endif %}</td>
           <td class="num">{{ q.latency_ms }} ms</td>
           <td class="num">${{ "%.5f"|format(q.cost_usd) }}</td>
           <td class="col-nowrap">
@@ -131,6 +136,41 @@
         {% endfor %}
       </tbody>
     </table>
+
+    {% if robustness %}
+    <h2>Robustness</h2>
+    <p class="dim">Score under input perturbations vs. the original (pass threshold {{ robustness.pass_threshold }}).
+      Negative score drop = degraded; pass-rate drop = fraction that fell below threshold.</p>
+    <table class="run-table">
+      <thead>
+        <tr>
+          <th>Perturbation</th><th class="num">n</th>
+          <th class="num">mean (orig → pert)</th>
+          <th class="num">score drop</th><th class="num">pass-rate drop</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pt, m in robustness.by_perturbation.items() %}{% if m.n %}
+        <tr>
+          <td>{{ pt }}</td>
+          <td class="num">{{ m.n }}</td>
+          <td class="num">{{ "%.2f"|format(m.mean_original) }} → {{ "%.2f"|format(m.mean_perturbed) }}</td>
+          <td class="num">{{ "%+.2f"|format(m.score_drop) }}</td>
+          <td class="num">{{ "%.0f%%"|format(m.pass_rate_drop * 100) }}</td>
+        </tr>
+        {% endif %}{% endfor %}
+        {% if robustness.overall.n %}
+        <tr class="row-best">
+          <td><b>overall</b></td>
+          <td class="num">{{ robustness.overall.n }}</td>
+          <td class="num">{{ "%.2f"|format(robustness.overall.mean_original) }} → {{ "%.2f"|format(robustness.overall.mean_perturbed) }}</td>
+          <td class="num">{{ "%+.2f"|format(robustness.overall.score_drop) }}</td>
+          <td class="num">{{ "%.0f%%"|format(robustness.overall.pass_rate_drop * 100) }}</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+    {% endif %}
 
     <h2>Judge rationales</h2>
     <p class="dim">one sentence per dimension per question; click to expand.</p>

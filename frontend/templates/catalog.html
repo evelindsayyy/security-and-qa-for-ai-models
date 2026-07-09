@@ -77,7 +77,10 @@
         <td class="col-compare" onclick="event.stopPropagation()">
           <input type="checkbox" class="compare-select" data-slug="{{ rollup.slug }}" aria-label="Select {{ m.id }} for compare">
         </td>
-        <td><span class="model">{{ m.id }}</span></td>
+        <td>
+          <span class="model">{{ m.id }}</span>
+          {%- if m.price_note %}<div class="price-note">{{ m.price_note }}</div>{% endif %}
+        </td>
         <td>{{ m.notes or "—" }}</td>
         <td class="num">{{ "$%.2f"|format(m.price_in) if m.price_in is not none else "—" }}</td>
         <td class="num">{{ "$%.2f"|format(m.price_out) if m.price_out is not none else "—" }}</td>

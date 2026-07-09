@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import time
@@ -22,21 +23,31 @@ from pathlib import Path
 DCC_DIR = Path(__file__).resolve().parent
 REPO_ROOT = DCC_DIR.parent.parent
 STATE_FILE = DCC_DIR / ".vllm-session.env"
+# Per-run state files live here so concurrent orchestrations (multiple models
+# served/evaluated at once) don't clobber each other's JOB_ID/HOST/PORT. The
+# single default STATE_FILE above stays the backward-compatible one-session path
+# for the plain `python -m scripts.dcc.vllm start` CLI flow.
+JOBS_DIR = DCC_DIR / ".jobs"
 SBATCH_TEMPLATE = DCC_DIR / "templates" / "vllm_server.sbatch"
 
 SQUEUE_FORMAT = "%.18i %.10T %.20R %B"
 
 
-def _write_state(data: dict[str, str]) -> None:
+def _write_state(data: dict[str, str], state_file: Path | None = None) -> None:
+    # Resolve the module global at CALL time (not as a default arg) so tests that
+    # mock.patch STATE_FILE, and callers that pass a per-run path, both work.
+    sf = state_file if state_file is not None else STATE_FILE
+    sf.parent.mkdir(parents=True, exist_ok=True)
     lines = [f'{k}="{v}"' for k, v in data.items()]
-    STATE_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    sf.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _read_state() -> dict[str, str]:
-    if not STATE_FILE.is_file():
-        raise FileNotFoundError(f"No vLLM session state file at {STATE_FILE}")
+def _read_state(state_file: Path | None = None) -> dict[str, str]:
+    sf = state_file if state_file is not None else STATE_FILE
+    if not sf.is_file():
+        raise FileNotFoundError(f"No vLLM session state file at {sf}")
     data: dict[str, str] = {}
-    for line in STATE_FILE.read_text(encoding="utf-8").splitlines():
+    for line in sf.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or "=" not in line:
             continue
@@ -45,7 +56,28 @@ def _read_state() -> dict[str, str]:
     return data
 
 
+def _resolve_state_file(args: argparse.Namespace) -> Path:
+    """Per-run state path from --session-file (or $VLLM_STATE_FILE), else the
+    single-session default. Keeps the plain CLI flow unchanged."""
+    sf = getattr(args, "session_file", None)
+    return Path(sf) if sf else STATE_FILE
+
+
+# A served model id is an HF repo id or local path — only these characters.
+# Rejecting anything else stops a comma (or other metachar) in --model from
+# injecting extra NAME=VALUE pairs into sbatch's comma-separated --export list
+# (e.g. `--model "x,LD_PRELOAD=/tmp/evil.so"`).
+_SAFE_MODEL_ID = re.compile(r"^[A-Za-z0-9._/-]+$")
+
+
 def cmd_start(args: argparse.Namespace) -> int:
+    if not _SAFE_MODEL_ID.fullmatch(args.model):
+        print(
+            f"error: refusing unsafe --model {args.model!r}: only letters, digits, "
+            ". _ / - are allowed (an HF repo id or local path).",
+            file=sys.stderr,
+        )
+        return 2
     log_dir = Path(args.log_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -75,19 +107,21 @@ def cmd_start(args: argparse.Namespace) -> int:
     result = subprocess.run(sbatch_argv, capture_output=True, text=True, check=True)
     job_id = result.stdout.strip().split(";")[0]
 
+    state_file = _resolve_state_file(args)
     _write_state({
         "JOB_ID": job_id,
         "MODEL": args.model,
         "PORT": str(args.port),
         "LOG_DIR": str(log_dir),
-    })
+    }, state_file)
     print(f"Submitted vLLM job {job_id}")
-    print(f"State file: {STATE_FILE}")
+    print(f"State file: {state_file}")
     return 0
 
 
 def cmd_wait(args: argparse.Namespace) -> int:
-    state = _read_state()
+    state_file = _resolve_state_file(args)
+    state = _read_state(state_file)
     job_id = state["JOB_ID"]
     port = state["PORT"]
     max_attempts = args.max_attempts
@@ -115,7 +149,7 @@ def cmd_wait(args: argparse.Namespace) -> int:
                     if resp.status == 200:
                         print(f"vLLM is ready at http://{node}:{port}/v1")
                         state["HOST"] = node
-                        _write_state(state)
+                        _write_state(state, state_file)
                         return 0
             except (urllib.error.URLError, OSError):
                 pass
@@ -126,8 +160,8 @@ def cmd_wait(args: argparse.Namespace) -> int:
     return 1
 
 
-def cmd_status(_args: argparse.Namespace) -> int:
-    state = _read_state()
+def cmd_status(args: argparse.Namespace) -> int:
+    state = _read_state(_resolve_state_file(args))
     subprocess.run(
         ["squeue", "-j", state["JOB_ID"], "-o", SQUEUE_FORMAT],
         check=False,
@@ -135,12 +169,23 @@ def cmd_status(_args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_stop(_args: argparse.Namespace) -> int:
-    state = _read_state()
+def cmd_stop(args: argparse.Namespace) -> int:
+    state_file = _resolve_state_file(args)
+    state = _read_state(state_file)
     subprocess.run(["scancel", state["JOB_ID"]], check=True)
-    STATE_FILE.unlink(missing_ok=True)
+    state_file.unlink(missing_ok=True)
     print(f"Cancelled vLLM job {state['JOB_ID']}")
     return 0
+
+
+def _add_session_arg(p: argparse.ArgumentParser) -> None:
+    """Per-run state file override, shared by every subcommand. Defaults to
+    $VLLM_STATE_FILE, then (in the command handlers) the single-session file."""
+    p.add_argument(
+        "--session-file",
+        default=os.environ.get("VLLM_STATE_FILE"),
+        help="per-run state file (default: scripts/dcc/.vllm-session.env)",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -148,6 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="command", required=True)
 
     start = sub.add_parser("start", help="Submit vLLM Slurm job")
+    _add_session_arg(start)
     start.add_argument("--model", default=os.environ.get("MODEL", "Qwen/Qwen2.5-7B-Instruct"))
     start.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8000")))
     start.add_argument("--hf-home", default=os.environ.get("HF_HOME", f"/work/{os.environ.get('USER', 'user')}/hf_cache"))
@@ -162,11 +208,14 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--log-dir", default=os.environ.get("LOG_DIR", str(REPO_ROOT / "logs")))
 
     wait = sub.add_parser("wait", help="Wait until vLLM health endpoint responds")
+    _add_session_arg(wait)
     wait.add_argument("--max-attempts", type=int, default=int(os.environ.get("MAX_ATTEMPTS", "120")))
     wait.add_argument("--sleep-seconds", type=int, default=int(os.environ.get("SLEEP_SECONDS", "10")))
 
-    sub.add_parser("status", help="Show Slurm status for current session")
-    sub.add_parser("stop", help="Cancel current vLLM job and remove state file")
+    status = sub.add_parser("status", help="Show Slurm status for current session")
+    _add_session_arg(status)
+    stop = sub.add_parser("stop", help="Cancel current vLLM job and remove state file")
+    _add_session_arg(stop)
     return ap
 
 

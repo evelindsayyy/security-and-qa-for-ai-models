@@ -724,6 +724,14 @@ header nav a:hover {
 .catalog-table { font-size: 14px; }
 .catalog-table td { vertical-align: middle; }
 
+/* Why a model shows "—" for price (per-minute audio, input-only embeddings,
+   per-search rerank, or no published Duke rate yet). */
+.catalog-page .price-note {
+  font-size: 12px;
+  color: #999;
+  margin-top: 2px;
+}
+
 /* small vendor pill (OpenAI / Meta) */
 .vendor {
   display: inline-block;
