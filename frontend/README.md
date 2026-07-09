@@ -42,7 +42,7 @@ Pillar list pages use **List / Compare** tabs (suite×model or tool×model matri
 | `model_summary.py` | Gateway-backed AI summaries (cached); rules-v1 fallback |
 | `recommendation_rules.py` | Rules-v1 analyst summaries (fallback) |
 | `reference_constants.py` | Preferred reference model ordering |
-| `staleness.py` | Per-pillar “needs rerun” rules; constants `CURRENT_SPEC_CUTOFF`, `SAFETY_EXPECTED_GARAK_PROBES` |
+| `staleness.py` | Per-pillar “needs rerun” rules via `dbutils/staleness_spec.py` (scanner version, garak probes, suite files, etc.) |
 | `oss_gateway_hf.py` | HF mirror repos for open-weight gateway models → catalog scan rollup |
 | `delete_db.py` | DB-delete error surfacing for permanent deletes |
 | `db_fallback.py` | Postgres-only when DSN reachable; disk fallback offline only |
