@@ -416,7 +416,7 @@ def model_slug(name: str) -> str:
 
 
 def get_model_detail(slug: str) -> dict | None:
-    """Per-model nutrition label: one model's eval runs across every suite.
+    """Per-model report card: one model's eval runs across every suite.
 
     Reuses the dispatched ``get_runs_data()`` (DB when available, files
     otherwise), so this works on both paths. Returns None if no run matches.
