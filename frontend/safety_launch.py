@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import shutil
 import subprocess
 import threading
+import time
 from pathlib import Path
 
 from dbutils import run_lock
-from frontend import docker_launch
-from frontend.log_status import status_message
+from frontend import docker_launch, run_paths
+from frontend.launch_registry import check_inflight_combo
+from frontend.log_status import run_log_payload, status_message
 from frontend.output_dirs import OutputDirError, prepare_output_dir
 from frontend.path_safety import is_safe_slug
 from safety.gateway_ids import normalize_gateway_model_id
@@ -29,6 +33,8 @@ _VALID_PROFILES = frozenset({"base", "education", "healthcare", "finance", "rag"
 
 
 def _prepare_output_dirs(slug: str, profile: str) -> str | None:
+    """Wipe+recreate the shared staging trees every safety run of (slug,
+    profile) writes to, regardless of visibility — see frontend.run_paths."""
     for base in (ROOT / "safety" / "output", ROOT / "safety" / "promptfoo" / "output"):
         err = prepare_output_dir(base / slug / profile)
         if err:
@@ -41,6 +47,66 @@ def _wipe_outputs(slug: str, profile: str) -> None:
     err = _prepare_output_dirs(slug, profile)
     if err:
         raise OutputDirError(err)
+
+
+def _private_merged_dir(slug: str, profile: str, owner_user_id: str) -> Path:
+    return run_paths.scoped_dir(
+        ROOT / "safety" / "output" / slug / profile,
+        visibility="private",
+        owner_user_id=owner_user_id,
+    )
+
+
+def _private_promptfoo_dir(slug: str, profile: str, owner_user_id: str) -> Path:
+    return run_paths.scoped_dir(
+        ROOT / "safety" / "promptfoo" / "output" / slug / profile,
+        visibility="private",
+        owner_user_id=owner_user_id,
+    )
+
+
+def _private_garak_dir(slug: str, owner_user_id: str) -> Path:
+    # Garak's wipe-on-restart is scoped to the whole <slug>/ tree (no
+    # profile level), so its private data must be a sibling of every slug
+    # directory, not nested inside one — scoped_dir handles this correctly
+    # because it's derived from the same (slug-level, not profile-level)
+    # base path the public garak tree uses.
+    return run_paths.scoped_dir(
+        ROOT / "safety" / "garak" / "output" / slug,
+        visibility="private",
+        owner_user_id=owner_user_id,
+    )
+
+
+def _move_tree(src: Path, dst: Path) -> None:
+    if not src.is_dir():
+        return
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists():
+        shutil.rmtree(dst, ignore_errors=True)
+    shutil.move(str(src), str(dst))
+
+
+def _finalize_private_safety(slug: str, profile: str, owner_user_id: str) -> Path:
+    """Move a just-completed staging merge (+ its promptfoo/garak trees)
+    into this owner's private location. Idempotent."""
+    staging_merged = ROOT / "safety" / "output" / slug / profile
+    private_merged = _private_merged_dir(slug, profile, owner_user_id)
+    with _LOCK:
+        if (private_merged / "merged_safety_result.json").is_file():
+            return private_merged
+        if not (staging_merged / "merged_safety_result.json").is_file():
+            return private_merged
+        _move_tree(staging_merged, private_merged)
+        _move_tree(
+            ROOT / "safety" / "promptfoo" / "output" / slug / profile,
+            _private_promptfoo_dir(slug, profile, owner_user_id),
+        )
+        _move_tree(
+            ROOT / "safety" / "garak" / "output" / slug,
+            _private_garak_dir(slug, owner_user_id),
+        )
+    return private_merged
 
 
 def _run_lock_path(slug: str, profile: str) -> Path:
@@ -60,6 +126,114 @@ _GATEWAY_FALLBACK: tuple[str, ...] = (
 _SAFETY_CATEGORIES = frozenset({"general_chat", "codex", "research"})
 _PROBE_RE = re.compile(r"^[a-zA-Z0-9.,_-]+$")
 
+_SUITE_LABELS = {
+    "promptfoo_duke_policy_v1": "Duke policy",
+    "promptfoo_duke_redteam_v1": "Red-team",
+    "garak_subset_v1": "Garak",
+}
+
+_LOG_ALERT_MARKERS: tuple[tuple[str, str], ...] = (
+    ("ERROR: Garak finished", "Garak failed — see log; merge may continue without Garak."),
+    ("ERROR: garak report incomplete", "Garak scan incomplete — see log; merge omits Garak."),
+    ("WARNING: Garak failed", "Garak failed — see log; merge may continue without Garak."),
+    ("ERROR: red-team failed", "Red-team failed — see log."),
+    ("ERROR: export failed", "Export failed — see log."),
+)
+
+
+def _read_lock(lock_file: Path) -> dict | None:
+    if not lock_file.is_file():
+        return None
+    try:
+        data = json.loads(lock_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _is_stale_lock(lock_file: Path, log_path: Path, run_key: str) -> bool:
+    """True when a lock file outlives the process that should hold it."""
+    proc = _RUNNING.get(run_key)
+    if proc is not None and proc.poll() is None:
+        return False
+    if not lock_file.is_file():
+        return False
+    if log_path.is_file():
+        try:
+            text = log_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            text = ""
+        if "Complete:" in text:
+            return True
+        if "ERROR:" in text or "Garak: FAILED" in text:
+            return True
+    lock = _read_lock(lock_file)
+    if not lock:
+        return True
+    pid = int(lock.get("pid") or 0)
+    if pid == 1 and lock.get("source") == "cli" and log_path.is_file():
+        try:
+            if time.time() - log_path.stat().st_mtime > 300:
+                return True
+        except OSError:
+            pass
+    if pid > 1 and not run_lock.pid_alive(pid):
+        return True
+    return False
+
+
+def _garak_partial_warning(data: dict) -> str | None:
+    garak_tool = (data.get("tool_results") or {}).get("garak_subset_v1") or {}
+    garak_meta = garak_tool.get("garak") or {}
+    expected = garak_meta.get("expected_modules")
+    completed = garak_meta.get("completed_modules")
+    if garak_meta.get("report_complete") is False:
+        if expected and completed is not None:
+            return f"Garak partial ({completed}/{expected} modules)"
+        return "Garak partial (incomplete report)"
+    if expected and completed is not None and completed < expected:
+        return f"Garak partial ({completed}/{expected} modules)"
+    return None
+
+
+def _log_alert(log_path: Path) -> str | None:
+    if not log_path.is_file():
+        return None
+    tail = status_message(log_path, failed=True)
+    for marker, message in _LOG_ALERT_MARKERS:
+        if marker in tail:
+            return message
+    return None
+
+
+def _merged_warnings(merged: Path) -> list[str]:
+    if not merged.is_file():
+        return []
+    try:
+        data = json.loads(merged.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+    warnings: list[str] = []
+    missing = data.get("missing_suites") or []
+    warnings.extend(_SUITE_LABELS.get(s, s.replace("_", " ")) for s in missing)
+    partial = _garak_partial_warning(data)
+    if partial:
+        warnings.append(partial)
+    return warnings
+
+
+def _running_payload(log_path: Path, rel_log: str) -> dict:
+    payload = {
+        "status": "running",
+        "log_path": rel_log,
+        **run_log_payload(log_path),
+    }
+    alert = _log_alert(log_path)
+    if alert:
+        payload["alert"] = alert
+    return payload
+
+
 _RUNNING: dict[str, subprocess.Popen] = {}
 _INFLIGHT: dict[tuple, str] = {}
 _LOCK = threading.Lock()
@@ -77,21 +251,36 @@ def _eligible_gateway_models() -> tuple[str, ...]:
     return tuple(ids) if ids else _GATEWAY_FALLBACK
 
 
-def _existing_safety_slugs() -> set[str]:
+def _existing_safety_slugs(
+    *, visibility: str = "public", owner_user_id: str | None = None
+) -> set[str]:
+    """Slugs with a completed result **in the given scope only**."""
+    if visibility == "private" and not owner_user_id:
+        return set()
     base = ROOT / "safety" / "output"
-    return {slug for _path, slug, _profile in iter_merged_result_paths(base)}
+    owner = owner_user_id if visibility == "private" else None
+    return {slug for _path, slug, _profile in iter_merged_result_paths(base, owner_user_id=owner)}
 
 
 def inflight_safety_keys() -> set[str]:
-    """Active runs as ``slug/profile`` keys."""
+    """Active runs as ``slug/profile`` keys.
+
+    A run's staging directory is shared regardless of visibility — only one
+    safety run of a given (model, profile) can physically run at a time — so
+    this check is intentionally scope-agnostic.
+    """
+    from dbutils import fs_safe
+
     keys: set[str] = set()
     base = ROOT / "safety" / "output"
-    if base.is_dir():
-        for slug_dir in base.iterdir():
-            if not slug_dir.is_dir():
+    if fs_safe.is_dir(base):
+        for slug_dir in fs_safe.iterdir(base):
+            if not fs_safe.is_dir(slug_dir) or slug_dir.name == run_paths.PRIVATE_SEGMENT:
                 continue
-            for profile_dir in slug_dir.iterdir():
-                if profile_dir.is_dir() and run_lock.is_active(run_lock.lock_path(profile_dir)):
+            for profile_dir in fs_safe.iterdir(slug_dir):
+                if not fs_safe.is_dir(profile_dir) or profile_dir.name == run_paths.PRIVATE_SEGMENT:
+                    continue
+                if run_lock.is_active(run_lock.lock_path(profile_dir)):
                     keys.add(f"{slug_dir.name}/{profile_dir.name}")
     with _LOCK:
         for run_key, proc in _RUNNING.items():
@@ -137,6 +326,18 @@ def validate_launch(
             f"a safety run for {model!r} (profile {redteam_profile}) is already running — "
             "wait for it to finish or open the progress page"
         )
+    from frontend.purge_rerun import purge_safety_for_launch
+    from frontend.read_context import read_context
+
+    visibility, owner_user_id = read_context()
+    err = purge_safety_for_launch(
+        slug,
+        redteam_profile,
+        visibility=visibility,
+        owner_user_id=owner_user_id,
+    )
+    if err:
+        return err
     return _prepare_output_dirs(slug, redteam_profile)
 
 
@@ -194,7 +395,23 @@ def start_run(
     skip_garak: bool = False,
     skip_promptfoo: bool = False,
     garak_probes: str | None = None,
-) -> tuple[str, bool]:
+) -> tuple[str, bool, str]:
+    """Returns (run_key, already_running, visibility)."""
+    from frontend.run_launch import build_launch_plan, persist_run_meta_dir
+
+    plan = build_launch_plan(
+        "safety",
+        force_private=bool(garak_probes) or redteam_profile != "base",
+        model=model,
+        redteam_profile=redteam_profile,
+        skip_policy=skip_policy,
+        skip_redteam=skip_redteam,
+        skip_garak=skip_garak,
+        skip_promptfoo=skip_promptfoo,
+        garak_probes=garak_probes,
+    )
+    # Explicit browser Start/Rerun must always spawn a fresh run (see scan_launch).
+
     slug = normalize_gateway_model_id(model)
     run_key = f"{slug}/{redteam_profile}"
     combo = (model, redteam_profile, skip_policy, skip_redteam, skip_garak, skip_promptfoo, garak_probes or "")
@@ -202,11 +419,11 @@ def start_run(
 
     with _LOCK:
         if is_safety_inflight(model, redteam_profile):
-            return run_key, True
+            return run_key, True, plan.visibility
 
-        existing = _INFLIGHT.get(combo)
-        if existing and _RUNNING.get(existing) is not None and _RUNNING[existing].poll() is None:
-            return existing, True
+        existing = check_inflight_combo(_RUNNING, _INFLIGHT, combo)
+        if existing:
+            return existing, True, plan.visibility
 
         _wipe_outputs(slug, redteam_profile)
 
@@ -215,6 +432,7 @@ def start_run(
 
         log_path = ROOT / "safety" / "output" / slug / redteam_profile / "run.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        persist_run_meta_dir(log_path.parent, plan)
         cmd = build_command(
             model,
             redteam_profile=redteam_profile,
@@ -245,7 +463,7 @@ def start_run(
             source=run_lock.FRONTEND_SOURCE,
         ):
             proc.terminate()
-            return run_key, True
+            return run_key, True, plan.visibility
         _RUNNING[run_key] = proc
         _INFLIGHT[combo] = run_key
         threading.Thread(
@@ -253,36 +471,58 @@ def start_run(
             args=(run_key, proc, lock_file),
             daemon=True,
         ).start()
-        return run_key, False
+        return run_key, False, plan.visibility
 
 
-def get_status(slug: str, profile: str = "base") -> dict:
+def get_status(
+    slug: str,
+    profile: str = "base",
+    *,
+    visibility: str = "public",
+    owner_user_id: str | None = None,
+) -> dict:
     if not is_safe_slug(slug) or not is_safe_slug(profile):
         return {"status": "not_found", "message": ""}
 
     run_key = f"{slug}/{profile}"
-    merged = merged_result_path(ROOT / "safety" / "output", slug, profile)
+    staging_merged = merged_result_path(ROOT / "safety" / "output", slug, profile)
     log_path = ROOT / "safety" / "output" / slug / profile / "run.log"
     rel_log = f"safety/output/{slug}/{profile}/run.log"
     lock_file = _run_lock_path(slug, profile)
 
     proc = _RUNNING.get(run_key)
     if proc is not None and proc.poll() is None:
-        return {
-            "status": "running",
-            "message": status_message(log_path),
-            "log_path": rel_log,
-        }
+        return _running_payload(log_path, rel_log)
 
-    if run_lock.is_active(lock_file) and not merged.is_file():
-        return {
-            "status": "running",
-            "message": status_message(log_path),
-            "log_path": rel_log,
-        }
+    if run_lock.is_active(lock_file) and not staging_merged.is_file():
+        if _is_stale_lock(lock_file, log_path, run_key):
+            run_lock.release(lock_file)
+            msg = status_message(log_path, failed=True)
+            return {"status": "failed", "message": msg, "log_path": rel_log}
+        return _running_payload(log_path, rel_log)
+
+    # A completed run's merge may still be sitting in staging (not yet
+    # moved) or may already be at its final scoped location.
+    if visibility == "private" and owner_user_id:
+        if staging_merged.is_file():
+            active_dir = _finalize_private_safety(slug, profile, owner_user_id)
+        else:
+            active_dir = _private_merged_dir(slug, profile, owner_user_id)
+        merged = active_dir / "merged_safety_result.json"
+    else:
+        merged = staging_merged
 
     if merged.is_file():
-        return {"status": "complete", "message": "", "log_path": rel_log}
+        active_rel_log = str(merged.parent.relative_to(ROOT) / "run.log")
+        warnings = _merged_warnings(merged)
+        if warnings:
+            return {
+                "status": "partial",
+                "message": "",
+                "warnings": warnings,
+                "log_path": active_rel_log,
+            }
+        return {"status": "complete", "message": "", "log_path": active_rel_log}
 
     if proc is not None:
         return {
@@ -291,7 +531,7 @@ def get_status(slug: str, profile: str = "base") -> dict:
             "log_path": rel_log,
         }
 
-    if log_path.is_file() and not merged.is_file():
+    if log_path.is_file() and not staging_merged.is_file():
         msg = status_message(log_path, failed=True)
         if "ERROR:" in msg or "failed (exit" in msg:
             return {"status": "failed", "message": msg, "log_path": rel_log}
@@ -300,10 +540,12 @@ def get_status(slug: str, profile: str = "base") -> dict:
 
 
 def get_launch_options() -> dict:
+    from frontend.read_context import read_context
     from gateway.catalog import get_gateway_catalog
 
     gw = get_gateway_catalog()
-    existing = _existing_safety_slugs()
+    view_mode, user_id = read_context()
+    existing = _existing_safety_slugs(visibility=view_mode, owner_user_id=user_id)
     groups: list[dict] = []
 
     for section in gw.get("by_category", []):

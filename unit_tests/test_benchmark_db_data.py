@@ -85,15 +85,14 @@ class AvailabilityTest(unittest.TestCase):
             data = benchmark_data.get_benchmarks_data()
         self.assertIn("has_runs", data)
 
-    def test_detail_dispatcher_falls_back_when_slug_not_in_db(self) -> None:
-        sentinel = {"slug": "from-files"}
+    def test_detail_returns_none_when_slug_not_in_db(self) -> None:
         with mock.patch.object(benchmark_db_data, "available", return_value=True), mock.patch.object(
             benchmark_db_data, "get_benchmark_detail_db", return_value=None
         ), mock.patch.object(
-            benchmark_data, "_get_benchmark_detail_files", return_value=sentinel
+            benchmark_data, "_get_benchmark_detail_files", return_value={"slug": "from-files"}
         ):
             detail = benchmark_data.get_benchmark_detail("some-slug")
-        self.assertIs(detail, sentinel)
+        self.assertIsNone(detail)
 
     def test_dispatcher_survives_db_exceptions(self) -> None:
         with mock.patch.object(

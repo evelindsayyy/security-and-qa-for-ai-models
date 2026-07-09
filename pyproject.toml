@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 # Core runtime shared by the Flask UI, gateway, evaluator, and unit tests.
 # Heavy scanner/benchmark tools live in optional groups — see dependency-groups.
 dependencies = [
+    "authlib>=1.6.0",
     "flask>=3.1.3",
     "litellm>=1.87.1",
     "openai>=2.38.0",
@@ -30,7 +31,7 @@ scanner = [
     "pip-audit>=2.9.0",
 ]
 # Safety orchestrator (python -m safety.run / safety/docker): uv sync --group safety
-safety = ["garak>=0.14.0,<0.15"]
+safety = ["garak>=0.15.1,<0.16"]
 # Public benchmark runners (benchmarks/docker): uv sync --group benchmarks
 benchmarks = [
     "absl-py>=2.4.0",

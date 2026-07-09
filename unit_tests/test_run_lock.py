@@ -6,6 +6,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from dbutils import run_lock
 
@@ -45,6 +46,10 @@ class RunLockTest(unittest.TestCase):
         self.assertTrue(run_lock.should_skip_cli_acquire(self.lock))
         run_lock.release(self.lock)
 
+    def test_is_active_false_when_lock_stat_fails(self) -> None:
+        with mock.patch.object(Path, "is_file", side_effect=PermissionError("denied")):
+            self.assertFalse(run_lock.is_active(self.lock))
+
     def test_read_log_tail(self) -> None:
         from dbutils.log_tail import read_log_tail
 
@@ -52,6 +57,16 @@ class RunLockTest(unittest.TestCase):
         log.write_text("line1\nline2\nline3\n", encoding="utf-8")
         tail = read_log_tail(log, max_bytes=100, max_lines=2)
         self.assertEqual(tail, "line2\nline3")
+
+    def test_read_run_log_returns_full_small_file(self) -> None:
+        from dbutils.log_tail import read_run_log
+
+        log = Path(self._tmp.name) / "run.log"
+        content = "alpha\n" * 500
+        log.write_text(content, encoding="utf-8")
+        text, truncated = read_run_log(log)
+        self.assertFalse(truncated)
+        self.assertEqual(text, content)
 
 
 if __name__ == "__main__":

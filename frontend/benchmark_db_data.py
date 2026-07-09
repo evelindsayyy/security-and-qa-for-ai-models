@@ -16,8 +16,9 @@ from dbutils import load_repo_env, resolve_dsn
 from frontend.benchmark_data import (
     PRIMARY_DIR,
     _attach_meta,
+    _attach_per_subject,
     _format_ts,
-    _summarize_file,
+    _paginate_detail_items,
 )
 
 load_repo_env()
@@ -71,7 +72,8 @@ _LIST_SQL = """
 SELECT output_slug, source_filename, gateway_model_id, benchmark_key,
        headline_metric, headline_value, n_items, metrics, items, run_params,
        completed_at
-FROM public.benchmark_runs
+FROM public.benchmark_runs b
+WHERE {visibility_filter}
 ORDER BY completed_at DESC NULLS LAST, output_slug
 """
 
@@ -79,8 +81,8 @@ _DETAIL_SQL = """
 SELECT output_slug, source_filename, gateway_model_id, benchmark_key,
        headline_metric, headline_value, n_items, metrics, items, run_params,
        completed_at
-FROM public.benchmark_runs
-WHERE output_slug = %(slug)s
+FROM public.benchmark_runs b
+WHERE output_slug = %(slug)s AND ({visibility_filter})
 LIMIT 1
 """
 
@@ -178,47 +180,57 @@ def _build_detail_db(row: tuple) -> dict:
     kind = row[3]
     metrics = row[7] or {}
     items = row[8] or []
+    run_params = row[9]
     detail = dict(summary)
-
-    if kind == "ifeval":
-        detail["raw_rows"] = items[:50]
-        detail["raw_row_count"] = len(items)
-    elif kind == "truthfulqa":
-        detail["responses"] = items[:50]
-        detail["raw_row_count"] = len(items)
-    elif kind == "consistency":
-        detail["questions"] = items[:50]
-        detail["raw_row_count"] = len(items)
-    elif kind == "mmlu":
-        detail["per_subject"] = metrics.get("per_subject") or {}
-        detail["results"] = items[:50]
-        detail["raw_row_count"] = len(items)
-    elif kind in ("tomi", "mbpp", "quality"):
-        detail["results"] = items[:50]
-        detail["raw_row_count"] = len(items)
-
+    if run_params:
+        detail["run_params"] = run_params
+    if kind == "mmlu":
+        _attach_per_subject(detail, metrics.get("per_subject") or {})
+    _paginate_detail_items(detail, items)
     return _attach_meta(detail)
 
 
-def get_benchmarks_data_db() -> dict:
-    """DB-preferred merge of every known benchmark run (DB rows + not-yet-loaded files)."""
+def fetch_detail_row(
+    slug: str, *, visibility: str | None = None, owner_user_id: str | None = None
+) -> tuple | None:
+    """Raw DB row for detail / pagination loaders."""
+    vis_clause, vis_params = _visibility_params(visibility=visibility, owner_user_id=owner_user_id)
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(_LIST_SQL)
+            params = {"slug": slug, **vis_params}
+            cur.execute(_DETAIL_SQL.format(visibility_filter=vis_clause), params)
+            return cur.fetchone()
+
+
+def _visibility_params(
+    *, visibility: str | None = None, owner_user_id: str | None = None
+) -> tuple[str, dict]:
+    """SQL visibility clause. Explicit ``visibility``/``owner_user_id`` (the
+    resolved route scope) take precedence over the ambient session — omit
+    both only for the list page, which still tracks the current toggle."""
+    from dbutils.visibility import visibility_clause
+
+    if visibility is None:
+        from frontend.read_context import read_context
+
+        visibility, owner_user_id = read_context()
+    clause, params = visibility_clause("b", view_mode=visibility, user_id=owner_user_id, links_alias=True)
+    return clause, params
+
+
+def get_benchmarks_data_db() -> dict:
+    """Every known benchmark run, straight from Postgres.
+
+    Postgres is the single source of truth when a DSN is reachable — we do NOT
+    merge in on-disk artifacts here. Disk is only consulted when no DSN is
+    configured (see benchmark_data.get_benchmarks_data)."""
+    vis_clause, vis_params = _visibility_params()
+
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(_LIST_SQL.format(visibility_filter=vis_clause), vis_params)
             run_rows = cur.fetchall()
-    db_rows = [_summarize_db_run(row) for row in run_rows]
-
-    seen_slugs = {r["slug"] for r in db_rows}
-    file_rows: list[dict] = []
-    if PRIMARY_DIR.is_dir():
-        for path in sorted(list(PRIMARY_DIR.glob("*.json")) + list(PRIMARY_DIR.glob("*.jsonl"))):
-            if path.stem in seen_slugs:
-                continue
-            row = _summarize_file(path)
-            if row is not None:
-                file_rows.append(row)
-
-    rows = db_rows + file_rows
+    rows = [_summarize_db_run(row) for row in run_rows]
     rows.sort(key=lambda r: r["timestamp_raw"], reverse=True)
     kinds = sorted({r["kind_label"] for r in rows})
     models = sorted({r["model"] for r in rows if r["model"] and not r["model"].startswith("—")})
@@ -231,25 +243,62 @@ def get_benchmarks_data_db() -> dict:
     }
 
 
-def get_benchmark_detail_db(slug: str) -> dict | None:
+def get_benchmark_detail_db(
+    slug: str, *, visibility: str | None = None, owner_user_id: str | None = None
+) -> dict | None:
     """Detail-page payload from Postgres; None if slug isn't loaded."""
+    vis_clause, vis_params = _visibility_params(visibility=visibility, owner_user_id=owner_user_id)
+
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(_DETAIL_SQL, {"slug": slug})
+            params = {"slug": slug, **vis_params}
+            cur.execute(_DETAIL_SQL.format(visibility_filter=vis_clause), params)
             row = cur.fetchone()
             if row is None:
                 return None
     return _build_detail_db(row)
 
 
-def delete_run(slug: str) -> bool:
-    """Delete one row from ``benchmark_runs``. Returns True if a row was removed."""
+def delete_run(
+    slug: str, *, visibility: str | None = None, owner_user_id: str | None = None
+) -> bool:
+    """Delete one row from ``benchmark_runs``. Returns True if a row was removed.
+
+    Scoped by ``visibility``/``owner_user_id`` so a public delete can never
+    remove someone else's private row for the same slug, or vice versa.
+    """
+    vis_clause, vis_params = _visibility_params(visibility=visibility, owner_user_id=owner_user_id)
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "DELETE FROM public.benchmark_runs WHERE output_slug = %(slug)s",
-                {"slug": slug},
+                f"DELETE FROM public.benchmark_runs AS b WHERE output_slug = %(slug)s AND ({vis_clause})",
+                {"slug": slug, **vis_params},
             )
             deleted = cur.rowcount > 0
+        conn.commit()
+    return deleted
+
+
+def delete_runs_for_combo(
+    benchmark_key: str,
+    model: str,
+    *,
+    visibility: str | None = None,
+    owner_user_id: str | None = None,
+) -> int:
+    """Delete every benchmark run for one (benchmark, model) in the given scope."""
+    vis_clause, vis_params = _visibility_params(visibility=visibility, owner_user_id=owner_user_id)
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                DELETE FROM public.benchmark_runs AS b
+                WHERE b.benchmark_key = %(benchmark_key)s
+                  AND b.gateway_model_id = %(model)s
+                  AND ({vis_clause})
+                """,
+                {"benchmark_key": benchmark_key, "model": model, **vis_params},
+            )
+            deleted = cur.rowcount
         conn.commit()
     return deleted

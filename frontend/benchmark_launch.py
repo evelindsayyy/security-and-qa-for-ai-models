@@ -10,8 +10,10 @@ One in-flight run per (benchmark, model, base_url) combo.
 from __future__ import annotations
 
 import ipaddress
+import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import threading
@@ -20,7 +22,9 @@ from urllib.parse import urlparse
 
 from dbutils import run_lock
 from frontend import docker_launch
-from frontend.log_status import status_message
+from frontend.launch_registry import check_inflight_combo
+from frontend.log_status import run_log_payload
+from frontend.output_dirs import OutputDirError
 from frontend.path_safety import is_safe_slug
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -35,7 +39,8 @@ from benchmarks.run_benchmark import (  # noqa: E402
     benchmark_options_schema,
     predict_stem,
 )
-from benchmarks.benchmark_progress import load_progress, write_progress_stub  # noqa: E402
+from benchmarks.benchmark_progress import load_progress, mark_cancelled, write_progress_stub  # noqa: E402
+from frontend.benchmark_data import BENCHMARK_META, COVERAGE_N_EXPLANATION, COVERAGE_N_TOOLTIP  # noqa: E402
 
 HOSTED_SAMPLE_MAX = 200
 HOSTED_SAMPLE_WARN = 50
@@ -63,7 +68,7 @@ HF_INFERENCE_BASE_URL = "https://router.huggingface.co/v1"
 _PUBLIC_HOST_ALLOWLIST = ("router.huggingface.co",)
 
 _RUNNING: dict[str, subprocess.Popen] = {}
-_INFLIGHT: dict[tuple[str, str, str], str] = {}
+_INFLIGHT: dict[tuple, str] = {}
 _LOCK = threading.Lock()
 
 
@@ -270,12 +275,65 @@ def _run_lock_path(stem: str) -> Path:
     return RESULTS_DIR / f"{stem}.run.lock"
 
 
+def _run_options_path(stem: str) -> Path:
+    return RESULTS_DIR / f"{stem}.run_options.json"
+
+
+def _write_run_options(
+    stem: str,
+    *,
+    benchmark_key: str,
+    model: str,
+    base_url: str | None,
+    sample: int | None,
+    seed: int | None,
+) -> None:
+    """Persist launch options so Run again can restore sample, seed, etc."""
+    payload: dict = {"benchmark": benchmark_key, "model": model}
+    if base_url:
+        payload["base_url"] = base_url
+    if sample is not None:
+        payload["sample"] = sample
+    if seed is not None:
+        payload["seed"] = seed
+    path = _run_options_path(stem)
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
 def _watch_process(stem: str, proc: subprocess.Popen, lock_path: Path) -> None:
     proc.wait()
     run_lock.release(lock_path)
     with _LOCK:
         if _RUNNING.get(stem) is proc:
             _RUNNING.pop(stem, None)
+        for key, slug in list(_INFLIGHT.items()):
+            if slug == stem:
+                _INFLIGHT.pop(key, None)
+
+
+def _terminate_process(proc: subprocess.Popen) -> None:
+    """Stop a benchmark subprocess tree (compose + python child)."""
+    if proc.poll() is not None:
+        return
+    try:
+        if proc.pid:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    except (ProcessLookupError, OSError, PermissionError):
+        try:
+            proc.terminate()
+        except OSError:
+            pass
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        try:
+            if proc.pid:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, OSError, PermissionError):
+            try:
+                proc.kill()
+            except OSError:
+                pass
 
 
 def start_run(
@@ -286,13 +344,39 @@ def start_run(
     api_key: str | None = None,
     sample: int | None = None,
     seed: int | None = None,
-) -> tuple[str, bool]:
-    combo = (benchmark_key, model, (base_url or "").strip())
+) -> tuple[str, bool, str]:
+    """Returns (stem, was_already_running, visibility)."""
+    from frontend.run_launch import build_launch_plan, persist_run_meta_dir
+    from frontend.run_paths import inflight_scope_key
+
+    plan = build_launch_plan(
+        "benchmark",
+        benchmark_key=benchmark_key,
+        model=model,
+    )
+    # Unlike scan/eval reuse, always allow a fresh benchmark run when the user
+    # clicks Start — list dedupe keeps the UI tidy; blocking reruns here made
+    # "Start a new run" jump back to an old result with no new subprocess.
+
+    combo = (
+        benchmark_key, model, (base_url or "").strip(),
+        *inflight_scope_key(plan.visibility, plan.owner_user_id),
+    )
     with _LOCK:
-        existing = _INFLIGHT.get(combo)
-        if existing and _RUNNING.get(existing) is not None \
-                and _RUNNING[existing].poll() is None:
-            return existing, True
+        existing = check_inflight_combo(_RUNNING, _INFLIGHT, combo)
+        if existing:
+            return existing, True, plan.visibility
+
+        from frontend.purge_rerun import purge_benchmark_for_launch
+
+        err = purge_benchmark_for_launch(
+            benchmark_key,
+            model,
+            visibility=plan.visibility,
+            owner_user_id=plan.owner_user_id,
+        )
+        if err:
+            raise OutputDirError(err)
 
         if docker_launch.use_docker():
             docker_launch.ensure_stack("benchmarks")
@@ -300,6 +384,7 @@ def start_run(
         stem = predict_stem(benchmark_key, model)
         lock_file = _run_lock_path(stem)
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        persist_run_meta_dir(RESULTS_DIR / stem, plan)
         log_path = RESULTS_DIR / f"{stem}.log"
         progress_path = RESULTS_DIR / f"{stem}.progress.json"
 
@@ -315,6 +400,14 @@ def start_run(
         )
 
         extra_env = _custom_env(base_url, api_key) if base_url else {}
+        _write_run_options(
+            stem,
+            benchmark_key=benchmark_key,
+            model=model,
+            base_url=base_url,
+            sample=sample,
+            seed=seed,
+        )
         cmd = build_command(
             benchmark_key,
             model,
@@ -349,7 +442,7 @@ def start_run(
             source=run_lock.FRONTEND_SOURCE,
         ):
             proc.terminate()
-            return stem, True
+            return stem, True, plan.visibility
         _RUNNING[stem] = proc
         _INFLIGHT[combo] = stem
         threading.Thread(
@@ -357,7 +450,7 @@ def start_run(
             args=(stem, proc, lock_file),
             daemon=True,
         ).start()
-        return stem, False
+        return stem, False, plan.visibility
 
 
 def _output_path(stem: str) -> Path | None:
@@ -386,7 +479,9 @@ def is_run_in_progress(slug: str) -> bool:
 
 def _with_log(status: dict, slug: str) -> dict:
     log_path = RESULTS_DIR / f"{slug}.log"
-    status["log"] = status_message(log_path)
+    payload = run_log_payload(log_path)
+    status["log"] = payload["log"]
+    status["log_truncated"] = payload["log_truncated"]
     status["log_path"] = f"benchmarks/results/{slug}.log"
     return status
 
@@ -406,12 +501,34 @@ def _status_from_progress(slug: str, prog: dict) -> dict:
     }
 
 
-def get_status(slug: str) -> dict:
+def get_status(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict:
+    """``visibility``/``owner_user_id`` are accepted for signature parity with
+    the other three pillars (routes.py calls all four the same way) —
+    benchmark's result path is a globally-unique timestamped stem regardless
+    of visibility, so there's no separate location to resolve."""
+    del visibility, owner_user_id
     if not is_safe_slug(slug):
         return {"status": "not_found", "progress": 0, "total": 0, "unit": "items", "message": ""}
 
-    out = _output_path(slug)
     prog = load_progress(_progress_path(slug))
+    if prog.get("cancelled"):
+        progress = int(prog.get("progress") or 0)
+        total = int(prog.get("total") or 0)
+        unit = prog.get("unit") or "items"
+        return _with_log({
+            "status": "cancelled",
+            "progress": progress,
+            "total": total,
+            "unit": unit,
+            "message": prog.get("message") or "Cancelled",
+            "benchmark": prog.get("benchmark") or "",
+            "benchmark_label": prog.get("benchmark_label") or "",
+            "model": prog.get("model") or "",
+        }, slug)
+
+    out = _output_path(slug)
     progress = int(prog.get("progress") or 0)
     total = int(prog.get("total") or 0)
     unit = prog.get("unit") or "items"
@@ -449,10 +566,21 @@ def get_status(slug: str) -> dict:
             **meta,
         }, slug)
     if _progress_path(slug).is_file() and progress < total:
-        # Flask restarted mid-run but the runner is still writing progress.
+        # Flask restarted mid-run (no _RUNNING entry survives that) — the
+        # lock is the only remaining signal of whether the runner is still
+        # actually alive. Active lock: still running, resume reporting
+        # progress. Inactive lock with progress never having reached total:
+        # the process died without finishing (crash, OOM, restart-killed) —
+        # report failed with the log attached instead of "running" forever,
+        # which otherwise looks identical to a live run from the UI's side.
         if run_lock.is_active(_run_lock_path(slug)):
             return _with_log(_status_from_progress(slug, prog), slug)
-        return _status_from_progress(slug, prog)
+        return _with_log({
+            "status": "failed",
+            "progress": progress,
+            "total": total,
+            **meta,
+        }, slug)
     if (RESULTS_DIR / f"{slug}.log").is_file():
         return _with_log({
             "status": "failed",
@@ -463,13 +591,82 @@ def get_status(slug: str) -> dict:
     return {"status": "not_found", "progress": 0, "total": 0, "unit": "items", "message": ""}
 
 
+def cancel_run(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> str | None:
+    """Stop an in-flight benchmark run. Returns an error message, or None on success."""
+    from dbutils.run_meta import read_run_meta_for_pillar
+    from dbutils.visibility import artifact_visible
+
+    if not is_safe_slug(slug):
+        return f"invalid slug: {slug!r}"
+
+    from frontend.benchmark_data import is_reference_slug
+
+    if is_reference_slug(slug):
+        return "reference benchmark runs cannot be cancelled"
+
+    meta = read_run_meta_for_pillar(RESULTS_DIR / slug, pillar="benchmark")
+    if meta and not artifact_visible(meta, view_mode=visibility, user_id=owner_user_id):
+        return f"no benchmark run found for slug {slug!r}"
+
+    if not is_run_in_progress(slug):
+        prog = load_progress(_progress_path(slug))
+        if prog.get("cancelled"):
+            return None
+        return "run is not in progress"
+
+    log_path = RESULTS_DIR / f"{slug}.log"
+    lock_path = _run_lock_path(slug)
+    progress_path = _progress_path(slug)
+
+    with _LOCK:
+        proc = _RUNNING.get(slug)
+        if proc is not None and proc.poll() is None:
+            _terminate_process(proc)
+            _RUNNING.pop(slug, None)
+        for key, stem in list(_INFLIGHT.items()):
+            if stem == slug:
+                _INFLIGHT.pop(key, None)
+
+    run_lock.release(lock_path)
+    mark_cancelled(progress_path)
+    try:
+        with log_path.open("ab") as log_f:
+            log_f.write(b"\n=== run cancelled by user ===\n")
+    except OSError:
+        pass
+    return None
+
+
+def _launch_benchmark_options() -> dict[str, dict]:
+    """Sample/seed schema plus short descriptions for the launch form."""
+    base = benchmark_options_schema()
+    out: dict[str, dict] = {}
+    for key, cfg in BENCHMARKS.items():
+        meta = BENCHMARK_META.get(key, {})
+        entry = dict(base.get(key, {}))
+        entry["label"] = cfg["label"]
+        entry["about"] = meta.get("about", "")
+        entry["headline_metric"] = meta.get("headline_metric", "")
+        sample = cfg.get("sample") or {}
+        if sample:
+            entry["default_sample"] = sample.get("default")
+            entry["sample_unit"] = sample.get("unit", "items")
+        out[key] = entry
+    return out
+
+
 def get_launch_options() -> dict:
     models = candidate_models()
     return {
         "benchmarks": [
             {"key": k, "label": v["label"]} for k, v in sorted(BENCHMARKS.items())
         ],
-        "benchmark_options": benchmark_options_schema(),
+        "benchmark_options": _launch_benchmark_options(),
+        "coverage_n_explanation": COVERAGE_N_EXPLANATION,
+        "coverage_n_tooltip": COVERAGE_N_TOOLTIP,
+        "rerun": None,
         "hosted_sample_max": HOSTED_SAMPLE_MAX,
         "hosted_sample_warn": HOSTED_SAMPLE_WARN,
         "models": list(models),

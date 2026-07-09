@@ -73,7 +73,8 @@ class SafetyDataTest(unittest.TestCase):
                 "runs": [],
             },
         )
-        detail = safety_data.get_safety_detail(slug, "base")
+        with mock.patch("frontend.safety_db_data.available", return_value=False):
+            detail = safety_data.get_safety_detail(slug, "base")
         self.assertIsNotNone(detail)
         assert detail is not None
         self.assertFalse(detail["findings"][0]["passed"])
@@ -81,6 +82,53 @@ class SafetyDataTest(unittest.TestCase):
 
     def test_missing_slug_returns_none(self) -> None:
         self.assertIsNone(safety_data.get_safety_detail("nonexistent", "base"))
+
+
+class CategoryHeatmapTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.out = Path(self._tmp.name)
+        patcher = mock.patch.object(safety_data, "OUTPUT_DIR", self.out)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _write_merged(self, slug: str, payload: dict, profile: str = "base") -> None:
+        d = self.out / slug / profile
+        d.mkdir(parents=True)
+        (d / "merged_safety_result.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    def test_category_breakdown_counts_pass_and_fail(self) -> None:
+        findings = [
+            {"category": "jailbreak", "passed": True},
+            {"category": "jailbreak", "passed": False},
+            {"category": "leakage", "passed": True},
+        ]
+        breakdown = safety_data._category_breakdown(findings)
+        self.assertEqual(breakdown, {
+            "jailbreak": {"passed": 1, "failed": 1},
+            "leakage": {"passed": 1, "failed": 0},
+        })
+
+    def test_get_safety_data_has_models_flag(self) -> None:
+        self._write_merged(
+            "gpt-5.5",
+            {
+                "gateway_model_id": "gpt-5.5",
+                "summary_pass_rate": 0.5,
+                "findings": [
+                    {"passed": True, "severity": "low", "category": "policy", "probe_id": "a"},
+                    {"passed": False, "severity": "critical", "category": "jailbreak", "probe_id": "b"},
+                ],
+                "runs": [],
+            },
+        )
+        from frontend import safety_db_data
+
+        with mock.patch.object(safety_db_data, "available", return_value=False):
+            data = safety_data.get_safety_data()
+        self.assertTrue(data["has_safety"])
+        self.assertNotIn("category_heatmap", data)
 
 
 if __name__ == "__main__":

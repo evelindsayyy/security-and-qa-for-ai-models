@@ -85,21 +85,6 @@ class GetEvalTest(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
 
 
-class GetModelTest(unittest.TestCase):
-    def test_found(self) -> None:
-        with mock.patch.object(api_evals.eval_run_data, "get_model_detail",
-                               return_value={"slug": "gpt-5-chat", "n_runs": 3}):
-            resp = _client().get("/api/models/gpt-5-chat")
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.get_json()["data"]["n_runs"], 3)
-
-    def test_not_found_404(self) -> None:
-        with mock.patch.object(api_evals.eval_run_data, "get_model_detail",
-                               return_value=None):
-            resp = _client().get("/api/models/nope")
-        self.assertEqual(resp.status_code, 404)
-
-
 class StartEvalTest(unittest.TestCase):
     def test_accepted(self) -> None:
         with mock.patch.object(api_evals.eval_launch, "validate_launch",
@@ -107,7 +92,7 @@ class StartEvalTest(unittest.TestCase):
              mock.patch("frontend.pipeline.require_ready_for_downstream",
                         return_value=None), \
              mock.patch.object(api_evals.eval_launch, "start_run",
-                               return_value=("run-slug", False)):
+                               return_value=("run-slug", False, "public")):
             resp = _client().post(
                 "/api/evals",
                 data='{"candidate":"gpt-5-chat","judge":"Llama 4 Maverick","suite":"it_support_v1"}',

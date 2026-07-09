@@ -17,11 +17,30 @@ import os
 os.environ.setdefault("FRONTEND_LAUNCH_MODE", "host")
 
 import re
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from frontend import create_app
 from frontend import eval_launch
+
+
+def _isolate_eval_output(test_case: unittest.TestCase) -> Path:
+    """Redirect eval_launch.RESULTS_DIR to a scratch tempdir and reset its
+    in-memory run registry — see test_scan_launch._isolate_scan_output for
+    why (a real, unmocked launch path writes real files under
+    evaluator/results/ and populates eval_launch._RUNNING/_INFLIGHT for
+    real, cleaned up on an unsynchronized background thread)."""
+    tmp = tempfile.TemporaryDirectory()
+    test_case.addCleanup(tmp.cleanup)
+    root = Path(tmp.name)
+    patcher = mock.patch.object(eval_launch, "RESULTS_DIR", root)
+    patcher.start()
+    test_case.addCleanup(patcher.stop)
+    test_case.addCleanup(eval_launch._RUNNING.clear)
+    test_case.addCleanup(eval_launch._INFLIGHT.clear)
+    return root
 
 
 class ValidateLaunchTest(unittest.TestCase):
@@ -263,6 +282,7 @@ class GetStatusTest(unittest.TestCase):
 
 class LaunchRoutesTest(unittest.TestCase):
     def setUp(self) -> None:
+        _isolate_eval_output(self)
         # Offline + deterministic candidate allowlist (see ValidateLaunchTest).
         # Also avoids the OpenAI client's platform/uname subprocess, which
         # would otherwise inflate the patched global subprocess.Popen count.
@@ -281,7 +301,15 @@ class LaunchRoutesTest(unittest.TestCase):
         )
         gate.start()
         self.addCleanup(gate.stop)
+        # /eval-run/new and /eval-run/start require a signed-in, allowlisted
+        # user — force the dev-auth bypass on regardless of the real .env
+        # AUTH_ENABLED.
+        env_patch = mock.patch.dict(os.environ, {"AUTH_ENABLED": "0"})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
         self.client = create_app({"TESTING": True}).test_client()
+        with self.client.session_transaction() as sess:
+            sess["user"] = {"id": "u-test", "netid": "testuser", "display_name": "Test"}
 
     def test_form_renders(self) -> None:
         r = self.client.get("/eval-run/new")
@@ -353,6 +381,19 @@ class LaunchRoutesTest(unittest.TestCase):
         self.assertIn(b"safety red-teaming required", r.data)
         # The gate must short-circuit before any subprocess is spawned.
         popen.assert_not_called()
+
+    def test_delete_requires_login(self) -> None:
+        with self.client.session_transaction() as sess:
+            sess.pop("user", None)
+        r = self.client.get("/eval-run/nonexistent-slug/delete")
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("/auth/login", r.headers["Location"])
+
+    def test_private_detail_requires_login(self) -> None:
+        with self.client.session_transaction() as sess:
+            sess.pop("user", None)
+        r = self.client.get("/eval-run/nonexistent-slug/private")
+        self.assertIn(r.status_code, (302, 401, 403))
 
 
 class CustomQuestionsTest(unittest.TestCase):
@@ -440,6 +481,10 @@ class CustomRouteTest(unittest.TestCase):
         import tempfile
         from pathlib import Path
 
+        os.environ["AUTH_ENABLED"] = "0"
+        os.environ["AUTH_DEV_NETID"] = "testuser"
+        os.environ["AUTH_ALLOWED_NETIDS"] = "testuser"
+        _isolate_eval_output(self)
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         for attr in ("CUSTOM_SUITES_DIR",):
@@ -457,7 +502,11 @@ class CustomRouteTest(unittest.TestCase):
         )
         gate.start()
         self.addCleanup(gate.stop)
-        self.client = create_app({"TESTING": True}).test_client()
+        self.app = create_app({"TESTING": True, "SECRET_KEY": "test"})
+        self.client = self.app.test_client()
+        with self.client.session_transaction() as sess:
+            sess["view_mode"] = "private"
+            sess["user"] = {"id": "u-test", "netid": "testuser", "display_name": "Test"}
 
     def test_invalid_questions_rejected(self) -> None:
         r = self.client.post("/eval-run/start-custom", data={
@@ -477,6 +526,35 @@ class CustomRouteTest(unittest.TestCase):
             })
         self.assertEqual(r.status_code, 302)
         self.assertIn("custom_", r.headers["Location"])
+
+
+class UnreadableEvalOutputTest(unittest.TestCase):
+    def test_all_suite_keys_tolerates_unreadable_custom_dir(self) -> None:
+        with mock.patch("dbutils.fs_safe.is_dir", return_value=False):
+            keys = eval_launch._all_suite_keys()
+        self.assertIn("it_support_v1", keys)
+
+    def test_wipe_prior_runs_skips_unreadable_glob_match(self) -> None:
+        root = _isolate_eval_output(self)
+        good = root / "20260101_120000_gpt-5-chat_it-support.jsonl"
+        good.write_text('{"x":1}\n', encoding="utf-8")
+
+        real_glob = Path.glob
+
+        def patched_glob(self, pattern):
+            for match in real_glob(self, pattern):
+                if "bad" in match.name:
+                    raise PermissionError("denied")
+                yield match
+
+        bad = root / "20260101_bad_gpt-5-chat_it-support.jsonl"
+        bad.write_text('{"x":1}\n', encoding="utf-8")
+        with mock.patch.object(Path, "glob", patched_glob):
+            eval_launch._wipe_prior_runs(
+                "it_support_v1", "gpt-5-chat", visibility="public", owner_user_id=None
+            )
+        self.assertTrue(good.is_file())
+        self.assertTrue(bad.is_file())
 
 
 if __name__ == "__main__":

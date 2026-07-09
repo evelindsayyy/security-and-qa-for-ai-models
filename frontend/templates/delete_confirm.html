@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Delete result — {{ pillar_label }}{% endblock %}
+
+{% block content %}
+<div class="eval-comparison">
+  <p class="back"><a href="{{ cancel_url }}">← {{ cancel_label }}</a></p>
+  <h1>Delete this result?</h1>
+
+  {% if error_message %}
+  <p class="form-warning">{{ error_message }}</p>
+  {% else %}
+  <p class="form-warning">
+    This permanently deletes this result. This cannot be undone.
+  </p>
+  {% endif %}
+
+  {% if summary_items %}
+  <dl class="legend-grid">
+    {% for label, value in summary_items %}
+    <dt>{{ label }}</dt>
+    <dd>{{ value }}</dd>
+    {% endfor %}
+  </dl>
+  {% endif %}
+
+  {% if removal_summary %}
+  <div class="delete-removal-box">
+    <h2 class="delete-removal-heading">What will be removed</h2>
+    <ul class="delete-removal-list">
+      {% for item in removal_summary %}
+      <li>{{ item }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if paths %}
+  <details class="tool-panel">
+    <summary>Output files on disk (if present)</summary>
+    <ul class="file-list">
+      {% for p in paths %}
+      <li><code>{{ p }}</code></li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+
+  <form method="post" action="{{ delete_url }}" class="detail-delete-form">
+    <input type="hidden" name="confirm" value="1">
+    <button type="submit" class="btn-danger" {% if delete_disabled %}disabled{% endif %}>
+      Delete permanently
+    </button>
+    <a class="btn-secondary" href="{{ cancel_url }}">Cancel</a>
+  </form>
+</div>
+{% endblock %}

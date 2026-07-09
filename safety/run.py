@@ -16,12 +16,14 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 from dbutils.compose import compose_build, compose_run
 from dbutils.env import REPO_ROOT
+from safety.garak.report_validation import DEFAULT_PROBE_SPEC, validate_report
 from dbutils import run_lock
 from safety.gateway_ids import normalize_gateway_model_id
 
@@ -37,6 +39,14 @@ ALL_MODELS = (
 
 PROMPTFOO_COMPOSE = REPO_ROOT / "safety" / "promptfoo" / "docker" / "compose.yml"
 GARAK_COMPOSE = REPO_ROOT / "safety" / "garak" / "docker" / "compose.yml"
+
+# Remote-plugin coverage that can't run inside the promptfoo redteam job (needs a
+# local LLM grader); run separately against static manual/*.yaml configs.
+MANUAL_EVALS = (
+    ("harmful", "manual/harmful_content.yaml"),
+    ("bias", "manual/bias.yaml"),
+    ("remote_policy", "manual/remote_policy.yaml"),
+)
 
 
 @dataclass
@@ -61,9 +71,12 @@ def garak_xdg_env(slug: str) -> dict[str, str]:
         d.mkdir(parents=True, exist_ok=True)
     return {
         "HOME": str(home),
+        "USER": "garak",
+        "LOGNAME": "garak",
         "XDG_DATA_HOME": str(data),
         "XDG_CACHE_HOME": str(cache),
         "XDG_CONFIG_HOME": str(config),
+        "TORCHINDUCTOR_CACHE_DIR": str(cache / "torchinductor"),
     }
 
 
@@ -94,7 +107,7 @@ def _prepare_promptfoo_host_dir() -> None:
         os.environ["PROMPTFOO_HOST_DIR"] = f"{host_repo}/safety/promptfoo"
 
 
-def _promptfoo_compose_env(base: dict[str, str]) -> dict[str, str]:
+def _promptfoo_compose_env(base: dict[str, str], *, slug: str, profile: str) -> dict[str, str]:
     """Env passed explicitly to nested Promptfoo compose (host bind mounts)."""
     env = dict(base)
     host_repo = os.environ.get("HOST_REPO", "").strip()
@@ -105,7 +118,58 @@ def _promptfoo_compose_env(base: dict[str, str]) -> dict[str, str]:
         env["PROMPTFOO_HOST_DIR"] = os.environ["PROMPTFOO_HOST_DIR"].strip()
     env.setdefault("UID", str(os.getuid()))
     env.setdefault("GID", str(os.getgid()))
+    env["PROMPTFOO_CONFIG_DIR"] = (
+        f"/app/safety/promptfoo/output/{slug}/{profile}/.promptfoo"
+    )
     return env
+
+
+def _promptfoo_sqlite_contention(stderr: str) -> bool:
+    needles = (
+        'Failed query: update "evals"',
+        "SQLITE_BUSY",
+        "SQLITE_LOCKED",
+        "database is locked",
+    )
+    lowered = stderr.lower()
+    return any(n.lower() in lowered for n in needles)
+
+
+def _compose_run_promptfoo(
+    inner_cmd: list[str],
+    *,
+    extra_env: dict[str, str],
+    label: str,
+    retries: int = 2,
+) -> None:
+    """Run promptfoo via compose with bounded retry on SQLite contention."""
+    last_exc: subprocess.CalledProcessError | None = None
+    for attempt in range(max(1, retries)):
+        try:
+            compose_run(
+                PROMPTFOO_COMPOSE,
+                "promptfoo",
+                inner_cmd,
+                extra_env=extra_env,
+                check=True,
+            )
+            return
+        except subprocess.CalledProcessError as exc:
+            last_exc = exc
+            detail = (exc.stderr or exc.stdout or "").strip()
+            if attempt + 1 < retries and _promptfoo_sqlite_contention(detail):
+                delay = 1.5 * (attempt + 1)
+                print(
+                    f"WARN: {label} hit promptfoo SQLite contention; "
+                    f"retrying in {delay:.1f}s ({attempt + 2}/{retries})",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                time.sleep(delay)
+                continue
+            raise
+    if last_exc is not None:
+        raise last_exc
 
 
 def _ensure_output_dirs(slug: str, profile: str) -> None:
@@ -210,7 +274,8 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
 
     print(
         f"Safety run: model={cfg.model} slug={slug} "
-        f"profile={cfg.redteam_profile} redteam={cfg.redteam}"
+        f"profile={cfg.redteam_profile} redteam={cfg.redteam}",
+        flush=True,
     )
 
     merge_args: list[str] = []
@@ -219,24 +284,22 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
     pf_env = _promptfoo_compose_env({
         "GATEWAY_MODEL": cfg.model,
         "REDTEAM_GRADER_MODEL": grader,
-    })
+    }, slug=slug, profile=cfg.redteam_profile)
 
     pf_output = REPO_ROOT / "safety" / "promptfoo" / "output" / slug / cfg.redteam_profile
 
     if not cfg.skip_promptfoo:
         if not cfg.skip_policy:
-            print("--- Promptfoo policy ---")
+            print("--- Promptfoo policy ---", flush=True)
             eval_json = pf_output / "eval.json"
             try:
-                compose_run(
-                    PROMPTFOO_COMPOSE,
-                    "promptfoo",
+                _compose_run_promptfoo(
                     [
                         "promptfoo", "eval", "-c", "promptfooconfig.yaml",
                         "-o", f"output/{slug}/{cfg.redteam_profile}/eval.json",
                     ],
                     extra_env=pf_env,
-                    check=True,
+                    label="policy eval",
                 )
             except subprocess.CalledProcessError as exc:
                 if not eval_json.is_file():
@@ -254,10 +317,10 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
                 str(pf_output / "safety_result.json"),
             ])
         else:
-            print("--- Promptfoo policy skipped (--skip-policy) ---")
+            print("--- Promptfoo policy skipped (--skip-policy) ---", flush=True)
 
         if cfg.redteam:
-            print(f"--- Promptfoo red-team (profile={cfg.redteam_profile}) ---")
+            print(f"--- Promptfoo red-team (profile={cfg.redteam_profile}) ---", flush=True)
             redteam_json = pf_output / "redteam_eval.json"
             run_py([
                 "safety/promptfoo/build_config.py",
@@ -269,9 +332,7 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
                 f"output/{slug}/{cfg.redteam_profile}/redteam_promptfooconfig.yaml"
             )
             try:
-                compose_run(
-                    PROMPTFOO_COMPOSE,
-                    "promptfoo",
+                _compose_run_promptfoo(
                     [
                         "promptfoo", "redteam", "run",
                         "-c", config_in_container,
@@ -281,7 +342,7 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
                         "--force",
                     ],
                     extra_env=pf_env,
-                    check=True,
+                    label="red-team eval",
                 )
             except subprocess.CalledProcessError as exc:
                 if not redteam_json.is_file():
@@ -300,15 +361,50 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
                 "--promptfoo",
                 str(pf_output / "redteam_safety_result.json"),
             ])
+
+            print("--- Promptfoo manual evals (remote-plugin coverage) ---", flush=True)
+            for stem, yaml_rel in MANUAL_EVALS:
+                print(f"  running {yaml_rel} ...", flush=True)
+                manual_eval = pf_output / f"manual_{stem}_eval.json"
+                try:
+                    _compose_run_promptfoo(
+                        [
+                            "promptfoo", "eval", "-c", yaml_rel,
+                            "-o", f"output/{slug}/{cfg.redteam_profile}/manual_{stem}_eval.json",
+                        ],
+                        extra_env=pf_env,
+                        label=f"manual eval {stem}",
+                    )
+                except subprocess.CalledProcessError:
+                    pass
+                if not manual_eval.is_file():
+                    print(f"WARN: manual eval '{stem}' failed, skipping", file=sys.stderr, flush=True)
+                    continue
+
+                manual_result = pf_output / f"manual_{stem}_safety_result.json"
+                try:
+                    run_py([
+                        "safety/promptfoo/export_safety_result.py",
+                        str(manual_eval),
+                        "-o", str(manual_result),
+                    ])
+                except subprocess.CalledProcessError as exc:
+                    print(
+                        f"WARN: export failed for manual eval '{stem}' (exit {exc.returncode}), skipping",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    continue
+                merge_args.extend(["--promptfoo", str(manual_result)])
         else:
-            print("--- Promptfoo red-team skipped (--skip-redteam) ---")
+            print("--- Promptfoo red-team skipped (--skip-redteam) ---", flush=True)
     else:
-        print("--- Promptfoo skipped (--skip-promptfoo) ---")
+        print("--- Promptfoo skipped (--skip-promptfoo) ---", flush=True)
 
     garak_failed = False
     garak_rc = 0
     if not cfg.skip_garak:
-        print("--- Garak scan ---")
+        print("--- Garak scan ---", flush=True)
         xdg = garak_xdg_env(slug)
         garak_argv = [
             "safety/garak/run_garak.py", cfg.model,
@@ -339,22 +435,12 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
             else:
                 return garak_rc or 1
         else:
-            print("--- Garak export ---")
-            garak_result = REPO_ROOT / "safety" / "garak" / "output" / slug / "safety_result.json"
-            try:
-                run_py([
-                    "safety/garak/export_safety_result.py",
-                    str(report),
-                    "-o", str(garak_result),
-                    "--gateway-model-id", cfg.model,
-                ])
-            except subprocess.CalledProcessError as exc:
+            probe_spec = cfg.garak_probes or DEFAULT_PROBE_SPEC
+            ok, err, _analysis = validate_report(report, probe_spec=probe_spec)
+            if not ok:
                 garak_failed = True
-                garak_rc = exc.returncode or 1
-                print(
-                    f"ERROR: Garak export failed (exit {garak_rc})",
-                    file=sys.stderr,
-                )
+                garak_rc = 1
+                print(f"ERROR: {err}", file=sys.stderr)
                 if merge_args:
                     print(
                         "WARNING: Garak failed; merged result omits garak",
@@ -363,17 +449,43 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
                 else:
                     return garak_rc
             else:
-                merge_args.extend(["--garak", str(garak_result)])
-                profile_copy = (
-                    REPO_ROOT / "safety" / "output" / slug / cfg.redteam_profile
-                    / "garak_safety_result.json"
+                print("--- Garak export ---", flush=True)
+                garak_result = (
+                    REPO_ROOT / "safety" / "garak" / "output" / slug / "safety_result.json"
                 )
                 try:
-                    shutil.copy2(garak_result, profile_copy)
-                except OSError:
-                    pass
+                    run_py([
+                        "safety/garak/export_safety_result.py",
+                        str(report),
+                        "-o", str(garak_result),
+                        "--gateway-model-id", cfg.model,
+                    ])
+                except subprocess.CalledProcessError as exc:
+                    garak_failed = True
+                    garak_rc = exc.returncode or 1
+                    print(
+                        f"ERROR: Garak export failed (exit {garak_rc})",
+                        file=sys.stderr,
+                    )
+                    if merge_args:
+                        print(
+                            "WARNING: Garak failed; merged result omits garak",
+                            file=sys.stderr,
+                        )
+                    else:
+                        return garak_rc
+                else:
+                    merge_args.extend(["--garak", str(garak_result)])
+                    profile_copy = (
+                        REPO_ROOT / "safety" / "output" / slug / cfg.redteam_profile
+                        / "garak_safety_result.json"
+                    )
+                    try:
+                        shutil.copy2(garak_result, profile_copy)
+                    except OSError:
+                        pass
     else:
-        print("--- Garak skipped (--skip-garak) ---")
+        print("--- Garak skipped (--skip-garak) ---", flush=True)
 
     if not merge_args:
         print("ERROR: nothing to merge — run at least one suite", file=sys.stderr)
@@ -382,10 +494,16 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
     merged = (
         REPO_ROOT / "safety" / "output" / slug / cfg.redteam_profile / "merged_safety_result.json"
     )
-    print("--- Merge ---")
+    print("--- Merge ---", flush=True)
     run_py(["-m", "safety.merge", *merge_args, "--profile", cfg.redteam_profile, "-o", str(merged)])
-    print(f"Complete: {merged.relative_to(REPO_ROOT)}")
-    print(f"Frontend: /safety/{slug}/{cfg.redteam_profile}")
+    if cfg.skip_garak:
+        print("Garak: SKIPPED", flush=True)
+    elif garak_failed:
+        print("Garak: FAILED (merged without garak)", file=sys.stderr, flush=True)
+    else:
+        print("Garak: OK", flush=True)
+    print(f"Complete: {merged.relative_to(REPO_ROOT)}", flush=True)
+    print(f"Frontend: /safety/{slug}/{cfg.redteam_profile}", flush=True)
     if garak_failed:
         exit_rc = garak_rc or 1
     return exit_rc

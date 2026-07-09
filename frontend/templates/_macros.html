@@ -9,13 +9,46 @@
 {% endif %}
 {% endmacro %}
 
-{% macro tier_label(level) %}
-<span class="tier tier-{{ level }}">{{ level }}</span>
+{# Login-gated "Start …" link — starting a run always requires sign-in.
+   Renders a live link when signed in, a disabled look-alike otherwise so
+   the rest of the page stays read-only without a dead click. #}
+{% macro start_button(url, label, classes='btn-primary') %}
+{% if is_logged_in %}
+<a class="{{ classes }}" href="{{ url }}">{{ label }}</a>
+{% else %}
+<span class="{{ classes }} is-disabled" aria-disabled="true" title="Sign in with your Duke NetID to start a run">{{ label }}</span>
+{% endif %}
 {% endmacro %}
 
-{% macro source_badge(source) %}
-<span class="badge badge-{{ source }}">{{ source }}</span>
+{# Login-gated "Delete" link — deleting a result always requires sign-in.
+   Renders a live link when signed in, a disabled look-alike otherwise so
+   signed-out visitors can view results but never remove them. #}
+{% macro delete_button(url, label='Delete result', classes='btn-danger') %}
+{% if is_logged_in %}
+<a class="{{ classes }}" href="{{ url }}">{{ label }}</a>
+{% else %}
+<span class="{{ classes }} is-disabled" aria-disabled="true" title="Sign in with your Duke NetID to delete a run">{{ label }}</span>
+{% endif %}
 {% endmacro %}
+
+{% macro tier_label(level) -%}
+<span class="tier tier-{{ level }}">{{ level }}</span>
+{%- endmacro %}
+
+{% macro source_badge(source) -%}
+<span class="badge badge-{{ source }}">{{ source }}</span>
+{%- endmacro %}
+
+{# Identical "private" badge repeated on every pillar's detail page. #}
+{% macro private_badge() -%}
+<span class="badge badge-private" title="Only visible to you">private</span>
+{%- endmacro %}
+
+{# Identical back-to-list link used by the running/complete branches of
+   every pillar's detail page (the "missing" branch has its own shape). #}
+{% macro back_link(url, label) -%}
+<p class="back"><a href="{{ url }}">{{ label }}</a></p>
+{%- endmacro %}
 
 {# Manual pillar runs when the UI has no data yet — matches docs/cli.md (Docker default). #}
 {% macro cli_scan_docker() -%}
@@ -42,10 +75,55 @@ docker compose --env-file .env -f benchmarks/docker/compose.yml run --rm benchma
 uv run python -m gateway
 {%- endmacro %}
 
+{# Pillar reference/guide callout — mirrors benchmarks list page. #}
+{% macro pillar_guide_callout(title, description, reference_url, kicker='Start here') %}
+<aside class="benchmark-reference-callout" aria-label="{{ title }}">
+  <div class="benchmark-reference-callout-text">
+    <p class="benchmark-reference-callout-kicker">{{ kicker }}</p>
+    <p class="benchmark-reference-callout-title">{{ title }}</p>
+    <p class="benchmark-reference-callout-desc">{{ description }}</p>
+  </div>
+  <a class="btn-reference" href="{{ reference_url }}">Open reference &amp; guide →</a>
+</aside>
+{% endmacro %}
+
+{# Rerun link — prefills the pillar launch form from a completed run. #}
+{% macro rerun_button(url, label='Rerun', classes='btn-secondary btn-sm') %}
+{% if is_logged_in %}
+<a class="{{ classes }}" href="{{ url }}">{{ label }}</a>
+{% else %}
+<span class="{{ classes }} is-disabled" aria-disabled="true" title="Sign in to rerun">{{ label }}</span>
+{% endif %}
+{% endmacro %}
+
+{# Stale-run indicator — orange ! with tooltip; nothing when up to date. #}
+{% macro staleness_badge(staleness) %}
+{% if staleness and staleness.stale %}
+<span class="staleness-warn"
+      title="{{ staleness.label }}{% if staleness.reasons %} — {{ staleness.reasons | join('; ') }}{% endif %}"
+      aria-label="{{ staleness.label }}"
+      role="img">!</span>
+{% endif %}
+{% endmacro %}
+
+{% macro benchmark_item_status(r) %}
+  {% if r.answered is defined and not r.answered %}
+    <span class="status-skip">SKIP</span>
+  {% elif r.judge is defined %}
+    {% if r.judge.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+  {% elif r.passed is defined %}
+    {% if r.passed %}<span class="status-ok">PASS</span>{% else %}<span class="status-fail">FAIL</span>{% endif %}
+  {% else %}
+    <span class="status-fail">FAIL</span>
+  {% endif %}
+{% endmacro %}
+
 {% macro progress_terminal(poll_url, interval, hint='', show_retry=false, retry_url='', initial_status='running', initial_message='') %}
 <div class="progress-card progress-card--wide">
   <p class="progress-meta">status: <b id="prog-state">{{ initial_status }}</b></p>
-  <pre class="log-terminal" id="prog-log" aria-live="polite">{{ initial_message }}</pre>
+  <p id="prog-truncated" class="log-terminal-hint" style="display: none;"></p>
+  <p id="prog-alert" class="form-warning" style="display: none;" role="alert"></p>
+  <pre class="log-terminal log-terminal--run" id="prog-log" aria-live="polite">{{ initial_message }}</pre>
   {% if hint %}
   <p class="log-terminal-hint">{{ hint }}</p>
   {% endif %}
@@ -61,32 +139,61 @@ uv run python -m gateway
   const intervalMs = {{ interval }};
   const logEl = document.getElementById("prog-log");
   const stateEl = document.getElementById("prog-state");
+  const alertEl = document.getElementById("prog-alert");
+  const truncatedEl = document.getElementById("prog-truncated");
   const retryEl = document.getElementById("prog-retry");
-  let userScrolledUp = false;
-
-  logEl.addEventListener("scroll", function () {
-    userScrolledUp = logEl.scrollTop + logEl.clientHeight < logEl.scrollHeight - 40;
-  });
 
   function updateLog(text) {
-    if (!text) return;
+    if (typeof text !== "string" || text === logEl.textContent) return;
+    const atBottom = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 48;
+    const prevTop = logEl.scrollTop;
     logEl.textContent = text;
-    if (!userScrolledUp) {
+    if (atBottom) {
       logEl.scrollTop = logEl.scrollHeight;
+    } else {
+      logEl.scrollTop = prevTop;
+    }
+  }
+
+  function showAlert(text) {
+    if (!text || !alertEl) return;
+    alertEl.textContent = text;
+    alertEl.style.display = "block";
+  }
+
+  function applyStatus(s) {
+    if (s.alert) {
+      stateEl.textContent = "running (suite failed)";
+      showAlert(s.alert);
+    } else if (s.warnings && s.warnings.length) {
+      const msg = s.warnings.map(function (w) {
+        return w.toLowerCase().indexOf("partial") >= 0 ? w : w + " did not run.";
+      }).join("; ");
+      showAlert(msg);
+    } else {
+      stateEl.textContent = s.status;
+      if (alertEl) alertEl.style.display = "none";
+    }
+    if (truncatedEl) {
+      if (s.log_truncated) {
+        truncatedEl.textContent = "Log is very large — showing the most recent portion. See the run log file on disk for the full history.";
+        truncatedEl.style.display = "block";
+      } else {
+        truncatedEl.style.display = "none";
+      }
+    }
+    const logText = s.message || s.log;
+    if (logText) updateLog(logText);
+    if (s.status === "complete" || s.status === "partial") {
+      window.location = window.location.pathname;
+    } else if (s.status === "failed") {
+      stateEl.textContent = "failed";
+      if (retryEl) retryEl.style.display = "block";
     }
   }
 
   function poll() {
-    fetch(pollUrl).then(function (r) { return r.json(); }).then(function (s) {
-      stateEl.textContent = s.status;
-      if (s.message) updateLog(s.message);
-      if (s.status === "complete") {
-        window.location = window.location.pathname;
-      } else if (s.status === "failed") {
-        stateEl.textContent = "failed";
-        if (retryEl) retryEl.style.display = "block";
-      }
-    }).catch(function () {});
+    fetch(pollUrl).then(function (r) { return r.json(); }).then(applyStatus).catch(function () {});
   }
 
   poll();

@@ -58,6 +58,10 @@
     </div>
   </details>
 
+  {% if rerun %}
+  <p class="sub benchmark-rerun-hint">Pre-filled from a previous run — starting will delete the prior results and replace them.</p>
+  {% endif %}
+
   <p class="sub">
     Launches <code>evaluator/runner.py</code> via Docker Compose (default).
     One run at a time; an identical in-flight request returns the existing run.
@@ -73,7 +77,7 @@
       <label class="src-opt"><input type="radio" name="source" value="gateway" checked> Gateway model</label>
       <select name="candidate" id="candidate">
         {% for m in candidates %}
-        <option value="{{ m }}" {% if m == 'gpt-5-chat' %}selected{% endif %}>{{ m }}</option>
+        <option value="{{ m }}">{{ m }}</option>
         {% endfor %}
       </select>
 
@@ -157,7 +161,7 @@
         <label class="src-opt"><input type="radio" name="source" value="gateway" checked> Gateway model</label>
         <select name="candidate" id="candidate_c">
           {% for m in candidates %}
-          <option value="{{ m }}" {% if m == 'gpt-5-chat' %}selected{% endif %}>{{ m }}</option>
+          <option value="{{ m }}">{{ m }}</option>
           {% endfor %}
         </select>
 
@@ -219,6 +223,31 @@
   const PRICING = {{ pricing_json | safe }};
   const FAMILIES = {{ families | tojson }};
   const MAX_Q = {{ custom_max_questions }};
+  const RERUN = {{ rerun | default(none) | tojson }};
+
+  function applyRerunPrefill() {
+    if (!RERUN) return;
+    const form = document.getElementById("std-form");
+    if (!form) return;
+    if (RERUN.candidate_model) {
+      const cand = form.querySelector('select[name="candidate"]');
+      if (cand) {
+        const match = [...cand.options].find((o) => o.value === RERUN.candidate_model);
+        if (match) cand.value = RERUN.candidate_model;
+      }
+    }
+    if (RERUN.judge_model) {
+      const judge = form.querySelector('select[name="judge"]');
+      if (judge) {
+        const match = [...judge.options].find((o) => o.value === RERUN.judge_model);
+        if (match) judge.value = RERUN.judge_model;
+      }
+    }
+    if (RERUN.suite) {
+      const suite = form.querySelector(`input[name="suite"][value="${RERUN.suite}"]`);
+      if (suite) suite.checked = true;
+    }
+  }
 
   // Mirrors evaluator model_family(): match the family keyword anywhere in the
   // id, so an HF repo like "Qwen/Qwen2.5-7B-Instruct" or "meta-llama/..." is
@@ -358,5 +387,7 @@
 
   wireForm(document.getElementById("std-form"), suiteCount);
   wireForm(document.getElementById("custom-form"), pastedCount);
+  applyRerunPrefill();
+  document.getElementById("std-form")?.dispatchEvent(new Event("change"));
 </script>
 {% endblock %}

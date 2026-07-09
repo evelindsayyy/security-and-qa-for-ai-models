@@ -1,0 +1,230 @@
+{
+  "model": "openai/GPT 4.1 Mini",
+  "timestamp": "2026-06-29T18:41:00.221251+00:00",
+  "summary": {
+    "attempted": 20,
+    "scored": 20,
+    "failed": 0,
+    "coverage": 1.0,
+    "correct": 17,
+    "accuracy": 0.85,
+    "total_evaluated": 20,
+    "total": 20,
+    "run_stats": {
+      "api_calls": 20,
+      "api_calls_failed": 0,
+      "latency_ms": {
+        "mean": 753.4,
+        "p50": 752.4,
+        "p95": 1024.7
+      },
+      "tokens": {
+        "prompt": 1682,
+        "completion": 53,
+        "total": 1735
+      }
+    }
+  },
+  "results": [
+    {
+      "id": 0,
+      "question_type": "memory",
+      "story": "Jackson entered the hall. Chloe entered the hall. The boots is in the bathtub. Jackson exited the hall. Jackson entered the dining_room. Chloe moved the boots to the pantry.",
+      "question": "Where was the boots at the beginning?",
+      "correct_answer": "bathtub",
+      "model_answer": "bathtub",
+      "passed": true,
+      "answered": true
+    },
+    {
+      "id": 1,
+      "question_type": "first_order",
+      "story": "Jackson entered the hall. Chloe entered the hall. The boots is in the bathtub. Jackson exited the hall. Jackson entered the dining_room. Chloe moved the boots to the pantry.",
+      "question": "Where will Chloe look for the boots?",
+      "correct_answer": "pantry",
+      "model_answer": "pantry",
+      "passed": true,
+      "answered": true
+    },
+    {
+      "id": 2,
+      "question_type": "second_order",
+      "story": "Jackson entered the hall. Chloe entered the hall. The boots is in the bathtub. Jackson exited the hall. Jackson entered the dining_room. Chloe moved the boots to the pantry.",
+      "question": "Where does Chloe think that Jackson searches for the boots?",
+      "correct_answer": "bathtub",
+      "model_answer": "bathtub",
+      "passed": true,
+      "answered": true
+    },
+    {
+      "id": 3,
+      "question_type": "reality",
+      "story": "Jackson entered the hall. Chloe entered the hall. The boots is in the bathtub. Jackson exited the hall. Jackson entered the dining_room. Chloe moved the boots to the pantry.",
+      "question": "Where is the boots really?",
+      "correct_answer": "pantry",
+      "model_answer": "pantry",
+      "passed": true,
+      "answered": true
+    },
+    {
+      "id": 4,
+      "question_type": "first_order",
+      "story": "Jackson entered the hall. Chloe entered the hall. The boots is in the bathtub. Jackson exited the hall. Jackson entered the dining_room. Chloe moved the boots to the pantry.",
+      "question": "Where will Jackson look for the boots?",
+      "correct_answer": "bathtub",
+      "model_answer": "bathtub",
+      "passed": true,
+      "answered": true
+    },
+    {
+      "id": 5,
+      "question_type": "second_order",
+      "story": "Jackson entered the hall. Chloe entered the hall. The boots is in the bathtub. Jackson exited the hall. Jackson entered the dining_room. Chloe moved the boots to the pantry.",
+      "question": "Where does Jackson think that Chloe searches for the boots?",
+      "correct_answer": "bathtub",
+      "model_answer": "bathtub",
+      "passed": true,
+      "answered": true
+    },
+    {
+      "id": 6,
+      "question_type": "memory",
+      "story": "Hannah entered the patio. Noah entered the patio. The sweater is in the bucket. Noah exited the patio. Ethan entered the study. Ethan exited the study. Hannah moved the sweater to the pantry.",
+      "question": "Where was the sweater at the beginning?",
+      "correct_answer": "bucket",
+      "model_answer": "bucket",
+      "passed": true,
+      "answered": true
+    },
+    {
+      "id": 7,
+      "question_type": "first_order",
+      "story": "Hannah entered the patio. Noah entered the patio. The sweater is in the bucket. Noah exited the patio. Ethan entered the study. Ethan exited the study. Hannah moved the sweater to the pantry.",
+      "question": "Where will Hannah look for the sweater?",
+      "correct_answer": "pantry",
+      "model_answer": "pantry",
+      "passed": true,
+      "answered": true
+    },
+    {
+      "id": 8,
+      "question_type": "second_order",
+      "story": "Hannah entered the patio. Noah entered the patio. The sweater is in the bucket. Noah exited the patio. Ethan entered the study. Ethan exited the study. Hannah moved the sweater to the pantry.",
+      "question": "Where does Hannah think that Noah searches for the sweater?",
+      "correct_answer": "bucket",
+      "model_answer": "bucket",
+      "passed": true,
+      "answered": true
+    },
+    {
+      "id": 9,
+      "question_type": "reality",
+      "story": "Hannah entered the patio. Noah entered the patio. The sweater is in the bucket. Noah exited the patio. Ethan entered the study. Ethan exited the study. Hannah moved the sweater to the pantry.",
+      "question": "Where is the sweater really?",
+      "correct_answer": "pantry",
+      "model_answer": "pantry",
+      "passed": true,
+      "answered": true
+    },
+    {
+      "id": 10,
+      "question_type": "first_order",
+      "story": "Hannah entered the patio. Noah entered the patio. The sweater is in the bucket. Noah exited the patio. Ethan entered the study. Ethan exited the study. Hannah moved the sweater to the pantry.",
+      "question": "Where will Noah look for the sweater?",
+      "correct_answer": "bucket",
+      "model_answer": "bucket",
+      "passed": true,
+      "answered": true
+    },
+    {
+      "id": 11,
+      "question_type": "second_order",
+      "story": "Hannah entered the patio. Noah entered the patio. The sweater is in the bucket. Noah exited the patio. Ethan entered the study. Ethan exited the study. Hannah moved the sweater to the pantry.",
+      "question": "Where does Noah think that Hannah searches for the sweater?",
+      "correct_answer": "bucket",
+      "model_answer": "bucket",
+      "passed": true,
+      "answered": true
+    },
+    {
+      "id": 12,
+      "question_type": "memory",
+      "story": "Carter entered the cellar. Jacob entered the workshop. Mia is in the cellar. The gloves is in the envelope. Mia moved the gloves to the container. Jacob hates the pumpkin Carter exited the cellar.",
+      "question": "Where was the gloves at the beginning?",
+      "correct_answer": "envelope",
+      "model_answer": "envelope",
+      "passed": true,
+      "answered": true
+    },
+    {
+      "id": 13,
+      "question_type": "first_order",
+      "story": "Carter entered the cellar. Jacob entered the workshop. Mia is in the cellar. The gloves is in the envelope. Mia moved the gloves to the container. Jacob hates the pumpkin Carter exited the cellar.",
+      "question": "Where will Mia look for the gloves?",
+      "correct_answer": "container",
+      "model_answer": "container",
+      "passed": true,
+      "answered": true
+    },
+    {
+      "id": 14,
+      "question_type": "second_order",
+      "story": "Carter entered the cellar. Jacob entered the workshop. Mia is in the cellar. The gloves is in the envelope. Mia moved the gloves to the container. Jacob hates the pumpkin Carter exited the cellar.",
+      "question": "Where does Mia think that Carter searches for the gloves?",
+      "correct_answer": "container",
+      "model_answer": "cellar",
+      "passed": false,
+      "answered": true
+    },
+    {
+      "id": 15,
+      "question_type": "reality",
+      "story": "Carter entered the cellar. Jacob entered the workshop. Mia is in the cellar. The gloves is in the envelope. Mia moved the gloves to the container. Jacob hates the pumpkin Carter exited the cellar.",
+      "question": "Where is the gloves really?",
+      "correct_answer": "container",
+      "model_answer": "container",
+      "passed": true,
+      "answered": true
+    },
+    {
+      "id": 16,
+      "question_type": "first_order",
+      "story": "Carter entered the cellar. Jacob entered the workshop. Mia is in the cellar. The gloves is in the envelope. Mia moved the gloves to the container. Jacob hates the pumpkin Carter exited the cellar.",
+      "question": "Where will Carter look for the gloves?",
+      "correct_answer": "container",
+      "model_answer": "cellar",
+      "passed": false,
+      "answered": true
+    },
+    {
+      "id": 17,
+      "question_type": "second_order",
+      "story": "Carter entered the cellar. Jacob entered the workshop. Mia is in the cellar. The gloves is in the envelope. Mia moved the gloves to the container. Jacob hates the pumpkin Carter exited the cellar.",
+      "question": "Where does Carter think that Mia searches for the gloves?",
+      "correct_answer": "container",
+      "model_answer": "envelope",
+      "passed": false,
+      "answered": true
+    },
+    {
+      "id": 18,
+      "question_type": "memory",
+      "story": "Charlotte entered the master_bedroom. Sophia entered the master_bedroom. Jacob entered the dining_room. The coat is in the bathtub. Sophia exited the master_bedroom. Jacob exited the dining_room. Charlotte moved the coat to the crate.",
+      "question": "Where was the coat at the beginning?",
+      "correct_answer": "bathtub",
+      "model_answer": "bathtub",
+      "passed": true,
+      "answered": true
+    },
+    {
+      "id": 19,
+      "question_type": "first_order",
+      "story": "Charlotte entered the master_bedroom. Sophia entered the master_bedroom. Jacob entered the dining_room. The coat is in the bathtub. Sophia exited the master_bedroom. Jacob exited the dining_room. Charlotte moved the coat to the crate.",
+      "question": "Where will Charlotte look for the coat?",
+      "correct_answer": "crate",
+      "model_answer": "crate",
+      "passed": true,
+      "answered": true
+    }
+  ]
+}

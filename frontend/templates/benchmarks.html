@@ -1,42 +1,104 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_benchmark_docker %}
+{% from '_macros.html' import expandable, cli_benchmark_docker, start_button, delete_button, rerun_button, staleness_badge with context %}
 
 {% block title %}Benchmark results{% endblock %}
 
 {% block content %}
 <div class="eval-comparison">
   <h1>Benchmark results</h1>
-  <p><a class="btn-primary" href="{{ url_for('benchmark_run_new') }}">▶ Start a new run</a></p>
+  <p class="benchmark-page-actions">
+    {{ start_button(url_for('benchmark_run_new'), '▶ Start a new run') }}
+  </p>
 
-  <section class="key">
-    <h2>How to read this</h2>
+  {% if has_reference %}
+  <aside class="benchmark-reference-callout" aria-label="Benchmark reference and guide">
+    <div class="benchmark-reference-callout-text">
+      <p class="benchmark-reference-callout-kicker">Start here</p>
+      <p class="benchmark-reference-callout-title">Reference scores &amp; benchmark guide</p>
+      <p class="benchmark-reference-callout-desc">
+        Sample pilot runs for gateway models, plus what each benchmark measures and how scores are computed on this site.
+      </p>
+    </div>
+    <a class="btn-reference" href="{{ url_for('benchmark_reference') }}">Open reference &amp; guide →</a>
+  </aside>
+  {% endif %}
+
+  <details class="key" open>
+    <summary>How to read this</summary>
     <dl class="legend-grid">
-      <dt>TruthfulQA / MMLU / QuALITY</dt>
-      <dd>Multiple-choice accuracy — higher is better.</dd>
-      <dt>IFEval</dt>
-      <dd>Share of prompts whose formatting constraints were satisfied.</dd>
-      <dt>Consistency</dt>
-      <dd>Mean BERTScore F1 across rephrasings of the same question.</dd>
-      <dt>ToMi / MBPP</dt>
-      <dd>Theory-of-mind accuracy; code problems passing unit tests.</dd>
+      <dt>Score</dt>
+      <dd>
+        Headline metric per benchmark (<code>accuracy</code>, <code>pass rate</code>, etc.).
+        Color bands mark this site's pilot thresholds — orientation, not a leaderboard.
+        Click a row for per-item PASS, FAIL, or SKIP detail.
+      </dd>
+      <dt class="num-sample" title="{{ coverage_n_tooltip }}">n</dt>
+      <dd>{{ coverage_n_explanation }}</dd>
+      <dt><span class="coverage-partial-badge">N skipped</span></dt>
+      <dd>{{ coverage_skip_explanation }}</dd>
+      <dt>List</dt>
+      <dd>
+        One latest run per model and benchmark by default; enable <b>Show all runs</b> for history.
+        Superseded rows are dimmed.
+      </dd>
+      {% if has_comparison %}
+      <dt>Compare</dt>
+      <dd>
+        Matrix of latest scores (benchmark × model). Optional columns for item count and
+        reference deltas. Empty cells mean no run yet.
+      </dd>
+      {% endif %}
+      {% if has_reference %}
+      <dt>Reference</dt>
+      <dd>
+        Committed gateway baselines on default pilot sizes —
+        <a href="{{ url_for('benchmark_reference') }}">open reference &amp; guide</a>
+        for what each benchmark measures.
+      </dd>
+      {% endif %}
     </dl>
-  </section>
+  </details>
 
+  <h2>Runs</h2>
   {% if not has_runs %}
     <p class="sub empty">
       No benchmark output yet. Use <b>Start a new run</b> above, or from repo root:
       <code>{{ cli_benchmark_docker() }}</code>
     </p>
   {% else %}
+    <div class="bench-view-tabs" role="tablist" aria-label="Benchmark results view">
+      <button type="button" class="bench-view-tab is-active" data-view="list" role="tab" aria-selected="true" id="bench-tab-list">List</button>
+      {% if has_comparison %}
+      <button type="button" class="bench-view-tab" data-view="compare" role="tab" aria-selected="false" id="bench-tab-compare">Compare</button>
+      {% endif %}
+    </div>
+
+    <div id="bench-view-list" class="bench-view-panel" role="tabpanel" aria-labelledby="bench-tab-list">
     <p class="sub">
-      {{ runs|length }} result{{ "" if runs|length == 1 else "s" }} ·
-      {{ kinds|join(" · ") }}
+      {% if all_run_count > run_count %}
+      <b>{{ run_count }}</b> latest per model &amp; benchmark
+      · {{ all_run_count }} total run{{ "" if all_run_count == 1 else "s" }} on disk
+      {% else %}
+      {{ run_count }} result{{ "" if run_count == 1 else "s" }}
+      {% endif %}
+      · {{ kinds|join(" · ") }}
     </p>
 
     <div class="table-controls">
       <label>Benchmark <select id="f-kind"><option value="">all</option></select></label>
       <label>Model <select id="f-model"><option value="">all</option></select></label>
-      <span class="controls-hint">click a row for per-question detail</span>
+      <label class="checkbox-inline">
+        <input type="checkbox" id="f-all"> Show all runs
+      </label>
+      <label>Sort
+        <select id="f-sort">
+          <option value="when-desc" selected>Newest first</option>
+          <option value="when-asc">Oldest first</option>
+          <option value="score-desc">Best score</option>
+          <option value="score-asc">Lowest score</option>
+        </select>
+      </label>
+      <span class="controls-hint">click Score / When headers to sort · click a row for detail</span>
     </div>
 
     <div class="table-wrap">
@@ -45,15 +107,15 @@
         <tr>
           <th class="col-nowrap">Benchmark</th>
           <th>Model</th>
-          <th class="num">Headline metric</th>
-          <th class="num">n</th>
-          <th class="col-nowrap">When</th>
+          <th class="num sortable" data-sort="score">Score <span class="s-ind"></span></th>
+          <th class="num" title="{{ coverage_n_tooltip }}">n <span class="col-hint" aria-hidden="true">ⓘ</span></th>
+          <th class="num sortable" data-sort="when">When <span class="s-ind">▼</span></th>
           <th>File</th>
           <th class="col-actions">Actions</th>
         </tr>
       </thead>
       <tbody>
-        {% for r in runs %}
+        {% for r in all_runs %}
         {% set badge_class = {'truthfulqa': 'badge-tqa',
                               'ifeval': 'badge-ifeval',
                               'consistency': 'badge-consistency',
@@ -61,33 +123,46 @@
                               'tomi': 'badge-tomi',
                               'mbpp': 'badge-mbpp',
                               'quality': 'badge-quality'}.get(r.kind, 'badge-pilot') %}
-        {% set v = r.headline_value or 0 %}
-        {% if v >= 0.8 %}{% set score_class = 'score-strong' %}
-        {% elif v >= 0.6 %}{% set score_class = 'score-mid' %}
-        {% else %}{% set score_class = 'score-weak' %}{% endif %}
-        <tr class="row-link"
-            data-href="{{ url_for('benchmark_detail', slug=r.slug) }}"
+        <tr class="row-link{% if not r.is_latest %} run-superseded{% endif %}"
+            data-href="{{ url_for('benchmark_detail_private' if view_mode == 'private' else 'benchmark_detail', slug=r.slug) }}"
             tabindex="0"
             role="link"
             aria-label="Open {{ r.kind_label }} results for {{ r.model }}"
             data-kind="{{ r.kind_label }}"
-            data-model="{{ r.model }}">
+            data-model="{{ r.model }}"
+            data-latest="{{ 'true' if r.is_latest else 'false' }}"
+            data-score="{{ r.headline_value if r.headline_value is not none else '' }}"
+            data-when="{{ r.timestamp_raw or '' }}"
+            data-slug="{{ r.slug }}">
           <td class="col-nowrap"><span class="badge {{ badge_class }}">{{ r.kind_label }}</span></td>
-          <td><span class="model">{{ r.model }}</span></td>
-          <td class="num overall {{ score_class }}">
+          <td>
+            <span class="model">{{ r.model }}</span>
+            {{ staleness_badge(r.staleness) }}
+            {% if r.is_latest and r.older_run_count %}
+            <span class="dim bench-older-hint" title="Older runs hidden — enable Show all runs to see them">
+              +{{ r.older_run_count }} older
+            </span>
+            {% elif not r.is_latest %}
+            <span class="badge badge-pilot bench-superseded-badge">superseded</span>
+            {% endif %}
+          </td>
+          <td class="num overall {{ r.score_class }}">
             {{ r.headline_display }}
             <span class="dim"> {{ r.headline_metric }}</span>
           </td>
-          <td class="num">{{ r.n }}</td>
+          <td class="num" title="{{ coverage_n_tooltip }}">
+            {{ r.coverage.n_display }}
+            {% if r.coverage.partial %}
+            <span class="coverage-partial-badge" title="{{ coverage_skip_explanation }}">
+              {{ r.coverage.failed }} skipped
+            </span>
+            {% endif %}
+          </td>
           <td class="col-nowrap dim">{{ r.timestamp }}</td>
           <td class="col-long">{{ expandable(r.filename, clamp=1) }}</td>
-          <td class="col-actions">
-            <form method="post" action="{{ url_for('benchmark_delete', slug=r.slug) }}"
-                  class="inline-delete-form"
-                  onsubmit="return confirm('Delete this benchmark result? This cannot be undone.');">
-              <input type="hidden" name="confirm" value="1">
-              <button type="submit" class="btn-danger btn-sm" title="Delete result">Delete</button>
-            </form>
+          <td class="col-actions" onclick="event.stopPropagation()">
+            {{ rerun_button(url_for('benchmark_run_new', from=r.slug), 'Rerun', 'btn-primary btn-sm' if r.staleness and r.staleness.stale else 'btn-secondary btn-sm') }}
+            {{ delete_button(url_for('benchmark_delete_private' if view_mode == 'private' else 'benchmark_delete', slug=r.slug), 'Delete', classes='btn-danger btn-sm') }}
           </td>
         </tr>
         {% endfor %}
@@ -95,10 +170,30 @@
     </table>
     </div>
 
+    <script src="{{ url_for('static', filename='table-sort.js') }}"></script>
     <script>
       (function () {
-        const tbody = document.querySelector("#bench-table tbody");
+        const table = document.getElementById("bench-table");
+        const tbody = table.querySelector("tbody");
         const rows = Array.from(tbody.querySelectorAll("tr"));
+        let sortKey = "when", sortDir = -1;
+
+        function syncSortSelect() {
+          const sel = document.getElementById("f-sort");
+          if (sortKey === "when") sel.value = sortDir === -1 ? "when-desc" : "when-asc";
+          else sel.value = sortDir === -1 ? "score-desc" : "score-asc";
+        }
+
+        function applySortPreset(value) {
+          if (value === "when-desc") { sortKey = "when"; sortDir = -1; }
+          else if (value === "when-asc") { sortKey = "when"; sortDir = 1; }
+          else if (value === "score-desc") { sortKey = "score"; sortDir = -1; }
+          else if (value === "score-asc") { sortKey = "score"; sortDir = 1; }
+          document.querySelectorAll("#bench-table .s-ind").forEach(s => s.textContent = "");
+          const th = document.querySelector(`#bench-table th.sortable[data-sort="${sortKey}"]`);
+          if (th) th.querySelector(".s-ind").textContent = sortDir === -1 ? "▼" : "▲";
+        }
+
         for (const [id, key] of [["f-kind", "kind"], ["f-model", "model"]]) {
           const sel = document.getElementById(id);
           [...new Set(rows.map(r => r.dataset[key]))].sort().forEach(v => {
@@ -108,15 +203,121 @@
           });
           sel.addEventListener("change", render);
         }
+        document.getElementById("f-all").addEventListener("change", render);
+        document.getElementById("f-sort").addEventListener("change", function () {
+          applySortPreset(this.value);
+          render();
+        });
+
+        document.querySelectorAll("#bench-table th.sortable").forEach(th => {
+          th.addEventListener("click", () => {
+            const key = th.dataset.sort;
+            sortDir = (key === sortKey) ? -sortDir : -1;
+            sortKey = key;
+            syncSortSelect();
+            document.querySelectorAll("#bench-table .s-ind").forEach(s => s.textContent = "");
+            th.querySelector(".s-ind").textContent = sortDir === -1 ? "▼" : "▲";
+            render();
+          });
+        });
+
         function render() {
           const fk = document.getElementById("f-kind").value;
           const fm = document.getElementById("f-model").value;
-          tbody.innerHTML = "";
-          rows.filter(r =>
+          const showAll = document.getElementById("f-all").checked;
+          table.classList.toggle("show-all-runs", showAll);
+
+          let visible = rows.filter(r =>
+            (showAll || r.dataset.latest === "true") &&
             (!fk || r.dataset.kind === fk) &&
-            (!fm || r.dataset.model === fm)
-          ).forEach(r => tbody.appendChild(r));
+            (!fm || r.dataset.model === fm));
+
+          visible.sort((a, b) => {
+            let cmp = 0;
+            if (sortKey === "when") {
+              const av = a.dataset.when || "";
+              const bv = b.dataset.when || "";
+              cmp = av.localeCompare(bv);
+              if (!cmp) cmp = (a.dataset.slug || "").localeCompare(b.dataset.slug || "");
+            } else {
+              cmp = num(a, "score") - num(b, "score");
+              if (!cmp) cmp = (a.dataset.when || "").localeCompare(b.dataset.when || "");
+            }
+            return sortDir * cmp;
+          });
+
+          tbody.innerHTML = "";
+          visible.forEach(r => tbody.appendChild(r));
         }
+
+        render();
+      })();
+    </script>
+    </div>
+
+    {% if has_comparison %}
+    <div id="bench-view-compare" class="bench-view-panel" role="tabpanel" aria-labelledby="bench-tab-compare" hidden>
+      <p class="sub">
+        Latest score per model and benchmark — click a cell for item-level detail.
+        Empty cells mean that model has not been run on that benchmark yet.
+      </p>
+      <div class="table-controls comparison-matrix-controls">
+        <label class="checkbox-inline">
+          <input type="checkbox" id="f-compare-n"> Show item count (n)
+        </label>
+        <label class="checkbox-inline">
+          <input type="checkbox" id="f-compare-ref"> Compare to reference
+        </label>
+      </div>
+      {% include '_benchmark_comparison_matrix.html' %}
+    </div>
+    {% endif %}
+
+    <script>
+      (function () {
+        const tabs = document.querySelectorAll(".bench-view-tab");
+        const panels = {
+          list: document.getElementById("bench-view-list"),
+          compare: document.getElementById("bench-view-compare"),
+        };
+        if (!tabs.length) return;
+
+        function showView(view) {
+          tabs.forEach((tab) => {
+            const active = tab.dataset.view === view;
+            tab.classList.toggle("is-active", active);
+            tab.setAttribute("aria-selected", active ? "true" : "false");
+          });
+          for (const [key, panel] of Object.entries(panels)) {
+            if (!panel) continue;
+            panel.hidden = key !== view;
+          }
+          if (view === "compare") {
+            history.replaceState(null, "", "#compare");
+          } else if (location.hash === "#compare") {
+            history.replaceState(null, "", location.pathname);
+          }
+        }
+
+        tabs.forEach((tab) => {
+          tab.addEventListener("click", () => showView(tab.dataset.view));
+        });
+
+        if (location.hash === "#compare" && panels.compare) {
+          showView("compare");
+        }
+
+        const comparePanel = panels.compare;
+        const compareN = document.getElementById("f-compare-n");
+        const compareRef = document.getElementById("f-compare-ref");
+        function syncCompareExtras() {
+          if (!comparePanel) return;
+          comparePanel.classList.toggle("show-compare-n", !!(compareN && compareN.checked));
+          comparePanel.classList.toggle("show-compare-ref", !!(compareRef && compareRef.checked));
+        }
+        if (compareN) compareN.addEventListener("change", syncCompareExtras);
+        if (compareRef) compareRef.addEventListener("change", syncCompareExtras);
+        syncCompareExtras();
       })();
     </script>
   {% endif %}

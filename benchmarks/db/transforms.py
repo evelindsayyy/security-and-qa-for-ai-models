@@ -296,4 +296,8 @@ def benchmark_run_row(path: Path) -> dict[str, Any] | None:
         "run_params": run_params,
         "started_at": None,
         "completed_at": completed_at,
+        "visibility": "public",
+        "owner_user_id": None,
+        "config_fingerprint": None,
+        "config_json": {},
     }

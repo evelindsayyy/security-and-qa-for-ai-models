@@ -6,6 +6,9 @@
 <div class="eval-comparison benchmark-launch-page">
   <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmark results</a></p>
   <h1>Start a benchmark run</h1>
+  {% if rerun %}
+  <p class="sub benchmark-rerun-hint">Pre-filled from a previous run — starting will delete the prior results and replace them.</p>
+  {% endif %}
   <p class="sub">
     Choose a <strong>benchmark</strong>, then pick how the model is reached:
     Duke <strong>gateway</strong>, Hugging Face <strong>hosted</strong> inference,
@@ -28,6 +31,11 @@
           {% endfor %}
         </select>
       </label>
+
+      <div id="benchmark-desc" class="benchmark-launch-desc" aria-live="polite" hidden>
+        <p class="benchmark-launch-desc__about" id="benchmark-desc-about"></p>
+        <p class="form-hint" id="benchmark-desc-meta"></p>
+      </div>
 
       <fieldset class="model-source">
         <legend>Model source</legend>
@@ -52,7 +60,7 @@
         <label>Model
           <select name="model" id="model">
             {% for m in models %}
-            <option value="{{ m }}" {% if m == 'GPT 4.1 Mini' %}selected{% endif %}>{{ m }}</option>
+            <option value="{{ m }}">{{ m }}</option>
             {% endfor %}
           </select>
           <span class="form-hint">exact gateway id — see <a href="{{ url_for('models_catalog') }}">model catalog</a></span>
@@ -95,7 +103,7 @@
 
       <details class="advanced-options">
         <summary>Advanced options</summary>
-        <label id="sample-label">Sample size
+        <label id="sample-label" title="{{ coverage_n_tooltip }}">Sample size
           <input type="number" name="sample" id="sample" min="1" placeholder="default">
           <span class="form-hint" id="sample-hint"></span>
         </label>
@@ -172,6 +180,67 @@
   const BENCHMARK_OPTIONS = {{ benchmark_options | tojson }};
   const HOSTED_SAMPLE_MAX = {{ hosted_sample_max }};
   const HOSTED_SAMPLE_WARN = {{ hosted_sample_warn }};
+  const COVERAGE_N_TOOLTIP = {{ coverage_n_tooltip | tojson }};
+  const RERUN = {{ rerun | tojson }};
+
+  function applyRerunPrefill() {
+    if (!RERUN || !RERUN.benchmark) return;
+    document.getElementById('benchmark').value = RERUN.benchmark;
+    const src = RERUN.model_source || 'gateway';
+    const radio = document.querySelector(`input[name="model_source"][value="${src}"]`);
+    if (radio) radio.checked = true;
+    toggleModelSource();
+    if (src === 'gateway' && RERUN.model) {
+      const sel = document.getElementById('model');
+      if (sel) {
+        const match = [...sel.options].find((o) => o.value === RERUN.model);
+        if (match) sel.value = RERUN.model;
+      }
+    } else if (src === 'hosted' && RERUN.hosted_model) {
+      document.getElementById('hosted_model').value = RERUN.hosted_model;
+    } else if (src === 'custom') {
+      if (RERUN.custom_model) document.getElementById('custom_model').value = RERUN.custom_model;
+      if (RERUN.base_url) document.getElementById('base_url').value = RERUN.base_url;
+    }
+    updateBenchmarkOptions();
+    updateBenchmarkDescription();
+    if (RERUN.sample != null) document.getElementById('sample').value = RERUN.sample;
+    if (RERUN.seed != null) {
+      const seedInput = document.getElementById('seed');
+      const seedLabel = document.getElementById('seed-label');
+      if (seedLabel) seedLabel.style.display = '';
+      if (seedInput) seedInput.value = RERUN.seed;
+    }
+    if (RERUN.sample != null || RERUN.seed != null) {
+      const adv = document.querySelector('.advanced-options');
+      if (adv) adv.open = true;
+    }
+  }
+
+  function updateBenchmarkDescription() {
+    const key = document.getElementById('benchmark').value;
+    const opts = BENCHMARK_OPTIONS[key] || {};
+    const panel = document.getElementById('benchmark-desc');
+    const about = document.getElementById('benchmark-desc-about');
+    const meta = document.getElementById('benchmark-desc-meta');
+    const parts = [];
+
+    if (opts.about) {
+      about.textContent = opts.about;
+      panel.hidden = false;
+    } else {
+      about.textContent = '';
+      panel.hidden = true;
+    }
+
+    if (opts.headline_metric) {
+      parts.push(`Headline metric: ${opts.headline_metric}`);
+    }
+    if (opts.default_sample != null) {
+      parts.push(`Default pilot: ${opts.default_sample} ${opts.sample_unit || 'items'}`);
+    }
+    meta.textContent = parts.join(' · ');
+  }
 
   function updateBenchmarkOptions() {
     const key = document.getElementById('benchmark').value;
@@ -187,6 +256,7 @@
       sampleInput.max = hosted ? Math.min(opts.sample.max, HOSTED_SAMPLE_MAX) : opts.sample.max;
       sampleHint.textContent =
         `default ${opts.sample.default} ${opts.sample.unit} (max ${sampleInput.max})`;
+      sampleHint.title = COVERAGE_N_TOOLTIP;
     } else {
       sampleInput.disabled = true;
       sampleInput.value = '';
@@ -203,6 +273,7 @@
     }
 
     document.getElementById('hosted-sample-note').style.display = hosted ? '' : 'none';
+    updateBenchmarkDescription();
   }
 
   function toggleModelSource() {
@@ -224,8 +295,13 @@
     document.getElementById('api_key').disabled = !isCustom;
     updateBenchmarkOptions();
   }
-  document.getElementById('benchmark').addEventListener('change', updateBenchmarkOptions);
+  document.getElementById('benchmark').addEventListener('change', function () {
+    updateBenchmarkOptions();
+    updateBenchmarkDescription();
+  });
   toggleModelSource();
   updateBenchmarkOptions();
+  updateBenchmarkDescription();
+  applyRerunPrefill();
 </script>
 {% endblock %}

@@ -69,12 +69,41 @@ class SafetyScorerTest(unittest.TestCase):
     def test_redteam_plugin_categories(self) -> None:
         from safety.exporters.promptfoo import REDTEAM_PLUGIN_CATEGORY
 
+        # --- original local plugins ---
         self.assertEqual(REDTEAM_PLUGIN_CATEGORY["pii"], "leakage")
         self.assertEqual(REDTEAM_PLUGIN_CATEGORY["pii:direct"], "leakage")
         self.assertEqual(REDTEAM_PLUGIN_CATEGORY["imitation"], "policy")
         self.assertEqual(REDTEAM_PLUGIN_CATEGORY["harmful:privacy"], "leakage")
         self.assertEqual(REDTEAM_PLUGIN_CATEGORY["rbac"], "policy")
         self.assertEqual(REDTEAM_PLUGIN_CATEGORY["contracts"], "policy")
+        # newly explicit local plugins (were falling through to default)
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["shell-injection"], "jailbreak")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["sql-injection"], "jailbreak")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["prompt-extraction"], "leakage")
+        # --- harmful content (manual — unaligned/remote) ---
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["harmful:self-harm"], "jailbreak")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["harmful:hate"], "policy")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["harmful:chemical-biological-weapons"], "jailbreak")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["harmful:cybercrime:malicious-code"], "jailbreak")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["harmful:weapons:ied"], "jailbreak")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["harmful:misinformation-disinformation"], "policy")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["harmful:harassment-bullying"], "policy")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["harmful:radicalization"], "policy")
+        # --- bias (manual — remote) ---
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["bias:age"], "policy")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["bias:disability"], "policy")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["bias:gender"], "policy")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["bias:race"], "policy")
+        # --- remote policy (manual) ---
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["hijacking"], "jailbreak")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["system-prompt-override"], "jailbreak")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["wordplay"], "jailbreak")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["data-exfil"], "leakage")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["ferpa"], "leakage")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["coppa"], "leakage")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["goal-misalignment"], "policy")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["religion"], "policy")
+        self.assertEqual(REDTEAM_PLUGIN_CATEGORY["model-identification"], "policy")
 
     def test_slug_second_model(self) -> None:
         self.assertEqual(normalize_gateway_model_id("gpt-5-chat"), "gpt-5-chat")

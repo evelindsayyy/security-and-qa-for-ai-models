@@ -1,7 +1,10 @@
 # Garak Duke gateway scan — model-agnostic config.
 # Model: use run_garak.py (auto-selects generator profile) or pass -n directly.
 #
-# 15-module Duke-focused probe_spec (curated from reference.garak.ai probe index).
+# 14-module Duke-focused probe_spec (garak 0.15.x in safety/docker).
+# propile omitted — all propile.* sub-probes are inactive upstream in 0.15.x.
+# probe_spec is passed to garak via CLI -p from run_garak.py.
+#
 # Jailbreak probes often get Azure gateway-blocked → 0 attack hits = module pass.
 #
 # Auth: OPENAICOMPATIBLE_API_KEY (= DUKE_GATEWAY_KEY)
@@ -50,7 +53,10 @@ plugins:
   # run_safety.sh rewrites this to the selected frontend/CLI model for each run.
   # CLI -n also overrides this default; kept for local runs without -n.
   target_name: "GPT 4.1 Mini"
-  probe_spec: ansiescape,apikey,atkgen,av_spam_scanning,badchars,continuation,dan,divergence,doctor,donotanswer,dra,encoding,exploitation,glitch,goodside,grandma,latentinjection,leakreplay,lmrc,malwaregen,misleading,packagehallucination,phrasing,promptinject,propile,realtoxicityprompts,sata,smuggling,snowball,suffix.GCGCached,sysprompt_extraction,tap.TAPCached,topic,web_injection
+  # realtoxicityprompts excluded: all classes use unsafe_content.ToxicCommentModel (HFDetector),
+  # which fails with "No username set in the environment" in a live garak run context.
+  # lmrc/latentinjection narrowed to class-level specs to skip the HFDetector-based subclasses.
+  probe_spec: ansiescape,apikey,badchars,continuation,dan,divergence,dra,encoding,exploitation,goodside,grandma,latentinjection.LatentInjectionFactSnippetEiffel,latentinjection.LatentInjectionFactSnippetLegal,latentinjection.LatentInjectionReport,latentinjection.LatentInjectionResume,latentinjection.LatentInjectionTranslationEnFr,latentinjection.LatentInjectionTranslationEnZh,latentinjection.LatentWhois,latentinjection.LatentWhoisSnippet,leakreplay,lmrc.Anthropomorphisation,lmrc.Deadnaming,lmrc.QuackMedicine,malwaregen,misleading,packagehallucination,phrasing,promptinject,sata,snowball,suffix.GCGCached,sysprompt_extraction,tap.TAPCached,topic,web_injection
   # one-off override: run_safety.sh --garak-probes "encoding,promptinject,dan.Dan_11_0"
   extended_detectors: false
   generators:

@@ -120,15 +120,14 @@ class AvailabilityTest(unittest.TestCase):
             data = eval_run_data.get_runs_data()
         self.assertIn("has_runs", data)  # file-path contract served
 
-    def test_detail_dispatcher_falls_back_when_slug_not_in_db(self) -> None:
-        sentinel = {"slug": "from-files"}
+    def test_detail_returns_none_when_slug_not_in_db(self) -> None:
         with mock.patch.object(eval_db_data, "available", return_value=True), \
              mock.patch.object(eval_db_data, "get_run_detail_db",
                                return_value=None), \
              mock.patch.object(eval_run_data, "_get_run_detail_files",
-                               return_value=sentinel):
+                               return_value={"slug": "from-files"}):
             detail = eval_run_data.get_run_detail("some-slug")
-        self.assertIs(detail, sentinel)
+        self.assertIsNone(detail)
 
     def test_dispatcher_survives_db_exceptions(self) -> None:
         with mock.patch.object(eval_db_data, "available",

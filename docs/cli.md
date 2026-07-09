@@ -35,12 +35,37 @@ When `POSTGRES_DSN` is reachable from the application VM (or VPN). Set `EFFICACY
 
 ```bash
 ./scripts/apply-schemas.sh --bootstrap
+# Auth backfill (one-time, after apply-schemas):
+uv run python db/migrate_auth_columns.py --apply
 # Or one file: uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql
 ```
 
 Verify: `curl -s localhost:5000/api/health | python3 -m json.tool` → `db_available: true`.
 
 **Data flow:** runs write JSON → auto-sync to Postgres (default) → UI/API read Postgres first. Set `AUTO_INGEST=0` to disable.
+
+### Optional — authentication (OIDC)
+
+Deploy code first with `AUTH_ENABLED=0`. Auth details: [`../auth/README.md`](../auth/README.md).
+
+```bash
+# After OAuth client is registered on the VM .env:
+AUTH_ENABLED=1
+SECRET_KEY=<random hex>
+DUKE_OIDC_CLIENT_ID=...
+DUKE_OIDC_CLIENT_SECRET=...
+DUKE_OIDC_REDIRECT_URI=https://model-advisor.colab.duke.edu/login
+AUTH_ALLOWED_NETIDS=netid1,netid2
+
+# Local dev without Duke login:
+AUTH_ENABLED=0
+AUTH_DEV_NETID=yournetid
+AUTH_ALLOWED_NETIDS=yournetid
+```
+
+```bash
+curl -s localhost:5000/auth/me | python3 -m json.tool
+```
 
 ### Optional — pillar deps on the host
 
@@ -70,6 +95,11 @@ python3 main.py --host
 ```
 
 Set `APP_PORT` in `.env` to change the container port. One-time pillar builds: `./docker/build-pillars.sh`.
+
+**Browsing via an IDE-forwarded port** (VS Code Remote, JetBrains Gateway, `ssh -L`,
+…) needs no config — Duke NetID login works on whatever local port the IDE
+forwards to `APP_PORT`, even if it changes between sessions. See
+[`auth/README.md`](../auth/README.md#oidc-callback-ports-local-dev--ide-port-forwarding).
 
 ## JSON API
 
@@ -112,19 +142,27 @@ export HOST_UID=$(id -u) HOST_GID=$(id -g)   # web stack (docker/run.sh sets the
 
 ```bash
 # Scan an HF repo -> scanner/output/<slug>/scan_result.json (+ auto-ingest)
-docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner \
+env UID=$(id -u) GID=$(id -g) \
+  docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner \
   python -m scanner scan gpt2
 
-# Safety red-team -> safety/output/<slug>/<profile>/merged_safety_result.json
+# Safety -> safety/output/<slug>/<profile>/merged_safety_result.json
 uv run python -m safety.run "GPT 4.1 Mini"
 # Thin wrapper (same): ./safety/run_safety.sh "GPT 4.1 Mini"
 
+# Safety via Docker orchestrator (matches browser / UI path)
+env UID=$(id -u) GID=$(id -g) DOCKER_GID=$(stat -c '%g' /var/run/docker.sock) \
+  docker compose --env-file .env -f safety/docker/compose.yml run --rm safety \
+  python -m safety.run "GPT 4.1 Mini"
+
 # Efficacy (LLM-as-judge) -> evaluator/results/*.jsonl
-docker compose --env-file .env -f evaluator/docker/compose.yml run --rm evaluator \
+env UID=$(id -u) GID=$(id -g) \
+  docker compose --env-file .env -f evaluator/docker/compose.yml run --rm evaluator \
   python runner.py --candidate-model "GPT 4.1 Mini" --judge-model "Llama 4 Maverick"
 
 # Public benchmark -> benchmarks/results/
-docker compose --env-file .env -f benchmarks/docker/compose.yml run --rm benchmarks \
+env UID=$(id -u) GID=$(id -g) \
+  docker compose --env-file .env -f benchmarks/docker/compose.yml run --rm benchmarks \
   python run_benchmark.py --benchmark truthfulqa --model "GPT 4.1 Mini"
 ```
 
@@ -140,7 +178,11 @@ Per-pillar flags and host-only paths: [`scanner/`](../scanner/README.md) ·
 | Safety | `safety/output/<slug>/<profile>/run.lock` | exit **2** |
 | Benchmark | `benchmarks/results/<stem>.run.lock` | UI only (no CLI lock yet) |
 
-Scan and safety start forms show a warning when that model/repo is already in progress. Stale locks are removed when the holder PID is dead; delete the lock file manually if needed after `kill -9`.
+Scan and safety start forms show a warning when that model/repo is already in progress.
+
+**Stale locks:** removed when the holder PID is dead. Safety UI also treats orphaned locks as `failed` when the log shows `Complete:` or errors without a live process. Delete `run.lock` manually after `kill -9` if needed.
+
+**Garak (safety):** Duke 14 `probe_spec` queues 14 yaml entries → ~13 exported module findings (`dan.*` rolls up). Incomplete reports (no `completion` entry or fewer modules) fail export/merge — `garak_subset_v1` appears in `missing_suites`.
 
 Historical scan rows may show pre-change `overall_risk_score` values (clean scans now score **0**; benign gpt2-style pickles stay **18**).
 
@@ -222,11 +264,12 @@ cp .env.example .env
 uv sync --group dev
 ./docker/build-pillars.sh
 ./scripts/apply-schemas.sh --bootstrap
+uv run python db/migrate_auth_columns.py --apply   # auth fingerprints (one-time)
 
 python3 main.py up -d --build
 curl -s http://127.0.0.1:5000/api/health | python3 -m json.tool
 ```
 
-After deploy: `GET /api/health` → `db_available: true`, then POST a job and poll `status_url`. See [`api/README.md`](../api/README.md).
+After deploy: `GET /api/health` → `db_available: true`, then POST a job and poll `status_url`. Enable OIDC when ready; see [`../auth/README.md`](../auth/README.md).
 
 Ongoing: `git pull && ./docker/run.sh up -d --build`; `uv run python -m api.ingest --apply` to bulk re-ingest artifacts from VM disk.

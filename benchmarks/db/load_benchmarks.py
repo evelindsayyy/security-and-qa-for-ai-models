@@ -28,6 +28,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from benchmarks.db.transforms import benchmark_run_row
 from dbutils import apply_loader, jsonb_param, load_repo_env
+from dbutils.auth_columns import apply_auth_defaults, auth_fields_from_artifact
 from dbutils.cli import add_ingest_arguments
 from dbutils.ingest import exit_if_apply_without_dsn, print_dry_run_hint
 
@@ -56,7 +57,11 @@ def iter_result_files(output_dir: Path) -> list[Path]:
 
 
 def load_file(path: Path) -> dict[str, Any] | None:
-    return benchmark_run_row(path)
+    row = benchmark_run_row(path)
+    if row is None:
+        return None
+    apply_auth_defaults(row, auth_fields_from_artifact(path, pillar="benchmark"))
+    return row
 
 
 def load_into(conn, parsed: list[dict[str, Any]]) -> None:
@@ -65,12 +70,14 @@ def load_into(conn, parsed: list[dict[str, Any]]) -> None:
 INSERT INTO public.benchmark_runs (
     model_id, output_slug, source_filename, gateway_model_id, benchmark_key,
     inference_backend, status, headline_metric, headline_value, n_items,
-    metrics, items, run_params, started_at, completed_at)
+    metrics, items, run_params, started_at, completed_at,
+    visibility, owner_user_id, config_fingerprint, config_json)
 VALUES (
     %(model_id)s, %(output_slug)s, %(source_filename)s, %(gateway_model_id)s,
     %(benchmark_key)s, %(inference_backend)s, %(status)s, %(headline_metric)s,
     %(headline_value)s, %(n_items)s, %(metrics)s::jsonb, %(items)s::jsonb,
-    %(run_params)s::jsonb, %(started_at)s, %(completed_at)s)
+    %(run_params)s::jsonb, %(started_at)s, %(completed_at)s,
+    %(visibility)s, %(owner_user_id)s, %(config_fingerprint)s, %(config_json)s::jsonb)
 ON CONFLICT (output_slug) DO NOTHING
 """
     with conn.cursor() as cur:
@@ -82,6 +89,7 @@ ON CONFLICT (output_slug) DO NOTHING
                 "run_params": jsonb_param(row["run_params"])
                 if row.get("run_params") is not None
                 else None,
+                "config_json": jsonb_param(row.get("config_json") or {}),
             }
             cur.execute(_INSERT, params)
     conn.commit()

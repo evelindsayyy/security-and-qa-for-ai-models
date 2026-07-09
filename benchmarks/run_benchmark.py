@@ -10,6 +10,8 @@ Usage:
     python run_benchmark.py --benchmark truthfulqa --model "GPT 4.1 Mini"
     python run_benchmark.py --benchmark ifeval --model "gpt-5-chat" --output-stem my-run
     python run_benchmark.py --benchmark mmlu --model "GPT 4.1 Mini" --sample 50 --seed 42
+    python run_benchmark.py --benchmark ifeval --model "GPT 4.1 Mini" \\
+        --output-dir frontend/benchmark_refs --output-stem gpt-4.1-mini-ifeval
 """
 
 from __future__ import annotations
@@ -55,7 +57,7 @@ BENCHMARKS: dict[str, dict] = {
         "glob": "ifeval_*.jsonl",
         "env_model": "IFEVAL_MODEL",
         "env_output": "IFEVAL_OUTPUT",
-        "sample": {"env": "IFEVAL_SAMPLE", "label": "Prompts", "unit": "prompts", "default": 10, "max": 500},
+        "sample": {"env": "IFEVAL_SAMPLE", "label": "Prompts", "unit": "prompts", "default": 20, "max": 500},
         "seed": {"env": "IFEVAL_SEED", "default": 42},
     },
     "mmlu": {
@@ -73,7 +75,7 @@ BENCHMARKS: dict[str, dict] = {
         "glob": "tomi_*.json",
         "env_model": "TOMI_MODEL",
         "env_output": "TOMI_OUTPUT",
-        "sample": {"env": "TOMI_LIMIT", "label": "Stories", "unit": "stories", "default": 10, "max": 2000},
+        "sample": {"env": "TOMI_LIMIT", "label": "Stories", "unit": "stories", "default": 20, "max": 2000},
     },
     "consistency": {
         "label": "Consistency",
@@ -187,6 +189,15 @@ def _post_process_results(dest: Path, wall_sec: float, stats_path: Path | None =
         _merge_wall_into_stats_file(stats_path, wall_sec)
 
 
+def _resolve_output_dir(path: str | Path | None) -> Path:
+    if path is None:
+        return RESULTS_DIR
+    p = Path(path)
+    if not p.is_absolute():
+        p = (_REPO / p).resolve()
+    return p
+
+
 def run(
     benchmark_key: str,
     model: str,
@@ -194,6 +205,7 @@ def run(
     *,
     sample: int | None = None,
     seed: int | None = None,
+    output_dir: str | Path | None = None,
 ) -> Path:
     if benchmark_key not in BENCHMARKS:
         raise SystemExit(f"unknown benchmark: {benchmark_key!r}")
@@ -203,17 +215,18 @@ def run(
     if not script.is_file():
         raise SystemExit(f"missing runner script: {script}")
 
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    results_dir = _resolve_output_dir(output_dir)
+    results_dir.mkdir(parents=True, exist_ok=True)
     stem = output_stem or predict_stem(benchmark_key, model)
-    log_path = RESULTS_DIR / f"{stem}.log"
-    stats_path = RESULTS_DIR / f"{stem}.stats.json"
-    progress_path = RESULTS_DIR / f"{stem}.progress.json"
+    log_path = results_dir / f"{stem}.log"
+    stats_path = results_dir / f"{stem}.stats.json"
+    progress_path = results_dir / f"{stem}.progress.json"
 
     env = os.environ.copy()
     env.setdefault("PYTHONIOENCODING", "utf-8")
     env.setdefault("PYTHONUNBUFFERED", "1")
     env[cfg["env_model"]] = model
-    env[cfg["env_output"]] = str(RESULTS_DIR)
+    env[cfg["env_output"]] = str(results_dir)
     env["BENCHMARK_STATS_PATH"] = str(stats_path)
     env["BENCHMARK_PROGRESS_PATH"] = str(progress_path)
     _apply_run_options(env, cfg, sample=sample, seed=seed)
@@ -263,11 +276,11 @@ def run(
     if proc.returncode != 0:
         raise SystemExit(proc.returncode)
 
-    src = _newest_match(RESULTS_DIR, cfg["glob"], since=started)
+    src = _newest_match(results_dir, cfg["glob"], since=started)
     if src is None:
         raise SystemExit(f"runner finished but no output matching {cfg['glob']!r}")
 
-    dest = RESULTS_DIR / f"{stem}{src.suffix}"
+    dest = results_dir / f"{stem}{src.suffix}"
     shutil.copy2(src, dest)
     if src.resolve() != dest.resolve():
         src.unlink()
@@ -303,6 +316,11 @@ def main() -> int:
         help="stable results filename stem (default: <UTC>_<benchmark>_<model>)",
     )
     p.add_argument(
+        "--output-dir",
+        default=None,
+        help="output directory (default: benchmarks/results; repo-relative paths ok)",
+    )
+    p.add_argument(
         "--sample",
         type=int,
         default=None,
@@ -321,6 +339,7 @@ def main() -> int:
         args.output_stem,
         sample=args.sample,
         seed=args.seed,
+        output_dir=args.output_dir,
     )
     print(f"Results: {dest}")
     from dbutils.post_run import maybe_sync_artifact

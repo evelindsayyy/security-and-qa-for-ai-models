@@ -34,6 +34,8 @@ class GarakXdgEnvTest(unittest.TestCase):
         env = garak_xdg_env("test-slug-xdg")
         self.assertIn("HOME", env)
         self.assertIn("test-slug-xdg", env["HOME"])
+        self.assertEqual(env["USER"], "garak")
+        self.assertEqual(env["LOGNAME"], "garak")
         self.assertTrue(os.path.isdir(env["HOME"]))
 
 

@@ -11,6 +11,8 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from frontend.path_safety import is_safe_slug
+
 ROOT = Path(__file__).parent.parent
 OUTPUT_DIR = ROOT / "scanner" / "output"
 
@@ -39,6 +41,61 @@ def _severity_rank(severity: str) -> int:
         return _SEVERITY_ORDER.index(severity.lower())
     except ValueError:
         return len(_SEVERITY_ORDER)
+
+
+def _tool_status_from_data(data: dict) -> dict[str, dict]:
+    """Per-scanner status for list rows and comparison matrix."""
+    tool = data.get("tool_results") or {}
+    ms = tool.get("modelscan") or {}
+    fick = tool.get("fickling") or {}
+    ma = tool.get("modelaudit") or {}
+    deps = tool.get("dependencies") or {}
+    sec = tool.get("secrets") or {}
+    status: dict[str, dict] = {}
+    if tool.get("modelscan") is not None or ms:
+        issues = ms.get("total_issues", 0)
+        status["modelscan"] = {
+            "display": str(issues),
+            "score_class": "rate-strong" if issues == 0 else "rate-mid",
+        }
+    if tool.get("fickling") is not None or data.get("fickling_severity"):
+        sev = fick.get("severity") or data.get("fickling_severity") or "—"
+        status["fickling"] = {"display": str(sev), "score_class": ""}
+    if tool.get("modelaudit") is not None or ma:
+        n = ma.get("actionable_issue_count", 0)
+        status["modelaudit"] = {
+            "display": str(n),
+            "score_class": "rate-strong" if n == 0 else "rate-mid",
+        }
+    if tool.get("dependencies") is not None:
+        n = deps.get("vuln_count", 0)
+        status["dependencies"] = {
+            "display": str(n),
+            "score_class": "rate-strong" if n == 0 else "rate-mid",
+        }
+    if tool.get("secrets") is not None:
+        n = sec.get("secret_count", 0)
+        status["secrets"] = {
+            "display": str(n),
+            "score_class": "rate-strong" if n == 0 else "rate-mid",
+        }
+    return status
+
+
+_SCAN_TOOL_ROWS = (
+    ("modelscan", "ModelScan", "badge-scan"),
+    ("fickling", "Fickling", "badge-scan"),
+    ("modelaudit", "ModelAudit", "badge-scan"),
+    ("dependencies", "Dependencies", "badge-scan"),
+    ("secrets", "Secrets", "badge-scan"),
+)
+
+
+def _order_scan_model_ids(model_ids: list[str]) -> list[str]:
+    """Llama-family HF repos first (proxy for preferred reference models)."""
+    preferred = sorted(m for m in model_ids if "llama" in m.lower())
+    other = sorted(m for m in model_ids if m not in preferred)
+    return preferred + other
 
 
 def _tool_snippet(data: dict) -> str:
@@ -94,6 +151,7 @@ def _summarize_from_data(data: dict, slug: str) -> dict:
         ),
         "scanned_at": scanned_at,
         "tool_snippet": _tool_snippet(data),
+        "tool_status": _tool_status_from_data(data),
         "scanned_file_count": len(data.get("scanned_files") or []),
         "status": data.get("status") or "unknown",
         "fickling_severity": data.get("fickling_severity"),
@@ -373,10 +431,16 @@ def _build_scan_detail(slug: str, data: dict) -> dict:
 
 def _get_scans_data_files() -> dict:
     """
-    list every scan_result.json under scanner/output/, sorted highest risk first.
+    list every scan_result.json visible in the current view (public catalog,
+    plus this owner's own private scans when in private mode), sorted
+    highest risk first.
 
     surfaces the malicious poc at the top for stakeholder demos when present.
     """
+    from frontend import run_paths
+    from frontend.read_context import artifact_path_visible, read_context
+    from dbutils import fs_safe
+
     if not OUTPUT_DIR.exists():
         return {
             "has_scans": False,
@@ -385,10 +449,17 @@ def _get_scans_data_files() -> dict:
             "tier_summary": "",
         }
 
+    view_mode, user_id = read_context()
     rows: list[dict] = []
-    for path in sorted(OUTPUT_DIR.glob("*/scan_result.json")):
-        slug = path.parent.name
-        row = _summarize_scan(path, slug)
+    for slug_dir in run_paths.iter_visible_slug_dirs(
+        OUTPUT_DIR, view_mode=view_mode, owner_user_id=user_id
+    ):
+        path = slug_dir / "scan_result.json"
+        if not fs_safe.is_file(path):
+            continue
+        if not artifact_path_visible(slug_dir, pillar="scan"):
+            continue
+        row = _summarize_scan(path, slug_dir.name)
         if row:
             rows.append(row)
 
@@ -405,13 +476,23 @@ def _get_scans_data_files() -> dict:
     }
 
 
-def _get_scan_detail_files(slug: str) -> dict | None:
+def _get_scan_detail_files(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
     """
     structured scan payload for one slug — findings, tool panels, coverage stats.
 
-    returns none if the slug dir or scan_result.json is missing.
+    ``visibility``/``owner_user_id`` pick the exact on-disk copy to read (the
+    public one, or one owner's private one) — the URL the caller resolved to,
+    not the viewer's ambient session, decides which artifact this returns.
     """
-    path = OUTPUT_DIR / slug / "scan_result.json"
+    from frontend import run_paths
+
+    if visibility == "private" and not owner_user_id:
+        return None
+
+    directory = run_paths.scoped_dir(OUTPUT_DIR / slug, visibility=visibility, owner_user_id=owner_user_id)
+    path = directory / "scan_result.json"
     if not path.is_file():
         return None
 
@@ -427,24 +508,282 @@ def _get_scan_detail_files(slug: str) -> dict | None:
 
 
 def get_scans_data() -> dict:
+    from frontend import scan_db_data
+    from frontend.db_fallback import get_data_with_db_fallback
+
+    data = get_data_with_db_fallback(
+        scan_db_data.available, scan_db_data.get_scans_data_db, _get_scans_data_files
+    )
+    scans = data.get("scans") or []
+    from frontend.staleness import attach_staleness
+
+    attach_staleness(scans, "scan")
+    data.update(_build_scan_comparison_section(scans))
+    return data
+
+
+def _build_scan_comparison_section(scans: list[dict]) -> dict:
+    """Pivot scans into tool×HF-model status matrix."""
+    if not scans:
+        return {"has_comparison": False, "comparison_models": [], "comparison_rows": []}
+
+    by_model = {s["model_id"]: s for s in scans if s.get("model_id")}
+    comparison_models = _order_scan_model_ids(list(by_model.keys()))
+
+    comparison_rows: list[dict] = []
+    for tool_key, label, badge in _SCAN_TOOL_ROWS:
+        cells: dict[str, dict] = {}
+        for model_id in comparison_models:
+            scan = by_model.get(model_id)
+            if not scan:
+                continue
+            tool_cell = (scan.get("tool_status") or {}).get(tool_key)
+            if tool_cell:
+                cells[model_id] = {
+                    **tool_cell,
+                    "slug": scan.get("slug"),
+                }
+        comparison_rows.append({
+            "key": tool_key,
+            "label": label,
+            "badge_class": badge,
+            "cells": cells,
+        })
+
+    return {
+        "has_comparison": bool(comparison_models),
+        "comparison_models": comparison_models,
+        "comparison_rows": comparison_rows,
+    }
+
+
+def _build_scan_reference_scores(scans: list[dict]) -> dict:
+    """Preferred HF repos (llama-first) × tool status reference table."""
+    by_model = {s["model_id"]: s for s in scans if s.get("model_id")}
+    llama_models = [m for m in _order_scan_model_ids(list(by_model)) if "llama" in m.lower()]
+    reference_models = llama_models[:2] if llama_models else _order_scan_model_ids(list(by_model))[:2]
+
+    reference_rows: list[dict] = []
+    for tool_key, label, badge in _SCAN_TOOL_ROWS:
+        cells: dict[str, dict] = {}
+        for model_id in reference_models:
+            scan = by_model.get(model_id)
+            if not scan:
+                continue
+            tool_cell = (scan.get("tool_status") or {}).get(tool_key)
+            if tool_cell:
+                cells[model_id] = tool_cell
+        reference_rows.append({
+            "key": tool_key,
+            "label": label,
+            "badge_class": badge,
+            "cells": cells,
+        })
+
+    has_scores = any(c for row in reference_rows for c in row["cells"].values())
+    return {
+        "has_reference_scores": has_scores,
+        "reference_models": reference_models,
+        "reference_rows": reference_rows,
+    }
+
+
+def get_scan_guide_data(scans: list[dict] | None = None) -> dict:
+    if scans is None:
+        from frontend import scan_db_data
+        from frontend.db_fallback import get_data_with_db_fallback
+
+        scans = get_data_with_db_fallback(
+            scan_db_data.available, scan_db_data.get_scans_data_db, _get_scans_data_files
+        ).get("scans") or []
+    example = scans[0] if scans else None
+    return {
+        "guide_rows": [
+            {
+                "key": "modelscan",
+                "label": "ModelScan",
+                "badge_class": "badge-scan",
+                "about": "Scans model weights and config for known unsafe patterns and suspicious ops.",
+                "procedure": "Runs ModelScan over downloaded HF artifacts before deletion.",
+                "scoring": "Issue counts by severity; contributes to the composite tier.",
+            },
+            {
+                "key": "fickling",
+                "label": "Fickling",
+                "badge_class": "badge-scan",
+                "about": "Pickle safety analysis on PyTorch checkpoint files.",
+                "procedure": "Fickling inspects pickle opcodes in weight files.",
+                "scoring": "Severity label; benign LIKELY_UNSAFE often leaves tier low.",
+            },
+            {
+                "key": "modelaudit",
+                "label": "ModelAudit",
+                "badge_class": "badge-scan",
+                "about": "Static analysis of model repo code and configuration.",
+                "procedure": "ModelAudit scans repository files for risky patterns.",
+                "scoring": "Actionable issue count; worst severity drives tier.",
+            },
+            {
+                "key": "dependencies",
+                "label": "Dependencies",
+                "badge_class": "badge-scan",
+                "about": "pip-audit / OSV scan of declared Python dependencies.",
+                "procedure": "Audits requirements files in the HF repo snapshot.",
+                "scoring": "Vulnerability count from dependency scanners.",
+            },
+            {
+                "key": "secrets",
+                "label": "Secrets",
+                "badge_class": "badge-scan",
+                "about": "TruffleHog scan for leaked credentials in repo files.",
+                "procedure": "Pattern-based secret detection across the snapshot.",
+                "scoring": "Secret count; any hit can escalate tier.",
+            },
+        ],
+        "has_example": example is not None,
+        "example_slug": example["slug"] if example else None,
+        "example_model": example["model_id"] if example else None,
+    }
+
+
+def get_scan_reference_data() -> dict:
+    from frontend import scan_db_data
+    from frontend.db_fallback import get_data_with_db_fallback
+
+    raw = get_data_with_db_fallback(
+        scan_db_data.available, scan_db_data.get_scans_data_db, _get_scans_data_files
+    )
+    scans = raw.get("scans") or []
+    data = get_scan_guide_data(scans)
+    data["has_reference"] = data["has_example"]
+    data.update(_build_scan_reference_scores(scans))
+    return data
+
+
+def get_scan_detail(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
+    """Detail payload for one scan. Defaults to the public catalog; pass
+    ``visibility="private", owner_user_id=...`` for a signed-in user's own copy."""
     try:
         from frontend import scan_db_data
 
         if scan_db_data.available():
-            return scan_db_data.get_scans_data_db()
+            return scan_db_data.get_scan_detail_db(
+                slug, visibility=visibility, owner_user_id=owner_user_id
+            )
     except Exception:
         pass
-    return _get_scans_data_files()
+    return _get_scan_detail_files(slug, visibility=visibility, owner_user_id=owner_user_id)
 
 
-def get_scan_detail(slug: str) -> dict | None:
+def get_scan_rerun_params(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
+    """Launch-form prefill from a completed scan."""
+    detail = get_scan_detail(slug, visibility=visibility, owner_user_id=owner_user_id)
+    if detail is None:
+        return None
+    return {"hf_repo": detail.get("model_id") or detail.get("hf_repo")}
+
+
+def delete_scan_paths(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> list[str]:
+    """Human-readable paths removed by ``delete_scan``."""
+    if not is_safe_slug(slug):
+        return []
+    if visibility == "private" and owner_user_id:
+        return [f"scanner/output/.private/{owner_user_id}/{slug}/"]
+    return [f"scanner/output/{slug}/"]
+
+
+def delete_scan(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> str | None:
+    """Remove scan artifacts (and DB row when configured). Returns error or None."""
+    from frontend import run_paths
+    from frontend.output_dirs import wipe_dir
+    from frontend.scan_launch import inflight_scan_slugs
+
+    if not is_safe_slug(slug):
+        return f"invalid slug: {slug!r}"
+    if visibility == "private" and not owner_user_id:
+        return f"no scan result found for slug {slug!r}"
+    if slug in inflight_scan_slugs():
+        return "cannot delete while the scan is still in progress"
+
+    scan_dir = run_paths.scoped_dir(OUTPUT_DIR / slug, visibility=visibility, owner_user_id=owner_user_id)
+    result_path = scan_dir / "scan_result.json"
+    run_id: str | None = None
+    db_keys: tuple[str, str] | None = None
+    db_available = False
+    db_row_existed = False
     try:
         from frontend import scan_db_data
 
-        if scan_db_data.available():
-            detail = scan_db_data.get_scan_detail_db(slug)
-            if detail is not None:
-                return detail
+        db_available = scan_db_data.available()
+        if db_available:
+            run_id = scan_db_data.resolve_delete_run_id(
+                slug, visibility=visibility, owner_user_id=owner_user_id
+            )
+            if run_id is not None:
+                db_row_existed = True
     except Exception:
         pass
-    return _get_scan_detail_files(slug)
+
+    if result_path.is_file() and not run_id:
+        try:
+            data = json.loads(result_path.read_text(encoding="utf-8"))
+            meta = data.get("scan_metadata") or {}
+            scanned_at = meta.get("scanned_at")
+            hf_repo = data.get("model_id")
+            if hf_repo and scanned_at:
+                db_keys = (hf_repo, scanned_at)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    removed_disk = scan_dir.is_dir()
+    if removed_disk:
+        wipe_dir(scan_dir)
+
+    removed_db = False
+    db_exc: BaseException | None = None
+    try:
+        from frontend import scan_db_data
+        from frontend.delete_db import db_delete_error
+
+        if db_available:
+            try:
+                if run_id:
+                    removed_db = scan_db_data.delete_run_by_id(run_id)
+                if not removed_db and db_keys:
+                    removed_db = scan_db_data.delete_run(*db_keys)
+                if not removed_db:
+                    removed_db = scan_db_data.delete_run_by_slug(
+                        slug, visibility=visibility, owner_user_id=owner_user_id
+                    )
+                if not removed_db and not db_row_existed:
+                    db_row_existed = (
+                        scan_db_data.resolve_delete_run_id(
+                            slug, visibility=visibility, owner_user_id=owner_user_id
+                        )
+                        is not None
+                    )
+            except Exception as exc:
+                db_exc = exc
+    except Exception as exc:
+        db_exc = exc
+
+    err = db_delete_error(
+        db_available=db_available,
+        db_row_existed=db_row_existed,
+        removed_db=removed_db,
+        db_exc=db_exc,
+    )
+    if err:
+        return err
+
+    if not removed_disk and not removed_db:
+        return f"no scan result found for slug {slug!r}"
+    return None
