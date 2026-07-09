@@ -55,6 +55,8 @@ def _db_scan_tuple(data: dict):
         meta,
         None,
         meta.get("scanned_at"),
+        None,
+        None,
     )
 
 

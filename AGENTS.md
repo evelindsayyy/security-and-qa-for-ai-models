@@ -38,7 +38,7 @@ Public and private runs of the same model never collide on disk or share a URL (
 | Module | Role |
 |--------|------|
 | `frontend/db_fallback.py` | Postgres-only reads when DSN reachable; disk fallback offline only |
-| `frontend/staleness.py` | Per-pillar needs-rerun rules (`CURRENT_SPEC_CUTOFF`, garak probe count, 0-file scans, etc.) |
+| `frontend/staleness.py` | Per-pillar needs-rerun rules (`dbutils/staleness_spec.py`) |
 | `frontend/oss_gateway_hf.py` | HF mirror map for open-weight gateway catalog scan rollup |
 | `frontend/delete_db.py` | Shared DB-delete error surfacing for permanent deletes |
 | `frontend/launch_registry.py` | In-flight job liveness (`check_inflight_combo`) |

@@ -5,8 +5,6 @@ from __future__ import annotations
 import unittest
 
 from frontend.staleness import (
-    CURRENT_SPEC_CUTOFF,
-    SAFETY_EXPECTED_GARAK_PROBES,
     attach_staleness,
     garak_probe_count_from_data,
     staleness_for,
@@ -28,25 +26,42 @@ class GarakProbeCountTest(unittest.TestCase):
 
 class SafetyStalenessTest(unittest.TestCase):
     def test_fresh_when_current(self) -> None:
+        from dbutils.staleness_spec import (
+            current_safety_garak_probe_spec,
+            expected_garak_module_count,
+            garak_probe_spec_digest,
+        )
+
         row = {
             "completed_at": "2026-08-01T12:00:00+00:00",
             "missing_suites": [],
-            "garak_probe_count": SAFETY_EXPECTED_GARAK_PROBES,
+            "garak_probe_count": expected_garak_module_count(),
             "status": "complete",
+            "garak_probe_spec_digest": garak_probe_spec_digest(
+                current_safety_garak_probe_spec()
+            ),
         }
         result = staleness_for("safety", row)
         self.assertFalse(result["stale"])
 
-    def test_stale_before_cutoff(self) -> None:
+    def test_not_stale_purely_by_old_date_when_spec_matches(self) -> None:
+        from dbutils.staleness_spec import (
+            current_safety_garak_probe_spec,
+            expected_garak_module_count,
+            garak_probe_spec_digest,
+        )
+
         row = {
             "completed_at": "2026-05-01T12:00:00+00:00",
             "missing_suites": [],
-            "garak_probe_count": SAFETY_EXPECTED_GARAK_PROBES,
+            "garak_probe_count": expected_garak_module_count(),
             "status": "complete",
+            "garak_probe_spec_digest": garak_probe_spec_digest(
+                current_safety_garak_probe_spec()
+            ),
         }
         result = staleness_for("safety", row)
-        self.assertTrue(result["stale"])
-        self.assertTrue(any(CURRENT_SPEC_CUTOFF.isoformat() in r for r in result["reasons"]))
+        self.assertFalse(result["stale"])
 
     def test_stale_low_garak_count(self) -> None:
         row = {
@@ -57,7 +72,7 @@ class SafetyStalenessTest(unittest.TestCase):
         }
         result = staleness_for("safety", row)
         self.assertTrue(result["stale"])
-        self.assertTrue(any("garak probe count" in r for r in result["reasons"]))
+        self.assertTrue(any("garak modules" in r for r in result["reasons"]))
 
 
 class ScanStalenessTest(unittest.TestCase):
@@ -71,6 +86,25 @@ class ScanStalenessTest(unittest.TestCase):
         self.assertTrue(result["stale"])
         self.assertIn("0 files scanned", result["reasons"])
 
+    def test_not_stale_by_date_when_scanner_current(self) -> None:
+        import scanner
+
+        row = {
+            "scanned_file_count": 8,
+            "scanned_at": "2026-05-01T12:00:00+00:00",
+            "status": "complete",
+            "scanner_version": scanner.__version__,
+            "tool_status": {
+                "modelscan": {},
+                "fickling": {},
+                "modelaudit": {},
+                "dependencies": {},
+                "secrets": {},
+            },
+        }
+        result = staleness_for("scan", row)
+        self.assertFalse(result["stale"])
+
 
 class EvalStalenessTest(unittest.TestCase):
     def test_stale_unknown_suite(self) -> None:
@@ -81,10 +115,36 @@ class EvalStalenessTest(unittest.TestCase):
         result = staleness_for("eval", row)
         self.assertTrue(result["stale"])
 
+    def test_not_stale_by_date_when_suite_versions_match(self) -> None:
+        from dbutils.staleness_spec import current_eval_suite_versions
+
+        current = current_eval_suite_versions("it_support_v1")
+        row = {
+            "timestamp": "2026-05-01T12:00:00Z",
+            "suite": "it_support_v1",
+            **current,
+        }
+        result = staleness_for("eval", row)
+        self.assertFalse(result["stale"])
+
 
 class AttachStalenessTest(unittest.TestCase):
     def test_mutates_rows(self) -> None:
-        rows = [{"scanned_file_count": 5, "scanned_at": "2026-08-01T12:00:00+00:00", "status": "complete"}]
+        import scanner
+
+        rows = [{
+            "scanned_file_count": 5,
+            "scanned_at": "2026-08-01T12:00:00+00:00",
+            "status": "complete",
+            "scanner_version": scanner.__version__,
+            "tool_status": {
+                "modelscan": {},
+                "fickling": {},
+                "modelaudit": {},
+                "dependencies": {},
+                "secrets": {},
+            },
+        }]
         attach_staleness(rows, "scan")
         self.assertIn("staleness", rows[0])
         self.assertFalse(rows[0]["staleness"]["stale"])

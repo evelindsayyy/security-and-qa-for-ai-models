@@ -113,6 +113,9 @@ def _aggregate_file(path: Path) -> dict | None:
         "slug": path.stem,  # used by /eval-run/<slug>
         "timestamp": first.timestamp,
         "suite": first.adaptation.task_suite_version,
+        "rubric_version": first.adaptation.rubric_version,
+        "system_prompt_version": first.adaptation.system_prompt_version,
+        "judge_prompt_version": first.adaptation.judge_prompt_version,
         "candidate_model": first.adaptation.candidate_model,
         "judge_model": first.adaptation.judge_model,
         "inference_backend": first.adaptation.inference_backend,

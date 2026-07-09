@@ -155,16 +155,27 @@ def _summarize_from_data(data: dict, slug: str) -> dict:
         "scanned_file_count": len(data.get("scanned_files") or []),
         "status": data.get("status") or "unknown",
         "fickling_severity": data.get("fickling_severity"),
+        "scanner_version": meta.get("scanner_version") or "—",
     }
 
 
 def _summarize_scan(path: Path, slug: str) -> dict | None:
     """load one scan_result.json into a table row. none if parse fails."""
+    from dbutils.run_meta import read_run_meta_for_pillar
+
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return None
-    return _summarize_from_data(data, slug)
+    row = _summarize_from_data(data, slug)
+    if row is None:
+        return None
+    sidecar = read_run_meta_for_pillar(path.parent, pillar="scan")
+    if sidecar.get("config_json"):
+        row["config_json"] = sidecar["config_json"]
+    if sidecar.get("config_fingerprint"):
+        row["config_fingerprint"] = sidecar["config_fingerprint"]
+    return row
 
 
 def _parse_findings(findings_raw: list) -> list[dict]:

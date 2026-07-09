@@ -50,6 +50,7 @@ def _db_row(**overrides):
         base["items"],
         base["run_params"],
         base["completed_at"],
+        base.get("config_json"),
     )
 
 

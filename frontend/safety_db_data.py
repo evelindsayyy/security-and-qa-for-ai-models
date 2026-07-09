@@ -62,7 +62,8 @@ _LATEST_RUNS_SQL = """
 SELECT DISTINCT ON (gateway_model_id, redteam_profile)
     id::text, gateway_model_id, redteam_profile, display_name, status, deployment_context,
     summary_pass_rate, safety_tier, adversarial_tier, composite_tier,
-    composite_score, missing_suites, runs, tool_results, started_at, completed_at
+    composite_score, missing_suites, runs, tool_results, started_at, completed_at,
+    config_fingerprint, config_json
 FROM public.safety_runs s
 WHERE {visibility_filter}
 ORDER BY gateway_model_id, redteam_profile, completed_at DESC NULLS LAST
@@ -172,7 +173,18 @@ def _summarize_db_run(run_row: tuple, findings_json: list[dict] | None = None) -
     """List-table row from one safety_runs tuple (same keys as _summarize_merged_data)."""
     slug = run_row[1]  # gateway_model_id doubles as slug
     data = _run_tuple_to_data(run_row, findings_json or [])
-    return _summarize_merged_data(data, slug)
+    row = _summarize_merged_data(data, slug)
+    if row is None:
+        return None
+    sidecar: dict = {}
+    if len(run_row) > 17 and run_row[17]:
+        sidecar["config_json"] = run_row[17]
+    if len(run_row) > 16 and run_row[16]:
+        sidecar["config_fingerprint"] = run_row[16]
+    from frontend.safety_data import _attach_safety_staleness_fields
+
+    _attach_safety_staleness_fields(row, data, sidecar=sidecar)
+    return row
 
 
 def _fetch_findings_by_run_id(conn, run_ids: list[str]) -> dict[str, list[dict]]:
