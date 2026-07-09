@@ -24,6 +24,7 @@ from dbutils import run_lock
 from frontend import docker_launch
 from frontend.launch_registry import check_inflight_combo
 from frontend.log_status import run_log_payload
+from frontend.output_dirs import OutputDirError
 from frontend.path_safety import is_safe_slug
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -365,6 +366,17 @@ def start_run(
         existing = check_inflight_combo(_RUNNING, _INFLIGHT, combo)
         if existing:
             return existing, True, plan.visibility
+
+        from frontend.purge_rerun import purge_benchmark_for_launch
+
+        err = purge_benchmark_for_launch(
+            benchmark_key,
+            model,
+            visibility=plan.visibility,
+            owner_user_id=plan.owner_user_id,
+        )
+        if err:
+            raise OutputDirError(err)
 
         if docker_launch.use_docker():
             docker_launch.ensure_stack("benchmarks")

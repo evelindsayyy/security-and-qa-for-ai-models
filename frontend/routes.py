@@ -616,6 +616,7 @@ def register_routes(app):
             start_run,
             validate_launch,
         )
+        from frontend.output_dirs import OutputDirError
 
         benchmark_key = request.form.get("benchmark", "")
         model_source = request.form.get("model_source", "gateway")
@@ -649,14 +650,17 @@ def register_routes(app):
         )
         if error:
             return error, 400
-        slug, already, visibility = start_run(
-            benchmark_key,
-            model,
-            base_url=base_url,
-            api_key=api_key,
-            sample=sample,
-            seed=seed,
-        )
+        try:
+            slug, already, visibility = start_run(
+                benchmark_key,
+                model,
+                base_url=base_url,
+                api_key=api_key,
+                sample=sample,
+                seed=seed,
+            )
+        except OutputDirError as exc:
+            return str(exc), 503
         endpoint = "benchmark_detail_private" if visibility == "private" else "benchmark_detail"
         status = "running"
         return redirect(url_for(endpoint, slug=slug, status=status))

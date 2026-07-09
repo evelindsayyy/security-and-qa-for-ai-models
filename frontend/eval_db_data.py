@@ -237,3 +237,32 @@ def delete_run(
             deleted = cur.rowcount > 0
         conn.commit()
     return deleted
+
+
+def delete_runs_for_combo(
+    suite_key: str,
+    candidate: str,
+    *,
+    visibility: str = "public",
+    owner_user_id: str | None = None,
+) -> int:
+    """Delete every eval run for one (suite, candidate) in the given scope."""
+    from dbutils.visibility import visibility_clause
+
+    vis_clause, vis_params = visibility_clause("r", view_mode=visibility, user_id=owner_user_id)
+    with queries.connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                DELETE FROM public.eval_runs AS r
+                USING public.task_suites AS s
+                WHERE r.suite_id = s.id
+                  AND s.suite_key = %(suite_key)s
+                  AND r.gateway_model_id = %(candidate)s
+                  AND ({vis_clause})
+                """,
+                {"suite_key": suite_key, "candidate": candidate, **vis_params},
+            )
+            deleted = cur.rowcount
+        conn.commit()
+    return deleted
