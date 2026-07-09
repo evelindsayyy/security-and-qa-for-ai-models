@@ -2,7 +2,7 @@
 cost_perf.py
 ============
 
-Cost-vs-performance layer v2 for the Efficacy "nutrition label".
+Cost-vs-performance layer v2 for the Efficacy "report card".
 
 A model that scores 4.8/5 but costs $0.04 and takes 4 seconds per response is
 not interchangeable with one that scores 4.2/5 at $0.002 and 0.9 seconds. The

@@ -1,7 +1,7 @@
 """
 hf_intake.py — validate a Hugging Face model BEFORE serving it for evaluation.
 
-Step 1 of the self-serve flow (HF link -> DCC serve -> eval -> nutrition label):
+Step 1 of the self-serve flow (HF link -> DCC serve -> eval -> report card):
 given a user-supplied repo id, decide whether we can evaluate it *before*
 spawning any cluster job. Pure validation — no orchestration here (that's the
 next step). The checks, in order:
