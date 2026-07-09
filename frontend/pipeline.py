@@ -68,6 +68,10 @@ def validate_safety_gate(model: str, *, profile: str = DEFAULT_SAFETY_PROFILE) -
     except Exception as e:  # noqa: BLE001 — malformed artifact must never 500
         return {
             **base,
+            # Non-None status so the /pipeline badge reads "blocked" (a present
+            # but corrupt artifact), not "missing" (no run at all). The gate
+            # still fails closed either way.
+            "status": "unreadable",
             "ok": False,
             "error": f"safety result is unreadable: {type(e).__name__}: {e}",
         }
@@ -121,6 +125,7 @@ def _gate_stage(gate: dict) -> dict:
 def stage_state(model: str, source: str) -> dict:
     """Per-model pipeline state for the /pipeline view (read-only)."""
     if source == "hf":
+        # Lazy import breaks the pipeline <-> eval_launch cycle.
         from frontend.eval_launch import validate_hf_scan_gate
 
         scan_gate = validate_hf_scan_gate(model)

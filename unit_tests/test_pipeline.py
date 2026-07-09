@@ -56,6 +56,15 @@ class ValidateSafetyGateTest(unittest.TestCase):
         self.assertFalse(gate["ok"])
         self.assertIn("not complete", gate["error"])
 
+    def test_present_but_missing_status_blocks(self) -> None:
+        # A low-tier artifact with no `status` key must fail closed (defaults to
+        # "unknown" -> not complete -> blocked), never clear on the absent field.
+        self._patch_path(_write_safety(self.tmp, {"composite_tier": "low"}))
+        gate = pipeline.validate_safety_gate("Llama 4 Maverick")
+        self.assertFalse(gate["ok"])
+        self.assertEqual(gate["status"], "unknown")
+        self.assertIn("not complete", gate["error"])
+
     def test_high_tier_blocks(self) -> None:
         self._patch_path(_write_safety(self.tmp, {"status": "complete", "composite_tier": "high"}))
         gate = pipeline.validate_safety_gate("Llama 4 Maverick")
@@ -69,6 +78,10 @@ class ValidateSafetyGateTest(unittest.TestCase):
         gate = pipeline.validate_safety_gate("Llama 4 Maverick")
         self.assertFalse(gate["ok"])
         self.assertIn("unreadable", gate["error"])
+        # A corrupt-but-present artifact reads as "blocked" (non-None status),
+        # not "missing", on the /pipeline badge.
+        self.assertEqual(gate["status"], "unreadable")
+        self.assertEqual(pipeline._gate_stage(gate)["state"], "blocked")
 
 
 class RequireReadyTest(unittest.TestCase):
