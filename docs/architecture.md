@@ -4,7 +4,7 @@ System components and how a run flows end to end. Schema and field examples: [`d
 
 ## Pillars
 
-Two nutrition-label pillars, two tracks:
+Two AI Model Advisor pillars, two tracks:
 
 | Pillar | Components | Track |
 |--------|------------|-------|
@@ -12,13 +12,13 @@ Two nutrition-label pillars, two tracks:
 | **Efficacy** | `evaluator/` (Duke judge suites) + `benchmarks/` (public benchmarks) | B |
 
 Every run produces structured JSON; optional ingest loads it into Postgres. The
-`frontend/` UI renders the nutrition label; `api/` exposes JSON REST for all four
+`frontend/` UI renders the report cards; `api/` exposes JSON REST for all four
 pillars (list, detail, status, POST jobs) — see [`api/README.md`](../api/README.md).
 Teams and schedule: [`team-tracks.md`](team-tracks.md).
 
 ## How a run flows
 
-Jobs start from the nutrition-label UI or CLI. The UI returns immediately with a
+Jobs start from the AI Model Advisor UI or CLI. The UI returns immediately with a
 job id; a background launcher (`frontend/*_launch.py`) runs the pillar in Docker on
 the **application VM**. Results land as JSON under each pillar's output dir;
 optional ingest upserts into Postgres. The UI reads via `frontend/*_data.py`
@@ -85,7 +85,7 @@ on the roadmap. Steps 5–7 persist and serve results.
 
 | Step | What | Detail |
 |------|------|--------|
-| **1** | Analyst uses browser | Start a job or open a nutrition-label page |
+| **1** | Analyst uses browser | Start a job or open a report-card page |
 | **2** | `frontend/` + `api/` | `POST /scans/start`, `/safety/start`, `/eval-run/start`, `/benchmarks/start` (or `/api/…`) — returns immediately |
 | **3** | `frontend/*_launch.py` | Non-blocking `subprocess` → `docker compose run` on the VM Docker socket |
 | **4** | Pillar containers | `scanner/`, `safety/`, `evaluator/`, `benchmarks/` — see tables below |
@@ -203,7 +203,7 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 - **`evaluator/`** (B) — Duke task suites scored by an LLM judge against YAML rubrics; records scores plus cost / latency / tokens → `eval_runs`. Postgres path: [`evaluator/db/`](../evaluator/db/README.md). See [`track-b-framework.md`](track-b-framework.md).
 - **`benchmarks/`** (B) — public benchmarks (IFEval, TruthfulQA, MMLU, ToMi, consistency); ingest + UI read via [`benchmarks/db/`](../benchmarks/db/README.md) and `frontend/benchmark_db_data.py`.
 - **`api/`** — Flask REST under `/api`; see [`api/README.md`](../api/README.md).
-- **`frontend/`** — nutrition-label UI; `frontend/*_data.py` + launch helpers. See [`frontend/README.md`](../frontend/README.md).
+- **`frontend/`** — AI Model Advisor UI; `frontend/*_data.py` + launch helpers. See [`frontend/README.md`](../frontend/README.md).
 
 ## Deployment and hosts
 

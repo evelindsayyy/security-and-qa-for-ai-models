@@ -226,7 +226,7 @@ How the model is offered (ITSO). Stored on `models` and/or copied onto `safety_r
 
 ---
 
-## Nutrition label aggregate (`GET /models/{id}`)
+## Report card aggregate (`GET /models/{id}`)
 
 Example shape:
 

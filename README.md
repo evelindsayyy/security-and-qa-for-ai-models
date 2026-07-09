@@ -2,7 +2,7 @@
 
 Code+ 2026 — Duke Office of Information Technology
 
-Automated **nutrition labels** for Duke AI Gateway models: **security** (artifact scanning + inference safety) and **efficacy** (Duke judge suites + public benchmarks).
+Automated **report cards** for Duke AI Gateway models: **security** (artifact scanning + inference safety) and **efficacy** (Duke judge suites + public benchmarks).
 
 | Pillar | Question |
 |--------|----------|
@@ -39,7 +39,7 @@ safety/        Track A — promptfoo + garak red team
 evaluator/     Track B — Duke LLM-as-judge suites
 benchmarks/    Track B — public benchmarks (IFEval, TruthfulQA, …)
 gateway/       Live gateway catalog
-frontend/      Nutrition-label UI
+frontend/      AI Model Advisor UI
 docker/        Containerized UI for the application VM
 dbutils/       Shared Postgres ingest helpers
 docs/          Architecture, data model, frameworks

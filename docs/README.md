@@ -11,7 +11,7 @@ Project guides & info. **GitLab:** [`.gitlab/README.md`](../.gitlab/README.md).
 | [`architecture.md`](architecture.md) | System design, `api/`, `frontend/`, deployment |
 | [`cli.md`](cli.md) | All CLI commands (UI, pillar jobs, tests, ingest) |
 | [`docker.md`](docker.md) | Docker model — layers, sibling launches, CI |
-| [`../frontend/README.md`](../frontend/README.md) | Nutrition label UI |
+| [`../frontend/README.md`](../frontend/README.md) | AI Model Advisor UI |
 | [`data-model.md`](data-model.md) | Postgres schema — tables, columns, JSON → DB mapping |
 | [`../dbutils/README.md`](../dbutils/README.md) | Shared Postgres ingest helpers |
 | [`tool-stack.md`](tool-stack.md) | Tools and rationale |
@@ -26,6 +26,6 @@ Project guides & info. **GitLab:** [`.gitlab/README.md`](../.gitlab/README.md).
 | [`evaluator/README.md`](../evaluator/README.md) | B — Duke efficacy (`runner.py`) |
 | [`benchmarks/README.md`](../benchmarks/README.md) | B — public benchmarks |
 | [`gateway/README.md`](../gateway/README.md) | Shared — live catalog + `ANNOTATIONS` |
-| [`frontend/README.md`](../frontend/README.md) | Nutrition-label UI |
+| [`frontend/README.md`](../frontend/README.md) | AI Model Advisor UI |
 | [`testing/README.md`](../testing/README.md) | Manual spikes |
 | [`unit_tests/README.md`](../unit_tests/README.md) | Automated tests |
