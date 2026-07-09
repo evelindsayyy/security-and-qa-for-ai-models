@@ -9,6 +9,9 @@ venv/
 .DS_Store
 __pycache__/
 
+# Claude Code local config / scratch
+.claude/
+
 # scanner runtime data (VM bind mount) — not in git except README
 scanner/models/*
 !scanner/models/README.md
