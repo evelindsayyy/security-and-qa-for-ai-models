@@ -278,5 +278,50 @@ class LaunchRoutesTest(unittest.TestCase):
         self.assertIn(r.status_code, (302, 401, 403))
 
 
+class UnreadableSafetyOutputTest(unittest.TestCase):
+    def setUp(self) -> None:
+        root = _isolate_safety_output(self)
+        self.out = root / "safety" / "output"
+        self.out.mkdir(parents=True)
+
+    def test_inflight_keys_skips_unreadable_slug_dir(self) -> None:
+        good = self.out / "gpt-5.5" / "base"
+        bad = self.out / "unreadable-model"
+        good.mkdir(parents=True)
+        bad.mkdir()
+        try:
+            os.chmod(bad, 0)
+            keys = safety_launch.inflight_safety_keys()
+        finally:
+            os.chmod(bad, 0o755)
+        self.assertIsInstance(keys, set)
+
+    def test_safety_run_new_returns_200_with_unreadable_sibling(self) -> None:
+        good = self.out / "llama-4-scout" / "base" / "merged_safety_result.json"
+        bad = self.out / "unreadable-model"
+        good.parent.mkdir(parents=True)
+        good.write_text(
+            json.dumps({"gateway_model_id": "llama-4-scout", "findings": [], "runs": []}),
+            encoding="utf-8",
+        )
+        bad.mkdir()
+        env_patch = mock.patch.dict(os.environ, {"AUTH_ENABLED": "0"})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        client = create_app({"TESTING": True}).test_client()
+        with client.session_transaction() as sess:
+            sess["user"] = {"id": "u-test", "netid": "testuser", "display_name": "Test"}
+        try:
+            os.chmod(bad, 0)
+            with mock.patch(
+                "frontend.safety_data.get_safety_rerun_params",
+                return_value={"gateway_model": "Llama 4 Scout", "redteam_profile": "base"},
+            ):
+                r = client.get("/safety/new?from=llama-4-scout&profile=base")
+        finally:
+            os.chmod(bad, 0o755)
+        self.assertEqual(r.status_code, 200)
+
+
 if __name__ == "__main__":
     unittest.main()

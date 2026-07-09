@@ -67,11 +67,13 @@ def iter_visible_slug_dirs(
     own sidecar metadata actually permits showing it (matters for artifacts
     written before per-pillar path scoping existed).
     """
-    if base_dir.is_dir():
-        for p in sorted(base_dir.iterdir()):
-            if p.is_dir() and p.name != PRIVATE_SEGMENT:
+    from dbutils import fs_safe
+
+    if fs_safe.is_dir(base_dir):
+        for p in sorted(fs_safe.iterdir(base_dir)):
+            if fs_safe.is_dir(p) and p.name != PRIVATE_SEGMENT:
                 yield p
     if view_mode == "private" and owner_user_id:
         private_root = base_dir / PRIVATE_SEGMENT / owner_user_id
-        if private_root.is_dir():
-            yield from sorted(p for p in private_root.iterdir() if p.is_dir())
+        if fs_safe.is_dir(private_root):
+            yield from sorted(p for p in fs_safe.iterdir(private_root) if fs_safe.is_dir(p))

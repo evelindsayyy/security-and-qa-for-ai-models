@@ -9,11 +9,13 @@ from typing import Any
 
 def read_run_meta(path: Path) -> dict[str, Any]:
     """Load run_meta.json from a directory or return empty dict."""
-    if path.is_file() and path.name == "run_meta.json":
+    from dbutils import fs_safe
+
+    if fs_safe.is_file(path) and path.name == "run_meta.json":
         meta_path = path
     else:
         meta_path = path / "run_meta.json"
-    if not meta_path.is_file():
+    if not fs_safe.is_file(meta_path):
         return {}
     try:
         data = json.loads(meta_path.read_text(encoding="utf-8"))
@@ -52,7 +54,9 @@ def merge_into_scan_meta(scan_dir: Path, run_meta: dict[str, Any]) -> None:
     """Merge auth fields into existing scan_meta.json if present."""
     meta_path = scan_dir / "scan_meta.json"
     base: dict[str, Any] = {}
-    if meta_path.is_file():
+    from dbutils import fs_safe
+
+    if fs_safe.is_file(meta_path):
         try:
             base = json.loads(meta_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -73,8 +77,10 @@ def read_run_meta_for_pillar(directory: Path, *, pillar: str) -> dict[str, Any]:
     """
     meta = read_run_meta(directory)
     if pillar == "scan":
+        from dbutils import fs_safe
+
         scan_meta_path = directory / "scan_meta.json"
-        if scan_meta_path.is_file():
+        if fs_safe.is_file(scan_meta_path):
             try:
                 scan_meta = json.loads(scan_meta_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):

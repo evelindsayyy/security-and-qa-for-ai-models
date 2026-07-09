@@ -269,14 +269,16 @@ def inflight_safety_keys() -> set[str]:
     safety run of a given (model, profile) can physically run at a time — so
     this check is intentionally scope-agnostic.
     """
+    from dbutils import fs_safe
+
     keys: set[str] = set()
     base = ROOT / "safety" / "output"
-    if base.is_dir():
-        for slug_dir in base.iterdir():
-            if not slug_dir.is_dir() or slug_dir.name == run_paths.PRIVATE_SEGMENT:
+    if fs_safe.is_dir(base):
+        for slug_dir in fs_safe.iterdir(base):
+            if not fs_safe.is_dir(slug_dir) or slug_dir.name == run_paths.PRIVATE_SEGMENT:
                 continue
-            for profile_dir in slug_dir.iterdir():
-                if not profile_dir.is_dir() or profile_dir.name == run_paths.PRIVATE_SEGMENT:
+            for profile_dir in fs_safe.iterdir(slug_dir):
+                if not fs_safe.is_dir(profile_dir) or profile_dir.name == run_paths.PRIVATE_SEGMENT:
                     continue
                 if run_lock.is_active(run_lock.lock_path(profile_dir)):
                     keys.add(f"{slug_dir.name}/{profile_dir.name}")

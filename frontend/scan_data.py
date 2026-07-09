@@ -439,6 +439,7 @@ def _get_scans_data_files() -> dict:
     """
     from frontend import run_paths
     from frontend.read_context import artifact_path_visible, read_context
+    from dbutils import fs_safe
 
     if not OUTPUT_DIR.exists():
         return {
@@ -454,7 +455,7 @@ def _get_scans_data_files() -> dict:
         OUTPUT_DIR, view_mode=view_mode, owner_user_id=user_id
     ):
         path = slug_dir / "scan_result.json"
-        if not path.is_file():
+        if not fs_safe.is_file(path):
             continue
         if not artifact_path_visible(slug_dir, pillar="scan"):
             continue
