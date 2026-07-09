@@ -101,3 +101,63 @@ class RequireReadyTest(unittest.TestCase):
                 pipeline.require_ready_for_downstream("Qwen/Qwen2.5-7B-Instruct", "hf"),
                 "scan required",
             )
+
+
+class StageStateTest(unittest.TestCase):
+    def test_gateway_cleared_unlocks_eval(self) -> None:
+        with mock.patch.object(
+            pipeline, "validate_safety_gate",
+            return_value={"ok": True, "error": None, "status": "complete"},
+        ):
+            st = pipeline.stage_state("Llama 4 Maverick", "gateway")
+        self.assertEqual(st["scan"]["state"], "n/a")
+        self.assertEqual(st["safety"]["state"], "cleared")
+        self.assertTrue(st["eval_unlocked"])
+
+    def test_gateway_missing_safety_is_missing_and_locked(self) -> None:
+        with mock.patch.object(
+            pipeline, "validate_safety_gate",
+            return_value={"ok": False, "error": "run safety", "status": None},
+        ):
+            st = pipeline.stage_state("Llama 4 Maverick", "gateway")
+        self.assertEqual(st["safety"]["state"], "missing")
+        self.assertFalse(st["eval_unlocked"])
+
+    def test_gateway_blocked_tier_is_blocked(self) -> None:
+        with mock.patch.object(
+            pipeline, "validate_safety_gate",
+            return_value={"ok": False, "error": "tier high", "status": "complete"},
+        ):
+            st = pipeline.stage_state("Llama 4 Maverick", "gateway")
+        self.assertEqual(st["safety"]["state"], "blocked")
+        self.assertFalse(st["eval_unlocked"])
+
+    def test_hf_scan_cleared_safety_unsupported(self) -> None:
+        with mock.patch(
+            "frontend.eval_launch.validate_hf_scan_gate",
+            return_value={"ok": True, "error": None, "status": "complete"},
+        ):
+            st = pipeline.stage_state("Qwen/Qwen2.5-7B-Instruct", "hf")
+        self.assertEqual(st["scan"]["state"], "cleared")
+        self.assertEqual(st["safety"]["state"], "unsupported")
+        self.assertTrue(st["eval_unlocked"])
+
+
+class BuildOverviewTest(unittest.TestCase):
+    def test_rows_from_gateway_and_scans(self) -> None:
+        with mock.patch(
+            "gateway.catalog.get_gateway_catalog",
+            return_value={"models": [{"id": "Llama 4 Maverick", "category": "general_chat"}]},
+        ), mock.patch(
+            "frontend.scan_data.get_scans_data",
+            return_value={"scans": [{"model_id": "Qwen/Qwen2.5-7B-Instruct", "slug": "Qwen--Qwen2.5-7B-Instruct"}]},
+        ), mock.patch.object(
+            pipeline, "validate_safety_gate",
+            return_value={"ok": False, "error": "run safety", "status": None},
+        ), mock.patch(
+            "frontend.eval_launch.validate_hf_scan_gate",
+            return_value={"ok": True, "error": None, "status": "complete"},
+        ):
+            ov = pipeline.build_overview()
+        self.assertTrue(ov["has_rows"])
+        self.assertEqual({r["source"] for r in ov["rows"]}, {"gateway", "hf"})

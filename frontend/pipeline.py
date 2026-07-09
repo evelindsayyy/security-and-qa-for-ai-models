@@ -106,3 +106,63 @@ def require_ready_for_downstream(model: str, source: str) -> str | None:
 
     gate = validate_safety_gate(model)
     return None if gate["ok"] else gate["error"]
+
+
+def _gate_stage(gate: dict) -> dict:
+    """Map a gate verdict to a display stage. `status is None` means the
+    artifact was absent (missing) vs. present-but-failing (blocked)."""
+    if gate["ok"]:
+        return {"state": "cleared", "detail": ""}
+    if gate.get("status") is None:
+        return {"state": "missing", "detail": gate["error"]}
+    return {"state": "blocked", "detail": gate["error"]}
+
+
+def stage_state(model: str, source: str) -> dict:
+    """Per-model pipeline state for the /pipeline view (read-only)."""
+    if source == "hf":
+        from frontend.eval_launch import validate_hf_scan_gate
+
+        scan_gate = validate_hf_scan_gate(model)
+        return {
+            "model": model,
+            "source": source,
+            "scan": _gate_stage(scan_gate),
+            "safety": {
+                "state": "unsupported",
+                "detail": "safety red-teaming not yet supported for served HF models",
+            },
+            "eval_unlocked": scan_gate["ok"],
+        }
+
+    safety_gate = validate_safety_gate(model)
+    return {
+        "model": model,
+        "source": source,
+        "scan": {"state": "n/a", "detail": "nothing to scan (API endpoint)"},
+        "safety": _gate_stage(safety_gate),
+        "eval_unlocked": safety_gate["ok"],
+    }
+
+
+def build_overview() -> dict:
+    """All gateway models + every HF repo that already has a scan, each with its
+    pipeline stage state. Degrades gracefully if a data source is unavailable."""
+    rows: list[dict] = []
+    try:
+        from gateway.catalog import get_gateway_catalog
+
+        for m in get_gateway_catalog().get("models", []):
+            rows.append(stage_state(m["id"], "gateway"))
+    except Exception:  # noqa: BLE001 — a catalog hiccup must not 500 the page
+        pass
+    try:
+        from frontend.scan_data import get_scans_data
+
+        for s in get_scans_data().get("scans", []):
+            repo = s.get("model_id")
+            if repo:
+                rows.append(stage_state(repo, "hf"))
+    except Exception:  # noqa: BLE001
+        pass
+    return {"rows": rows, "has_rows": bool(rows)}
