@@ -161,3 +161,30 @@ class BuildOverviewTest(unittest.TestCase):
             ov = pipeline.build_overview()
         self.assertTrue(ov["has_rows"])
         self.assertEqual({r["source"] for r in ov["rows"]}, {"gateway", "hf"})
+
+
+from frontend import create_app  # noqa: E402  (top-of-file group is fine too)
+
+
+class PipelineRouteTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.client = create_app({"TESTING": True}).test_client()
+
+    def test_pipeline_page_renders_empty(self) -> None:
+        with mock.patch("frontend.pipeline.build_overview",
+                        return_value={"rows": [], "has_rows": False}):
+            r = self.client.get("/pipeline")
+        self.assertEqual(r.status_code, 200)
+
+    def test_pipeline_page_lists_models(self) -> None:
+        rows = [
+            {"model": "Llama 4 Maverick", "source": "gateway",
+             "scan": {"state": "n/a", "detail": ""},
+             "safety": {"state": "missing", "detail": "run safety"},
+             "eval_unlocked": False},
+        ]
+        with mock.patch("frontend.pipeline.build_overview",
+                        return_value={"rows": rows, "has_rows": True}):
+            r = self.client.get("/pipeline")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"Llama 4 Maverick", r.data)
