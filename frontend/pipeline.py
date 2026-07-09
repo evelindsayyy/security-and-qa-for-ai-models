@@ -88,3 +88,21 @@ def validate_safety_gate(model: str, *, profile: str = DEFAULT_SAFETY_PROFILE) -
             ),
         }
     return {**out, "ok": True, "error": None}
+
+
+def require_ready_for_downstream(model: str, source: str) -> str | None:
+    """Hard-block gate reused by eval + benchmark. Returns the blocking error
+    message, or None when the model may proceed.
+
+    gateway: safety must be cleared (scan is N/A).
+    hf:      scan must be cleared (safety not yet supported for served HF models).
+    """
+    if source == "hf":
+        # Lazy import breaks the pipeline <-> eval_launch cycle.
+        from frontend.eval_launch import validate_hf_scan_gate
+
+        gate = validate_hf_scan_gate(model)
+        return None if gate["ok"] else gate["error"]
+
+    gate = validate_safety_gate(model)
+    return None if gate["ok"] else gate["error"]

@@ -69,3 +69,35 @@ class ValidateSafetyGateTest(unittest.TestCase):
         gate = pipeline.validate_safety_gate("Llama 4 Maverick")
         self.assertFalse(gate["ok"])
         self.assertIn("unreadable", gate["error"])
+
+
+class RequireReadyTest(unittest.TestCase):
+    def test_gateway_cleared_returns_none(self) -> None:
+        with mock.patch.object(pipeline, "validate_safety_gate",
+                               return_value={"ok": True, "error": None}):
+            self.assertIsNone(
+                pipeline.require_ready_for_downstream("Llama 4 Maverick", "gateway")
+            )
+
+    def test_gateway_blocked_returns_error(self) -> None:
+        with mock.patch.object(pipeline, "validate_safety_gate",
+                               return_value={"ok": False, "error": "no safety run"}):
+            self.assertEqual(
+                pipeline.require_ready_for_downstream("Llama 4 Maverick", "gateway"),
+                "no safety run",
+            )
+
+    def test_hf_scan_cleared_returns_none(self) -> None:
+        with mock.patch("frontend.eval_launch.validate_hf_scan_gate",
+                        return_value={"ok": True, "error": None}):
+            self.assertIsNone(
+                pipeline.require_ready_for_downstream("Qwen/Qwen2.5-7B-Instruct", "hf")
+            )
+
+    def test_hf_scan_blocked_returns_error(self) -> None:
+        with mock.patch("frontend.eval_launch.validate_hf_scan_gate",
+                        return_value={"ok": False, "error": "scan required"}):
+            self.assertEqual(
+                pipeline.require_ready_for_downstream("Qwen/Qwen2.5-7B-Instruct", "hf"),
+                "scan required",
+            )
