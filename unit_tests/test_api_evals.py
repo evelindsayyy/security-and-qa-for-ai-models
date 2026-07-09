@@ -104,6 +104,8 @@ class StartEvalTest(unittest.TestCase):
     def test_accepted(self) -> None:
         with mock.patch.object(api_evals.eval_launch, "validate_launch",
                                return_value=None), \
+             mock.patch("frontend.pipeline.require_ready_for_downstream",
+                        return_value=None), \
              mock.patch.object(api_evals.eval_launch, "start_run",
                                return_value=("run-slug", False)):
             resp = _client().post(
@@ -124,6 +126,20 @@ class StartEvalTest(unittest.TestCase):
                 content_type="application/json",
             )
         self.assertEqual(resp.status_code, 400)
+
+    def test_blocked_when_safety_not_cleared(self) -> None:
+        with mock.patch.object(api_evals.eval_launch, "validate_launch",
+                               return_value=None), \
+             mock.patch("frontend.pipeline.require_ready_for_downstream",
+                        return_value="safety red-teaming required before this step"), \
+             mock.patch.object(api_evals.eval_launch, "start_run") as sr:
+            resp = _client().post(
+                "/api/evals",
+                data='{"candidate":"gpt-5-chat","judge":"Llama 4 Maverick","suite":"it_support_v1"}',
+                content_type="application/json",
+            )
+        self.assertEqual(resp.status_code, 400)
+        sr.assert_not_called()
 
 
 # --- Pagination on the list endpoint --------------------------------------
