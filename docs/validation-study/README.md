@@ -10,7 +10,7 @@
 
 Measure how well the automated **LLM-as-judge** agrees with **humans** on the
 open-ended tasks (email drafting, plain-language rewriting, tutoring, …), so the
-open-ended rankings on the nutrition-label dashboard are trustworthy — not just
+open-ended rankings on the AI Model Advisor dashboard are trustworthy — not just
 the verifiable SQL/JSON/numeric tasks that have an execution oracle.
 
 **Deliverable:** `docs/validation-study.md` — Cohen's κ (judge vs humans),
