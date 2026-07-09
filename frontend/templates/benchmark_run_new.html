@@ -7,7 +7,7 @@
   <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmark results</a></p>
   <h1>Start a benchmark run</h1>
   {% if rerun %}
-  <p class="sub benchmark-rerun-hint">Pre-filled from a previous run — adjust settings if needed, then start.</p>
+  <p class="sub benchmark-rerun-hint">Pre-filled from a previous run — starting will delete the prior results and replace them.</p>
   {% endif %}
   <p class="sub">
     Choose a <strong>benchmark</strong>, then pick how the model is reached:
@@ -60,7 +60,7 @@
         <label>Model
           <select name="model" id="model">
             {% for m in models %}
-            <option value="{{ m }}" {% if m == 'GPT 4.1 Mini' %}selected{% endif %}>{{ m }}</option>
+            <option value="{{ m }}">{{ m }}</option>
             {% endfor %}
           </select>
           <span class="form-hint">exact gateway id — see <a href="{{ url_for('models_catalog') }}">model catalog</a></span>

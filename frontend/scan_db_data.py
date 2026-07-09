@@ -208,15 +208,12 @@ def _visibility_params(
 
 
 def get_scans_data_db() -> dict:
-    """DB-preferred merge of every known scan (DB rows + not-yet-loaded files)."""
-    from dbutils.run_meta import read_run_meta_for_pillar
-    from dbutils.visibility import artifact_visible
-    from frontend import run_paths
-    from frontend.read_context import read_context
-    from frontend.scan_data import _summarize_scan
+    """Every known scan, straight from Postgres.
 
+    Postgres is the single source of truth when a DSN is reachable — we do NOT
+    merge in on-disk artifacts here. Disk is only consulted when no DSN is
+    configured (see scan_data.get_scans_data)."""
     vis_clause, vis_params = _visibility_params()
-    view_mode, user_id = read_context()
 
     with _connect() as conn:
         with conn.cursor() as cur:
@@ -227,25 +224,7 @@ def get_scans_data_db() -> dict:
             _summarize_db_scan(row, findings_by_scan.get(row[0], []))
             for row in scan_rows
         ]
-    db_rows = [r for r in db_rows if r is not None]
-
-    seen_slugs = {r["slug"] for r in db_rows}
-    file_rows: list[dict] = []
-    for slug_dir in run_paths.iter_visible_slug_dirs(
-        OUTPUT_DIR, view_mode=view_mode, owner_user_id=user_id
-    ):
-        path = slug_dir / "scan_result.json"
-        slug = slug_dir.name
-        if not path.is_file() or slug in seen_slugs:
-            continue
-        meta = read_run_meta_for_pillar(slug_dir, pillar="scan")
-        if not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
-            continue
-        row = _summarize_scan(path, slug)
-        if row is not None:
-            file_rows.append(row)
-
-    rows = db_rows + file_rows
+    rows = [r for r in db_rows if r is not None]
     rows.sort(key=lambda r: r["overall_risk_score"], reverse=True)
     tiers = sorted({r["severity_tier"] for r in rows})
     tier_summary = ", ".join(tiers) if tiers else ""
@@ -287,12 +266,10 @@ def get_scan_detail_db(
     return _build_scan_detail(detail_slug, data)
 
 
-def resolve_delete_keys(
+def _resolve_delete_row(
     slug: str, *, visibility: str | None = None, owner_user_id: str | None = None
-) -> tuple[str, str] | None:
-    """Map UI slug to ``(hf_repo, completed_at)`` for the latest Postgres row
-    matching ``visibility``/``owner_user_id`` (defaults to the ambient session's
-    scope, same as the detail read path)."""
+) -> tuple[str, str, str] | None:
+    """Map UI slug to ``(scan_id, hf_repo, completed_at)`` for the latest row."""
     if not is_safe_slug(slug):
         return None
 
@@ -309,15 +286,36 @@ def resolve_delete_keys(
                     break
             if scan_row is None:
                 return None
+            scan_id = scan_row[0]
             repo = scan_row[1]
             completed_at = scan_row[9]
-            if not repo or completed_at is None:
+            if not scan_id or not repo or completed_at is None:
                 return None
             if hasattr(completed_at, "isoformat"):
                 completed_at = completed_at.isoformat()
             else:
                 completed_at = str(completed_at)
-            return repo, completed_at
+            return scan_id, repo, completed_at
+
+
+def resolve_delete_keys(
+    slug: str, *, visibility: str | None = None, owner_user_id: str | None = None
+) -> tuple[str, str] | None:
+    """Map UI slug to ``(hf_repo, completed_at)`` for the latest Postgres row
+    matching ``visibility``/``owner_user_id`` (defaults to the ambient session's
+    scope, same as the detail read path)."""
+    row = _resolve_delete_row(slug, visibility=visibility, owner_user_id=owner_user_id)
+    if row is None:
+        return None
+    return row[1], row[2]
+
+
+def resolve_delete_run_id(
+    slug: str, *, visibility: str | None = None, owner_user_id: str | None = None
+) -> str | None:
+    """Return the Postgres ``scans.id`` for the latest scoped row, if any."""
+    row = _resolve_delete_row(slug, visibility=visibility, owner_user_id=owner_user_id)
+    return row[0] if row else None
 
 
 def delete_run_by_slug(
@@ -326,10 +324,26 @@ def delete_run_by_slug(
     """Delete the latest Postgres scan row for a UI slug (scoped to
     ``visibility``/``owner_user_id`` so a public delete can never remove
     someone else's private row for the same model, or vice versa)."""
-    keys = resolve_delete_keys(slug, visibility=visibility, owner_user_id=owner_user_id)
-    if keys is None:
+    run_id = resolve_delete_run_id(slug, visibility=visibility, owner_user_id=owner_user_id)
+    if run_id is None:
         return False
-    return delete_run(*keys)
+    return delete_run_by_id(run_id)
+
+
+def delete_run_by_id(scan_id: str) -> bool:
+    """Delete one scans row by primary key (findings cascade)."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM public.scans
+                WHERE id = %(scan_id)s::uuid
+                """,
+                {"scan_id": scan_id},
+            )
+            deleted = cur.rowcount > 0
+        conn.commit()
+    return deleted
 
 
 def delete_run(hf_repo: str, completed_at: str) -> bool:

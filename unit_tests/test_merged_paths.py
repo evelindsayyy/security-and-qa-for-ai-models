@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -49,6 +50,22 @@ class MergedPathsTests(unittest.TestCase):
             rows = list(iter_merged_result_paths(root))
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0][0], scoped)
+
+    def test_skips_unreadable_slug_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            good = root / "gpt-4.1-mini" / "base" / "merged_safety_result.json"
+            bad_parent = root / "unreadable-slug"
+            good.parent.mkdir(parents=True)
+            good.write_text("{}", encoding="utf-8")
+            bad_parent.mkdir()
+            try:
+                os.chmod(bad_parent, 0)
+                rows = list(iter_merged_result_paths(root))
+            finally:
+                os.chmod(bad_parent, 0o755)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0][1], "gpt-4.1-mini")
 
 
 if __name__ == "__main__":

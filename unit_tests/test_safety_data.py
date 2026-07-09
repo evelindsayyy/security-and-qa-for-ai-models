@@ -73,7 +73,8 @@ class SafetyDataTest(unittest.TestCase):
                 "runs": [],
             },
         )
-        detail = safety_data.get_safety_detail(slug, "base")
+        with mock.patch("frontend.safety_db_data.available", return_value=False):
+            detail = safety_data.get_safety_detail(slug, "base")
         self.assertIsNotNone(detail)
         assert detail is not None
         self.assertFalse(detail["findings"][0]["passed"])

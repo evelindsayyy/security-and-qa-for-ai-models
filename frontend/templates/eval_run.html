@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button, pillar_guide_callout with context %}
+{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button, rerun_button, staleness_badge, pillar_guide_callout with context %}
 
 {% block title %}Model comparison{% endblock %}
 
@@ -115,6 +115,7 @@
             data-utility="{{ "%.4f"|format(r.cost_perf.utility) if r.cost_perf else '' }}">
           <td>
             <a class="model" href="{{ url_for('model_detail', slug=r.model_slug) }}">{{ r.candidate_model }}</a>
+            {{ staleness_badge(r.staleness) }}
             {% if r.is_best %}<span class="badge badge-best">best</span>{% endif %}
           </td>
           <td><span class="dim">{{ r.judge_model }}</span></td>
@@ -143,6 +144,7 @@
             {% endif %}
           </td>
           <td class="col-actions" onclick="event.stopPropagation()">
+            {{ rerun_button(url_for('eval_run_new', from=r.slug), 'Rerun', 'btn-primary btn-sm' if r.staleness and r.staleness.stale else 'btn-secondary btn-sm') }}
             {{ delete_button(url_for('eval_run_delete_private' if view_mode == 'private' else 'eval_run_delete', slug=r.slug), 'Delete', classes='btn-danger btn-sm') }}
           </td>
         </tr>

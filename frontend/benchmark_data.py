@@ -628,11 +628,15 @@ def is_reference_slug(slug: str) -> bool:
 
 
 def _load_reference_summaries() -> list[dict]:
+    from dbutils import fs_safe
+
     ref = _reference_dir()
     if ref is None:
         return []
     rows: list[dict] = []
-    for path in sorted(list(ref.glob("*.json")) + list(ref.glob("*.jsonl"))):
+    for path in sorted(
+        list(fs_safe.glob(ref, "*.json")) + list(fs_safe.glob(ref, "*.jsonl"))
+    ):
         row = _summarize_file(path)
         if row is None:
             continue
@@ -1335,6 +1339,7 @@ def get_benchmark_latest_for_hub(all_runs: list[dict] | None = None) -> dict | N
 
 def _get_benchmarks_data_files() -> dict:
     from frontend.read_context import artifact_path_visible
+    from dbutils import fs_safe
 
     dirs = _candidate_dirs()
     if not dirs:
@@ -1348,7 +1353,7 @@ def _get_benchmarks_data_files() -> dict:
     rows: list[dict] = []
     seen: set[str] = set()
     for d in dirs:
-        for path in sorted(list(d.glob("*.json")) + list(d.glob("*.jsonl"))):
+        for path in sorted(list(fs_safe.glob(d, "*.json")) + list(fs_safe.glob(d, "*.jsonl"))):
             if path.stem in seen:
                 continue
             if not artifact_path_visible(d / path.stem, pillar="benchmark"):
@@ -1472,6 +1477,7 @@ def delete_benchmark(
     """
     from dbutils.run_meta import read_run_meta_for_pillar
     from dbutils.visibility import artifact_visible
+    from frontend.delete_db import db_delete_error
 
     if not is_safe_slug(slug):
         return f"invalid slug: {slug!r}"
@@ -1479,9 +1485,23 @@ def delete_benchmark(
     if is_reference_slug(slug):
         return "reference benchmark runs cannot be deleted"
 
-    meta = read_run_meta_for_pillar(PRIMARY_DIR / slug, pillar="benchmark")
-    if not artifact_visible(meta, view_mode=visibility, user_id=owner_user_id):
-        return f"no benchmark result found for slug {slug!r}"
+    exists = False
+    try:
+        from frontend import benchmark_db_data
+
+        if benchmark_db_data.available():
+            exists = (
+                benchmark_db_data.get_benchmark_detail_db(
+                    slug, visibility=visibility, owner_user_id=owner_user_id
+                )
+                is not None
+            )
+    except Exception:
+        pass
+    if not exists:
+        meta = read_run_meta_for_pillar(PRIMARY_DIR / slug, pillar="benchmark")
+        if not artifact_visible(meta, view_mode=visibility, user_id=owner_user_id):
+            return f"no benchmark result found for slug {slug!r}"
 
     from frontend.benchmark_launch import is_run_in_progress
 
@@ -1497,15 +1517,40 @@ def delete_benchmark(
             return f"could not delete {path.name}: {exc}"
 
     removed_db = False
+    db_available = False
+    db_row_existed = False
+    db_exc: BaseException | None = None
     try:
         from frontend import benchmark_db_data
 
-        if benchmark_db_data.available():
-            removed_db = benchmark_db_data.delete_run(
-                slug, visibility=visibility, owner_user_id=owner_user_id
-            )
-    except Exception:
-        pass
+        db_available = benchmark_db_data.available()
+        if db_available:
+            try:
+                db_row_existed = (
+                    benchmark_db_data.get_benchmark_detail_db(
+                        slug, visibility=visibility, owner_user_id=owner_user_id
+                    )
+                    is not None
+                )
+            except Exception:
+                pass
+            try:
+                removed_db = benchmark_db_data.delete_run(
+                    slug, visibility=visibility, owner_user_id=owner_user_id
+                )
+            except Exception as exc:
+                db_exc = exc
+    except Exception as exc:
+        db_exc = exc
+
+    err = db_delete_error(
+        db_available=db_available,
+        db_row_existed=db_row_existed,
+        removed_db=removed_db,
+        db_exc=db_exc,
+    )
+    if err:
+        return err
 
     if removed_files == 0 and not removed_db:
         return f"no benchmark result found for slug {slug!r}"
@@ -1543,7 +1588,11 @@ def get_benchmarks_data() -> dict:
         )
         row["timestamp"] = _format_ts(row["timestamp_raw"])
     data.update(_postprocess_benchmark_runs(raw_runs))
-    for row in data.get("all_runs", []):
+    all_runs = data.get("all_runs") or []
+    from frontend.staleness import attach_staleness
+
+    attach_staleness(all_runs, "benchmark")
+    for row in all_runs:
         row["score_class"] = _score_class(row.get("kind"), row.get("headline_value"))
         row["coverage"] = _coverage_info(row)
     data.update(_build_comparison_section(data.get("runs", [])))
@@ -1570,9 +1619,11 @@ def get_benchmark_detail(
                 detail = benchmark_db_data.get_benchmark_detail_db(
                     slug, visibility=visibility, owner_user_id=owner_user_id
                 )
+            else:
+                detail = _get_benchmark_detail_files(
+                    slug, visibility=visibility, owner_user_id=owner_user_id
+                )
         except Exception:
-            pass
-        if detail is None:
             detail = _get_benchmark_detail_files(
                 slug, visibility=visibility, owner_user_id=owner_user_id
             )

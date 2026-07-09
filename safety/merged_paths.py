@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from dbutils.run_paths import PRIVATE_SEGMENT
+from dbutils import fs_safe
 
 
 def merged_result_path(
@@ -22,11 +23,11 @@ def merged_result_path(
             / "merged_safety_result.json"
         )
     scoped = output_dir / slug / profile / "merged_safety_result.json"
-    if scoped.is_file():
+    if fs_safe.is_file(scoped):
         return scoped
     if profile == "base":
         legacy = output_dir / slug / "merged_safety_result.json"
-        if legacy.is_file():
+        if fs_safe.is_file(legacy):
             return legacy
     return scoped
 
@@ -47,13 +48,13 @@ def iter_merged_result_paths(
     dbutils.run_paths for why private lives nested one level inside the
     slug dir here, unlike scanner's sibling-of-everything layout).
     """
-    if not output_dir.is_dir():
+    if not fs_safe.is_dir(output_dir):
         return
 
     if owner_user_id is not None:
         seen: set[tuple[str, str]] = set()
         pattern = f"*/{PRIVATE_SEGMENT}/{owner_user_id}/*/merged_safety_result.json"
-        for path in sorted(output_dir.glob(pattern)):
+        for path in sorted(fs_safe.glob(output_dir, pattern)):
             profile = path.parent.name
             slug = path.parent.parent.parent.parent.name
             key = (slug, profile)
@@ -64,7 +65,7 @@ def iter_merged_result_paths(
         return
 
     seen = set()
-    for path in sorted(output_dir.glob("*/*/merged_safety_result.json")):
+    for path in sorted(fs_safe.glob(output_dir, "*/*/merged_safety_result.json")):
         profile = path.parent.name
         slug = path.parent.parent.name
         key = (slug, profile)
@@ -73,7 +74,7 @@ def iter_merged_result_paths(
         seen.add(key)
         yield path, slug, profile
 
-    for path in sorted(output_dir.glob("*/merged_safety_result.json")):
+    for path in sorted(fs_safe.glob(output_dir, "*/merged_safety_result.json")):
         slug = path.parent.name
         key = (slug, "base")
         if key in seen:

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_scan_docker, start_button, delete_button, tier_label, pillar_guide_callout with context %}
+{% from '_macros.html' import expandable, cli_scan_docker, start_button, delete_button, rerun_button, staleness_badge, tier_label, pillar_guide_callout with context %}
 
 {% block title %}HF artifact scans{% endblock %}
 
@@ -70,13 +70,14 @@
             tabindex="0"
             role="link"
             aria-label="Open scan for {{ s.model_id }}">
-          <td><span class="model">{{ s.model_id }}</span></td>
+          <td><span class="model">{{ s.model_id }}</span> {{ staleness_badge(s.staleness) }}</td>
           <td class="col-nowrap">{{ tier_label(s.severity_tier) }}</td>
           <td class="num overall">{{ s.overall_risk_score }}</td>
           <td class="num dim">{{ s.n_findings }}</td>
           <td class="col-long dim">{{ expandable(s.severity_summary, clamp=1) }}</td>
           <td class="col-nowrap dim">{{ s.scanned_at[:10] if s.scanned_at != "—" else "—" }}</td>
           <td class="col-actions" onclick="event.stopPropagation()">
+            {{ rerun_button(url_for('scan_run_new', from=s.slug), 'Rerun', 'btn-primary btn-sm' if s.staleness and s.staleness.stale else 'btn-secondary btn-sm') }}
             {{ delete_button(url_for('scan_delete_private' if view_mode == 'private' else 'scan_delete', slug=s.slug), 'Delete', classes='btn-danger btn-sm') }}
           </td>
         </tr>

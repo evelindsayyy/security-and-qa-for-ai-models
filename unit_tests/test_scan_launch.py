@@ -197,6 +197,52 @@ class LaunchRoutesTest(unittest.TestCase):
         self.assertIsInstance(argv, list)
         self.assertIn("gpt2", argv)
 
+    def test_start_spawns_even_when_postgres_has_reusable_run(self) -> None:
+        from dbutils.run_access import ReusableRun
+
+        fake_proc = mock.Mock()
+        fake_proc.poll.return_value = None
+        fake_proc.pid = 424243
+        reused = ReusableRun(
+            run_id="scan-uuid", pillar="scan", visibility="public", slug="gpt2"
+        )
+        data = {
+            "hf_repo": "gpt2",
+            "run_modelscan": "on",
+            "run_fickling": "on",
+            "run_modelaudit": "on",
+            "run_deps": "on",
+            "run_secrets": "on",
+        }
+        with mock.patch("frontend.run_launch.try_lookup_reusable", return_value=reused), \
+             mock.patch.object(scan_launch.subprocess, "Popen", return_value=fake_proc) as popen:
+            r = self.client.post("/scans/start", data=data)
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("status=running", r.headers["Location"])
+        self.assertNotIn("status=reused", r.headers["Location"])
+        popen.assert_called_once()
+
+    def test_start_returns_503_on_output_dir_error(self) -> None:
+        from frontend.output_dirs import OutputDirError
+
+        data = {
+            "hf_repo": "gpt2",
+            "run_modelscan": "on",
+            "run_fickling": "on",
+            "run_modelaudit": "on",
+            "run_deps": "on",
+            "run_secrets": "on",
+        }
+        with mock.patch("frontend.run_launch.try_lookup_reusable", return_value=None), \
+             mock.patch("frontend.scan_launch.validate_launch", return_value=None), \
+             mock.patch(
+                 "frontend.scan_launch.start_run",
+                 side_effect=OutputDirError("cannot write to /tmp/x"),
+             ):
+            r = self.client.post("/scans/start", data=data)
+        self.assertEqual(r.status_code, 503)
+        self.assertIn(b"cannot write", r.data)
+
     def test_status_endpoint_returns_json(self) -> None:
         r = self.client.get("/scans/nonexistent-slug/status")
         self.assertEqual(r.status_code, 200)
@@ -290,6 +336,77 @@ class PrivatePublicIsolationTest(unittest.TestCase):
         # And the public read of the same slug sees nothing, since the
         # result was relocated into user-a's private location.
         self.assertEqual(scan_launch.get_status("gpt2")["status"], "not_found")
+
+
+class UnreadableOutputDirTest(unittest.TestCase):
+    """Regression: one root-owned sibling must not 500 /scans/new for everyone."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        root = Path(self._tmp.name)
+        for attr, value in (
+            ("ROOT", root),
+            ("SCAN_OUTPUT", root / "scanner" / "output"),
+            ("DOCKER_COMPOSE_FILE", root / "scanner" / "docker" / "compose.yml"),
+        ):
+            patcher = mock.patch.object(scan_launch, attr, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.out = root / "scanner" / "output"
+        self.out.mkdir(parents=True)
+
+    def _write_good_scan(self, slug: str) -> None:
+        d = self.out / slug
+        d.mkdir(parents=True)
+        (d / "scan_result.json").write_text(
+            json.dumps({"model_id": slug.replace("--", "/"), "overall_risk_score": 1}),
+            encoding="utf-8",
+        )
+
+    def test_existing_slugs_skips_unreadable_sibling(self) -> None:
+        self._write_good_scan("microsoft--phi-2")
+        bad = self.out / "TinyLlama--TinyLlama-1.1B-Chat-v1.0"
+        bad.mkdir()
+        try:
+            os.chmod(bad, 0)
+            slugs = scan_launch._existing_scan_slugs(visibility="public")
+        finally:
+            os.chmod(bad, 0o755)
+        self.assertIn("microsoft--phi-2", slugs)
+        self.assertNotIn("TinyLlama--TinyLlama-1.1B-Chat-v1.0", slugs)
+
+    def test_inflight_slugs_skips_unreadable_sibling(self) -> None:
+        self._write_good_scan("microsoft--phi-2")
+        bad = self.out / "TinyLlama--TinyLlama-1.1B-Chat-v1.0"
+        bad.mkdir()
+        try:
+            os.chmod(bad, 0)
+            slugs = scan_launch.inflight_scan_slugs()
+        finally:
+            os.chmod(bad, 0o755)
+        self.assertIsInstance(slugs, set)
+
+    def test_scan_run_new_returns_200_with_unreadable_sibling(self) -> None:
+        from frontend import create_app
+
+        self._write_good_scan("microsoft--phi-2")
+        bad = self.out / "TinyLlama--TinyLlama-1.1B-Chat-v1.0"
+        bad.mkdir()
+        env_patch = mock.patch.dict(os.environ, {"AUTH_ENABLED": "0"})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        client = create_app({"TESTING": True}).test_client()
+        with client.session_transaction() as sess:
+            sess["user"] = {"id": "u-test", "netid": "testuser", "display_name": "Test"}
+        try:
+            os.chmod(bad, 0)
+            with mock.patch("frontend.scan_data.get_scan_rerun_params", return_value={"hf_repo": "microsoft/phi-2"}):
+                r = client.get("/scans/new?from=microsoft--phi-2")
+        finally:
+            os.chmod(bad, 0o755)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"microsoft/phi-2", r.data)
 
 
 class PrivateRouteTest(unittest.TestCase):

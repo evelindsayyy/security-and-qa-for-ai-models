@@ -198,6 +198,8 @@ class GetStatusTest(unittest.TestCase):
 class LaunchRoutesTest(unittest.TestCase):
     def setUp(self) -> None:
         _isolate_safety_output(self)
+        safety_launch._RUNNING.clear()
+        safety_launch._INFLIGHT.clear()
         patcher = mock.patch.object(
             safety_launch,
             "_eligible_gateway_models",
@@ -224,19 +226,35 @@ class LaunchRoutesTest(unittest.TestCase):
         self.assertEqual(r.status_code, 400)
 
     def test_start_valid_spawns_and_redirects(self) -> None:
+        from frontend.run_launch import LaunchPlan
+
         fake_proc = mock.Mock()
         fake_proc.poll.return_value = None
         fake_proc.pid = 424242
+        fresh_plan = LaunchPlan(
+            config={"gateway_model": "gpt-5.5"},
+            config_fingerprint="test-fp",
+            visibility="public",
+            owner_user_id=None,
+            owner_netid=None,
+            reused=None,
+        )
         with mock.patch.object(
             safety_launch.subprocess, "Popen", return_value=fake_proc
-        ) as popen:
+        ) as popen, mock.patch(
+            "frontend.run_launch.build_launch_plan", return_value=fresh_plan
+        ), mock.patch.object(safety_launch, "is_safety_inflight", return_value=False), mock.patch.object(
+            safety_launch, "check_inflight_combo", return_value=None
+        ), mock.patch.object(safety_launch.docker_launch, "use_docker", return_value=False), mock.patch(
+            "dbutils.run_lock.try_acquire", return_value=True
+        ):
             r = self.client.post("/safety/start", data={
                 "gateway_model": "gpt-5.5",
                 "run_policy": "1",
                 "run_redteam": "1",
                 "run_garak": "1",
             })
-        self.assertEqual(r.status_code, 302)
+        self.assertEqual(r.status_code, 302, r.data[:500] if r.data else r.status_code)
         self.assertIn("status=running", r.headers["Location"])
         popen.assert_called_once()
         self.assertIsInstance(popen.call_args.args[0], list)
@@ -258,6 +276,51 @@ class LaunchRoutesTest(unittest.TestCase):
             sess.pop("user", None)
         r = self.client.get("/safety/gpt-5.5/base/private")
         self.assertIn(r.status_code, (302, 401, 403))
+
+
+class UnreadableSafetyOutputTest(unittest.TestCase):
+    def setUp(self) -> None:
+        root = _isolate_safety_output(self)
+        self.out = root / "safety" / "output"
+        self.out.mkdir(parents=True)
+
+    def test_inflight_keys_skips_unreadable_slug_dir(self) -> None:
+        good = self.out / "gpt-5.5" / "base"
+        bad = self.out / "unreadable-model"
+        good.mkdir(parents=True)
+        bad.mkdir()
+        try:
+            os.chmod(bad, 0)
+            keys = safety_launch.inflight_safety_keys()
+        finally:
+            os.chmod(bad, 0o755)
+        self.assertIsInstance(keys, set)
+
+    def test_safety_run_new_returns_200_with_unreadable_sibling(self) -> None:
+        good = self.out / "llama-4-scout" / "base" / "merged_safety_result.json"
+        bad = self.out / "unreadable-model"
+        good.parent.mkdir(parents=True)
+        good.write_text(
+            json.dumps({"gateway_model_id": "llama-4-scout", "findings": [], "runs": []}),
+            encoding="utf-8",
+        )
+        bad.mkdir()
+        env_patch = mock.patch.dict(os.environ, {"AUTH_ENABLED": "0"})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        client = create_app({"TESTING": True}).test_client()
+        with client.session_transaction() as sess:
+            sess["user"] = {"id": "u-test", "netid": "testuser", "display_name": "Test"}
+        try:
+            os.chmod(bad, 0)
+            with mock.patch(
+                "frontend.safety_data.get_safety_rerun_params",
+                return_value={"gateway_model": "Llama 4 Scout", "redteam_profile": "base"},
+            ):
+                r = client.get("/safety/new?from=llama-4-scout&profile=base")
+        finally:
+            os.chmod(bad, 0o755)
+        self.assertEqual(r.status_code, 200)
 
 
 if __name__ == "__main__":

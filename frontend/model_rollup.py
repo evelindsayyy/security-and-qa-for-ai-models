@@ -17,6 +17,7 @@ import json
 import time
 
 from frontend import benchmark_data, eval_run_data, safety_data, scan_data
+from frontend.oss_gateway_hf import gateway_slug_for_hf_repo
 from frontend.model_identity import gateway_slug, hf_repo_id
 
 _UNION_CACHE: list[dict] | None = None
@@ -154,12 +155,18 @@ def rollups_for_gateway_ids(gateway_ids: list[str]) -> dict[str, dict]:
 def _add_scan_rows(by_key: dict[str, dict]) -> None:
     for s in scan_data.get_scans_data().get("scans", []):
         key = s["slug"]
-        row = _row(by_key, key, s.get("model_id") or hf_repo_id(key))
-        row["scan"] = {
+        model_id = s.get("model_id") or hf_repo_id(key)
+        scan_summary = {
             "slug": s["slug"],
             "tier": s["severity_tier"],
             "overall_risk_score": s["overall_risk_score"],
         }
+        row = _row(by_key, key, model_id)
+        row["scan"] = scan_summary
+        gw_slug = gateway_slug_for_hf_repo(model_id)
+        if gw_slug and gw_slug != key:
+            grow = _row(by_key, gw_slug, model_id)
+            grow["scan"] = scan_summary
 
 
 def _add_safety_rows(by_key: dict[str, dict]) -> None:

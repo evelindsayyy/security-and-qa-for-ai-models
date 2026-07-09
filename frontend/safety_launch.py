@@ -269,14 +269,16 @@ def inflight_safety_keys() -> set[str]:
     safety run of a given (model, profile) can physically run at a time — so
     this check is intentionally scope-agnostic.
     """
+    from dbutils import fs_safe
+
     keys: set[str] = set()
     base = ROOT / "safety" / "output"
-    if base.is_dir():
-        for slug_dir in base.iterdir():
-            if not slug_dir.is_dir() or slug_dir.name == run_paths.PRIVATE_SEGMENT:
+    if fs_safe.is_dir(base):
+        for slug_dir in fs_safe.iterdir(base):
+            if not fs_safe.is_dir(slug_dir) or slug_dir.name == run_paths.PRIVATE_SEGMENT:
                 continue
-            for profile_dir in slug_dir.iterdir():
-                if not profile_dir.is_dir() or profile_dir.name == run_paths.PRIVATE_SEGMENT:
+            for profile_dir in fs_safe.iterdir(slug_dir):
+                if not fs_safe.is_dir(profile_dir) or profile_dir.name == run_paths.PRIVATE_SEGMENT:
                     continue
                 if run_lock.is_active(run_lock.lock_path(profile_dir)):
                     keys.add(f"{slug_dir.name}/{profile_dir.name}")
@@ -324,6 +326,18 @@ def validate_launch(
             f"a safety run for {model!r} (profile {redteam_profile}) is already running — "
             "wait for it to finish or open the progress page"
         )
+    from frontend.purge_rerun import purge_safety_for_launch
+    from frontend.read_context import read_context
+
+    visibility, owner_user_id = read_context()
+    err = purge_safety_for_launch(
+        slug,
+        redteam_profile,
+        visibility=visibility,
+        owner_user_id=owner_user_id,
+    )
+    if err:
+        return err
     return _prepare_output_dirs(slug, redteam_profile)
 
 
@@ -383,7 +397,7 @@ def start_run(
     garak_probes: str | None = None,
 ) -> tuple[str, bool, str]:
     """Returns (run_key, already_running, visibility)."""
-    from frontend.run_launch import build_launch_plan, persist_run_meta_dir, reused_run_key
+    from frontend.run_launch import build_launch_plan, persist_run_meta_dir
 
     plan = build_launch_plan(
         "safety",
@@ -396,9 +410,7 @@ def start_run(
         skip_promptfoo=skip_promptfoo,
         garak_probes=garak_probes,
     )
-    if plan.reused:
-        run_key = reused_run_key(plan) or f"{normalize_gateway_model_id(model)}/{redteam_profile}"
-        return run_key, True, plan.visibility
+    # Explicit browser Start/Rerun must always spawn a fresh run (see scan_launch).
 
     slug = normalize_gateway_model_id(model)
     run_key = f"{slug}/{redteam_profile}"

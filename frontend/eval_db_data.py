@@ -23,7 +23,6 @@ from frontend.path_safety import is_safe_slug
 # Helpers shared with the file path — eval_run_data imports THIS module only
 # lazily (inside functions), so this top-level import is not circular.
 from frontend.eval_run_data import (
-    RESULTS_DIR,
     _load_suite_questions,
     _percentile,
     _truncate,
@@ -107,33 +106,18 @@ def _aggregate_db_run(run: dict, results: list[dict]) -> dict:
 
 
 def get_runs_data_db() -> dict:
-    """DB-preferred merge of every known run (DB rows + not-yet-loaded files)."""
-    # Import here, not at module top: eval_run_data imports this module lazily,
-    # and these two helpers are the file-side fallbacks we merge with.
-    from frontend.eval_run_data import _aggregate_file, _postprocess_runs
-    from frontend.read_context import artifact_path_visible
+    """Every known eval run, straight from Postgres.
+
+    Postgres is the single source of truth when a DSN is reachable — we do NOT
+    merge in on-disk artifacts here. Disk is only consulted when no DSN is
+    configured (see eval_run_data.get_runs_data)."""
+    from frontend.eval_run_data import _postprocess_runs
 
     with queries.connect() as conn:
         records = queries.fetch_runs(conn)
     db_runs = [_aggregate_db_run(rec["run"], rec["results"]) for rec in records]
 
-    seen_slugs = {r["slug"] for r in db_runs}
-    file_runs = []
-    if RESULTS_DIR.exists():
-        for path in RESULTS_DIR.glob("*.jsonl"):
-            if "_trace" in path.name or path.stem in seen_slugs:
-                continue
-            # Not-yet-ingested files skip the DB's visibility_clause entirely —
-            # apply the same run_meta.json check the file-fallback path uses so
-            # a private run can't leak into another user's (or the public) view
-            # just because it hasn't been synced to Postgres yet.
-            if not artifact_path_visible(RESULTS_DIR / path.stem, pillar="eval"):
-                continue
-            row = _aggregate_file(path)
-            if row is not None:
-                file_runs.append(row)
-
-    return _postprocess_runs(db_runs + file_runs)
+    return _postprocess_runs(db_runs)
 
 
 def get_run_detail_db(
@@ -251,5 +235,34 @@ def delete_run(
                 {"source_file": source_file, **vis_params},
             )
             deleted = cur.rowcount > 0
+        conn.commit()
+    return deleted
+
+
+def delete_runs_for_combo(
+    suite_key: str,
+    candidate: str,
+    *,
+    visibility: str = "public",
+    owner_user_id: str | None = None,
+) -> int:
+    """Delete every eval run for one (suite, candidate) in the given scope."""
+    from dbutils.visibility import visibility_clause
+
+    vis_clause, vis_params = visibility_clause("r", view_mode=visibility, user_id=owner_user_id)
+    with queries.connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                DELETE FROM public.eval_runs AS r
+                USING public.task_suites AS s
+                WHERE r.suite_id = s.id
+                  AND s.suite_key = %(suite_key)s
+                  AND r.gateway_model_id = %(candidate)s
+                  AND ({vis_clause})
+                """,
+                {"suite_key": suite_key, "candidate": candidate, **vis_params},
+            )
+            deleted = cur.rowcount
         conn.commit()
     return deleted

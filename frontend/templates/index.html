@@ -61,6 +61,17 @@
       <p class="pillar-meta">TruthfulQA · IFEval · Consistency · MMLU · ToMi · MBPP · QuALITY</p>
       {% if benchmark_has %}
         <p class="pillar-stat"><b>{{ benchmark_count }}</b> run{{ "s" if benchmark_count != 1 else "" }} recorded</p>
+        {% if benchmark_latest %}
+          <p class="pillar-stat">
+            latest:
+            {% if benchmark_latest.slug %}
+              <a href="{{ url_for('benchmark_detail', slug=benchmark_latest.slug) }}">{{ benchmark_latest.kind_label }} · {{ benchmark_latest.model }}</a>
+            {% else %}
+              {{ benchmark_latest.kind_label }} · {{ benchmark_latest.model }}
+            {% endif %}
+            ({{ benchmark_latest.headline_display }})
+          </p>
+        {% endif %}
       {% else %}
         <p class="empty">{% if is_logged_in %}No benchmark results yet — click Start benchmark below.{% else %}No benchmark results yet. Sign in to start a run.{% endif %}</p>
       {% endif %}

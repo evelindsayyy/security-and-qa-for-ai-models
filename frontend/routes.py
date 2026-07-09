@@ -44,6 +44,7 @@ def _hub_context() -> dict:
     safety_worst_tier = "—"
     benchmark_has = False
     benchmark_count = 0
+    benchmark_latest = None
 
     try:
         from frontend.scan_data import get_scans_data
@@ -81,11 +82,12 @@ def _hub_context() -> dict:
         pass
 
     try:
-        from frontend.benchmark_data import get_benchmarks_data
+        from frontend.benchmark_data import get_benchmark_latest_for_hub, get_benchmarks_data
 
         bench = get_benchmarks_data()
         benchmark_has = bench["has_runs"]
         benchmark_count = len(bench["runs"])
+        benchmark_latest = get_benchmark_latest_for_hub(bench.get("all_runs") or bench.get("runs"))
     except Exception:
         pass
 
@@ -107,6 +109,7 @@ def _hub_context() -> dict:
         "safety_worst_tier": safety_worst_tier,
         "benchmark_has": benchmark_has,
         "benchmark_count": benchmark_count,
+        "benchmark_latest": benchmark_latest,
     }
 
 
@@ -150,6 +153,7 @@ def register_routes(app):
     def scan_run_start():
         from flask import redirect, request, url_for
 
+        from frontend.output_dirs import OutputDirError
         from frontend.scan_launch import start_run, validate_launch
 
         hf_repo = request.form.get("hf_repo", "")
@@ -163,14 +167,17 @@ def register_routes(app):
         )
         if error:
             return error, 400
-        slug, already, visibility = start_run(
-            hf_repo,
-            skip_modelscan=not request.form.get("run_modelscan"),
-            skip_fickling=not request.form.get("run_fickling"),
-            skip_modelaudit=not request.form.get("run_modelaudit"),
-            skip_deps=not request.form.get("run_deps"),
-            skip_secrets=not request.form.get("run_secrets"),
-        )
+        try:
+            slug, already, visibility = start_run(
+                hf_repo,
+                skip_modelscan=not request.form.get("run_modelscan"),
+                skip_fickling=not request.form.get("run_fickling"),
+                skip_modelaudit=not request.form.get("run_modelaudit"),
+                skip_deps=not request.form.get("run_deps"),
+                skip_secrets=not request.form.get("run_secrets"),
+            )
+        except OutputDirError as exc:
+            return str(exc), 503
         status = "reused" if already else "running"
         endpoint = "scan_detail_private" if visibility == "private" else "scan_detail"
         return redirect(url_for(endpoint, slug=slug, status=status))
@@ -347,6 +354,7 @@ def register_routes(app):
             validate_hf_candidate,
             validate_launch,
         )
+        from frontend.output_dirs import OutputDirError
 
         # Candidate source: a gateway model (runs now) or a Hugging Face model
         # (validated now; served on the DCC in a later milestone).
@@ -369,7 +377,10 @@ def register_routes(app):
         if error is not None:
             return error, 400
 
-        slug, _already, visibility = start_run(candidate, judge, suite_key, max_tokens)
+        try:
+            slug, _already, visibility = start_run(candidate, judge, suite_key, max_tokens)
+        except OutputDirError as exc:
+            return str(exc), 503
         endpoint = "eval_run_detail_private" if visibility == "private" else "eval_run_detail"
         return redirect(url_for(endpoint, slug=slug, status="running"))
 
@@ -608,6 +619,7 @@ def register_routes(app):
             start_run,
             validate_launch,
         )
+        from frontend.output_dirs import OutputDirError
 
         benchmark_key = request.form.get("benchmark", "")
         model_source = request.form.get("model_source", "gateway")
@@ -641,14 +653,17 @@ def register_routes(app):
         )
         if error:
             return error, 400
-        slug, already, visibility = start_run(
-            benchmark_key,
-            model,
-            base_url=base_url,
-            api_key=api_key,
-            sample=sample,
-            seed=seed,
-        )
+        try:
+            slug, already, visibility = start_run(
+                benchmark_key,
+                model,
+                base_url=base_url,
+                api_key=api_key,
+                sample=sample,
+                seed=seed,
+            )
+        except OutputDirError as exc:
+            return str(exc), 503
         endpoint = "benchmark_detail_private" if visibility == "private" else "benchmark_detail"
         status = "running"
         return redirect(url_for(endpoint, slug=slug, status=status))
@@ -915,6 +930,7 @@ def register_routes(app):
         from flask import redirect, request, url_for
 
         from frontend.safety_launch import start_run, validate_launch
+        from frontend.output_dirs import OutputDirError
 
         model = request.form.get("gateway_model", "")
         redteam_profile = request.form.get("redteam_profile", "base")
@@ -939,15 +955,18 @@ def register_routes(app):
         )
         if error:
             return error, 400
-        run_key, _already, visibility = start_run(
-            model,
-            redteam_profile=redteam_profile,
-            skip_policy=skip_policy,
-            skip_redteam=skip_redteam,
-            skip_garak=skip_garak,
-            skip_promptfoo=skip_promptfoo,
-            garak_probes=garak_probes or None,
-        )
+        try:
+            run_key, _already, visibility = start_run(
+                model,
+                redteam_profile=redteam_profile,
+                skip_policy=skip_policy,
+                skip_redteam=skip_redteam,
+                skip_garak=skip_garak,
+                skip_promptfoo=skip_promptfoo,
+                garak_probes=garak_probes or None,
+            )
+        except OutputDirError as exc:
+            return str(exc), 503
         slug, profile = run_key.split("/", 1)
         endpoint = "safety_detail_private" if visibility == "private" else "safety_detail"
         return redirect(url_for(endpoint, slug=slug, profile=profile, status="running"))
