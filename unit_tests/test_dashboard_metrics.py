@@ -131,6 +131,10 @@ class ComparisonRowIntegrationTest(unittest.TestCase):
 class DetailIntegrationTest(unittest.TestCase):
     def test_detail_carries_execution_and_robustness(self) -> None:
         stem = "20260708T010101Z_sql_smoke_v1_stub-model"
+        # RESULTS_DIR is gitignored, so it's absent in a fresh checkout (CI);
+        # create it before writing (as start_run does) so this integration test
+        # doesn't FileNotFoundError. The written file is cleaned up below.
+        erd.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         p = _write(erd.RESULTS_DIR, [_mk_row("q1", 4.0), _mk_row("q2", 4.5)], stem)
         self.addCleanup(lambda: p.unlink(missing_ok=True))
         report = {"by_perturbation": {"typo": {"n": 2, "score_drop": -0.5, "pass_rate_drop": 0.5}},
