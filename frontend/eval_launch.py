@@ -180,6 +180,19 @@ SUITES: dict[str, dict] = {
         "rubric": _INERT_RUBRIC,                     # inert (judge auto-skipped)
         "system_prompt": _SYS / "numeric_v1.txt",
     },
+    "tool_use_duke_v1": {
+        "label": "Tool use / function calling (15 tasks, execution-scored)",
+        "description": "Given a set of tools, the model must reply with the "
+                       "correct function call (name + arguments) — or decline "
+                       "when no tool fits. Scored by parsing and comparing the "
+                       "call, no LLM judge.",
+        "example": "\"I can't get on the VPN with NetID ar455\" → "
+                   "check_vpn_status(netid=\"ar455\")",
+        "scoring": "execution",
+        "suite": EVALUATOR / "tasks" / "tool_use_duke_v1.jsonl",
+        "rubric": _INERT_RUBRIC,                     # inert (judge auto-skipped)
+        "system_prompt": _SYS / "tool_use_v1.txt",
+    },
     # --- More judge-scored task domains --------------------------------------
     "email_drafting_v1": {
         "label": "Email drafting (5 scenarios, judge-scored)",

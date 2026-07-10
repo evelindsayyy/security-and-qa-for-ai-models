@@ -164,6 +164,7 @@ def register_routes(app):
     def scan_run_start():
         from flask import redirect, request, url_for
 
+        from frontend import docker_launch
         from frontend.output_dirs import OutputDirError
         from frontend.scan_launch import start_run, validate_launch
 
@@ -188,6 +189,8 @@ def register_routes(app):
                 skip_secrets=not request.form.get("run_secrets"),
             )
         except OutputDirError as exc:
+            return str(exc), 503
+        except docker_launch.DockerUnavailableError as exc:
             return str(exc), 503
         status = "reused" if already else "running"
         endpoint = "scan_detail_private" if visibility == "private" else "scan_detail"
@@ -369,6 +372,7 @@ def register_routes(app):
             validate_hf_scan_gate,
             validate_launch,
         )
+        from frontend import docker_launch
         from frontend.output_dirs import OutputDirError
 
         # Candidate source: a gateway model (runs on the gateway) or a Hugging
@@ -401,7 +405,10 @@ def register_routes(app):
             error = validate_dcc_params(hf_repo, judge, suite_key, max_tokens)
             if error is not None:
                 return error, 400
-            slug, _already = start_dcc_run(hf_repo, judge, suite_key, max_tokens)
+            try:
+                slug, _already = start_dcc_run(hf_repo, judge, suite_key, max_tokens)
+            except docker_launch.DockerUnavailableError as exc:
+                return str(exc), 503
             return redirect(url_for("eval_run_detail", slug=slug, status="running"))
 
         candidate = request.form.get("candidate", "")
@@ -430,6 +437,8 @@ def register_routes(app):
             slug, _already, visibility = start_run(candidate, judge, suite_key, max_tokens)
         except OutputDirError as exc:
             return str(exc), 503
+        except docker_launch.DockerUnavailableError as exc:
+            return str(exc), 503
         endpoint = "eval_run_detail_private" if visibility == "private" else "eval_run_detail"
         return redirect(url_for(endpoint, slug=slug, status="running"))
 
@@ -449,6 +458,7 @@ def register_routes(app):
             validate_launch,
             write_custom_suite,
         )
+        from frontend import docker_launch
 
         user, auth_err = require_private_access()
         if auth_err:
@@ -485,7 +495,10 @@ def register_routes(app):
             if error is not None:
                 return error, 400
 
-            slug, _already = start_dcc_run(hf_repo, judge, suite_key, max_tokens)
+            try:
+                slug, _already = start_dcc_run(hf_repo, judge, suite_key, max_tokens)
+            except docker_launch.DockerUnavailableError as exc:
+                return str(exc), 503
             return redirect(url_for("eval_run_detail", slug=slug, status="running"))
 
         candidate = request.form.get("candidate", "")
@@ -524,7 +537,10 @@ def register_routes(app):
         if error is not None:
             return error, 400
 
-        slug, _already, visibility = start_run(candidate, judge, suite_key, max_tokens)
+        try:
+            slug, _already, visibility = start_run(candidate, judge, suite_key, max_tokens)
+        except docker_launch.DockerUnavailableError as exc:
+            return str(exc), 503
         endpoint = "eval_run_detail_private" if visibility == "private" else "eval_run_detail"
         return redirect(url_for(endpoint, slug=slug, status="running"))
 
@@ -1006,6 +1022,7 @@ def register_routes(app):
         from flask import redirect, request, url_for
 
         from frontend.safety_launch import start_run, validate_launch
+        from frontend import docker_launch
         from frontend.output_dirs import OutputDirError
 
         model = request.form.get("gateway_model", "")
@@ -1042,6 +1059,8 @@ def register_routes(app):
                 garak_probes=garak_probes or None,
             )
         except OutputDirError as exc:
+            return str(exc), 503
+        except docker_launch.DockerUnavailableError as exc:
             return str(exc), 503
         slug, profile = run_key.split("/", 1)
         endpoint = "safety_detail_private" if visibility == "private" else "safety_detail"
