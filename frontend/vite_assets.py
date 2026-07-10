@@ -1,34 +1,53 @@
-"""Resolve Vite-built asset URLs from the manifest."""
+"""Resolve Vite-built asset URLs and serve the built bundle.
+
+The Vite build output (``frontend/static/dist``) is gitignored, so a
+bind-mounted repo on the VM has no build after ``git pull``. The Docker image
+bakes a copy at ``/opt/frontend-dist``. To avoid a "split brain" — reading the
+manifest from one location while Flask serves files from another — both the
+manifest lookup and the ``/static/dist`` file route resolve to the *same*
+directory: the bind-mounted dist if it has a manifest, else the image bake.
+"""
 
 from __future__ import annotations
 
 import json
-from functools import lru_cache
 from pathlib import Path
+
+from flask import abort, send_from_directory
 
 _DIST = Path(__file__).resolve().parent / "static" / "dist"
 _IMAGE_DIST = Path("/opt/frontend-dist")
 _ENTRY = "src/main.ts"
 
 
-def _manifest_paths() -> list[Path]:
-    """Prefer bind-mounted dist; fall back to the image bake path."""
-    paths = [_DIST / ".vite" / "manifest.json"]
+def _dist_dirs() -> list[Path]:
+    """Candidate dist dirs, in priority order (bind mount, then image bake)."""
+    dirs = [_DIST]
     if _IMAGE_DIST != _DIST:
-        paths.append(_IMAGE_DIST / ".vite" / "manifest.json")
-    return paths
+        dirs.append(_IMAGE_DIST)
+    return dirs
 
 
-@lru_cache(maxsize=1)
+def _active_dist_dir() -> Path:
+    """The dist dir whose manifest we read AND whose files we serve.
+
+    Not cached: on the VM the image seed / a host build can populate the
+    bind-mounted dist after the process starts, and the resolution is cheap.
+    """
+    for d in _dist_dirs():
+        if (d / ".vite" / "manifest.json").is_file():
+            return d
+    return _DIST
+
+
 def _manifest() -> dict:
-    for path in _manifest_paths():
-        if not path.is_file():
-            continue
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-    return {}
+    path = _active_dist_dir() / ".vite" / "manifest.json"
+    if not path.is_file():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
 
 
 def vite_entry() -> str:
@@ -50,7 +69,12 @@ def vite_css_entries() -> list[str]:
 
 
 def register_vite_template_globals(app) -> None:
-    """Expose asset helpers to Jinja templates."""
+    """Expose asset helpers to Jinja templates and serve /static/dist files.
+
+    A dedicated ``/static/dist/<path>`` route serves the built bundle from the
+    resolved active dist dir (bind mount preferred, image bake fallback), so the
+    files the browser fetches always match the manifest that produced their URLs
+    — even when the bind-mounted repo has no build (VM after git pull)."""
 
     @app.context_processor
     def _vite_context():
@@ -65,3 +89,15 @@ def register_vite_template_globals(app) -> None:
         item = manifest.get(entry, {})
         file_name = item.get("file")
         return f"dist/{file_name}" if file_name else "dist/main.js"
+
+    # More specific than Flask's built-in /static/<path>, so it wins for dist.
+    @app.route("/static/dist/<path:filename>")
+    def static_dist(filename: str):
+        # Per-file resolution: prefer the active dist dir, but fall back to any
+        # candidate that actually has the file (covers a stale bind-mount
+        # manifest whose assets never landed).
+        active = _active_dist_dir()
+        for base in [active, *(_dist_dirs())]:
+            if (base / filename).is_file():
+                return send_from_directory(str(base), filename)
+        abort(404)
