@@ -66,32 +66,48 @@ ls -la .docker-home/*/.docker/config.json 2>/dev/null
 so `entrypoint.sh` creates a per-UID HOME. Do not share one `.docker-home` across
 users.
 
-### UI has no styling (unstyled HTML, `/static/dist/main.js` 404)
+### UI has no styling, or shows an outdated layout
 
-Symptom: pages render as plain HTML; browser network tab shows `404` on
-`/static/dist/main.js` and no hashed CSS under `/static/dist/assets/`.
+Symptom A — fully unstyled: pages render as plain HTML; browser network tab
+shows `404` on `/static/dist/main.js` and no hashed CSS under
+`/static/dist/assets/`.
 
-**Cause:** `frontend/static/dist/` is gitignored. A bind-mounted repo after
-`git pull` has no Vite build. `vite_assets.py` falls back to `dist/main.js`,
-which does not exist (production bundles are hashed, e.g. `main-BE6YOoG2.js`).
+Symptom B — partially/incorrectly styled: hashed assets return `200`, but the
+UI still looks outdated (missing layout/design changes you know are on
+`main`).
 
-**Fix:** restart the web container so `entrypoint.sh` seeds dist from the image
-bake at `/opt/frontend-dist`:
+**Cause:** `frontend/static/dist/` is gitignored, so a bind-mounted repo has no
+Vite build after `git pull`. `frontend/vite_assets.py` resolves both the
+manifest and the served files from `/opt/frontend-dist` — the copy baked into
+the image at build time from current source — so the UI is correctly styled
+even when the bind-mounted `frontend/static/dist/` is empty (Symptom A) or
+contains a stale build seeded by an older image (Symptom B). `entrypoint.sh`
+additionally resyncs the bind mount from the image on every container start
+(clean replace, not merge) purely so on-disk state matches what's served; this
+is not required for correct rendering.
+
+**Fix:** rebuild and recreate the web container so the image bakes fresh
+assets from current source and the entrypoint resyncs the bind mount:
 
 ```bash
-./docker/run.sh up -d --force-recreate
+./docker/run.sh up -d --build --force-recreate
 ```
 
-Or copy manually inside the running container:
+If styling still looks wrong after that, confirm the image actually contains a
+fresh bake (compare the hash in the page's `<script>`/`<link>` tags against a
+local `npm run build` in `frontend/assets/`), and check the container logs for
+`Synced frontend static dist from image bake` — its absence with a
+`warning: cannot write` means the bind mount isn't writable by the container
+UID (harmless for styling, but worth fixing per the `.docker-home` section
+above).
+
+**Verify:**
 
 ```bash
-docker compose --project-name qa-ai-models exec web \
-  cp -a /opt/frontend-dist/. "${HOST_REPO}/frontend/static/dist/"
+docker compose --project-name qa-ai-models exec -T web \
+  python3 -c "from frontend.vite_assets import vite_entry; print(vite_entry())"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:5000/static/$(docker compose --project-name qa-ai-models exec -T web python3 -c 'from frontend.vite_assets import vite_entry; print(vite_entry())' | tr -d '\r')"
 ```
-
-**Prevent:** deploy pulls a CI-built `WEB_IMAGE` that already contains
-`/opt/frontend-dist`; entrypoint copies it on start when the host manifest is
-missing.
 
 ### Port 5000 already in use
 

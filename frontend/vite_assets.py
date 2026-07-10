@@ -2,10 +2,20 @@
 
 The Vite build output (``frontend/static/dist``) is gitignored, so a
 bind-mounted repo on the VM has no build after ``git pull``. The Docker image
-bakes a copy at ``/opt/frontend-dist``. To avoid a "split brain" — reading the
-manifest from one location while Flask serves files from another — both the
-manifest lookup and the ``/static/dist`` file route resolve to the *same*
-directory: the bind-mounted dist if it has a manifest, else the image bake.
+bakes a copy at ``/opt/frontend-dist`` from the *current* source on every
+``docker build``, so it is always fresh for whatever image is running.
+
+Two bugs to avoid:
+
+1. "Split brain" — reading the manifest from one location while Flask serves
+   files from another. Both the manifest lookup and the ``/static/dist`` file
+   route resolve to the *same* directory.
+2. Staleness — the entrypoint seeds the bind mount from the image once (only
+   when the bind mount has no manifest at all), so a bind mount seeded by an
+   older image build never gets refreshed by later image builds. The image
+   bake is therefore preferred whenever it exists; the bind-mounted dist is
+   only used as a fallback for bare-metal (non-Docker) host dev where
+   ``/opt/frontend-dist`` doesn't exist.
 """
 
 from __future__ import annotations
@@ -21,18 +31,25 @@ _ENTRY = "src/main.ts"
 
 
 def _dist_dirs() -> list[Path]:
-    """Candidate dist dirs, in priority order (bind mount, then image bake)."""
-    dirs = [_DIST]
+    """Candidate dist dirs, in priority order.
+
+    The image bake is always fresh for the running image's source, so it is
+    preferred over a bind-mounted dist, which may have been seeded once from
+    an older image build and never refreshed. The bind mount is only relied
+    on for bare-metal (non-Docker) host dev, where the image path is absent.
+    """
+    dirs = []
     if _IMAGE_DIST != _DIST:
         dirs.append(_IMAGE_DIST)
+    dirs.append(_DIST)
     return dirs
 
 
 def _active_dist_dir() -> Path:
     """The dist dir whose manifest we read AND whose files we serve.
 
-    Not cached: on the VM the image seed / a host build can populate the
-    bind-mounted dist after the process starts, and the resolution is cheap.
+    Not cached: on the VM a host build can populate the bind-mounted dist
+    after the process starts, and the resolution is cheap.
     """
     for d in _dist_dirs():
         if (d / ".vite" / "manifest.json").is_file():

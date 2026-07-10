@@ -1,8 +1,12 @@
 """Tests for frontend/vite_assets.py manifest resolution and dist serving.
 
-Reproduces the VM failure mode: a bind-mounted repo with no Vite build, where
-the manifest + built files must be served from the image bake (/opt/frontend-dist)
-so the UI keeps its styling.
+Reproduces two VM failure modes:
+1. A bind-mounted repo with no Vite build at all (404s) — assets must be
+   served from the image bake (/opt/frontend-dist).
+2. A bind-mounted repo seeded once from an *older* image build, whose
+   manifest is present but stale — the image bake (always fresh for the
+   running image) must win over it, or the UI renders with outdated CSS/JS
+   even though requests return 200.
 """
 
 from __future__ import annotations
@@ -49,6 +53,22 @@ class ViteEntryTest(unittest.TestCase):
                  mock.patch.object(vite_assets, "_IMAGE_DIST", image):
                 self.assertEqual(vite_assets.vite_entry(), "dist/assets/main-fromimg.js")
 
+    def test_prefers_fresh_image_dist_over_stale_bind_mount(self) -> None:
+        """The staleness bug: bind mount has a manifest (seeded long ago from an
+        older image), image bake has a newer one. Image must win so the UI
+        never silently serves outdated, unstyled-looking CSS/JS."""
+        with tempfile.TemporaryDirectory() as tmp:
+            bind = Path(tmp) / "bind"
+            _write_build(bind, "main-OLDSTALE.js", "main-OLDSTALE.css")
+            image = Path(tmp) / "image"
+            _write_build(image, "main-FRESH.js", "main-FRESH.css")
+            with mock.patch.object(vite_assets, "_DIST", bind), \
+                 mock.patch.object(vite_assets, "_IMAGE_DIST", image):
+                self.assertEqual(vite_assets.vite_entry(), "dist/assets/main-FRESH.js")
+                self.assertEqual(
+                    vite_assets.vite_css_entries(), ["dist/assets/main-FRESH.css"]
+                )
+
     def test_dev_fallback_when_no_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with mock.patch.object(vite_assets, "_DIST", Path(tmp) / "none"), \
@@ -77,6 +97,24 @@ class StaticDistServingTest(unittest.TestCase):
                 r_css = client.get(f"/static/{css}")
                 self.assertEqual(r_js.status_code, 200, "hashed JS must be served")
                 self.assertEqual(r_css.status_code, 200, "hashed CSS must be served")
+
+    def test_serves_fresh_image_content_when_bind_mount_is_stale(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            bind = Path(tmp) / "bind"
+            _write_build(bind, "main-stale.js", "main-stale.css")
+            (bind / "assets" / "main-stale.js").write_text("// OLD stale js", encoding="utf-8")
+            image = Path(tmp) / "image"
+            _write_build(image, "main-fresh.js", "main-fresh.css")
+            (image / "assets" / "main-fresh.js").write_text("// NEW fresh js", encoding="utf-8")
+            with mock.patch.object(vite_assets, "_DIST", bind), \
+                 mock.patch.object(vite_assets, "_IMAGE_DIST", image):
+                app = create_app({"TESTING": True})
+                client = app.test_client()
+                entry = vite_assets.vite_entry()
+                self.assertIn("fresh", entry)
+                resp = client.get(f"/static/{entry}")
+                self.assertEqual(resp.status_code, 200)
+                self.assertIn(b"NEW fresh js", resp.data)
 
     def test_missing_asset_404s(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
