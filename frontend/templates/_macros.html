@@ -127,6 +127,10 @@
 </div>
 {% endmacro %}
 
+{% macro launch_back(url, label) %}
+<p class="back-link"><a href="{{ url }}">← {{ label }}</a></p>
+{% endmacro %}
+
 {% macro cli_scan_docker() -%}
 docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner python -m scanner scan &lt;hf_repo&gt;
 {%- endmacro %}

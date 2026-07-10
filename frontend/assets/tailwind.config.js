@@ -12,7 +12,7 @@ export default {
     { pattern: /^badge(-[a-z]+)?$/ },
     "staleness-pill",
     "staleness-warn",
-    { pattern: /^ref-delta-(pos|neg|neutral)$/ },
+    { pattern: /^ref-delta-(pos|neg|neutral|up|down|flat)$/ },
     "row-warn",
   ],
   theme: {

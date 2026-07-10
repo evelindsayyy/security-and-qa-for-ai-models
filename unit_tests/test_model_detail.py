@@ -1,5 +1,5 @@
 """
-Tests for the per-model nutrition-label page (frontend/eval_run_data
+Tests for the per-model report-card page (frontend/eval_run_data
 get_model_detail + model_slug) and the custom-suite exclusion from the
 comparison table. No database, no API calls — get_runs_data is stubbed.
 

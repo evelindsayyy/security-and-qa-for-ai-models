@@ -1,148 +1,255 @@
 {% extends "base.html" %}
+{% from '_macros.html' import launch_back, rerun_callout, guide_panel with context %}
 
 {% block title %}Start an evaluation run{% endblock %}
 
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span><a href="{{ url_for('eval_run') }}">Eval</a></span>
+<span class="text-text-subtle">›</span>
+<span class="font-medium text-text">Start run</span>
+{% endblock %}
+
 {% block content %}
-<div class="eval-comparison">
-  <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
-  <h1>Start an evaluation run</h1>
-  {% if rerun %}
-  <p class="sub benchmark-rerun-hint">Pre-filled from a previous run — starting will delete the prior results and replace them.</p>
-  {% endif %}
-  <p class="sub">
-    Launches <code>evaluator/runner.py</code> via Docker Compose (default).
-    One run at a time; an identical in-flight request returns the existing run.
-    {% if not docker_available %}
-    <span class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>
-    {% endif %}
-  </p>
+<style>
+  .suite-opt { display:flex; align-items:center; gap:.4rem; margin:.2rem 0; }
+  .suite-help { position:relative; display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; border:1px solid #b7bed0; color:#556; font-size:11px; line-height:1; cursor:help; }
+  .suite-tip { display:none; position:absolute; left:22px; top:50%; transform:translateY(-50%); z-index:20; width:250px; background:#1b2a5e; color:#fff; padding:.5rem .6rem; border-radius:6px; font-size:.8rem; line-height:1.45; box-shadow:0 2px 8px rgba(0,0,0,.15); }
+  .suite-tip em { color:#c9d3f0; font-style:italic; }
+  .suite-help:hover .suite-tip, .suite-help.tip-open .suite-tip { display:block; }
+  .suite-badge { display:inline-block; font-size:.64rem; font-weight:600; text-transform:uppercase; letter-spacing:.03em; padding:.06rem .4rem; border-radius:10px; line-height:1.55; white-space:nowrap; }
+  .suite-badge--execution { background:#e6f4ea; color:#1e7a43; border:1px solid #bfe3cd; }
+  .suite-badge--judge { background:#eaeff9; color:#2f43a0; border:1px solid #ccd6f2; }
 
-  <form method="post" action="{{ url_for('eval_run_start') }}" class="launch-form" id="std-form">
+  .eval-guide-steps { display:grid; grid-template-columns:repeat(3,1fr); gap:.6rem; margin:.55rem 0 .85rem; }
+  .eval-guide-steps b { color: var(--color-duke-blue); }
+  .eval-guide-steps span { color: var(--color-text-subtle); }
+  .eval-guide-pick { display:grid; grid-template-columns:1fr 1fr; gap:.6rem; }
+  .eval-guide-pick > div { background: var(--color-surface-raised); border: 1px solid var(--color-border); border-radius: 8px; padding:.5rem .7rem; }
+  .eval-guide-pick strong { display:block; color: var(--color-duke-blue); margin-bottom:.15rem; }
+  .eval-guide-pick small { color: var(--color-text-subtle); }
 
-    <fieldset class="candidate-source">
-      <legend>Candidate model</legend>
-      <label class="src-opt"><input type="radio" name="source" value="gateway" checked> Gateway model</label>
-      <select name="candidate" id="candidate">
-        {% for m in candidates %}
-        <option value="{{ m }}">{{ m }}</option>
-        {% endfor %}
-      </select>
+  .qb-row { border: 1px solid var(--color-border); border-radius: 8px; padding:.6rem .7rem; margin-bottom:.55rem; }
+  .qb-rowhead { display:flex; justify-content:space-between; align-items:center; font-size:.78rem; color: var(--color-text-subtle); margin-bottom:.25rem; }
+  .qb-remove { background:none; border:none; color: var(--color-text-subtle); font-size:1.15rem; line-height:1; cursor:pointer; padding:0 .2rem; }
+  .qb-remove:hover { color:#c0392b; }
+  .qb-field { display:block; font-size:.78rem; color: var(--color-text-muted); margin-top:.4rem; }
+  .qb-field textarea { display:block; width:100%; margin-top:2px; box-sizing:border-box; }
+  .qb-actions { display:flex; align-items:center; justify-content:space-between; margin:.2rem 0 .5rem; }
+  .qb-add { background: var(--color-surface-raised); border: 1px solid var(--color-border-strong); border-radius:8px; padding:.4rem .8rem; cursor:pointer; color: var(--color-duke-blue); }
+  .qb-add:disabled { opacity:.5; cursor:not-allowed; }
+  .qb-count { color: var(--color-text-subtle); font-size:.85rem; }
+  .qb-tip { font-size:.82rem; background: var(--color-duke-blue-muted); border-radius:8px; padding:.5rem .65rem; margin:.4rem 0; color: var(--color-duke-blue); }
+  .qb-advanced { margin-top:.6rem; }
+  .qb-advanced > summary { cursor:pointer; color: var(--color-text-muted); font-size:.85rem; }
+  .qb-advanced textarea { width:100%; box-sizing:border-box; }
+</style>
 
-      <label class="src-opt"><input type="radio" name="source" value="hf"> Hugging Face model</label>
-      <input type="text" name="hf_repo" id="hf_repo" list="hf_repo_suggestions"
-             placeholder="Qwen/Qwen2.5-7B-Instruct" autocomplete="off" spellcheck="false">
-      <datalist id="hf_repo_suggestions">
-        {% for repo in suggested_hf_repos %}<option value="{{ repo }}"></option>{% endfor %}
-      </datalist>
-      <span class="form-hint">HF models are served on the DCC GPU — serving wires in next; for now we validate the model before any run.</span>
-    </fieldset>
+<div class="launch-page">
+  {{ launch_back(url_for('eval_run'), 'all runs') }}
 
-    <label>Judge model
-      <select name="judge" id="judge">
-        {% for m in judges %}
-        <option value="{{ m }}">{{ m }}</option>
-        {% endfor %}
-      </select>
-      <span class="form-hint">must be a different model family than the candidate (MT-Bench rule)</span>
-    </label>
-
-    <fieldset>
-      <legend>Task suite</legend>
-      {% for s in suites %}
-      <label>
-        <input type="radio" name="suite" value="{{ s.key }}"
-               data-n="{{ s.n }}" {% if loop.first %}checked{% endif %}>
-        {{ s.label }}
-      </label>
-      {% endfor %}
-    </fieldset>
-
-    <label>Max tokens (candidate completion budget)
-      <input type="number" name="max_tokens" id="max_tokens" value="2000"
-             min="{{ max_tokens_min }}" max="{{ max_tokens_max }}">
-      <span class="form-hint">completion budget for the candidate. Chat models (GPT 4.1 Mini, gpt-5-chat) work at 500–2000;
-        reasoning models (gpt-5-mini, gpt-5-nano) need 2000–4000.</span>
-    </label>
-
-    <p id="family-warning" class="form-warning js-family-warning" style="display: none;">
-      Judge and candidate are the same model family — the server will reject this.
+  <header>
+    <h1 class="page-title">Start an evaluation run</h1>
+    <p class="page-subtitle">
+      Launches <code>evaluator/runner.py</code> via Docker Compose (default).
+      One run at a time; an identical in-flight request returns the existing run.
     </p>
+  </header>
 
-    <p class="cost-line">Estimated candidate cost: <b id="cost-preview" class="js-cost-preview">$—</b>
-      <span class="form-hint">upper bound: n × (250 prompt + max_tokens completion) at list rates; judge cost not included</span>
-    </p>
+  {% set eval_guide_body %}
+  <p>An evaluation tests one model and has a second model grade the answers. You choose three things:</p>
+  <div class="eval-guide-steps">
+    <div><b>1 · Model</b><br><span>the one being tested</span></div>
+    <div><b>2 · What to test</b><br><span>a ready task or your own</span></div>
+    <div><b>3 · Judge</b><br><span>grades the answers</span></div>
+  </div>
+  <div class="eval-guide-pick">
+    <div><strong>Use a task suite</strong><small>to compare models on a standard Duke task — references already written.</small></div>
+    <div><strong>Bring your own questions</strong><small>for your specific use case — you provide the ideal answer for each.</small></div>
+  </div>
+  {% endset %}
+  {{ guide_panel('ⓘ How this works — which should I pick?', eval_guide_body, open_default=true) }}
 
-    <button type="submit" id="submit-btn" class="btn-primary">▶ Start run</button>
-  </form>
-
-  {% if hf_result %}
-    {% if hf_result.ok %}
-    <div class="intake-result intake-ok">
-      <h2>✅ {{ hf_result.repo_id }} — ready to evaluate</h2>
-      <p>Architecture: {{ hf_result.architectures | join(', ') }}{% if hf_result.num_params %} · {{ '%.1f'|format(hf_result.num_params / 1e9) }}B params{% endif %}</p>
-      <p class="form-hint">Evaluation will run once DCC serving is wired (next milestone).</p>
-    </div>
-    {% else %}
-    <div class="intake-result intake-error">
-      <h2>❌ Can't evaluate {{ hf_result.repo_id }}</h2>
-      <p>{{ hf_result.error }}</p>
-    </div>
-    {% endif %}
+  {% if rerun %}{{ rerun_callout() }}{% endif %}
+  {% if not docker_available %}
+  <p class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</p>
   {% endif %}
 
-  <details class="custom-suite">
-    <summary>Or bring your own questions</summary>
-    <p class="form-hint">
-      Use your own question set when our reference suites don't fit your need.
-      One JSON object per line, each with a <code>question</code> and your own
-      <code>reference</code> answer (optional <code>id</code>). Up to
-      {{ custom_max_questions }} questions. Custom runs are ad-hoc — they're
-      scored the same way but kept out of the model-comparison table.
-    </p>
-    <form method="post" action="{{ url_for('eval_run_start_custom') }}" class="launch-form" id="custom-form">
+  <form method="post" action="{{ url_for('eval_run_start') }}" class="launch-form card p-5" id="std-form">
 
+    <section class="form-section">
+      <h2 class="form-section-title">Candidate model</h2>
       <fieldset class="candidate-source">
-        <legend>Candidate model</legend>
         <label class="src-opt"><input type="radio" name="source" value="gateway" checked> Gateway model</label>
-        <select name="candidate" id="candidate_c">
+        <select name="candidate" id="candidate">
           {% for m in candidates %}
           <option value="{{ m }}">{{ m }}</option>
           {% endfor %}
         </select>
 
         <label class="src-opt"><input type="radio" name="source" value="hf"> Hugging Face model</label>
-        <input type="text" name="hf_repo" id="hf_repo_c" list="hf_repo_suggestions"
+        <input type="text" name="hf_repo" id="hf_repo" list="hf_repo_suggestions"
                placeholder="Qwen/Qwen2.5-7B-Instruct" autocomplete="off" spellcheck="false">
-        <span class="form-hint">HF models are served on the DCC GPU — serving wires in next; for now we validate the model before any run (your questions run once serving lands).</span>
+        <datalist id="hf_repo_suggestions">
+          {% for repo in suggested_hf_repos %}<option value="{{ repo }}"></option>{% endfor %}
+        </datalist>
+        <span class="form-hint"><b>Public, open-weight models only</b> — gated or private repos (e.g. Meta Llama, Gemma) aren't supported, and no Hugging Face account is needed. Public models must pass the scanner gate, then are served on the DCC GPU, evaluated, and torn down — all from ▶ Start run.</span>
       </fieldset>
+    </section>
 
-      <label>Judge model
-        <select name="judge" id="judge_c">
+    <section class="form-section">
+      <h2 class="form-section-title">Judge model</h2>
+      <div class="form-field">
+        <label for="judge">Judge</label>
+        <select name="judge" id="judge">
           {% for m in judges %}
           <option value="{{ m }}">{{ m }}</option>
           {% endfor %}
         </select>
-        <span class="form-hint">must be a different model family than the candidate</span>
-      </label>
-      <label>Max tokens
-        <input type="number" name="max_tokens" id="max_tokens_c" value="2000"
+        <span class="form-hint">Must be a different model family than the candidate (MT-Bench rule).</span>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <h2 class="form-section-title">Task suite</h2>
+      <fieldset>
+        {% for s in suites %}
+        <div class="suite-opt">
+          <label class="suite-label">
+            <input type="radio" name="suite" value="{{ s.key }}"
+                   data-n="{{ s.n }}" {% if loop.first %}checked{% endif %}>
+            {{ s.label }}
+          </label>
+          {% if s.scoring == 'execution' %}
+          <span class="suite-badge suite-badge--execution"
+                title="checked by running the answer — no LLM judge">run &amp; check</span>
+          {% else %}
+          <span class="suite-badge suite-badge--judge"
+                title="graded by an LLM-as-judge against a reference">LLM-judged</span>
+          {% endif %}
+          <span class="suite-help" tabindex="0" role="button" aria-label="About {{ s.label }}">?<span
+            class="suite-tip" role="tooltip">{{ s.description }}{% if s.example %}<br><em>e.g. {{ s.example }}</em>{% endif %}</span></span>
+        </div>
+        {% endfor %}
+      </fieldset>
+    </section>
+
+    <section class="form-section">
+      <h2 class="form-section-title">Parameters</h2>
+      <div class="form-field">
+        <label for="max_tokens">Max tokens (candidate completion budget)</label>
+        <input type="number" name="max_tokens" id="max_tokens" value="2000"
                min="{{ max_tokens_min }}" max="{{ max_tokens_max }}">
-      </label>
-      <label>Questions (JSONL)
-        <textarea name="questions" rows="8" spellcheck="false"
-          placeholder='{"question": "How do I reset my NetID password?", "reference": "Go to oit.duke.edu ..."}
+        <span class="form-hint">Chat models (GPT 4.1 Mini, gpt-5-chat) work at 500–2000; reasoning models (gpt-5-mini, gpt-5-nano) need 2000–4000.</span>
+      </div>
+
+      <p id="family-warning" class="form-warning js-family-warning mt-3" style="display: none;">
+        Judge and candidate are the same model family — the server will reject this.
+      </p>
+
+      <p class="cost-line mt-3">Estimated candidate cost: <b id="cost-preview" class="js-cost-preview">$—</b>
+        <span class="form-hint">Upper bound: n × (250 prompt + max_tokens completion) at list rates; judge cost not included.</span>
+      </p>
+    </section>
+
+    <div class="form-actions">
+      <button type="submit" id="submit-btn" class="btn-primary">▶ Start run</button>
+    </div>
+  </form>
+
+  {% if hf_result %}
+    {% if hf_result.ok %}
+    <div class="intake-result intake-ok">
+      <h2 class="subsection-title">✅ {{ hf_result.repo_id }} — ready to evaluate</h2>
+      <p>Architecture: {{ hf_result.architectures | join(', ') }}{% if hf_result.num_params %} · {{ '%.1f'|format(hf_result.num_params / 1e9) }}B params{% endif %}</p>
+    </div>
+    {% else %}
+    <div class="intake-result intake-error">
+      <h2 class="subsection-title">❌ Can't evaluate {{ hf_result.repo_id }}</h2>
+      <p>{{ hf_result.error }}</p>
+    </div>
+    {% endif %}
+  {% endif %}
+
+  <details class="custom-suite card p-5">
+    <summary>Or bring your own questions</summary>
+    <p class="form-hint mt-3">
+      Test the model on your own questions. Add a question and the ideal answer
+      you'd want back; the judge scores each model's reply against your ideal
+      answer. Up to {{ custom_max_questions }} questions. Custom runs are ad-hoc —
+      scored the same way but kept out of the model-comparison table.
+    </p>
+    <form method="post" action="{{ url_for('eval_run_start_custom') }}" class="launch-form mt-4" id="custom-form">
+
+      <section class="form-section">
+        <h2 class="form-section-title">Candidate model</h2>
+        <fieldset class="candidate-source">
+          <label class="src-opt"><input type="radio" name="source" value="gateway" checked> Gateway model</label>
+          <select name="candidate" id="candidate_c">
+            {% for m in candidates %}
+            <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </select>
+
+          <label class="src-opt"><input type="radio" name="source" value="hf"> Hugging Face model</label>
+          <input type="text" name="hf_repo" id="hf_repo_c" list="hf_repo_suggestions"
+                 placeholder="Qwen/Qwen2.5-7B-Instruct" autocomplete="off" spellcheck="false">
+          <span class="form-hint"><b>Public, open-weight models only</b> — gated or private repos aren't supported, and no Hugging Face account is needed. Public models must pass the scanner gate, then are served on the DCC GPU, evaluated on your questions, and torn down.</span>
+        </fieldset>
+      </section>
+
+      <section class="form-section">
+        <h2 class="form-section-title">Judge &amp; parameters</h2>
+        <div class="form-field">
+          <label for="judge_c">Judge model</label>
+          <select name="judge" id="judge_c">
+            {% for m in judges %}
+            <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </select>
+          <span class="form-hint">Must be a different model family than the candidate.</span>
+        </div>
+        <div class="form-field mt-3">
+          <label for="max_tokens_c">Max tokens</label>
+          <input type="number" name="max_tokens" id="max_tokens_c" value="2000"
+                 min="{{ max_tokens_min }}" max="{{ max_tokens_max }}">
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h2 class="form-section-title">Your questions</h2>
+        <div id="qb-rows"></div>
+        <div class="qb-actions">
+          <button type="button" class="qb-add" id="qb-add">+ Add another question</button>
+          <span class="qb-count"><span id="qb-n">0</span> / {{ custom_max_questions }}</span>
+        </div>
+        <p class="qb-tip">A good ideal answer is a correct, complete reply you'd be happy to receive — that's the bar the model is graded against.</p>
+
+        <details class="qb-advanced">
+          <summary>Advanced — paste JSONL instead</summary>
+          <p class="form-hint">One JSON object per line, each with a <code>question</code> and a
+            <code>reference</code> (optional <code>id</code>). Pasting here overrides the builder above.</p>
+          <textarea id="questions_paste" rows="6" spellcheck="false"
+            placeholder='{"question": "How do I reset my NetID password?", "reference": "Go to oit.duke.edu ..."}
 {"question": "...", "reference": "..."}'></textarea>
-      </label>
+        </details>
+
+        <input type="hidden" name="questions" id="questions_hidden">
+        <p class="form-warning" id="qb-error" style="display: none;">Add at least one question with an ideal answer, or paste JSONL under Advanced.</p>
+      </section>
 
       <p class="form-warning js-family-warning" style="display: none;">
         Judge and candidate are the same model family — the server will reject this.
       </p>
 
-      <p class="cost-line">Estimated candidate cost: <b class="js-cost-preview">$—</b>
-        <span class="form-hint">gateway models only; based on the questions you paste</span>
+      <p class="cost-line mt-3">Estimated candidate cost: <b class="js-cost-preview">$—</b>
+        <span class="form-hint">Gateway models only; based on the questions you add.</span>
       </p>
 
-      <button type="submit" class="btn-primary">▶ Run custom set</button>
+      <div class="form-actions">
+        <button type="submit" class="btn-primary">▶ Run custom set</button>
+      </div>
     </form>
   </details>
 </div>
@@ -150,6 +257,7 @@
 <script>
   const PRICING = {{ pricing_json | safe }};
   const FAMILIES = {{ families | tojson }};
+  const MAX_Q = {{ custom_max_questions }};
   const RERUN = {{ rerun | default(none) | tojson }};
 
   function applyRerunPrefill() {
@@ -189,11 +297,66 @@
     return "other";
   }
 
-  // Wire one launch form (standard or custom). All lookups are scoped to the
-  // form element, so the two forms' identically-named source radios / fields
-  // never collide. countQuestions(form) yields n for the cost preview: the
-  // standard form reads the chosen suite's size; the custom form counts the
-  // non-empty lines the user pasted.
+  // --- Question builder (custom form) ----------------------------------------
+  // Repeating [question | ideal answer] rows. On submit the rows are assembled
+  // into the JSONL the backend already expects and written to the hidden
+  // `questions` field — unless the Advanced paste box has content (it wins). So
+  // the server (validate_custom_questions) stays the single source of truth.
+  const rowsEl = document.getElementById("qb-rows");
+  const nEl = document.getElementById("qb-n");
+  const addBtn = document.getElementById("qb-add");
+  const customForm = document.getElementById("custom-form");
+  const hiddenEl = document.getElementById("questions_hidden");
+  const pasteEl = document.getElementById("questions_paste");
+  const errEl = document.getElementById("qb-error");
+
+  function makeRow() {
+    const row = document.createElement("div");
+    row.className = "qb-row";
+    row.innerHTML =
+      '<div class="qb-rowhead"><span class="qb-idx"></span>'
+      + '<button type="button" class="qb-remove" aria-label="Remove question">×</button></div>'
+      + '<label class="qb-field">Question'
+      + '<textarea class="qb-q" rows="2" placeholder="How do I set up the Duke VPN on a Mac?"></textarea></label>'
+      + '<label class="qb-field">Ideal answer'
+      + '<textarea class="qb-a" rows="2" placeholder="The best answer you&#39;d want back…"></textarea></label>';
+    row.querySelector(".qb-remove").addEventListener("click", () => {
+      if (rowsEl.querySelectorAll(".qb-row").length > 1) { row.remove(); renumber(); }
+    });
+    return row;
+  }
+  function renumber() {
+    const rows = rowsEl.querySelectorAll(".qb-row");
+    rows.forEach((r, i) => { r.querySelector(".qb-idx").textContent = "Question " + (i + 1); });
+    nEl.textContent = rows.length;
+    addBtn.disabled = rows.length >= MAX_Q;
+  }
+  function addRow() {
+    if (rowsEl.querySelectorAll(".qb-row").length >= MAX_Q) return;
+    rowsEl.appendChild(makeRow());
+    renumber();
+  }
+  function assembleRows() {
+    const lines = [];
+    rowsEl.querySelectorAll(".qb-row").forEach((r) => {
+      const q = r.querySelector(".qb-q").value.trim();
+      const a = r.querySelector(".qb-a").value.trim();
+      if (q && a) lines.push(JSON.stringify({ question: q, reference: a }));
+    });
+    return lines.join("\n");
+  }
+  if (rowsEl) {
+    addBtn.addEventListener("click", addRow);
+    addRow();  // start with one empty row
+    customForm.addEventListener("submit", (e) => {
+      const paste = (pasteEl.value || "").trim();
+      hiddenEl.value = paste ? paste : assembleRows();
+      if (!hiddenEl.value) { e.preventDefault(); errEl.style.display = "block"; }
+      else { errEl.style.display = "none"; }
+    });
+  }
+
+  // --- Cost preview + cross-family guard (both forms) -------------------------
   function wireForm(form, countQuestions) {
     if (!form) return;
     const sel = (s) => form.querySelector(s);
@@ -209,7 +372,6 @@
       const maxTok = parseInt((sel('input[name="max_tokens"]') || {}).value || "0", 10);
       const n = countQuestions(form);
 
-      // Cost preview: gateway models only (HF models aren't priced here).
       if (costEl) {
         const rates = source === "gateway" ? PRICING[gwCand] : null;
         costEl.textContent = (rates && n && maxTok)
@@ -217,8 +379,6 @@
           : "$—";
       }
 
-      // Cross-family check: the candidate's family depends on the source. For
-      // an HF candidate, classify its repo id; an empty repo doesn't warn.
       const candFamily = source === "hf" ? modelFamily(hfRepo) : FAMILIES[gwCand];
       const hasCand = source === "hf" ? hfRepo.trim() !== "" : true;
       const clash = hasCand && candFamily === FAMILIES[judge];
@@ -235,10 +395,30 @@
     const s = form.querySelector('input[name="suite"]:checked');
     return s ? parseInt(s.dataset.n, 10) : 0;
   };
+  // Custom count: filled builder rows, or pasted JSONL lines if Advanced is used.
   const pastedCount = (form) => {
-    const t = form.querySelector('textarea[name="questions"]');
-    return t ? t.value.split("\n").filter(l => l.trim()).length : 0;
+    const paste = form.querySelector('#questions_paste');
+    if (paste && paste.value.trim()) {
+      return paste.value.split("\n").filter((l) => l.trim()).length;
+    }
+    let n = 0;
+    form.querySelectorAll(".qb-row").forEach((r) => {
+      if (r.querySelector(".qb-q").value.trim() && r.querySelector(".qb-a").value.trim()) n++;
+    });
+    return n;
   };
+
+  // Suite tooltips: reveal on hover AND keyboard focus. JS-driven (a toggled
+  // class) rather than CSS :focus so it works for keyboard users regardless of
+  // window-focus quirks, and stays testable.
+  document.querySelectorAll(".suite-help").forEach((h) => {
+    const open = () => h.classList.add("tip-open");
+    const close = () => h.classList.remove("tip-open");
+    h.addEventListener("focus", open);
+    h.addEventListener("blur", close);
+    h.addEventListener("mouseenter", open);
+    h.addEventListener("mouseleave", close);
+  });
 
   wireForm(document.getElementById("std-form"), suiteCount);
   wireForm(document.getElementById("custom-form"), pastedCount);

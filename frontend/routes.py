@@ -1,5 +1,5 @@
 """
-Flask routes for the nutrition-label frontend.
+Flask routes for the AI Model Advisor frontend.
 
 List and detail pages read pillar results via ``*_data.py`` modules.
 Browser-launched runs use subprocess + polling.
@@ -91,8 +91,21 @@ def _hub_context() -> dict:
     except Exception:
         pass
 
+    # Featured per-model report card (the AI Model Advisor label). Best-effort:
+    # the home page never breaks if a pillar's data is missing.
+    model_card = None
+    try:
+        from frontend.eval_run_data import featured_model_slug, get_model_card
+
+        fslug = featured_model_slug()
+        if fslug:
+            model_card = get_model_card(fslug)
+    except Exception:
+        model_card = None
+
     gw = get_gateway_catalog()
     return {
+        "model_card": model_card,
         "gateway_models": gw["models"],
         "gateway_count": gw["count"],
         "gateway_error": gw["error"],
@@ -349,18 +362,47 @@ def register_routes(app):
 
         from frontend.eval_launch import (
             get_launch_options,
+            start_dcc_run,
             start_run,
+            validate_dcc_params,
             validate_hf_candidate,
+            validate_hf_scan_gate,
             validate_launch,
         )
         from frontend.output_dirs import OutputDirError
 
-        # Candidate source: a gateway model (runs now) or a Hugging Face model
-        # (validated now; served on the DCC in a later milestone).
+        # Candidate source: a gateway model (runs on the gateway) or a Hugging
+        # Face model (served + evaluated + torn down on the DCC via the
+        # orchestrator). The HF branch validates servability first — an
+        # unservable model never starts a GPU job — then the run params.
         if request.form.get("source") == "hf":
-            hf_result = validate_hf_candidate(request.form.get("hf_repo", "").strip())
-            return render_template("eval_run_new.html",
-                                   hf_result=hf_result, **get_launch_options())
+            hf_repo = request.form.get("hf_repo", "").strip()
+
+            # Servability first: an unservable model never starts a GPU job — show
+            # the reason inline (before parsing the other params, so a bad model
+            # reports its reason rather than a max_tokens error).
+            hf_result = validate_hf_candidate(hf_repo)
+            if not hf_result["ok"]:
+                return render_template("eval_run_new.html",
+                                       hf_result=hf_result, **get_launch_options())
+            scan_gate = validate_hf_scan_gate(hf_repo)
+            if not scan_gate["ok"]:
+                hf_result = {**hf_result, "ok": False, "error": scan_gate["error"],
+                             "scan_gate": scan_gate}
+                return render_template("eval_run_new.html",
+                                       hf_result=hf_result, **get_launch_options())
+
+            judge = request.form.get("judge", "")
+            suite_key = request.form.get("suite", "")
+            try:
+                max_tokens = int(request.form.get("max_tokens", ""))
+            except ValueError:
+                return "max_tokens must be an integer", 400
+            error = validate_dcc_params(hf_repo, judge, suite_key, max_tokens)
+            if error is not None:
+                return error, 400
+            slug, _already = start_dcc_run(hf_repo, judge, suite_key, max_tokens)
+            return redirect(url_for("eval_run_detail", slug=slug, status="running"))
 
         candidate = request.form.get("candidate", "")
         judge = request.form.get("judge", "")
@@ -376,6 +418,14 @@ def register_routes(app):
         if error is not None:
             return error, 400
 
+        # Cross-pillar gate: a gateway model must clear safety red-teaming
+        # before it can be evaluated (scan is N/A for gateway endpoints).
+        from frontend import pipeline
+
+        gate_error = pipeline.require_ready_for_downstream(candidate, "gateway")
+        if gate_error is not None:
+            return gate_error, 400
+
         try:
             slug, _already, visibility = start_run(candidate, judge, suite_key, max_tokens)
         except OutputDirError as exc:
@@ -390,9 +440,12 @@ def register_routes(app):
         from auth.session import require_private_access
         from frontend.eval_launch import (
             get_launch_options,
+            start_dcc_run,
             start_run,
+            validate_dcc_params,
             validate_custom_questions,
             validate_hf_candidate,
+            validate_hf_scan_gate,
             validate_launch,
             write_custom_suite,
         )
@@ -402,13 +455,38 @@ def register_routes(app):
             return auth_err, 403
 
         # Candidate source mirrors the standard start form: a gateway model runs
-        # now; a Hugging Face model is validated now and served on the DCC in a
-        # later milestone. The HF branch validates the model only (no run yet),
-        # identical to /eval-run/start.
+        # locally; a Hugging Face model must pass servability + scanner clearance
+        # and then launches through the DCC orchestrator.
         if request.form.get("source") == "hf":
-            hf_result = validate_hf_candidate(request.form.get("hf_repo", "").strip())
-            return render_template("eval_run_new.html",
-                                   hf_result=hf_result, **get_launch_options())
+            hf_repo = request.form.get("hf_repo", "").strip()
+            hf_result = validate_hf_candidate(hf_repo)
+            if not hf_result["ok"]:
+                return render_template("eval_run_new.html",
+                                       hf_result=hf_result, **get_launch_options())
+            scan_gate = validate_hf_scan_gate(hf_repo)
+            if not scan_gate["ok"]:
+                hf_result = {**hf_result, "ok": False, "error": scan_gate["error"],
+                             "scan_gate": scan_gate}
+                return render_template("eval_run_new.html",
+                                       hf_result=hf_result, **get_launch_options())
+
+            judge = request.form.get("judge", "")
+            try:
+                max_tokens = int(request.form.get("max_tokens", ""))
+            except ValueError:
+                return "max_tokens must be an integer", 400
+
+            questions, q_error = validate_custom_questions(request.form.get("questions", ""))
+            if q_error is not None:
+                return f"custom questions: {q_error}", 400
+
+            suite_key = write_custom_suite(questions)
+            error = validate_dcc_params(hf_repo, judge, suite_key, max_tokens)
+            if error is not None:
+                return error, 400
+
+            slug, _already = start_dcc_run(hf_repo, judge, suite_key, max_tokens)
+            return redirect(url_for("eval_run_detail", slug=slug, status="running"))
 
         candidate = request.form.get("candidate", "")
         judge = request.form.get("judge", "")
@@ -416,6 +494,24 @@ def register_routes(app):
             max_tokens = int(request.form.get("max_tokens", ""))
         except ValueError:
             return "max_tokens must be an integer", 400
+
+        # Allowlist the candidate BEFORE the gate so no unvalidated value reaches
+        # the safety-artifact path lookup. The standard path allowlists first via
+        # validate_launch; here validate_launch runs later (it needs the suite
+        # key), so the candidate check is hoisted up front. The message does not
+        # reflect the raw candidate, so no HTML-escaping is needed.
+        from frontend.eval_launch import candidate_models
+
+        if candidate not in candidate_models():
+            return "candidate model not in allowlist", 400
+
+        # Cross-pillar gate before we write any custom-suite file: a gateway
+        # model must clear safety red-teaming first (scan is N/A for gateway).
+        from frontend import pipeline
+
+        gate_error = pipeline.require_ready_for_downstream(candidate, "gateway")
+        if gate_error is not None:
+            return gate_error, 400
 
         # Validate the user's pasted questions as data before anything touches
         # the filesystem or a subprocess (the custom-content security boundary).
@@ -464,7 +560,7 @@ def register_routes(app):
             from frontend.eval_launch import get_status
 
             status = get_status(slug)
-            if status["status"] in ("running", "failed"):
+            if status["status"] not in ("not_found", "done"):
                 return render_template(
                     "eval_run_detail.html",
                     missing=False,

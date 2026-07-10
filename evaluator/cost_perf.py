@@ -2,7 +2,7 @@
 cost_perf.py
 ============
 
-Cost-vs-performance layer v1 for the Efficacy "nutrition label".
+Cost-vs-performance layer v2 for the Efficacy "report card".
 
 A model that scores 4.8/5 but costs $0.04 and takes 4 seconds per response is
 not interchangeable with one that scores 4.2/5 at $0.002 and 0.9 seconds. The
@@ -31,8 +31,10 @@ Two metrics, two purposes:
     Changing the weights (Budget vs Quality-first) can change the ranking — that
     is the feature, not a bug.
 
-What v1 deliberately does NOT do (later weeks): the Pareto frontier, a
-weight-slider UI, and modeling GPU-hour cost for self-hosted backends.
+v2 adds the **Pareto frontier** (the quality-vs-cost efficient set — models no
+other model beats on both axes) and a **weight-slider UI** (the frontend
+recomputes utility live from the normalized components carried on each score).
+Still deferred: modeling GPU-hour cost for self-hosted (DCC) backends.
 
 CLI demo (prints a small cohort table):
     uv run python evaluator/cost_perf.py
@@ -119,6 +121,7 @@ class CostPerfScore:
     cost_per_response_usd: float
     latency_ms: float
     weights: CostPerfWeights
+    on_frontier: bool = True             # on the quality-vs-cost Pareto frontier
     notes: tuple[str, ...] = ()
 
 
@@ -149,6 +152,31 @@ def quality_per_dollar(overall: float, cost_per_response_usd: float) -> Optional
     return overall / cost_per_response_usd
 
 
+def pareto_frontier(models: list[ModelCost]) -> set[str]:
+    """Model names on the quality-vs-cost **efficient frontier**: those NOT
+    dominated by any other model in the cohort.
+
+    A dominates B when A is at least as good on BOTH axes (quality >=, cost <=)
+    and strictly better on at least one — i.e. B is strictly worse on one axis and
+    no better on the other. Higher quality and lower cost are better; models tied
+    on both axes both stay on the frontier. This is the 2-D tradeoff the dashboard
+    plots; latency is reported alongside but not part of the frontier definition.
+    """
+    frontier: set[str] = set()
+    for m in models:
+        dominated = any(
+            n is not m
+            and n.quality_overall >= m.quality_overall
+            and n.cost_per_response_usd <= m.cost_per_response_usd
+            and (n.quality_overall > m.quality_overall
+                 or n.cost_per_response_usd < m.cost_per_response_usd)
+            for n in models
+        )
+        if not dominated:
+            frontier.add(m.model)
+    return frontier
+
+
 def score_cohort(
     models: list[ModelCost],
     weights: CostPerfWeights,
@@ -169,6 +197,7 @@ def score_cohort(
     latencies = [m.latency_ms for m in models]
     cost_lo, cost_hi = min(costs), max(costs)
     lat_lo, lat_hi = min(latencies), max(latencies)
+    frontier = pareto_frontier(models)
 
     scores: list[CostPerfScore] = []
     for m in models:
@@ -200,6 +229,7 @@ def score_cohort(
             cost_per_response_usd=m.cost_per_response_usd,
             latency_ms=m.latency_ms,
             weights=weights,
+            on_frontier=m.model in frontier,
             notes=notes,
         ))
     return scores

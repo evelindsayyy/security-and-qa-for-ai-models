@@ -484,6 +484,159 @@
     @apply w-full text-xs text-text-subtle sm:ml-auto sm:w-auto;
   }
 
+  .pillar-toolbar {
+    @apply mb-4 space-y-4;
+  }
+
+  .back-link {
+    @apply mb-4 text-sm;
+  }
+
+  .back-link a {
+    @apply font-semibold text-duke-blue no-underline hover:underline;
+  }
+
+  .launch-page {
+    @apply max-w-3xl space-y-4;
+  }
+
+  .launch-page-wide {
+    @apply max-w-6xl space-y-4;
+  }
+
+  .launch-layout-split {
+    @apply grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start;
+  }
+
+  .form-section {
+    @apply border-b border-border py-5 first:pt-0 last:border-b-0;
+  }
+
+  .form-section-title {
+    @apply subsection-title mb-4;
+  }
+
+  .form-field {
+    @apply space-y-1.5;
+  }
+
+  .form-field > label,
+  .launch-form > label {
+    @apply block text-sm font-semibold text-text;
+  }
+
+  .launch-form fieldset {
+    @apply m-0 border-0 p-0;
+  }
+
+  .launch-form fieldset legend {
+    @apply form-section-title mb-3 px-0;
+  }
+
+  .launch-form input[type="text"],
+  .launch-form input[type="number"],
+  .launch-form input[type="password"],
+  .launch-form select,
+  .launch-form textarea {
+    @apply w-full max-w-lg rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm text-text;
+  }
+
+  .launch-form textarea {
+    @apply max-w-2xl font-mono text-xs;
+  }
+
+  .launch-form label:has(input[type="radio"]),
+  .launch-form label:has(input[type="checkbox"]),
+  .launch-form .src-opt,
+  .launch-form .radio {
+    @apply mt-2 flex items-center gap-2 font-normal text-text;
+  }
+
+  .launch-form .candidate-source select,
+  .launch-form .candidate-source input[type="text"] {
+    @apply mt-1;
+  }
+
+  .form-hint {
+    @apply mt-1 block text-xs leading-relaxed text-text-subtle;
+  }
+
+  .form-actions {
+    @apply border-t border-border pt-5;
+  }
+
+  .cost-line {
+    @apply text-sm text-text;
+  }
+
+  .benchmark-launch-desc {
+    @apply rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm;
+  }
+
+  .model-setup-guide__title {
+    @apply subsection-title mb-3;
+  }
+
+  .model-setup-panel {
+    @apply space-y-2 text-sm text-text-muted;
+  }
+
+  .model-setup-panel ol,
+  .model-setup-panel ul {
+    @apply my-2 list-inside list-decimal space-y-1 pl-1;
+  }
+
+  .model-setup-panel ul {
+    @apply list-disc;
+  }
+
+  .model-setup-example,
+  .model-setup-note {
+    @apply text-xs text-text-subtle;
+  }
+
+  .advanced-options,
+  .custom-suite {
+    @apply text-sm;
+  }
+
+  .advanced-options summary,
+  .custom-suite summary {
+    @apply cursor-pointer font-semibold text-duke-blue;
+  }
+
+  .table-controls {
+    @apply flex flex-wrap items-end gap-4;
+  }
+
+  .table-controls label {
+    @apply flex min-w-[8rem] flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-text-subtle;
+  }
+
+  .table-controls select {
+    @apply rounded-lg border border-border bg-surface-raised px-2.5 py-1.5 text-sm font-normal normal-case text-text;
+  }
+
+  .table-controls .checkbox-inline {
+    @apply flex-row items-center gap-2 normal-case;
+  }
+
+  .table-controls .checkbox-inline input {
+    @apply m-0;
+  }
+
+  .intake-result {
+    @apply card p-4 text-sm;
+  }
+
+  .intake-ok {
+    @apply border-green-200 bg-green-50;
+  }
+
+  .intake-error {
+    @apply border-red-200 bg-red-50;
+  }
+
   .callout {
     @apply mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-duke-blue-muted p-4;
   }
@@ -499,7 +652,6 @@
   .dim { @apply text-text-subtle; }
   .sub { @apply text-sm text-text-muted; }
   .model { @apply font-semibold text-text; }
-  .back { @apply mb-4 text-sm; }
 
   .expandable.is-overflow .expandable-body {
     @apply line-clamp-2;
@@ -524,5 +676,191 @@
   .sr-only {
     @apply absolute -m-px h-px w-px overflow-hidden whitespace-nowrap border-0 p-0;
     clip: rect(0, 0, 0, 0);
+  }
+
+  /* Detail-page panels — summary strips, probe/finding lists, raw JSON,
+     reference deltas. Ported from the pre-Tailwind stylesheet onto the
+     current design tokens (still used by safety/scan/eval/benchmark detail
+     pages and their per-benchmark item partials). */
+
+  .summary-row {
+    @apply mb-6 flex flex-wrap items-center gap-2 rounded-[var(--radius-lg)] border border-border bg-surface-muted px-4 py-3;
+  }
+
+  .summary-chips {
+    @apply inline-flex flex-wrap items-center gap-2;
+  }
+
+  .summary-meta {
+    @apply min-w-0 flex-1 basis-48;
+  }
+
+  .summary-score {
+    @apply text-base;
+  }
+
+  .tool-panel {
+    @apply mb-3 rounded-[var(--radius-lg)] border border-border bg-surface-raised px-4 py-3;
+  }
+
+  .tool-panel summary {
+    @apply flex flex-wrap items-center gap-2 cursor-pointer text-sm;
+  }
+
+  .panel-summary-chips {
+    @apply inline-flex flex-nowrap items-center gap-2;
+  }
+
+  .probe-item {
+    @apply my-2 rounded-[var(--radius-md)] border border-border border-l-4 bg-surface-raised px-3 py-2;
+  }
+
+  .probe-item.probe-fail {
+    border-left-color: var(--color-tier-high);
+    background: var(--color-tier-high-bg);
+  }
+
+  .probe-item-head {
+    @apply flex flex-wrap items-center gap-2 text-xs;
+  }
+
+  .probe-item-title {
+    @apply mt-1 text-xs font-semibold text-text;
+  }
+
+  .probe-item-desc {
+    @apply mt-0.5 text-xs;
+  }
+
+  .probe-more > summary {
+    @apply mt-2 cursor-pointer text-xs font-medium text-duke-blue;
+  }
+
+  .finding-detail {
+    @apply mb-2 rounded-[var(--radius-md)] border border-border bg-surface-muted px-3 py-2 transition;
+  }
+
+  .finding-detail summary {
+    @apply flex flex-wrap items-center gap-2 cursor-pointer text-sm;
+  }
+
+  .finding-detail.finding-fail {
+    border-color: #e8c9b8;
+    background: var(--color-tier-high-bg);
+  }
+
+  .finding-detail.finding-skip {
+    border-color: #ddd0a8;
+    background: var(--color-tier-medium-bg);
+  }
+
+  .finding-detail-panel {
+    @apply rounded-b-[var(--radius-md)] px-4 py-3 text-sm;
+    background: var(--color-surface-raised);
+  }
+
+  .finding-summary-title {
+    @apply min-w-0 flex-1 basis-48 font-semibold text-text;
+  }
+
+  .benchmark-item-panel h3 {
+    @apply mt-3 text-sm font-semibold text-text;
+  }
+
+  .benchmark-item-panel h3:first-child {
+    @apply mt-0;
+  }
+
+  .benchmark-meta-dl {
+    @apply mt-2 grid gap-1 text-sm;
+    grid-template-columns: minmax(8rem, 14rem) 1fr;
+  }
+
+  .benchmark-meta-dl dt {
+    @apply m-0 font-semibold text-text;
+  }
+
+  .benchmark-meta-dl dd {
+    @apply m-0 text-text-muted;
+  }
+
+  .benchmark-choice-list {
+    @apply my-1 pl-5 text-sm;
+  }
+
+  .benchmark-choice-list li.choice-correct {
+    @apply font-semibold;
+  }
+
+  .benchmark-choice-list li.choice-wrong {
+    color: var(--color-status-failed);
+  }
+
+  .reference-delta-panel {
+    @apply inline-block text-sm align-baseline;
+  }
+
+  .reference-delta-panel > summary,
+  .reference-delta-summary {
+    @apply inline-block cursor-pointer text-text-muted;
+    list-style: none;
+  }
+
+  .reference-delta-panel > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .reference-delta-row + .reference-delta-row {
+    @apply mt-1;
+  }
+
+  .reference-delta {
+    @apply whitespace-nowrap text-sm;
+  }
+
+  .reference-delta-link {
+    @apply font-semibold;
+  }
+
+  .reference-delta-link:hover {
+    text-decoration: underline;
+  }
+
+  .ref-delta-up { color: var(--color-rate-strong); }
+  .ref-delta-down { color: var(--color-rate-weak); }
+  .ref-delta-flat { color: var(--color-text-muted); }
+
+  .json-block {
+    @apply max-h-80 overflow-auto rounded-[var(--radius-md)] border border-border bg-surface-muted px-4 py-3 text-xs;
+  }
+
+  .coverage-banner {
+    @apply my-4 rounded-[var(--radius-md)] border px-4 py-3 text-sm;
+    border-color: var(--color-tier-medium-bg);
+    background: var(--color-tier-medium-bg);
+  }
+
+  .coverage-banner p {
+    @apply m-0 mb-1 last:mb-0;
+  }
+
+  .coverage-partial-badge {
+    @apply ml-1 inline-block rounded px-1.5 py-0.5 text-xs font-semibold;
+    color: var(--color-tier-medium);
+    background: var(--color-tier-medium-bg);
+    border: 1px solid var(--color-tier-medium-bg);
+  }
+
+  .file-list {
+    @apply my-2 max-h-60 overflow-y-auto text-xs;
+  }
+
+  .compact-table td,
+  .compact-table th {
+    @apply py-1.5;
+  }
+
+  .price-note {
+    @apply mt-0.5 text-xs text-text-subtle;
   }
 }

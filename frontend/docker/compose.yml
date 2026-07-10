@@ -1,0 +1,61 @@
+# Local DEVELOPMENT compose for the efficacy dashboard (frontend/).
+# Live source bind-mount + Flask debug reloader — for iterating, NOT for deploy.
+# (--debug exposes the Werkzeug debugger = remote code execution if reachable.)
+# For a real/CI image, build frontend/docker/Dockerfile instead.
+#
+# Run from the repo root so the single root .env is found:
+#   docker compose --env-file .env -f frontend/docker/compose.yml up --build
+# then open http://localhost:3000
+#
+# LAUNCH-BUTTON CAVEAT (the unresolved team decision):
+#   This container has NO Docker daemon, so it can't spawn the per-pillar run
+#   stacks the way the host does. FRONTEND_LAUNCH_MODE=host makes "Start run"
+#   execute in-process instead — evaluator + benchmark runs work (their deps are
+#   in this image), but safety/scanner runs need their own tools and will not
+#   launch from here. Full launch parity needs a Docker strategy (socket mount or
+#   host execution) — see frontend/docker/README.md.
+
+services:
+  frontend:
+    image: qa-frontend-dev
+    build:
+      context: ../..
+      dockerfile_inline: |
+        # uv's official image: Python 3.13 (matches requires-python) + uv on PATH.
+        # No curl/uv-install step needed.
+        FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+        # Build the project venv OUTSIDE /app so the source bind-mount below can't
+        # shadow it with the host's macOS .venv (.dockerignore does NOT apply to
+        # bind mounts). Deps sync lazily on first boot into /opt/venv.
+        # $$PATH escapes Compose substitution so the image build (not the host)
+        # expands it -> the container ends up with /opt/venv/bin first on PATH.
+        ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
+            UV_LINK_MODE=copy \
+            UV_COMPILE_BYTECODE=1 \
+            PATH=/opt/venv/bin:$$PATH
+    ports:
+      - "3000:5001"
+    environment:
+      # No Docker in-container -> in-process launches, not nested compose.
+      FRONTEND_LAUNCH_MODE: host
+      # DB read path (optional): dashboard falls back to result files when unset
+      # or unreachable. psycopg is installed via the `db` group below.
+      EFFICACY_DB_DSN: ${EFFICACY_DB_DSN:-}
+      # Gateway creds — only needed if you launch evaluator runs from the browser.
+      DUKE_GATEWAY_URL: ${DUKE_GATEWAY_URL:-https://litellm.oit.duke.edu/v1}
+      DUKE_GATEWAY_KEY: ${DUKE_GATEWAY_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://litellm.oit.duke.edu/v1}
+    volumes:
+      # Live source for hot-reload.
+      - ../..:/app
+      # Mask the host .venv so macOS binaries never leak into the Linux container
+      # (belt-and-suspenders alongside UV_PROJECT_ENVIRONMENT above).
+      - /app/.venv
+    working_dir: /app
+    # Sync deps (incl. the optional `db` group) into /opt/venv, then run the
+    # dashboard. `--no-install-project` keeps uv from trying to build this flat
+    # app repo as a package (there's no [build-system]); code imports from /app.
+    command: >
+      sh -c "uv sync --no-install-project --group db &&
+             exec flask --app frontend:create_app run --debug --host 0.0.0.0 --port 5001"

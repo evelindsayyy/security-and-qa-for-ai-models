@@ -13,6 +13,9 @@ venv/
 .DS_Store
 __pycache__/
 
+# Claude Code local config / scratch
+.claude/
+
 # scanner runtime data (VM bind mount) — not in git except README
 scanner/models/*
 !scanner/models/README.md
@@ -47,6 +50,7 @@ jack/
 instance/
 logs/
 scripts/dcc/.vllm-session.env
+scripts/dcc/.jobs/
 
 # Ignore tqa test results
 test_results/

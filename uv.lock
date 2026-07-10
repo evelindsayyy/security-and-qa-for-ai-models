@@ -5599,6 +5599,7 @@ dcc = [
     { name = "vllm", marker = "sys_platform == 'linux' or (extra == 'group-29-security-and-qa-for-ai-models-benchmarks' and extra == 'group-29-security-and-qa-for-ai-models-safety') or (extra == 'group-29-security-and-qa-for-ai-models-benchmarks' and extra == 'group-29-security-and-qa-for-ai-models-scanner') or (extra == 'group-29-security-and-qa-for-ai-models-safety' and extra == 'group-29-security-and-qa-for-ai-models-scanner')" },
 ]
 dev = [
+    { name = "numpy" },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -5640,6 +5641,7 @@ benchmarks = [
 ]
 dcc = [{ name = "vllm", marker = "sys_platform == 'linux'", specifier = ">=0.8" }]
 dev = [
+    { name = "numpy", specifier = ">=2.0.0" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "ruff", specifier = ">=0.15.15" },
 ]

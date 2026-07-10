@@ -123,6 +123,31 @@ def _pricing_table() -> dict[str, tuple[float, float]]:
         _pricing_cache = {}
     return _pricing_cache
 
+
+# Why a live model shows "—" instead of a token price. Two reasons:
+#   * it's priced in a unit the (input, output)/1M-token table can't express
+#     (audio per-minute, embeddings input-only, rerank per-search), or
+#   * it isn't on Duke's published rate sheet (kb0038832) yet.
+# Keyed by exact id first, then by category as a fallback, so the catalog
+# EXPLAINS every blank price instead of looking half-filled. Surfaced only when
+# a model has no token rate (a priced model never shows a note).
+_PRICE_NOTE_BY_ID: dict[str, str] = {
+    "whisper-1": "billed per audio-minute ($0.006/min), not per token",
+    "text-embedding-3-small": "input-only: $0.02 per 1M tokens (no output cost)",
+    "text-embedding-3-large": "input-only: $0.13 per 1M tokens (no output cost)",
+    "Cohere-rerank-v4.0-fast": "rerank — priced per search, not per token",
+    "Cohere-rerank-v4.0-pro": "rerank — priced per search, not per token",
+}
+_PRICE_NOTE_BY_CATEGORY: dict[str, str] = {
+    "embeddings": "input-only pricing; no per-token output cost",
+    "audio": "billed per audio-minute, not per token",
+}
+
+
+def _price_note_for(model_id: str, category: str) -> str | None:
+    """Reason a model has no token price, or None if it's priced."""
+    return _PRICE_NOTE_BY_ID.get(model_id) or _PRICE_NOTE_BY_CATEGORY.get(category)
+
 # Legacy aliases from week-2 spikes (not returned by /v1/models anymore).
 DEPRECATED_IDS: dict[str, str] = {
     "Mistral on-site": "deprecated — phased out; not on gateway allowlist",
@@ -215,6 +240,7 @@ def _fetch_live_models() -> tuple[list[dict[str, str]], str | None]:
                 "owned_by": getattr(item, "owned_by", "") or "",
                 "price_in": rate[0] if rate else None,
                 "price_out": rate[1] if rate else None,
+                "price_note": None if rate else _price_note_for(mid, cat),
             }
         )
 

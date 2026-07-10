@@ -37,6 +37,14 @@ _GOOD = hf_intake.ValidationResult(
                         num_params=7_000_000_000, gated=False))
 _BAD = hf_intake.ValidationResult(
     False, "model is gated/private; not supported in the MVP")
+_SCAN_OK = {
+    "ok": True,
+    "repo_id": "Qwen/Qwen2.5-7B-Instruct",
+    "status": "complete",
+    "severity_tier": "low",
+    "overall_risk_score": 0,
+    "path": "scanner/output/Qwen--Qwen2.5-7B-Instruct/scan_result.json",
+}
 
 
 class _Base(unittest.TestCase):
@@ -70,13 +78,21 @@ class HfLaunchValidateTest(_Base):
         self.assertEqual(out["architectures"], ["Qwen2ForCausalLM"])
         self.assertEqual(out["repo_id"], "Qwen/Qwen2.5-7B-Instruct")
 
-    def test_post_hf_valid_shows_ready(self) -> None:
-        with mock.patch.object(hf_intake, "validate", return_value=_GOOD):
+    def test_post_hf_valid_launches_on_dcc(self) -> None:
+        # DCC serving is now wired: a servable HF model launches the orchestrator
+        # and redirects to the running detail (see test_eval_dcc_launch for full
+        # coverage).
+        with mock.patch.object(hf_intake, "validate", return_value=_GOOD), \
+             mock.patch.object(eval_launch, "validate_hf_scan_gate", return_value=_SCAN_OK), \
+             mock.patch.object(eval_launch, "start_dcc_run",
+                               return_value=("stem123", False)) as sr:
             r = _client().post("/eval-run/start",
                                data={"source": "hf",
-                                     "hf_repo": "Qwen/Qwen2.5-7B-Instruct"})
-        self.assertEqual(r.status_code, 200)
-        self.assertIn(b"Qwen2ForCausalLM", r.data)
+                                     "hf_repo": "Qwen/Qwen2.5-7B-Instruct",
+                                     "judge": "Llama 4 Maverick",
+                                     "suite": "it_support_v1", "max_tokens": "2000"})
+        self.assertEqual(r.status_code, 302)
+        sr.assert_called_once()
 
     def test_post_hf_invalid_shows_reason(self) -> None:
         with mock.patch.object(hf_intake, "validate", return_value=_BAD):
@@ -89,8 +105,9 @@ class HfLaunchValidateTest(_Base):
 class CustomHfLaunchTest(_Base):
     """The 'bring your own questions' form supports HF models the same way the
     standard start-run form does: a gateway/hf source toggle, an HF repo field,
-    and a /eval-run/start-custom HF branch that validates the model (serving is
-    the later DCC milestone). Custom eval requires private view + allowlisted user."""
+    and a /eval-run/start-custom HF branch that launches through DCC once the
+    model passes servability and scanner clearance. Custom eval requires a
+    private view + allowlisted user (dev-auth bypass)."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -108,13 +125,22 @@ class CustomHfLaunchTest(_Base):
         self.assertEqual(r.status_code, 200)
         self.assertIn(b'id="hf_repo_c"', r.data)   # the custom form's HF field
 
-    def test_post_custom_hf_valid_shows_ready(self) -> None:
-        with mock.patch.object(hf_intake, "validate", return_value=_GOOD):
+    def test_post_custom_hf_valid_launches_dcc(self) -> None:
+        with mock.patch.object(hf_intake, "validate", return_value=_GOOD), \
+             mock.patch.object(eval_launch, "validate_hf_scan_gate", return_value=_SCAN_OK), \
+             mock.patch.object(eval_launch, "write_custom_suite",
+                               return_value="custom_x"), \
+             mock.patch.object(eval_launch, "validate_dcc_params", return_value=None), \
+             mock.patch.object(eval_launch, "start_dcc_run",
+                               return_value=("stem123", False)) as sr:
             r = self.client.post("/eval-run/start-custom",
                                data={"source": "hf",
-                                     "hf_repo": "Qwen/Qwen2.5-7B-Instruct"})
-        self.assertEqual(r.status_code, 200)
-        self.assertIn(b"Qwen2ForCausalLM", r.data)
+                                     "hf_repo": "Qwen/Qwen2.5-7B-Instruct",
+                                     "judge": "Llama 4 Maverick",
+                                     "max_tokens": "2000",
+                                     "questions": '{"question": "q", "reference": "r"}'})
+        self.assertEqual(r.status_code, 302)
+        sr.assert_called_once()
 
     def test_post_custom_hf_invalid_shows_reason(self) -> None:
         with mock.patch.object(hf_intake, "validate", return_value=_BAD):
@@ -123,14 +149,19 @@ class CustomHfLaunchTest(_Base):
         self.assertEqual(r.status_code, 200)
         self.assertIn(b"gated", r.data)
 
-    def test_post_custom_hf_does_not_start_a_run(self) -> None:
-        # HF serving isn't wired yet — the custom HF path validates only, never
-        # spawning a runner, exactly like the standard HF path.
+    def test_post_custom_hf_missing_scan_does_not_start_a_run(self) -> None:
+        blocked = {**_SCAN_OK, "ok": False, "error": "security scan required"}
         with mock.patch.object(hf_intake, "validate", return_value=_GOOD), \
-             mock.patch.object(eval_launch, "start_run") as sr:
-            self.client.post("/eval-run/start-custom",
-                           data={"source": "hf",
-                                 "hf_repo": "Qwen/Qwen2.5-7B-Instruct"})
+             mock.patch.object(eval_launch, "validate_hf_scan_gate", return_value=blocked), \
+             mock.patch.object(eval_launch, "start_dcc_run") as sr:
+            r = self.client.post("/eval-run/start-custom",
+                               data={"source": "hf",
+                                     "hf_repo": "Qwen/Qwen2.5-7B-Instruct",
+                                     "judge": "Llama 4 Maverick",
+                                     "max_tokens": "2000",
+                                     "questions": '{"question": "q", "reference": "r"}'})
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"security scan required", r.data)
         sr.assert_not_called()
 
     def test_post_custom_gateway_still_starts_a_run(self) -> None:
@@ -139,7 +170,9 @@ class CustomHfLaunchTest(_Base):
                                return_value=("slug123", False, "public")) as sr, \
              mock.patch.object(eval_launch, "write_custom_suite",
                                return_value="custom_x"), \
-             mock.patch.object(eval_launch, "validate_launch", return_value=None):
+             mock.patch.object(eval_launch, "validate_launch", return_value=None), \
+             mock.patch("frontend.pipeline.require_ready_for_downstream",
+                        return_value=None):
             r = self.client.post(
                 "/eval-run/start-custom",
                 data={"candidate": "gpt-5-chat", "judge": "Llama 4 Maverick",

@@ -1,70 +1,93 @@
 {% extends "base.html" %}
+{% from '_macros.html' import launch_back, rerun_callout with context %}
 
 {% block title %}Start a safety run{% endblock %}
 
-{% block content %}
-<div class="eval-comparison">
-  <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
-  <h1>Start a safety run</h1>
-  {% if rerun %}
-  <p class="sub benchmark-rerun-hint">Pre-filled from a previous run — starting will delete the prior results and replace them.</p>
-  {% endif %}
-  <p class="sub">
-    Launches <code>safety.run</code> via Docker Compose (default) — Promptfoo, Garak, and merge.
-    Full runs can take 30–90 minutes per model.
-    Host fallback: <code>uv run python -m safety.run "&lt;model&gt;"</code>.
-    {% if not docker_available %}
-    <span class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>
-    {% endif %}
-  </p>
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span><a href="{{ url_for('safety') }}">Safety</a></span>
+<span class="text-text-subtle">›</span>
+<span class="font-medium text-text">Start run</span>
+{% endblock %}
 
+{% block content %}
+<div class="launch-page">
+  {{ launch_back(url_for('safety'), 'all safety results') }}
+
+  <header>
+    <h1 class="page-title">Start a safety run</h1>
+    <p class="page-subtitle">
+      Launches <code>safety.run</code> via Docker Compose (default) — Promptfoo, Garak, and merge.
+      Full runs can take 30–90 minutes per model.
+      Host fallback: <code>uv run python -m safety.run "&lt;model&gt;"</code>.
+    </p>
+  </header>
+
+  {% if rerun %}{{ rerun_callout() }}{% endif %}
+  {% if not docker_available %}
+  <p class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</p>
+  {% endif %}
   {% if gateway_error %}
   <p class="form-warning">Live catalog unavailable — showing fallback list. {{ gateway_error }}</p>
   {% endif %}
 
-  <form method="post" action="{{ url_for('safety_run_start') }}" class="launch-form" id="safety-form">
-    <label>Gateway model
-      <select name="gateway_model" id="gateway_model">
-        {% for group in gateway_groups %}
-        <optgroup label="{{ group.label }}">
-          {% for m in group.models %}
-          <option value="{{ m }}">{{ m }}</option>
+  <form method="post" action="{{ url_for('safety_run_start') }}" class="launch-form card p-5" id="safety-form">
+
+    <section class="form-section">
+      <h2 class="form-section-title">Gateway model</h2>
+      <div class="form-field">
+        <label for="gateway_model">Model</label>
+        <select name="gateway_model" id="gateway_model">
+          {% for group in gateway_groups %}
+          <optgroup label="{{ group.label }}">
+            {% for m in group.models %}
+            <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </optgroup>
           {% endfor %}
-        </optgroup>
-        {% endfor %}
-      </select>
-      <span class="form-hint">chat-capable gateway ids — case-sensitive</span>
-    </label>
+        </select>
+        <span class="form-hint">Chat-capable gateway ids — case-sensitive.</span>
+      </div>
 
-    <p id="overwrite-warning" class="form-warning" style="display: none;">
-      This model already has safety results — starting again will delete the prior outputs and replace them.
-    </p>
-    <p id="inflight-warning" class="form-warning" style="display: none;">
-      A safety run for this model and profile is already in progress.
-    </p>
+      <p id="overwrite-warning" class="form-warning mt-3" style="display: none;">
+        This model already has safety results — starting again will delete the prior outputs and replace them.
+      </p>
+      <p id="inflight-warning" class="form-warning mt-3" style="display: none;">
+        A safety run for this model and profile is already in progress.
+      </p>
+    </section>
 
-    <fieldset>
-      <legend>Test suites <span class="dim">(all on by default)</span></legend>
-      <label><input type="checkbox" name="run_policy" id="run_policy" value="1" checked> Promptfoo policy</label>
-      <label><input type="checkbox" name="run_redteam" id="run_redteam" value="1" checked> Promptfoo red-team</label>
-      <label><input type="checkbox" name="run_garak" id="run_garak" value="1" checked> Garak</label>
-    </fieldset>
+    <section class="form-section">
+      <h2 class="form-section-title">Test suites <span class="dim font-normal">(all on by default)</span></h2>
+      <fieldset>
+        <label><input type="checkbox" name="run_policy" id="run_policy" value="1" checked> Promptfoo policy</label>
+        <label><input type="checkbox" name="run_redteam" id="run_redteam" value="1" checked> Promptfoo red-team</label>
+        <label><input type="checkbox" name="run_garak" id="run_garak" value="1" checked> Garak</label>
+      </fieldset>
+    </section>
 
-    <label id="redteam-profile-row">Red-team profile
-      <select name="redteam_profile" id="redteam_profile">
-        {% for p in profiles %}
-        <option value="{{ p.value }}" {% if p.value == 'base' %}selected{% endif %}>{{ p.label }}</option>
-        {% endfor %}
-      </select>
-      <span class="form-hint">attack plugins for the red-team suite — base is the general-purpose default</span>
-    </label>
+    <section class="form-section">
+      <div class="form-field" id="redteam-profile-row">
+        <label for="redteam_profile">Red-team profile</label>
+        <select name="redteam_profile" id="redteam_profile">
+          {% for p in profiles %}
+          <option value="{{ p.value }}" {% if p.value == 'base' %}selected{% endif %}>{{ p.label }}</option>
+          {% endfor %}
+        </select>
+        <span class="form-hint">Attack plugins for the red-team suite — base is the general-purpose default.</span>
+      </div>
 
-    <label id="garak-probes-row">Garak probe subset <span class="dim">(optional)</span>
-      <input type="text" name="garak_probes" id="garak_probes" placeholder="encoding,promptinject">
-      <span class="form-hint">comma-separated modules; leave blank for the full default Duke set</span>
-    </label>
+      <div class="form-field mt-4" id="garak-probes-row">
+        <label for="garak_probes">Garak probe subset <span class="dim font-normal">(optional)</span></label>
+        <input type="text" name="garak_probes" id="garak_probes" placeholder="encoding,promptinject">
+        <span class="form-hint">Comma-separated modules; leave blank for the full default Duke set.</span>
+      </div>
+    </section>
 
-    <button type="submit" class="btn-primary" id="submit-btn">▶ Start safety run</button>
+    <div class="form-actions">
+      <button type="submit" class="btn-primary" id="submit-btn">▶ Start safety run</button>
+    </div>
   </form>
 </div>
 

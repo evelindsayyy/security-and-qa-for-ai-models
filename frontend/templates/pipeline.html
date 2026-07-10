@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% from '_macros.html' import page_header, empty_state with context %}
+
+{% block title %}Model pipeline{% endblock %}
+
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span class="breadcrumb-current">Pipeline</span>
+{% endblock %}
+
+{% macro stage_tier(state) -%}
+{%- if state == 'cleared' -%}low
+{%- elif state == 'blocked' -%}high
+{%- elif state in ('missing', 'unsupported') -%}unknown
+{%- else -%}unknown
+{%- endif -%}
+{%- endmacro %}
+
+{% macro stage_pill(stage) -%}
+{%- if stage.state == 'n/a' -%}
+<span class="dim" title="{{ stage.detail }}">n/a</span>
+{%- else -%}
+<span class="tier tier-{{ stage_tier(stage.state) }}" title="{{ stage.detail }}">{{ stage.state }}</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% block content %}
+<div class="eval-comparison">
+  {{ page_header('Model pipeline', 'Cross-pillar launch gates — a model must clear its prerequisite pillar before eval or benchmark can run.') }}
+
+  <section class="key card p-4 mb-6">
+    <h2 class="subsection-title">How to read this</h2>
+    <dl class="legend-grid mt-3">
+      <dt>Gateway models</dt>
+      <dd>Scan is n/a (nothing to scan); must clear <b>safety red-teaming</b> (any completed run, tier low/medium) before eval or benchmark unlock.</dd>
+      <dt>Hugging Face repos</dt>
+      <dd>Must clear the <b>artifact scan</b> (completed, low tier); safety red-teaming isn't yet supported for served HF models.</dd>
+    </dl>
+  </section>
+
+  {% if not has_rows %}
+    {{ empty_state('No models yet. Add a gateway model or run a scan to populate this view.') }}
+  {% else %}
+    <p class="sub mb-4">{{ rows|length }} model{{ "" if rows|length == 1 else "s" }}</p>
+    <div class="table-wrap">
+      <table class="run-table">
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th class="col-nowrap">Source</th>
+            <th class="col-nowrap">Scan</th>
+            <th class="col-nowrap">Safety</th>
+            <th class="col-nowrap">Eval / Benchmark</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td><span class="model">{{ r.model }}</span></td>
+            <td class="col-nowrap"><span class="badge">{{ r.source }}</span></td>
+            <td class="col-nowrap">{{ stage_pill(r.scan) }}</td>
+            <td class="col-nowrap">{{ stage_pill(r.safety) }}</td>
+            <td class="col-nowrap">
+              {% if r.eval_unlocked %}
+                <a href="{{ url_for('eval_run_new') }}" class="status-ok">unlocked →</a>
+              {% else %}
+                <span class="dim">locked</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

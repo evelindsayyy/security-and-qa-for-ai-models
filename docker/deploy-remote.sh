@@ -85,9 +85,23 @@ docker compose --project-name qa-ai-models --env-file .env \
 
 # Recreate containers so Flask reloads bind-mounted code and refreshes
 # HOST_UID / DOCKER_GID from host-env.sh (git pull alone does not restart the process).
-docker compose --project-name qa-ai-models --env-file .env \
-  "${COMPOSE_FILES[@]}" \
-  up -d --force-recreate --no-build --pull missing --no-deps \
-  --wait --wait-timeout 90 "${SERVICES[@]}"
+#
+# Self-heal a wedged deploy: a previous half-finished recreate can leave a
+# renamed container squatting a compose name (observed: caddy), which fails the
+# next `up` with a "container name already in use" conflict that --force-recreate
+# cannot clear. On failure, drop this project's containers and retry once so the
+# deploy recovers on its own instead of needing a manual `docker rm` on the VM.
+_compose_up() {
+  docker compose --project-name qa-ai-models --env-file .env \
+    "${COMPOSE_FILES[@]}" \
+    up -d --force-recreate --no-build --pull missing --no-deps --remove-orphans \
+    --wait --wait-timeout 90 "${SERVICES[@]}"
+}
+
+if ! _compose_up; then
+  echo "compose up failed — clearing stale qa-ai-models containers and retrying" >&2
+  docker ps -aq --filter "name=qa-ai-models-" | xargs -r docker rm -f
+  _compose_up
+fi
 
 echo "Deployed ${WEB_IMAGE} at ${DEPLOY_PATH} ($(git rev-parse --short HEAD))"

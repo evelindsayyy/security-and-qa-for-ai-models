@@ -21,7 +21,11 @@ dependencies = [
 # CI and local lint/test: uv sync --group dev  (enough for UI + API + tests)
 # Pillar groups (scanner / safety / benchmarks) conflict — install at most ONE on
 # the host; browser "Start" jobs use Docker images that bake the right group.
-dev = ["pytest>=8.0", "ruff>=0.15.15"]
+dev = [
+    "numpy>=2.0.0",
+    "pytest>=8.0",
+    "ruff>=0.15.15",
+]
 # Scanner pillar (scanner/docker): uv sync --group scanner
 scanner = [
     "fickling>=0.1.0",
