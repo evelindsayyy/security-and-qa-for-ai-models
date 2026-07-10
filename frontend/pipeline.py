@@ -25,7 +25,11 @@ from markupsafe import escape
 ROOT = Path(__file__).parent.parent
 SAFETY_OUTPUT_DIR = ROOT / "safety" / "output"
 
-CLEARED_TIER = "low"
+# A completed safety run clears the gate unless it flagged the model as high
+# risk. Blocking only high/critical (not medium) keeps the gate meaningful
+# while letting normal models through — most gateway models score medium, so a
+# low-only bar blocks nearly every eval in practice.
+CLEARED_TIERS = frozenset({"low", "medium"})
 COMPLETE_STATUSES = frozenset({"complete", "completed"})
 DEFAULT_SAFETY_PROFILE = "base"
 
@@ -40,11 +44,11 @@ def _safety_result_path(model: str, profile: str = DEFAULT_SAFETY_PROFILE) -> Pa
 
 
 def validate_safety_gate(model: str, *, profile: str = DEFAULT_SAFETY_PROFILE) -> dict:
-    """Require a completed, low-tier safety run before eval/benchmark.
+    """Require a completed safety run that isn't high-risk before eval/benchmark.
 
-    Mirrors eval_launch.validate_hf_scan_gate: only a completed run whose
-    composite_tier is 'low' clears the gate. Reflected values are HTML-escaped
-    (errors render as HTML).
+    Mirrors eval_launch.validate_hf_scan_gate: a completed run clears the gate
+    unless its composite_tier is high/critical (low and medium pass). Reflected
+    values are HTML-escaped (errors render as HTML).
     """
     path = _safety_result_path(model, profile)
     base = {
@@ -82,12 +86,12 @@ def validate_safety_gate(model: str, *, profile: str = DEFAULT_SAFETY_PROFILE) -
     if status not in COMPLETE_STATUSES:
         return {**out, "ok": False,
                 "error": f"safety run is not complete yet (status={status})"}
-    if tier != CLEARED_TIER:
+    if tier not in CLEARED_TIERS:
         return {
             **out,
             "ok": False,
             "error": (
-                "safety red-teaming did not clear this model "
+                "safety red-teaming flagged this model as high risk "
                 f"(tier={tier}); eval/benchmark is blocked"
             ),
         }

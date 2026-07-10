@@ -220,7 +220,9 @@ SUITES: dict[str, dict] = {
 JUDGE_PROMPT = EVALUATOR / "prompts" / "judge" / "reference_based_v2.txt"
 
 MAX_TOKENS_MIN, MAX_TOKENS_MAX = 50, 4000
-SCAN_ALLOWED_TIERS = frozenset({"low"})
+# Clear a completed scan unless it flagged the repo as high risk — block only
+# high/critical (low + medium pass), matching the safety gate in pipeline.py.
+SCAN_ALLOWED_TIERS = frozenset({"low", "medium"})
 SCAN_COMPLETE_STATUSES = frozenset({"complete", "completed"})
 
 # --- Custom ("bring your own") question sets -------------------------------

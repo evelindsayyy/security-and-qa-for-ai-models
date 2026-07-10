@@ -43,6 +43,20 @@ class ValidateSafetyGateTest(unittest.TestCase):
         self.assertTrue(gate["ok"])
         self.assertIsNone(gate["error"])
 
+    def test_complete_medium_tier_clears(self) -> None:
+        # Medium clears — the gate blocks only high/critical, so normal models
+        # (which mostly score medium) can still be evaluated.
+        self._patch_path(_write_safety(self.tmp, {"status": "complete", "composite_tier": "medium"}))
+        gate = pipeline.validate_safety_gate("Llama 4 Maverick")
+        self.assertTrue(gate["ok"])
+        self.assertIsNone(gate["error"])
+
+    def test_critical_tier_blocks(self) -> None:
+        self._patch_path(_write_safety(self.tmp, {"status": "complete", "composite_tier": "critical"}))
+        gate = pipeline.validate_safety_gate("Llama 4 Maverick")
+        self.assertFalse(gate["ok"])
+        self.assertIn("high risk", gate["error"])
+
     def test_missing_file_blocks_with_none_status(self) -> None:
         self._patch_path(self.tmp / "does_not_exist.json")
         gate = pipeline.validate_safety_gate("Llama 4 Maverick")
@@ -69,7 +83,7 @@ class ValidateSafetyGateTest(unittest.TestCase):
         self._patch_path(_write_safety(self.tmp, {"status": "complete", "composite_tier": "high"}))
         gate = pipeline.validate_safety_gate("Llama 4 Maverick")
         self.assertFalse(gate["ok"])
-        self.assertIn("did not clear", gate["error"])
+        self.assertIn("high risk", gate["error"])
 
     def test_unreadable_blocks(self) -> None:
         path = self.tmp / "merged_safety_result.json"
