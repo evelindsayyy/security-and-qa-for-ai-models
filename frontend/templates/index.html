@@ -12,6 +12,64 @@
 
   <h2 class="hub-section">Model report cards</h2>
 
+  {% if model_card %}
+  <style>
+    .mlabel { max-width:460px; border:1px solid #dfe3ee; border-radius:14px; background:#fff;
+              box-shadow:0 6px 20px rgba(27,42,94,.08); overflow:hidden; margin:.4rem 0 1.4rem; }
+    .mlabel-head { background:#1b2a5e; color:#fff; padding:1rem 1.25rem; display:flex;
+                   align-items:center; justify-content:space-between; }
+    .mlabel-head h3 { margin:0; font-size:1.35rem; font-weight:800; letter-spacing:.02em; }
+    .mlabel-head .mid { color:rgba(255,255,255,.72); font-size:.95rem; margin-top:.15rem; }
+    .mlabel-body { padding:1.1rem 1.25rem .4rem; }
+    .mlabel-sec { color:#8890a5; font-size:.78rem; font-weight:700; letter-spacing:.06em;
+                  border-bottom:2px solid #e7eaf2; padding-bottom:.35rem; margin:.9rem 0 .2rem; }
+    .mlabel-sec:first-child { margin-top:0; }
+    .mlabel-row { display:flex; align-items:center; justify-content:space-between;
+                  padding:.6rem 0; border-bottom:1px solid #f0f2f7; }
+    .mlabel-row:last-child { border-bottom:none; }
+    .mlabel-lab { color:#2a2f3a; font-size:1.05rem; }
+    .pill { border-radius:999px; padding:.32rem .8rem; font-size:.9rem; font-weight:700;
+            white-space:nowrap; }
+    .pill-ok  { background:#e6f4ea; color:#1e7a43; }
+    .pill-warn{ background:#fbe6cf; color:#9a6b12; }
+    .pill-bad { background:#f6dcda; color:#b23b2e; }
+    .pill-na  { background:#eceef2; color:#6b767c; }
+    .mlabel-foot { background:#eef2fb; padding:.85rem 1.25rem; display:flex; align-items:center;
+                   justify-content:space-between; gap:1rem; }
+    .mlabel-foot-lab { color:#1b2a5e; font-weight:800; letter-spacing:.03em; font-size:.95rem; }
+    .mlabel-foot-val { color:#556; font-size:1.05rem; }
+  </style>
+  <a class="mlabel" href="{{ url_for('model_detail', slug=model_card.slug) }}"
+     style="display:block; text-decoration:none;">
+    <div class="mlabel-head">
+      <div>
+        <h3>MODEL LABEL</h3>
+        <div class="mid">{{ model_card.model }}</div>
+      </div>
+    </div>
+    <div class="mlabel-body">
+      <div class="mlabel-sec">SECURITY</div>
+      {% for row in model_card.security %}
+      <div class="mlabel-row">
+        <span class="mlabel-lab">{{ row.label }}</span>
+        <span class="pill pill-{{ row.cls }}">{{ row.value }}</span>
+      </div>
+      {% endfor %}
+      <div class="mlabel-sec">EFFICACY</div>
+      {% for row in model_card.efficacy %}
+      <div class="mlabel-row">
+        <span class="mlabel-lab">{{ row.label }}</span>
+        <span class="pill pill-{{ row.cls }}">{{ row.value }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="mlabel-foot">
+      <span class="mlabel-foot-lab">RECOMMENDED USE</span>
+      <span class="mlabel-foot-val">{{ model_card.recommended_use }}</span>
+    </div>
+  </a>
+  {% endif %}
+
   <section class="pillars">
     <div class="pillar-card">
       <h2>Scanning</h2>

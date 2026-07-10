@@ -72,8 +72,21 @@ def _hub_context() -> dict:
     except Exception:
         pass
 
+    # Featured per-model report card (the AI Model Advisor label). Best-effort:
+    # the home page never breaks if a pillar's data is missing.
+    model_card = None
+    try:
+        from frontend.eval_run_data import featured_model_slug, get_model_card
+
+        fslug = featured_model_slug()
+        if fslug:
+            model_card = get_model_card(fslug)
+    except Exception:
+        model_card = None
+
     gw = get_gateway_catalog()
     return {
+        "model_card": model_card,
         "gateway_models": gw["models"],
         "gateway_count": gw["count"],
         "gateway_error": gw["error"],
