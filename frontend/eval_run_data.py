@@ -66,31 +66,43 @@ def _percentile(values: list[float], p: float) -> float:
     return s[f] + (s[c] - s[f]) * (k - f)
 
 
+# Bump to invalidate cached execution sidecars written by an older scorer. v2
+# fixes judge-only suites (e.g. it_support) that an early scorer mis-scored as
+# all-fail SQL — those stale sidecars are now ignored and recomputed.
+_EXEC_CACHE_VERSION = 2
+
+
 def _execution_summary(path: Path) -> dict | None:
     """Functional pass/fail for an execution (SQL/JSON/numeric) run, cached to a
-    ``<slug>_execution.json`` sidecar. None for a judge-scored suite (or any
-    error) — the dashboard just shows nothing when absent. Never raises.
+    ``<slug>_execution.json`` sidecar. None for a judge-scored suite (a suite
+    with no execution rows) or any error — the dashboard shows nothing when
+    absent. Never raises.
 
     Lazy + cached: the first view of an execution run runs the checks (fast,
     in-memory) and writes the sidecar; later views read it. The sidecar is
     ``.json`` (not ``.jsonl``) so the runs glob never mistakes it for a run.
+    A sidecar from an older scorer version is ignored and recomputed.
     """
     sidecar = path.with_name(f"{path.stem}_execution.json")
     if sidecar.is_file():
         try:
             data = json.loads(sidecar.read_text(encoding="utf-8"))
         except Exception:
-            return None
-        return data if data.get("applicable") else None
+            data = None
+        # Trust the cache only if it came from the current scorer; otherwise
+        # recompute (a stale sidecar may have mis-scored a judge-only suite).
+        if isinstance(data, dict) and data.get("cache_version") == _EXEC_CACHE_VERSION:
+            return data if data.get("applicable") else None
     try:
         import execution_eval  # lazy: a bad import mustn't break the dashboard
 
         summary = execution_eval.score_results_file(path)
-        summary["applicable"] = True
+        # A suite with no execution rows is judge-only, not an execution suite.
+        summary["applicable"] = summary.get("n", 0) > 0
     except Exception:
-        # not an execution suite, or scoring failed → cache a marker so we don't
-        # re-attempt on every page load.
+        # scoring failed → cache a marker so we don't re-attempt every page load.
         summary = {"applicable": False}
+    summary["cache_version"] = _EXEC_CACHE_VERSION
     try:
         sidecar.write_text(json.dumps(summary), encoding="utf-8")
     except Exception:
