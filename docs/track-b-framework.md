@@ -13,7 +13,7 @@ Gateway catalog: [`gateway-models.md`](gateway-models.md). Structured outputs: [
 ```text
 1. Duke YAML suites (primary)
 2. Adapted public benchmark subsets (optional)
-3. Published external scores (nutrition label reference only)
+3. Published external scores (report card reference only)
 ```
 
 Record latency, tokens, cost, and failure rate on every run.

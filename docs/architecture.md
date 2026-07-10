@@ -4,7 +4,7 @@ System components and how a run flows end to end. Schema and field examples: [`d
 
 ## Pillars
 
-Two nutrition-label pillars, two tracks:
+Two AI Model Advisor pillars, two tracks:
 
 | Pillar | Components | Track |
 |--------|------------|-------|
@@ -12,13 +12,13 @@ Two nutrition-label pillars, two tracks:
 | **Efficacy** | `evaluator/` (Duke judge suites) + `benchmarks/` (public benchmarks) | B |
 
 Every run produces structured JSON; optional ingest loads it into Postgres. The
-`frontend/` UI renders the nutrition label; `api/` exposes JSON REST for all four
+`frontend/` UI renders the report cards; `api/` exposes JSON REST for all four
 pillars (list, detail, status, POST jobs) — see [`api/README.md`](../api/README.md).
 Teams and schedule: [`team-tracks.md`](team-tracks.md).
 
 ## How a run flows
 
-Jobs start from the nutrition-label UI or CLI. The UI returns immediately with a
+Jobs start from the AI Model Advisor UI or CLI. The UI returns immediately with a
 job id; a background launcher (`frontend/*_launch.py`) runs the pillar in Docker on
 the **application VM**. Results land as JSON under each pillar's output dir;
 optional ingest upserts into Postgres. The UI reads via `frontend/*_data.py`
@@ -85,7 +85,7 @@ on the roadmap. Steps 5–7 persist and serve results.
 
 | Step | What | Detail |
 |------|------|--------|
-| **1** | Analyst uses browser | Start a job or open a nutrition-label page |
+| **1** | Analyst uses browser | Start a job or open a report-card page |
 | **2** | `frontend/` + `api/` | `POST /scans/start`, `/safety/start`, `/eval-run/start`, `/benchmarks/start` (or `/api/…`) — returns immediately |
 | **3** | `frontend/*_launch.py` | Non-blocking `subprocess` → `docker compose run` on the VM Docker socket |
 | **4** | Pillar containers | `scanner/`, `safety/`, `evaluator/`, `benchmarks/` — see tables below |
@@ -138,17 +138,16 @@ planned).
 
 Long scans and evals take minutes to hours. Start routes return immediately; the pillar runs in the background while the UI polls status.
 
-**MVP concurrency limits:**
+**MVP concurrency limits (shared VM, no auth):**
 
 | Concern | Behavior |
 |---------|----------|
 | Same job params twice | Deduped via in-memory `_INFLIGHT` in each `*_launch.py` |
-| Same config in Postgres | Reused via `config_fingerprint` (no re-run when match exists) |
 | Different jobs at once | Allowed — separate subprocesses and output paths |
 | Same scan slug or safety `(slug, profile)` | Blocked by `run.lock` under the output dir (UI + CLI); second start returns existing job or exit **2** |
 | Benchmark re-click same combo | Deduped in-memory; lock file is `benchmarks/results/<stem>.run.lock` |
 | Multiple Flask workers | **Not supported** — `_RUNNING` is per-process |
-| Auth | Duke OIDC optional (`AUTH_ENABLED`); public read open; starting any run requires an allowlisted NetID; private mode + custom runs add the private-view check on top — [`../auth/README.md`](../auth/README.md) |
+| Auth | **None** — anyone who can reach the URL can start jobs |
 
 While a job runs, status routes return a log tail (`message` or `log` field) for progress pages.
 
@@ -157,7 +156,7 @@ While a job runs, status routes return a log tail (`message` or `log` field) for
 | **`frontend/*_launch.py`** | `subprocess.Popen` + `threading`; spawns Docker or host CLI from UI start routes |
 | **`dbutils/run_lock.py`** | File lock coordinating UI launchers and scan/safety CLI |
 | **Ingest** | Per-pillar `*/db/` loaders + `dbutils/post_run.py` — auto-sync after each successful run when DSN set; bulk via `python -m api.ingest` |
-| **Postgres** | Authoritative read path when DSN is set and reachable; disk JSON is offline fallback only |
+| **Postgres** | Optional read path when DSN is set; disk JSON remains source of truth |
 | **`api/`** | JSON reads under `/api`; ingest orchestrator in `api/ingest.py` (CLI, not a route) |
 
 ### Ingest
@@ -168,7 +167,7 @@ While a job runs, status routes return a log tail (`message` or `log` field) for
 
 Pillars define the contract in code (`scanner/schemas.py`, `safety/schemas.py`, `evaluator/schemas.py`, etc.) — same logical shapes as the Postgres tables. Flow: **job → JSON file → optional ingest → Postgres or disk read → UI**. Detail: [`data-model.md`](data-model.md).
 
-**Persistence approach:** versioned **SQL schema files** plus **psycopg** loaders in each pillar's `db/` directory. Shared helpers in [`dbutils/`](../dbutils/README.md). Unified dry-run/apply: `python -m api.ingest`. Ingest is idempotent (`ON CONFLICT DO NOTHING`); when a DSN is reachable the UI reads **only Postgres** (no disk re-merge); disk is used when the DB is unavailable. Permanent deletes remove both Postgres rows and on-disk artifacts.
+**Persistence approach:** versioned **SQL schema files** plus **psycopg** loaders in each pillar's `db/` directory. Shared helpers in [`dbutils/`](../dbutils/README.md). Unified dry-run/apply: `python -m api.ingest`. Ingest is idempotent (`ON CONFLICT DO NOTHING`); the UI reads Postgres when a DSN is set, else disk.
 
 ## Inference: two backends
 
@@ -185,17 +184,17 @@ chat call is identical.
 
 | Job | Track | UI routes | Inference (default) | DCC (open-weight) | Postgres tables |
 |-----|-------|-----------|----------------------|-------------------|-----------------|
-| Scan | A | `/scans`, `/scans/reference` | Hugging Face (VM Docker sandbox) | — | `scans`, `findings` |
-| Safety | A | `/safety`, `/safety/reference` | Duke Gateway | Planned | `safety_runs`, `safety_findings` |
-| Eval | B | `/eval-run`, `/eval-run/reference` | Duke Gateway | CLI today; UI future | `eval_runs`, `eval_results` |
-| Benchmark | B | `/benchmarks`, `/benchmarks/reference` | Duke Gateway | Planned | `benchmark_runs` |
-| Cross-pillar | — | `/models`, `/compare` | — | — | Union via `frontend/model_rollup.py` (no `models` table yet) |
+| Scan | A | `/scans` | Hugging Face (VM Docker sandbox) | — | `scans`, `findings` |
+| Safety | A | `/safety` | Duke Gateway | Planned | `safety_runs`, `safety_findings` |
+| Eval | B | `/eval-run` | Duke Gateway | CLI today; UI future | `eval_runs`, `eval_results` |
+| Benchmark | B | `/benchmarks` | Duke Gateway | Planned | `benchmark_runs` |
 
-All four pillars have optional Postgres ingest. When a DSN is set and reachable, the UI reads **only Postgres** for every pillar; disk JSON is consulted only when the database is unreachable. List pages show an orange **!** on stale rows (rules in `frontend/staleness.py`) plus **Rerun** and **Delete** actions.
+All four pillars have optional Postgres ingest. When a DSN is set and reachable, the UI reads Postgres for every pillar (merged
+with artifacts not yet loaded); otherwise it reads artifacts directly.
 
 ## Why JSON → Postgres
 
-Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [Key concepts](#key-concepts)). Artifacts provide an audit trail and offline fallback when the database is unreachable. Ingest is idempotent (keyed on run id). Large outputs stay gitignored; only small fixtures are committed. Deletes purge both Postgres and disk artifacts.
+Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [Key concepts](#key-concepts)). Artifacts provide an audit trail and offline fallback when the database is unreachable. Ingest is idempotent (keyed on run id). Large outputs stay gitignored; only small fixtures are committed.
 
 ## Components
 
@@ -204,8 +203,7 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 - **`evaluator/`** (B) — Duke task suites scored by an LLM judge against YAML rubrics; records scores plus cost / latency / tokens → `eval_runs`. Postgres path: [`evaluator/db/`](../evaluator/db/README.md). See [`track-b-framework.md`](track-b-framework.md).
 - **`benchmarks/`** (B) — public benchmarks (IFEval, TruthfulQA, MMLU, ToMi, consistency); ingest + UI read via [`benchmarks/db/`](../benchmarks/db/README.md) and `frontend/benchmark_db_data.py`.
 - **`api/`** — Flask REST under `/api`; see [`api/README.md`](../api/README.md).
-- **`auth/`** — Duke OIDC login, sessions, allowlist; see [`auth/README.md`](../auth/README.md).
-- **`frontend/`** — nutrition-label UI; `frontend/*_data.py` + launch helpers; cross-pillar rollup (`model_rollup.py`, `model_summary.py`, `recommendation_rules.py`); pillar List/Compare matrices and reference guides. See [`frontend/README.md`](../frontend/README.md).
+- **`frontend/`** — AI Model Advisor UI; `frontend/*_data.py` + launch helpers. See [`frontend/README.md`](../frontend/README.md).
 
 ## Deployment and hosts
 
@@ -224,6 +222,6 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 ## Open questions
 
 - Frontend stack — Flask now; possibly Next.js + Tailwind later.
-- Auth — Duke OIDC (Shibboleth login screen) via [`auth/`](../auth/) and [`auth/README.md`](../auth/README.md). Public view requires no login; private mode uses netID allowlist.
+- Auth — Duke Shibboleth preferred; until then the app may run behind the VM firewall.
 - LiteLLM guardrail hooks — integration path TBD.
 - Benchmark catalog — which pilots become standing suites.

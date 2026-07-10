@@ -1,6 +1,6 @@
 # Team tracks and schedule
 
-Code+ 2026 — Duke OIT. The nutrition label has two pillars — **security** (scanning + safety) and **efficacy**.
+Code+ 2026 — Duke OIT. The AI Model Advisor has two pillars — **security** (scanning + safety) and **efficacy**.
 
 **Execution (tasks):** GitLab — [`.gitlab/README.md`](../.gitlab/README.md) (Track A, Track B, Team).
 

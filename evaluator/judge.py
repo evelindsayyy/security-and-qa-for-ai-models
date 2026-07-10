@@ -454,6 +454,178 @@ def judge_response(
 
 
 # ---------------------------------------------------------------------------
+# Pairwise judging (Track 1 validation study — reference-free, MT-Bench style)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PairwiseResult:
+    """What ``judge_pairwise`` returns. ``winner`` is 'A', 'B', or 'tie',
+    where A/B are the two responses in the order passed in. The driver maps
+    A/B back to system ids and runs each pair in both orders (position-bias
+    probe)."""
+
+    winner: str = ""          # "A" | "B" | "tie"
+    rationale: str = ""
+    failed: bool = False
+    error: Optional[str] = None
+    raw_response: str = ""
+
+
+def _parse_pairwise(raw: str) -> tuple[str, str]:
+    """Parse the judge's pairwise JSON → (winner, rationale).
+
+    winner is normalized to 'A', 'B', or 'tie'. Tolerates code fences, prose
+    around the JSON, and a few natural synonyms for a tie. Raises ValueError if
+    no verdict can be read (drives the one retry in ``judge_pairwise``)."""
+    text = _strip_fences(raw)
+    if not text.startswith("{"):
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        if m:
+            text = m.group(0)
+    try:
+        obj = json.loads(text)
+    except (json.JSONDecodeError, ValueError) as e:
+        raise ValueError(f"pairwise judge did not return valid JSON: {e}")
+    if not isinstance(obj, dict) or "winner" not in obj:
+        raise ValueError("pairwise judge JSON missing 'winner'")
+    w = str(obj["winner"]).strip().lower()
+    if w in ("a", "response a", "1", "response 1"):
+        winner = "A"
+    elif w in ("b", "response b", "2", "response 2"):
+        winner = "B"
+    elif w in ("tie", "equal", "same", "neither", "both", "draw"):
+        winner = "tie"
+    else:
+        raise ValueError(
+            f"pairwise judge returned an unrecognized winner: {obj['winner']!r}")
+    return winner, str(obj.get("rationale", "")).strip()
+
+
+def _pairwise_cache_key(
+    *, judge_model: str, judge_prompt_version: str,
+    question: str, response_a: str, response_b: str,
+) -> str:
+    # Order-DEPENDENT on purpose: (A,B) and (B,A) are distinct API calls (the
+    # position-bias probe re-runs each pair swapped), so they must cache
+    # separately. The "PW|" prefix keeps these off the score-cache namespace.
+    raw = (
+        f"PW|{judge_model}|{judge_prompt_version}|{question}"
+        f"|{response_a}|{response_b}"
+    ).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _pairwise_cache_read(key: str) -> Optional[PairwiseResult]:
+    path = _cache_path(key)
+    if not path.exists():
+        return None
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        return PairwiseResult(**data)
+    except (json.JSONDecodeError, OSError, TypeError, KeyError) as e:
+        print(f"  WARN: discarding corrupt pairwise cache entry {path.name}: {e}",
+              file=sys.stderr)
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return None
+
+
+def _pairwise_cache_write(key: str, result: PairwiseResult) -> None:
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    target = _cache_path(key)
+    tmp = target.with_name(f"{key}.{os.getpid()}.tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(asdict(result), f, ensure_ascii=False, indent=2)
+    tmp.replace(target)
+
+
+def judge_pairwise(
+    *,
+    question: str,
+    response_a: str,
+    response_b: str,
+    judge_model: str,
+    judge_prompt_path: Path,
+    timeout_sec: float = 30.0,
+    max_tokens: int = 400,
+) -> PairwiseResult:
+    """Ask the judge which of two responses is better for ``question`` — no
+    reference (MT-Bench pairwise). Returns winner 'A', 'B', or 'tie'.
+
+    Temperature 0 (MT-Bench rule). Parses strict JSON; on parse failure retries
+    ONCE asking for JSON only, then returns ``PairwiseResult(failed=True)``.
+    Cached per (judge_model, prompt_version, question, response_a, response_b) —
+    order matters, so the swapped re-run is a separate entry. Failures are not
+    cached, so a transient error retries on re-run."""
+    template = judge_prompt_path.read_text(encoding="utf-8")
+    version = judge_prompt_path.stem
+
+    key = _pairwise_cache_key(
+        judge_model=judge_model, judge_prompt_version=version,
+        question=question, response_a=response_a, response_b=response_b,
+    )
+    cached = _pairwise_cache_read(key)
+    if cached is not None:
+        return cached
+
+    user_message = template.format(
+        question=question, response_a=response_a, response_b=response_b,
+    )
+    client = gateway_client().with_options(timeout=timeout_sec)
+    messages: list[dict] = [{"role": "user", "content": user_message}]
+
+    # ----- attempt 1 -----
+    try:
+        resp = client.chat.completions.create(
+            model=judge_model, messages=messages, temperature=0, max_tokens=max_tokens,
+        )
+        raw1 = (resp.choices[0].message.content or "").strip()
+    except Exception as e:  # noqa: BLE001 — never crash the run
+        return PairwiseResult(failed=True, error=f"{type(e).__name__}: {e}",
+                              raw_response="")
+
+    try:
+        winner, rationale = _parse_pairwise(raw1)
+        result = PairwiseResult(winner=winner, rationale=rationale, raw_response=raw1)
+        _pairwise_cache_write(key, result)
+        return result
+    except ValueError as parse_err_1:
+        first_error = str(parse_err_1)
+
+    # ----- attempt 2 (ask for valid JSON only) -----
+    messages.extend([
+        {"role": "assistant", "content": raw1},
+        {"role": "user", "content":
+            "Return ONLY valid JSON in this exact shape, nothing else: "
+            '{"winner": "A" | "B" | "tie", "rationale": "<one sentence>"}'},
+    ])
+    try:
+        resp2 = client.chat.completions.create(
+            model=judge_model, messages=messages, temperature=0, max_tokens=max_tokens,
+        )
+        raw2 = (resp2.choices[0].message.content or "").strip()
+    except Exception as e:  # noqa: BLE001
+        return PairwiseResult(failed=True, error=f"{type(e).__name__}: {e}",
+                              raw_response=raw1)
+
+    try:
+        winner, rationale = _parse_pairwise(raw2)
+        result = PairwiseResult(winner=winner, rationale=rationale, raw_response=raw2)
+        _pairwise_cache_write(key, result)
+        return result
+    except ValueError as parse_err_2:
+        return PairwiseResult(
+            failed=True,
+            error=f"pairwise parse failed twice: {first_error} | {parse_err_2}",
+            raw_response=raw2,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Smoke test — deliverable: real judge scores from the Gateway.
 # Run:  cd evaluator && python judge.py
 # Requires DUKE_GATEWAY_URL and DUKE_GATEWAY_KEY in .env.

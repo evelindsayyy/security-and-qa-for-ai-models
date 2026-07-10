@@ -2,7 +2,7 @@
 
 Code+ 2026 — Duke Office of Information Technology
 
-Automated **nutrition labels** for Duke AI Gateway models: **security** (artifact scanning + inference safety) and **efficacy** (Duke judge suites + public benchmarks).
+Automated **report cards** for Duke AI Gateway models: **security** (artifact scanning + inference safety) and **efficacy** (Duke judge suites + public benchmarks).
 
 | Pillar | Question |
 |--------|----------|
@@ -10,7 +10,6 @@ Automated **nutrition labels** for Duke AI Gateway models: **security** (artifac
 | **Safety** | Can the model be misused or violate policy at inference? |
 | **Efficacy** | How well does it perform on Duke-relevant and standard tasks? |
 
-**Live application:** [https://model-advisor.colab.duke.edu](https://model-advisor.colab.duke.edu)
 
 ---
 
@@ -18,15 +17,11 @@ Automated **nutrition labels** for Duke AI Gateway models: **security** (artifac
 
 | I want to… | Start here |
 |------------|------------|
-| **Onboard (agents & contributors)** | [`AGENTS.md`](AGENTS.md) |
 | **Run the UI** | [Quick start](#quick-start) |
 | **CLI and JSON API** — scans, safety, eval, benchmarks, tests | [`docs/cli.md`](docs/cli.md) · [`api/README.md`](api/README.md) |
 | **Docker model** (UI + pillar jobs) | [`docs/docker.md`](docs/docker.md) · [`docker/`](docker/) |
 | **Understand the system** (VM, Postgres, background jobs) | [`docs/architecture.md`](docs/architecture.md) |
-| **Model catalog & compare** (`/models`, `/compare`, rollup API) | [`frontend/README.md`](frontend/README.md) · [`api/README.md`](api/README.md) |
 | **Postgres schema and ingest** | [`docs/data-model.md`](docs/data-model.md) · [`dbutils/README.md`](dbutils/README.md) |
-| **Authentication (OIDC, public/private views)** | [`auth/README.md`](auth/README.md) |
-| **HTTPS / TLS (production Caddy)** | [`docker/README.md`](docker/README.md) |
 | **Track A** (scanning + safety) | [`docs/track-a-framework.md`](docs/track-a-framework.md) |
 | **Track B** (evaluator + benchmarks) | [`docs/track-b-framework.md`](docs/track-b-framework.md) |
 | **Gateway models and HF scan tiers** | [`docs/gateway-models.md`](docs/gateway-models.md) |
@@ -44,8 +39,7 @@ safety/        Track A — promptfoo + garak red team
 evaluator/     Track B — Duke LLM-as-judge suites
 benchmarks/    Track B — public benchmarks (IFEval, TruthfulQA, …)
 gateway/       Live gateway catalog
-auth/          Duke OIDC login, sessions, allowlist
-frontend/      Nutrition-label UI
+frontend/      AI Model Advisor UI
 docker/        Containerized UI for the application VM
 dbutils/       Shared Postgres ingest helpers
 docs/          Architecture, data model, frameworks
@@ -75,11 +69,10 @@ Requires Docker and Docker Compose. Pillar dependency groups (`scanner`, `safety
 
 ### Optional — Postgres
 
-When `POSTGRES_DSN` is set, set `EFFICACY_DB_DSN` to the same value. Runs auto-sync to Postgres by default; set `AUTO_INGEST=0` to disable.
+When `POSTGRES_DSN` is set; Set `EFFICACY_DB_DSN` to the same value. Runs auto-sync to Postgres by default; set `AUTO_INGEST=0` to disable.
 
 ```bash
 ./scripts/apply-schemas.sh --bootstrap
-# Auth backfill (after schema apply): uv run python db/migrate_auth_columns.py --apply
 # Or one file: uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql
 ```
 
@@ -101,7 +94,7 @@ For UI-only iteration without containerizing the app (pillar jobs still use Dock
 ```bash
 uv sync --group dev
 cp .env.example .env
-uv run python main.py --host           # dev Flask on APP_PORT (default 5000)
+python3 main.py --host           # or: uv run flask --app frontend:create_app run --debug --port 5001
 ```
 
 See [`frontend/README.md`](frontend/README.md) for API curl examples.
@@ -125,7 +118,6 @@ One repo-root [`.env.example`](.env.example) → `.env` (never commit). Key vari
 - `DUKE_GATEWAY_URL`, `DUKE_GATEWAY_KEY` — gateway chat and catalog (aliases: `OPENAI_*`)
 - `HF_TOKEN` — gated Hugging Face downloads (scanning)
 - `POSTGRES_DSN`, `EFFICACY_DB_DSN` — Postgres (set both to the same DSN); UI/API read DB when reachable
-- `AUTH_ENABLED`, `DUKE_OIDC_*`, `AUTH_ALLOWED_NETIDS` — optional OIDC; see [`auth/README.md`](auth/README.md)
 - `APP_PORT` — containerized UI port (default 5000 via `./docker/run.sh`)
 - `FRONTEND_LAUNCH_MODE` — defaults to `docker` for Start buttons; set `host` for legacy dev
 

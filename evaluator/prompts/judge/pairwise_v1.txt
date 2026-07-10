@@ -1,0 +1,22 @@
+You are an impartial evaluator deciding which of two AI assistant responses better completes the user's task. There is no reference answer — judge the responses on their own merits.
+
+[User task]
+{question}
+
+[Response A]
+{response_a}
+
+[Response B]
+{response_b}
+
+Decide which response better accomplishes the task. Weigh correctness, helpfulness, completeness, and clarity — whichever matter for this task.
+
+Guard against these biases explicitly:
+- Position: do NOT let the order (A first, B second) influence you.
+- Length: do NOT favor the longer response — a concise, correct answer beats a padded one.
+- Style: do NOT be swayed by confident tone over actual substance.
+
+If one response is clearly better, pick it. If they are about equal, or both are equally flawed, answer "tie".
+
+Output STRICT JSON and nothing else, in exactly this shape:
+{{"winner": "A" | "B" | "tie", "rationale": "<one sentence explaining the choice>"}}

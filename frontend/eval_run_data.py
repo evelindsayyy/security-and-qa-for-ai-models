@@ -453,6 +453,128 @@ def get_model_detail(slug: str) -> dict | None:
     }
 
 
+# ---------------------------------------------------------------------------
+# Per-model "report card" (the AI Model Advisor label). Joins efficacy with the
+# scanner + safety pillars (READ-ONLY) into one at-a-glance view-model. Every
+# row is N/A-safe: a pillar with no data for this model renders as "—".
+# ---------------------------------------------------------------------------
+
+# /5 efficacy-pill thresholds: green >= OK, amber >= WARN, else red.
+_SCORE_OK, _SCORE_WARN = 4.0, 2.5
+
+# tier -> (badge text, css class). Same class vocabulary as the pills.
+_TIER_BADGES = {
+    "low": ("Low risk", "ok"),
+    "medium": ("Medium risk", "warn"),
+    "high": ("High risk", "bad"),
+    "critical": ("Critical risk", "bad"),
+}
+
+
+def _score_badge(score: float | None) -> dict:
+    """A /5 efficacy score -> {value, cls}. None -> N/A."""
+    if score is None:
+        return {"value": "—", "cls": "na"}
+    cls = "ok" if score >= _SCORE_OK else "warn" if score >= _SCORE_WARN else "bad"
+    return {"value": f"{score:.2f} / 5", "cls": cls}
+
+
+def _tier_badge(tier: str | None) -> dict:
+    """A scanner/safety severity tier -> {value, cls}. None/unknown -> N/A."""
+    if not tier:
+        return {"value": "—", "cls": "na"}
+    text, cls = _TIER_BADGES.get(str(tier).lower(), (str(tier).title(), "na"))
+    return {"value": text, "cls": cls}
+
+
+def _recommend(it: float | None, qa: float | None, cost_cls: str) -> str:
+    """Derive a one-line 'recommended use' from the efficacy + cost signals."""
+    scored = [(name, s) for name, s in (("IT support", it), ("Q&A", qa))
+              if s is not None]
+    if not scored:
+        return "—"
+    best_name, best_score = max(scored, key=lambda t: t[1])
+    if best_score < _SCORE_WARN:
+        return "not recommended — low task scores"
+    prefix = "cost-sensitive " if cost_cls == "ok" else ""
+    return f"{prefix}{best_name}"
+
+
+def _model_cost_effectiveness(detail: dict) -> float | None:
+    """Mean cost-vs-performance utility across the model's scorable runs, on /5."""
+    enriched = attach_cost_perf(dict(detail), BALANCED)
+    utils = [r["cost_perf"]["utility"] for r in enriched.get("runs", [])
+             if r.get("cost_perf")]
+    return round(sum(utils) / len(utils) * 5, 2) if utils else None
+
+
+def _lookup_scan_tier(slug: str) -> str | None:
+    """READ-ONLY: this model's file-scan severity tier from the scanner pillar."""
+    try:
+        from frontend.scan_data import get_scans_data
+        for s in get_scans_data().get("scans", []):
+            if s.get("slug") == slug:
+                return s.get("severity_tier")
+    except Exception:  # noqa: BLE001 — the card degrades to N/A, never crashes
+        return None
+    return None
+
+
+def _lookup_safety_tier(slug: str) -> str | None:
+    """READ-ONLY: this model's red-team safety tier from the safety pillar."""
+    try:
+        from frontend.safety_data import get_safety_data
+        for m in get_safety_data().get("models", []):
+            if m.get("slug") == slug:
+                return m.get("tier")
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def get_model_card(slug: str) -> dict | None:
+    """The per-model label: security (scan + safety) + efficacy + a recommended
+    use. Returns None only when the model has no eval runs at all; individual
+    rows fall back to N/A."""
+    detail = get_model_detail(slug)
+    if detail is None:
+        return None
+    runs = detail["runs"]
+
+    def _suite_overall(suite_key: str) -> float | None:
+        vals = [r["overall"] for r in runs
+                if r["suite"] == suite_key and r["overall"] is not None]
+        return max(vals) if vals else None
+
+    it = _suite_overall("it_support_v1")
+    qa = _suite_overall("policy_qa_v1.1")
+    cost = _score_badge(_model_cost_effectiveness(detail))
+
+    return {
+        "slug": slug,
+        "model": detail["model"],
+        "security": [
+            {"label": "File scan", **_tier_badge(_lookup_scan_tier(slug))},
+            {"label": "Red-team safety", **_tier_badge(_lookup_safety_tier(slug))},
+        ],
+        "efficacy": [
+            {"label": "IT support tasks", **_score_badge(it)},
+            {"label": "General Q&A", **_score_badge(qa)},
+            {"label": "Cost Effectiveness", **cost},
+        ],
+        "recommended_use": _recommend(it, qa, cost["cls"]),
+    }
+
+
+def featured_model_slug() -> str | None:
+    """Slug of the most-recently-evaluated model, for the home-page card."""
+    runs = get_runs_data().get("runs", [])
+    if not runs:
+        return None
+    latest = max(runs, key=lambda r: r.get("timestamp", ""))
+    return model_slug(latest["candidate_model"])
+
+
 def attach_cost_perf(data: dict, weights: CostPerfWeights = BALANCED) -> dict:
     """Enrich comparison runs with cost-vs-performance metrics, then return data.
 

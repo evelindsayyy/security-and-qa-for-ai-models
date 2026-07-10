@@ -16,7 +16,6 @@ Catalog keys: [`gateway-models.md`](gateway-models.md).
 - **UI reads normalized fields;** investigators drill into `tool_results`, `detail`, or `metrics` JSONB.
 
 ```text
-users ── user_run_links
 models ──┬── scans ── findings
          ├── safety_runs ── safety_findings
          ├── eval_runs ── eval_results
@@ -24,17 +23,11 @@ models ──┬── scans ── findings
 task_suites ── eval_runs
 ```
 
-Each pillar run table also has: `visibility` (`public`|`private`), `owner_user_id` → `users`, `config_fingerprint`, `config_json`. DDL: [`db/auth_schema.sql`](../db/auth_schema.sql).
-
 ---
 
-## `models` (deferred)
+## `models`
 
-**Not implemented in DDL today.** Pillar schemas use string keys (`gateway_model_id`,
-`hf_repo`) and nullable `model_id` FK placeholders. Cross-pillar union is done in
-`frontend/model_rollup.py` at read time, not via a shared `models` table.
-
-Sketch for a future anchor table:
+Gateway catalog anchor (and optional HF repo for on-prem).
 
 | Column | Type (sketch) | Example |
 |--------|---------------|---------|
@@ -92,62 +85,44 @@ Shapes: `scanner/schemas.py` (`ScanResult`, `Finding`).
 
 ## `safety_runs` / `safety_findings` (Track A — safety)
 
-> **Authoritative DDL:** `safety/db/safety_schema.sql` (implemented; loader:
-> `safety/db/load_safety.py`, idempotent, dry-run by default, uses `dbutils/`).
-> Idempotency: `UNIQUE (gateway_model_id, redteam_profile, completed_at)`.
-> Shared `models` FK on `safety_runs.model_id` deferred (same stance as scans).
-
-One merged red-team result per gateway model per profile. Multiple probe suites
-(garak, promptfoo policy, promptfoo red-team) are merged into a single
-`merged_safety_result.json` artifact at `safety/output/<slug>/<profile>/` and
-loaded as one `safety_runs` row with child `safety_findings` rows.
+One red-team job against one or more gateway models (or, when DCC is wired, an open-weight endpoint).
 
 **`safety_runs`:**
 
-| Column | Example |
-|--------|---------|
-| `id` | UUID |
-| `model_id` | FK → `models.id` (nullable; deferred until shared models table exists) |
-| `gateway_model_id` | `gpt-4.1-mini` |
-| `redteam_profile` | `base` \| `education` \| `healthcare` \| … |
-| `display_name` | `GPT 4.1 Mini` |
-| `status` | `complete` |
-| `deployment_context` | JSONB — `{"deployment_type": "chatbot", "has_guardrails": true, …}` (ITSO context) |
-| `summary_pass_rate` | `0.85` — fraction of findings with `passed=true` across all suites |
-| `safety_tier` | `low` \| `medium` \| `high` \| `critical` — Duke policy headline (promptfoo_duke_policy_v1) |
-| `adversarial_tier` | `low` \| `medium` \| `high` \| `critical` — worst failed severity across garak + red-team |
-| `composite_tier` | `low` \| `medium` \| `high` \| `critical` — calibrated headline (see `safety_scorer.py`) |
-| `composite_score` | `0.85` — weighted pass rate used to rank models |
-| `missing_suites` | JSONB array — suites expected but absent (skipped/failed runs), e.g. `["promptfoo_duke_policy_v1"]` |
-| `runs` | JSONB array of `SafetyRunSummary` — one entry per probe suite with per-suite pass rate and probe ids |
-| `tool_results` | JSONB — raw tool metadata keyed by suite, e.g. `{"garak_subset_v1": {"garak": {"run_id": "…"}}}` |
-| `started_at` / `completed_at` | timestamptz |
-| `created_at` | timestamptz — row insertion time |
+| Column | Example | Notes |
+|--------|---------|-------|
+| `id` | UUID | |
+| `gateway_model_id` | `gpt-4.1-mini` | Gateway id, or display id when using DCC |
+| `inference_backend` | `gateway` \| `dcc` | Schema ready; UI jobs use `gateway` today; DCC planned |
+| `hf_repo` | nullable | Set when an open-weight model was served on DCC |
+| `status` | `complete` | |
+| `deployment_context` | JSONB | Required for ITSO-aligned probes |
+| `probe_suite` | string | `garak_subset_v1` or `promptfoo_duke_policy_v1` |
+| `summary_pass_rate` | float | `0.85` |
+| `tool_results` | JSONB | `{"garak": {...}, "promptfoo": {...}}` |
+| `started_at` / `completed_at` | timestamptz | |
 
-**`safety_findings`** (normalized probe outcomes, child of `safety_runs`):
+**`safety_findings`** (normalized for UI):
 
 | Column | Example |
 |--------|---------|
 | `id` | UUID |
-| `run_id` | FK → `safety_runs.id` ON DELETE CASCADE |
-| `finding_key` | `c515df9a-…` — `SafetyFinding.id` UUID assigned at merge time |
-| `category` | `smoke` \| `policy` \| `jailbreak` \| `leakage` \| `toxicity` |
+| `safety_run_id` | FK |
+| `category` | `jailbreak` \| `toxicity` \| `policy` \| `leakage` |
 | `source` | `garak` \| `promptfoo` \| `duke_probe` |
-| `passed` | `true` = model resisted the probe; `false` = failure |
-| `severity` | `low` \| `medium` \| `high` \| `critical` |
+| `passed` | bool | `false` |
+| `severity` | `medium` |
 | `title` | `academic integrity — graded submission request` |
-| `description` | text — pass/fail summary from the tool |
-| `probe_id` | `duke.policy.003` \| `garak.apikey` |
-| `probe_suite` | `garak_subset_v1` \| `promptfoo_duke_policy_v1` \| `promptfoo_duke_redteam_v1` |
-| `corroborated_by` | JSONB string array — other tools that failed the same category, e.g. `["garak"]`; null otherwise |
+| `description` | text |
+| `probe_id` | string | `duke.policy.003` |
 
-Pydantic types: `safety/schemas.py` (`MergedSafetyResult`, `SafetyFinding`, `SafetyRunSummary`).
+Pydantic types in `safety/schemas.py` match this table.
 
 ---
 
 ## `task_suites` / `eval_runs` / `eval_results` (Track B — Duke efficacy)
 
-> **Authoritative DDL: `evaluator/db/efficacy_schema.sql`** (implemented;
+> **Authoritative DDL: `evaluator/db/efficacy_schema.sql`** (implemented week 4;
 > loader: `evaluator/db/load_results.py`, idempotent, dry-run by default).
 > The tables below reflect what is implemented; columns marked *planned* are
 > agreed direction but not yet in the DDL.
@@ -251,7 +226,7 @@ How the model is offered (ITSO). Stored on `models` and/or copied onto `safety_r
 
 ---
 
-## Nutrition label aggregate (`GET /api/models/<slug>`)
+## Report card aggregate (`GET /models/{id}`)
 
 Example shape:
 
