@@ -208,11 +208,158 @@ def _check_numeric(candidate_response: str, task: dict) -> tuple[bool, str | Non
     return False, f"got {got}, expected {expected} (tol {tol})"
 
 
+# --- tool-use / function-calling checker ------------------------------------
+
+
+def _as_number(v) -> float | None:
+    """A numeric value (or numeric string) as float; None if not numeric.
+    Booleans are NOT treated as numbers (True must not equal 1 for a tool arg)."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        try:
+            return float(v.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _arg_equal(got, exp) -> bool:
+    """Compare one argument value. Numbers (incl. numeric strings) match by value;
+    strings match after trimming; lists/dicts match recursively."""
+    if isinstance(exp, bool) or isinstance(got, bool):
+        return got == exp
+    en = _as_number(exp)
+    if en is not None:
+        gn = _as_number(got)
+        return gn is not None and math.isclose(gn, en, rel_tol=1e-9, abs_tol=0.0)
+    if isinstance(exp, str):
+        return isinstance(got, str) and got.strip() == exp.strip()
+    if isinstance(exp, list):
+        return (isinstance(got, list) and len(got) == len(exp)
+                and all(_arg_equal(g, e) for g, e in zip(got, exp)))
+    if isinstance(exp, dict):
+        return (isinstance(got, dict)
+                and all(k in got and _arg_equal(got[k], v) for k, v in exp.items()))
+    return got == exp
+
+
+def _args_match(got: dict, expected: dict) -> bool:
+    """Every EXPECTED argument must be present with an equal value. Extra args the
+    model adds are ignored (lenient on optional params)."""
+    if not isinstance(got, dict):
+        return False
+    return all(k in got and _arg_equal(got[k], v) for k, v in expected.items())
+
+
+def _is_no_call(name) -> bool:
+    """A name value meaning 'no tool was called' (null / '' / 'null' / 'none')."""
+    if name is None:
+        return True
+    return isinstance(name, str) and name.strip().lower() in ("", "null", "none")
+
+
+def _parse_tool_call(candidate_response: str) -> tuple[dict | None, str | None]:
+    """Parse the model's JSON tool call. Returns (obj, error); tolerates code
+    fences and surrounding prose (pulls the first {...} block)."""
+    raw = _strip_fence(candidate_response)
+    if not raw:
+        return None, "empty response"
+    if not raw.startswith("{"):
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if m:
+            raw = m.group(0)
+    try:
+        obj = json.loads(raw)
+    except (json.JSONDecodeError, ValueError) as e:
+        return None, f"invalid JSON: {e}"
+    if not isinstance(obj, dict):
+        return None, "tool call is not a JSON object"
+    return obj, None
+
+
+def _check_tool(candidate_response: str, task: dict) -> tuple[bool, str | None]:
+    """Compare the model's JSON tool call to the gold ``expected`` = {name, arguments}.
+
+    Irrelevance items have ``name`` null: the model must call NO tool (a JSON
+    ``{"name": null}`` or a plain refusal both count). For a real call, the tool
+    NAME must match and every gold argument must match (``_args_match``)."""
+    expected = task["expected"]
+    exp_name = expected.get("name")
+    obj, err = _parse_tool_call(candidate_response)
+
+    if err is not None:
+        # No parseable JSON — correct only if the task wanted no tool call.
+        return (True, None) if _is_no_call(exp_name) else (False, err)
+
+    got_name = obj.get("name")
+    if _is_no_call(exp_name):
+        if _is_no_call(got_name):
+            return True, None
+        return False, f"called '{got_name}' but no tool was appropriate"
+
+    if _is_no_call(got_name):
+        return False, f"declined; expected tool '{exp_name}'"
+    if str(got_name).strip() != str(exp_name).strip():
+        return False, f"wrong tool: got '{got_name}', expected '{exp_name}'"
+    if not _args_match(obj.get("arguments") or {}, expected.get("arguments") or {}):
+        return False, f"argument mismatch for '{exp_name}'"
+    return True, None
+
+
 CHECKERS: dict[str, Callable[[str, dict], tuple]] = {
     "sql": _check_sql,
     "json": _check_json,
     "numeric": _check_numeric,
+    "tool": _check_tool,
 }
+
+
+def tool_report(results_rows: list[dict], suite: dict) -> dict:
+    """Sub-signal breakdown for a tool-use run (beyond pass/fail): tool-selection
+    accuracy, argument accuracy given correct selection, and irrelevance accuracy.
+
+    ``results_rows`` are result JSONL rows (need ``question_id`` +
+    ``candidate_response``); ``suite`` maps question_id -> task (from load_suite)."""
+    n = passed = 0
+    sel_total = sel_ok = 0
+    arg_total = arg_ok = 0
+    irr_total = irr_ok = 0
+    for r in results_rows:
+        task = suite.get(r.get("question_id"))
+        if task is None:
+            continue
+        n += 1
+        exp_name = task["expected"].get("name")
+        resp = r.get("candidate_response", "")
+        full_ok, _ = _check_tool(resp, task)
+        passed += int(full_ok)
+        obj, err = _parse_tool_call(resp)
+        got_name = None if err else obj.get("name")
+        if _is_no_call(exp_name):
+            irr_total += 1
+            irr_ok += int(err is not None or _is_no_call(got_name))
+        else:
+            sel_total += 1
+            name_ok = (not _is_no_call(got_name)
+                       and str(got_name).strip() == str(exp_name).strip())
+            sel_ok += int(name_ok)
+            if name_ok:
+                arg_total += 1
+                arg_ok += int(full_ok)
+
+    def _rate(a: int, b: int) -> float | None:
+        return round(a / b, 4) if b else None
+
+    return {
+        "n": n, "passed": passed, "pass_rate": _rate(passed, n),
+        "tool_selection_accuracy": _rate(sel_ok, sel_total),
+        "argument_accuracy": _rate(arg_ok, arg_total),
+        "irrelevance_accuracy": _rate(irr_ok, irr_total),
+        "n_selection": sel_total, "n_irrelevance": irr_total,
+    }
 
 
 def score_results_file(results_path: Path, suite_version: str | None = None) -> dict:
