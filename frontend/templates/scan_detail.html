@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_scan_docker, progress_terminal, start_button, delete_button, tier_label, source_badge, private_badge, back_link, rerun_button with context %}
+{% from '_macros.html' import expandable, cli_scan_docker, progress_terminal, start_button, delete_button, tier_label, source_badge, private_badge, back_link, rerun_button, island_mount with context %}
 
 {% block title %}{% if missing %}Scan not found{% else %}{{ model_id }} — scan{% endif %}{% endblock %}
 
@@ -44,69 +44,7 @@
 
     <h2>Findings ({{ n_findings }})</h2>
     {% if findings %}
-    <div class="filter-row">
-      <label for="finding-filter" class="dim">Show</label>
-      <select id="finding-filter" class="scan-filter">
-        <option value="all">All findings</option>
-        <option value="critical">Critical only</option>
-        <option value="high">High only</option>
-        <option value="medium">Medium only</option>
-        <option value="low">Low only</option>
-        <option value="modelscan">Source: modelscan</option>
-        <option value="fickling">Source: fickling</option>
-        <option value="modelaudit">Source: modelaudit</option>
-        <option value="pip_audit">Source: pip_audit</option>
-        <option value="osv">Source: osv</option>
-        <option value="trufflehog">Source: trufflehog</option>
-      </select>
-      <span class="controls-hint dim">click a row to expand details</span>
-    </div>
-    <table class="run-table" id="findings-table">
-      <thead>
-        <tr>
-          <th class="col-expand"></th>
-          <th class="col-nowrap">Severity</th>
-          <th class="col-nowrap">Source</th>
-          <th>Title</th>
-          <th>File</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for f in findings %}
-        <tr class="finding-row {% if f.severity in ('critical', 'high') %}row-warn{% endif %}"
-            role="button" tabindex="0" aria-expanded="false"
-            data-finding-severity="{{ f.severity }}"
-            data-finding-source="{{ f.source }}">
-          <td class="col-expand"><span class="expand-indicator">▸</span></td>
-          <td class="col-nowrap">{{ tier_label(f.severity) }}</td>
-          <td class="col-nowrap">{{ source_badge(f.source) }}</td>
-          <td class="col-long">{{ f.title }}</td>
-          <td class="col-long">{% if f.file_path %}<code>{{ f.file_path }}</code>{% else %}—{% endif %}</td>
-        </tr>
-        <tr class="finding-detail-row" hidden>
-          <td colspan="5">
-            <div class="finding-detail-panel">
-              {% if f.description %}
-                <p>{{ f.description }}</p>
-              {% endif %}
-              {% if f.remediation %}
-                <p><span class="dim">Remediation:</span> {{ f.remediation }}</p>
-              {% endif %}
-              {% if f.raw_tool_severity %}
-                <p class="dim">raw tool severity: {{ f.raw_tool_severity }}</p>
-              {% endif %}
-              {% if f.corroborated_by %}
-                <p class="dim">corroborated by: {{ f.corroborated_by|join(", ") }}</p>
-              {% endif %}
-              {% if not f.description and not f.remediation %}
-                <p class="dim">no extra detail recorded.</p>
-              {% endif %}
-            </div>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    {{ island_mount('findings', findings) }}
     {% else %}
     <p class="empty">no normalized findings — check scanner tools below (benign pytorch pickles often show fickling signal with tier still low).</p>
     {% endif %}
@@ -313,8 +251,4 @@
     </details>
   {% endif %}
 </div>
-
-{% if not missing and findings %}
-<script src="{{ url_for('static', filename='findings-table.js') }}"></script>
-{% endif %}
 {% endblock %}

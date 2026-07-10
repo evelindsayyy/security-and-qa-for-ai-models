@@ -83,11 +83,15 @@ def _aggregate_db_run(run: dict, results: list[dict]) -> dict:
                 if not (r["detail"].get("candidate_response") or "").strip())
 
     slug = (run["source_file"] or "").removesuffix(".jsonl")
+    adaptation = run["adaptation"] or {}
     return {
         "filename": run["source_file"],
         "slug": slug,
         "timestamp": _ts(run["started_at"]),
-        "suite": (run["adaptation"] or {}).get("task_suite_version", ""),
+        "suite": adaptation.get("task_suite_version", ""),
+        "rubric_version": adaptation.get("rubric_version", ""),
+        "system_prompt_version": adaptation.get("system_prompt_version", ""),
+        "judge_prompt_version": adaptation.get("judge_prompt_version", ""),
         "candidate_model": run["gateway_model_id"],
         "judge_model": run["judge_model"],
         "inference_backend": (run["adaptation"] or {}).get("inference_backend", "gateway"),

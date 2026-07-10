@@ -29,6 +29,27 @@ cp .env.example .env
 uv run flask --app frontend:create_app run --debug --port 5001
 ```
 
+For live CSS/TS during host Flask dev, run the Vite watcher in a second terminal:
+
+```bash
+cd frontend/assets && npm ci && npm run dev
+```
+
+### Frontend assets
+
+Vite + Preact + Tailwind workspace under `frontend/assets/`. Production bundles land in `frontend/static/dist/` (gitignored).
+
+```bash
+cd frontend/assets
+npm ci
+npm run build       # production → ../static/dist/
+npm run dev         # watch (pair with host Flask)
+npm run test        # Vitest
+# Or: ./scripts/build-frontend.sh
+```
+
+Container builds and `docker/run.sh` run `npm run build` when dist is missing. CI: `frontend-build` job in `.gitlab-ci.yml`.
+
 ### Optional — Postgres (one-time)
 
 When `POSTGRES_DSN` is reachable from the application VM (or VPN). Set `EFFICACY_DB_DSN` to the same DSN.
@@ -91,6 +112,7 @@ python3 main.py logs -f web       # logs
 
 # Development — host Flask only (port 5001 avoids clash with container on 5000)
 python3 main.py --host
+# Pair with: cd frontend/assets && npm run dev
 # Or: uv run flask --app frontend:create_app run --debug --port 5001
 ```
 
@@ -197,6 +219,7 @@ uv run python -m gateway --json   # machine-readable
 
 ```bash
 uv sync --frozen --group dev
+cd frontend/assets && npm ci && npm run build && npm run test
 uv run ruff check .
 uv run python -m unittest discover -s unit_tests -v
 ```

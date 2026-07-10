@@ -129,19 +129,17 @@ def _hub_context() -> dict:
 def register_routes(app):
     @app.route("/")
     def index():
-        return render_template("index.html", **_hub_context())
+        from frontend.overview import get_overview_data
+
+        return render_template("index.html", **get_overview_data())
 
     @app.route("/scans")
     def scans():
-        from frontend.scan_data import get_scans_data
+        from frontend.scan_data import get_scan_guide_data, get_scans_data
 
-        return render_template("scans.html", **get_scans_data())
-
-    @app.route("/scans/reference")
-    def scan_reference():
-        from frontend.scan_data import get_scan_reference_data
-
-        return render_template("scan_reference.html", **get_scan_reference_data())
+        data = get_scans_data()
+        data.update(get_scan_guide_data(data.get("scans")))
+        return render_template("scans.html", **data)
 
     @app.route("/scans/new")
     @require_login()
@@ -333,10 +331,11 @@ def register_routes(app):
 
     @app.route("/eval-run")
     def eval_run():
-        # lazy import — don't load evaluator/openai at app startup
-        from frontend.eval_run_data import get_runs_data
+        from frontend.eval_run_data import get_eval_guide_data, get_runs_data
 
-        return render_template("eval_run.html", **get_runs_data())
+        data = get_runs_data()
+        data.update(get_eval_guide_data())
+        return render_template("eval_run.html", **data)
 
     @app.route("/eval-run/new")
     @require_login()
@@ -671,20 +670,11 @@ def register_routes(app):
 
     @app.route("/benchmarks")
     def benchmarks():
-        from frontend.benchmark_data import get_benchmarks_data
+        from frontend.benchmark_data import get_benchmark_guide_data, get_benchmarks_data
 
-        return render_template("benchmarks.html", **get_benchmarks_data())
-
-    @app.route("/benchmarks/reference")
-    def benchmark_reference():
-        from flask import redirect, url_for
-
-        from frontend.benchmark_data import get_benchmark_reference_data
-
-        data = get_benchmark_reference_data()
-        if not data.get("has_reference"):
-            return redirect(url_for("benchmarks"))
-        return render_template("benchmark_reference.html", **data)
+        data = get_benchmarks_data()
+        data.update(get_benchmark_guide_data())
+        return render_template("benchmarks.html", **data)
 
     @app.route("/benchmarks/new")
     @require_login()
@@ -985,21 +975,11 @@ def register_routes(app):
 
     @app.route("/safety")
     def safety():
-        from frontend.safety_data import get_safety_data
+        from frontend.safety_data import get_safety_data, get_safety_guide_data
 
-        return render_template("safety.html", **get_safety_data())
-
-    @app.route("/safety/reference")
-    def safety_reference():
-        from frontend.safety_data import get_safety_reference_data
-
-        return render_template("safety_reference.html", **get_safety_reference_data())
-
-    @app.route("/eval-run/reference")
-    def eval_reference():
-        from frontend.eval_run_data import get_eval_reference_data
-
-        return render_template("eval_reference.html", **get_eval_reference_data())
+        data = get_safety_data()
+        data.update(get_safety_guide_data())
+        return render_template("safety.html", **data)
 
     @app.route("/safety/new")
     @require_login()
@@ -1281,11 +1261,15 @@ def register_routes(app):
         }
         recommendation = model_summary.get_recommendation_summary(rollup)
         can_hf_scan = gateway_is_hf_scannable(rollup["display_name"])
+        from frontend.model_findings import get_model_findings
+
+        pillar_findings = get_model_findings(rollup)
         return render_template(
             "model_detail.html",
             missing=False,
             rollup=rollup,
             recommendation=recommendation,
+            pillar_findings=pillar_findings,
             gateway_profile=gateway_profile,
             gateway_id=gateway_id,
             can_hf_scan=can_hf_scan,
@@ -1320,6 +1304,24 @@ def register_routes(app):
             for r in rollups
             for kind in (r.get("benchmark") or {}).get("kinds", {})
         })
+        chart_models = []
+        for r in rollups:
+            bench = {}
+            for kind, info in (r.get("benchmark") or {}).get("kinds", {}).items():
+                bench[kind] = {
+                    "headline_value": info.get("headline_value"),
+                    "headline_display": info.get("headline_display"),
+                }
+            chart_models.append(
+                {
+                    "slug": r["slug"],
+                    "display_name": r.get("display_name", r["slug"]),
+                    "scan": r.get("scan"),
+                    "safety": r.get("safety"),
+                    "eval": r.get("eval"),
+                    "benchmark": bench,
+                }
+            )
         return render_template(
             "compare.html",
             rollups=rollups,
@@ -1328,6 +1330,7 @@ def register_routes(app):
             requested_slugs=slugs,
             unmatched=unmatched,
             benchmark_kinds=benchmark_kinds,
+            chart_models=chart_models,
         )
 
     @app.route("/gateway/refresh", methods=["POST"])

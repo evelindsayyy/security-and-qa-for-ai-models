@@ -384,7 +384,22 @@ def start_run(
         stem = predict_stem(benchmark_key, model)
         lock_file = _run_lock_path(stem)
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-        persist_run_meta_dir(RESULTS_DIR / stem, plan)
+        from dbutils.staleness_spec import current_benchmark_spec_digest
+        from frontend.run_launch import LaunchPlan
+
+        launch_config = dict(plan.config)
+        spec_digest = current_benchmark_spec_digest(benchmark_key)
+        if spec_digest:
+            launch_config["benchmark_spec_digest"] = spec_digest
+        persist_plan = LaunchPlan(
+            config=launch_config,
+            config_fingerprint=plan.config_fingerprint,
+            visibility=plan.visibility,
+            owner_user_id=plan.owner_user_id,
+            owner_netid=plan.owner_netid,
+            reused=plan.reused,
+        )
+        persist_run_meta_dir(RESULTS_DIR / stem, persist_plan)
         log_path = RESULTS_DIR / f"{stem}.log"
         progress_path = RESULTS_DIR / f"{stem}.progress.json"
 

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_safety_docker, progress_terminal, start_button, delete_button, tier_label, source_badge, private_badge, back_link, rerun_button with context %}
+{% from '_macros.html' import expandable, cli_safety_docker, progress_terminal, start_button, delete_button, tier_label, source_badge, private_badge, back_link, rerun_button, island_mount with context %}
 
 {% block title %}{% if missing %}Safety not found{% else %}{{ gateway_model_id }} — safety{% endif %}{% endblock %}
 
@@ -49,72 +49,7 @@
 
     <h2>Probe findings ({{ n_findings }})</h2>
     {% if findings %}
-    <div class="filter-row">
-      <label for="finding-filter" class="dim">Show</label>
-      <select id="finding-filter" class="scan-filter">
-        <option value="all">All findings</option>
-        <option value="failed">Failed only</option>
-        <option value="passed">Passed only</option>
-        <option value="promptfoo">Source: promptfoo</option>
-        <option value="garak">Source: garak</option>
-        <option value="jailbreak">Category: jailbreak</option>
-        <option value="leakage">Category: leakage</option>
-        <option value="policy">Category: policy</option>
-      </select>
-      <span class="controls-hint dim">click a row to expand details</span>
-    </div>
-    <table class="run-table" id="findings-table">
-      <thead>
-        <tr>
-          <th class="col-expand"></th>
-          <th class="col-nowrap">Result</th>
-          <th class="col-nowrap">Severity</th>
-          <th class="col-nowrap">Source</th>
-          <th class="col-nowrap">Category</th>
-          <th>Probe</th>
-          <th>Title</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for f in findings %}
-        <tr class="finding-row {% if not f.passed %}row-warn{% endif %}"
-            role="button" tabindex="0" aria-expanded="false"
-            data-finding-passed="{{ 'passed' if f.passed else 'failed' }}"
-            data-finding-severity="{{ f.severity }}"
-            data-finding-source="{{ f.source }}"
-            data-finding-category="{{ f.category }}">
-          <td class="col-expand"><span class="expand-indicator">▸</span></td>
-          <td class="col-nowrap">
-            {% if f.passed %}
-              <span class="status-ok">PASS</span>
-            {% else %}
-              <span class="status-fail">FAIL</span>
-            {% endif %}
-          </td>
-          <td class="col-nowrap">{{ tier_label(f.severity) }}</td>
-          <td class="col-nowrap">{{ source_badge(f.source) }}</td>
-          <td class="col-nowrap dim">{{ f.category }}</td>
-          <td class="col-long"><code>{{ f.probe_id }}</code></td>
-          <td class="col-long">{{ f.title }}</td>
-        </tr>
-        <tr class="finding-detail-row" hidden>
-          <td colspan="7">
-            <div class="finding-detail-panel">
-              {% if f.probe_suite %}<p class="dim">suite: {{ f.probe_suite }}</p>{% endif %}
-              {% if f.description %}
-                <p>{{ f.description }}</p>
-              {% else %}
-                <p class="dim">no extra detail recorded.</p>
-              {% endif %}
-              {% if f.corroborated_by %}
-                <p class="dim">corroborated by: {{ f.corroborated_by|join(", ") }}</p>
-              {% endif %}
-            </div>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    {{ island_mount('findings', findings) }}
     {% else %}
     <p class="empty">no findings recorded in this merge.</p>
     {% endif %}
@@ -185,8 +120,4 @@
     </details>
   {% endif %}
 </div>
-
-{% if not missing and findings %}
-<script src="{{ url_for('static', filename='findings-table.js') }}"></script>
-{% endif %}
 {% endblock %}

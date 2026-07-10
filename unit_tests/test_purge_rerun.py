@@ -116,7 +116,14 @@ class PurgeBenchmarkLaunchTest(unittest.TestCase):
     def test_start_run_purges_prior_benchmark(self) -> None:
         from frontend import benchmark_launch
 
-        plan = mock.Mock(visibility="public", owner_user_id=None)
+        plan = mock.Mock(
+            visibility="public",
+            owner_user_id=None,
+            config={},
+            config_fingerprint="fp",
+            owner_netid=None,
+            reused=None,
+        )
         with (
             mock.patch("frontend.run_launch.build_launch_plan", return_value=plan),
             mock.patch("frontend.benchmark_launch.check_inflight_combo", return_value=None),

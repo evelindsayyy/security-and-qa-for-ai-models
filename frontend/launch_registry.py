@@ -25,3 +25,23 @@ def check_inflight_combo(
     if existing and running.get(existing) is not None and running[existing].poll() is None:
         return existing
     return None
+
+
+def count_inflight() -> int:
+    """Count pillar jobs whose subprocess is still alive."""
+    total = 0
+    for mod_name in (
+        "frontend.scan_launch",
+        "frontend.safety_launch",
+        "frontend.eval_launch",
+        "frontend.benchmark_launch",
+    ):
+        try:
+            mod = __import__(mod_name, fromlist=["_RUNNING"])
+            running = getattr(mod, "_RUNNING", {})
+            for proc in running.values():
+                if proc is not None and proc.poll() is None:
+                    total += 1
+        except Exception:
+            continue
+    return total

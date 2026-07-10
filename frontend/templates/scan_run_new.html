@@ -1,55 +1,73 @@
 {% extends "base.html" %}
+{% from '_macros.html' import launch_back, rerun_callout with context %}
 
 {% block title %}Start an HF scan{% endblock %}
 
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span><a href="{{ url_for('scans') }}">Scans</a></span>
+<span class="text-text-subtle">›</span>
+<span class="font-medium text-text">Start scan</span>
+{% endblock %}
+
 {% block content %}
-<div class="eval-comparison">
-  <p class="back"><a href="{{ url_for('scans') }}">← all scans</a></p>
-  <h1>Start an HF scan</h1>
-  {% if rerun %}
-  <p class="sub benchmark-rerun-hint">Pre-filled from a previous scan — starting will delete the prior results and replace them.</p>
+<div class="launch-page">
+  {{ launch_back(url_for('scans'), 'all scans') }}
+
+  <header>
+    <h1 class="page-title">Start an HF scan</h1>
+    <p class="page-subtitle">
+      Launches the scanner via Docker Compose (<code>{{ compose_file }}</code>).
+      Weights are downloaded for the scan and removed afterward — only
+      <code>scan_result.json</code> is kept under <code>scanner/output/</code>.
+      One-time on the host: <code>./docker/build-pillars.sh</code>.
+    </p>
+  </header>
+
+  {% if rerun %}{{ rerun_callout() }}{% endif %}
+  {% if not docker_available %}
+  <p class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</p>
   {% endif %}
-  <p class="sub">
-    Launches the scanner via Docker Compose
-    (<code>{{ compose_file }}</code>) — same isolated image as the CLI in <code>docs/cli.md</code>.
-    Weights are downloaded for the scan and
-    removed afterward — only <code>scan_result.json</code> is kept under
-    <code>scanner/output/</code>.
-    One-time on the host: <code>./docker/build-pillars.sh</code>.
-    {% if not docker_available %}
-    <span class="form-warning">Docker Compose is not available on this host — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>
-    {% endif %}
-  </p>
 
-  <form method="post" action="{{ url_for('scan_run_start') }}" class="launch-form">
-    <label>Hugging Face repo id
-      <input type="text" name="hf_repo" id="hf_repo" list="hf_repo_suggestions"
-             placeholder="gpt2 or org/model" autocomplete="off" required>
-      <datalist id="hf_repo_suggestions">
-        {% for repo in suggested_hf_repos %}
-        <option value="{{ repo }}"></option>
-        {% endfor %}
-      </datalist>
-      <span class="form-hint">public or gated repo on huggingface.co — use the id from the model page (e.g. <code>meta-llama/Llama-3.2-1B</code> or <code>gpt2</code>)</span>
-    </label>
+  <form method="post" action="{{ url_for('scan_run_start') }}" class="launch-form card p-5">
 
-    <p id="overwrite-warning" class="form-warning" style="display: none;">
-      A scan for this repo already exists — starting again will delete the prior results and replace them.
-    </p>
-    <p id="inflight-warning" class="form-warning" style="display: none;">
-      A scan for this repo is already running — open the progress page or wait for it to finish.
-    </p>
+    <section class="form-section">
+      <h2 class="form-section-title">Hugging Face repo</h2>
+      <div class="form-field">
+        <label for="hf_repo">Repo id</label>
+        <input type="text" name="hf_repo" id="hf_repo" list="hf_repo_suggestions"
+               placeholder="gpt2 or org/model" autocomplete="off" required>
+        <datalist id="hf_repo_suggestions">
+          {% for repo in suggested_hf_repos %}
+          <option value="{{ repo }}"></option>
+          {% endfor %}
+        </datalist>
+        <span class="form-hint">Public or gated repo on huggingface.co — e.g. <code>meta-llama/Llama-3.2-1B</code> or <code>gpt2</code>.</span>
+      </div>
 
-    <fieldset>
-      <legend>Scanners <span class="dim">(all on by default)</span></legend>
-      <label><input type="checkbox" name="run_modelscan" checked> ModelScan</label>
-      <label><input type="checkbox" name="run_fickling" checked> Fickling (pickle)</label>
-      <label><input type="checkbox" name="run_modelaudit" checked> ModelAudit</label>
-      <label><input type="checkbox" name="run_deps" checked> pip-audit / OSV (dependencies)</label>
-      <label><input type="checkbox" name="run_secrets" checked> TruffleHog (secrets)</label>
-    </fieldset>
+      <p id="overwrite-warning" class="form-warning mt-3" style="display: none;">
+        A scan for this repo already exists — starting again will delete the prior results and replace them.
+      </p>
+      <p id="inflight-warning" class="form-warning mt-3" style="display: none;">
+        A scan for this repo is already running — open the progress page or wait for it to finish.
+      </p>
+    </section>
 
-    <button type="submit" class="btn-primary">▶ Start scan</button>
+    <section class="form-section">
+      <h2 class="form-section-title">Scanners <span class="dim font-normal">(all on by default)</span></h2>
+      <fieldset>
+        <label><input type="checkbox" name="run_modelscan" checked> ModelScan</label>
+        <label><input type="checkbox" name="run_fickling" checked> Fickling (pickle)</label>
+        <label><input type="checkbox" name="run_modelaudit" checked> ModelAudit</label>
+        <label><input type="checkbox" name="run_deps" checked> pip-audit / OSV (dependencies)</label>
+        <label><input type="checkbox" name="run_secrets" checked> TruffleHog (secrets)</label>
+      </fieldset>
+    </section>
+
+    <div class="form-actions">
+      <button type="submit" class="btn-primary">▶ Start scan</button>
+    </div>
   </form>
 </div>
 

@@ -1,7 +1,7 @@
 """
 api/health.py — liveness endpoint.
 
-    GET /api/health   -> status, db_available, per-pillar db flags
+    GET /api/health   -> status, db_available, per-pillar db flags and row counts
 """
 
 from __future__ import annotations
@@ -33,12 +33,16 @@ def _pillar_db_flags() -> dict[str, bool]:
 
 @bp.get("/health")
 def health():
-    """Liveness + whether the Postgres read-path is currently reachable."""
+    """Liveness + Postgres read-path diagnostics per pillar."""
+    from frontend.db_health import pillar_read_diagnostics
+
     pillars = _pillar_db_flags()
+    reads = pillar_read_diagnostics()
     return ok(
         {
             "status": "ok",
             "db_available": any(pillars.values()),
             "pillars": pillars,
+            "reads": reads,
         }
     )

@@ -15,9 +15,11 @@ Production on the application VM uses the same scripts with optional **Caddy HTT
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| App | `docker/` | Long-lived Flask UI |
+| App | `docker/` | Long-lived Flask UI (multi-stage build includes Node asset compile) |
 | Job sandboxes | `*/docker/` | One-shot scan / safety / eval / benchmark runs |
 | Safety sub-tools | `safety/promptfoo/docker/`, `safety/garak/docker/` | Nested from the safety orchestrator |
+
+The web image [`docker/Dockerfile`](../docker/Dockerfile) uses a **Node build stage** to run `npm ci && npm run build` in `frontend/assets/`, copying `frontend/static/dist/` into the final Python image. [`docker/run.sh`](../docker/run.sh) and [`docker/entrypoint.sh`](../docker/entrypoint.sh) rebuild assets on start when dist is missing.
 
 Dependencies live in [`pyproject.toml`](../pyproject.toml) + [`uv.lock`](../uv.lock). Core deps include **psycopg**; optional groups: `dev` (pytest, ruff), and **one of** `scanner`, `safety`, or `benchmarks` (mutually exclusive — baked into pillar images instead).
 
@@ -51,7 +53,7 @@ host or in CI is reused when the UI launches a job.
 
 ## CI
 
-GitLab runs lint and unit tests on Duke **shared runners**. On `main`, the
+GitLab runs lint, **frontend-build** (Vite bundle + Vitest), and unit tests on Duke **shared runners**. On `main`, the
 `build-web-image` job uses the dedicated `oit-shared-buildah` runner to build
 `docker/Dockerfile` without a Docker socket or DinD, then pushes
 `${CI_REGISTRY_IMAGE}/web:${CI_COMMIT_SHORT_SHA}` to the GitLab container

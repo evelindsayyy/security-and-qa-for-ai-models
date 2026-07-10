@@ -1,35 +1,35 @@
-<details class="tool-panel benchmark-guide-panel" open>
-  <summary>{{ title or "How safety testing works" }}</summary>
+<details class="tool-panel benchmark-guide-panel">
+  <summary class="subsection-title">{{ title or "Safety reference & guide" }}</summary>
   <div class="benchmark-guide-body">
     {% if intro %}
-    <p class="sub">{{ intro }}</p>
+    <p class="body">{{ intro }}</p>
     {% else %}
-    <p class="sub">
+    <p class="body">
       Each suite probes a different attack surface. Results merge into a composite tier
       (policy 40%, red-team 35%, Garak 25%, renormalized when a suite is skipped).
     </p>
     {% endif %}
 
-    {% for row in guide_rows %}
-    <article class="benchmark-guide-item" id="guide-{{ row.key }}">
-      <h3 class="benchmark-guide-heading">
-        <span class="badge {{ row.badge_class }}">{{ row.label }}</span>
-      </h3>
-      {% if row.about %}
-      <p>{{ row.about }}</p>
-      {% endif %}
-      <dl class="benchmark-guide-dl">
-        {% if row.procedure %}
-        <dt>What happens in a run</dt>
-        <dd>{{ row.procedure }}</dd>
-        {% endif %}
-        {% if row.scoring %}
-        <dt>How it is scored</dt>
-        <dd>{{ row.scoring }}</dd>
-        {% endif %}
-      </dl>
-    </article>
-    {% endfor %}
+    <div class="guide-accordion">
+      {% for row in guide_rows %}
+      <details class="guide-accordion-item" id="guide-{{ row.key }}" open>
+        <summary>
+          <span class="badge {{ row.badge_class }}">{{ row.label }}</span>
+          {% if row.about %}<span class="guide-accordion-summary">{{ row.about }}</span>{% endif %}
+        </summary>
+        <dl class="benchmark-guide-dl">
+          {% if row.procedure %}
+          <dt>What happens in a run</dt>
+          <dd>{{ row.procedure }}</dd>
+          {% endif %}
+          {% if row.scoring %}
+          <dt>How it is scored</dt>
+          <dd>{{ row.scoring }}</dd>
+          {% endif %}
+        </dl>
+      </details>
+      {% endfor %}
+    </div>
 
     {% if has_example and example_slug %}
     <p class="dim benchmark-guide-source">

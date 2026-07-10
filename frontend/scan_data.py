@@ -132,6 +132,8 @@ def _severity_summary(findings: list[dict]) -> str:
 
 def _summarize_from_data(data: dict, slug: str) -> dict:
     """Build a list-table row from an in-memory ScanResult-shaped dict."""
+    from dbutils.staleness_spec import scan_tool_applicability
+
     findings = data.get("findings") or []
     sev_counts = Counter(
         (f.get("severity") or "unknown").lower() for f in findings if isinstance(f, dict)
@@ -155,16 +157,28 @@ def _summarize_from_data(data: dict, slug: str) -> dict:
         "scanned_file_count": len(data.get("scanned_files") or []),
         "status": data.get("status") or "unknown",
         "fickling_severity": data.get("fickling_severity"),
+        "scanner_version": meta.get("scanner_version") or "—",
+        "tool_applicability": scan_tool_applicability(data.get("scanned_files")),
     }
 
 
 def _summarize_scan(path: Path, slug: str) -> dict | None:
     """load one scan_result.json into a table row. none if parse fails."""
+    from dbutils.run_meta import read_run_meta_for_pillar
+
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return None
-    return _summarize_from_data(data, slug)
+    row = _summarize_from_data(data, slug)
+    if row is None:
+        return None
+    sidecar = read_run_meta_for_pillar(path.parent, pillar="scan")
+    if sidecar.get("config_json"):
+        row["config_json"] = sidecar["config_json"]
+    if sidecar.get("config_fingerprint"):
+        row["config_fingerprint"] = sidecar["config_fingerprint"]
+    return row
 
 
 def _parse_findings(findings_raw: list) -> list[dict]:
@@ -512,7 +526,7 @@ def get_scans_data() -> dict:
     from frontend.db_fallback import get_data_with_db_fallback
 
     data = get_data_with_db_fallback(
-        scan_db_data.available, scan_db_data.get_scans_data_db, _get_scans_data_files
+        scan_db_data.available, scan_db_data.get_scans_data_db, _get_scans_data_files, pillar="scan"
     )
     scans = data.get("scans") or []
     from frontend.staleness import attach_staleness
@@ -594,7 +608,7 @@ def get_scan_guide_data(scans: list[dict] | None = None) -> dict:
         from frontend.db_fallback import get_data_with_db_fallback
 
         scans = get_data_with_db_fallback(
-            scan_db_data.available, scan_db_data.get_scans_data_db, _get_scans_data_files
+            scan_db_data.available, scan_db_data.get_scans_data_db, _get_scans_data_files, pillar="scan"
         ).get("scans") or []
     example = scans[0] if scans else None
     return {
@@ -651,7 +665,7 @@ def get_scan_reference_data() -> dict:
     from frontend.db_fallback import get_data_with_db_fallback
 
     raw = get_data_with_db_fallback(
-        scan_db_data.available, scan_db_data.get_scans_data_db, _get_scans_data_files
+        scan_db_data.available, scan_db_data.get_scans_data_db, _get_scans_data_files, pillar="scan"
     )
     scans = raw.get("scans") or []
     data = get_scan_guide_data(scans)
