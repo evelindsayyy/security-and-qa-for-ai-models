@@ -16,6 +16,7 @@ import os
 # Browser launches default to Docker; unit tests exercise the host argv path.
 os.environ.setdefault("FRONTEND_LAUNCH_MODE", "host")
 
+import json
 import re
 import tempfile
 import unittest
@@ -555,6 +556,73 @@ class UnreadableEvalOutputTest(unittest.TestCase):
             )
         self.assertTrue(good.is_file())
         self.assertTrue(bad.is_file())
+
+
+class RerunReusesScanHistoryTest(unittest.TestCase):
+    """Re-running a past eval goes through the same gated /eval-run/start, so it
+    reuses the model's existing safety history and never triggers a new scan.
+
+    A model with a completed non-high-risk safety run (under ANY red-team
+    profile) is approved from history; a model with no history is blocked (you
+    would run safety first). This locks in "old evals reuse prior scannings".
+    """
+
+    def setUp(self) -> None:
+        # /eval-run/start is @require_login — use the dev-auth bypass + a session.
+        env = mock.patch.dict(os.environ, {"AUTH_ENABLED": "0"})
+        env.start()
+        self.addCleanup(env.stop)
+        cand = mock.patch.object(
+            eval_launch, "candidate_models",
+            return_value=eval_launch._CANDIDATE_FALLBACK,
+        )
+        cand.start()
+        self.addCleanup(cand.stop)
+        self.client = create_app({"TESTING": True, "SECRET_KEY": "test"}).test_client()
+        with self.client.session_transaction() as sess:
+            sess["user"] = {"id": "u-test", "netid": "testuser", "display_name": "Test"}
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+
+    def _history(self, tier: str) -> list[tuple[str, Path]]:
+        """A completed safety run already in history, under a non-base profile."""
+        p = Path(self._tmp.name) / "merged_safety_result.json"
+        p.write_text(json.dumps({"status": "complete", "composite_tier": tier}),
+                     encoding="utf-8")
+        return [("education", p)]
+
+    def _rerun_post(self):
+        # a re-run posts the past run's params to the same launch endpoint
+        return self.client.post("/eval-run/start", data={
+            "candidate": "GPT 4.1 Mini", "judge": "Llama 4 Maverick",
+            "suite": "it_support_v1", "max_tokens": "500",
+        })
+
+    def test_rerun_start_reuses_existing_safety_history(self) -> None:
+        from frontend import pipeline
+        with mock.patch.object(pipeline, "_safety_result_paths",
+                               return_value=self._history("medium")), \
+             mock.patch.object(eval_launch, "start_run",
+                               return_value=("slug1", False, "public")) as sr:
+            r = self._rerun_post()
+        # existing history approves the re-run — launched, no new scan triggered
+        self.assertEqual(r.status_code, 302)
+        sr.assert_called_once()
+
+    def test_rerun_start_blocked_without_history(self) -> None:
+        from frontend import pipeline
+        with mock.patch.object(pipeline, "_safety_result_paths", return_value=[]), \
+             mock.patch.object(eval_launch, "start_run") as sr:
+            r = self._rerun_post()
+        self.assertEqual(r.status_code, 400)
+        self.assertIn(b"safety red-teaming required", r.data)
+        sr.assert_not_called()
+
+    def test_rerun_prefill_entrypoint_renders(self) -> None:
+        # /eval-run/new?from=<slug> is the re-run entry point; it renders even
+        # when the source run is missing (prefill just degrades to none).
+        r = self.client.get("/eval-run/new?from=nonexistent-slug")
+        self.assertEqual(r.status_code, 200)
 
 
 if __name__ == "__main__":
