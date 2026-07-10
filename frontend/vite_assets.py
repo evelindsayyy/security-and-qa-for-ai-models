@@ -7,18 +7,28 @@ from functools import lru_cache
 from pathlib import Path
 
 _DIST = Path(__file__).resolve().parent / "static" / "dist"
-_MANIFEST = _DIST / ".vite" / "manifest.json"
+_IMAGE_DIST = Path("/opt/frontend-dist")
 _ENTRY = "src/main.ts"
+
+
+def _manifest_paths() -> list[Path]:
+    """Prefer bind-mounted dist; fall back to the image bake path."""
+    paths = [_DIST / ".vite" / "manifest.json"]
+    if _IMAGE_DIST != _DIST:
+        paths.append(_IMAGE_DIST / ".vite" / "manifest.json")
+    return paths
 
 
 @lru_cache(maxsize=1)
 def _manifest() -> dict:
-    if not _MANIFEST.is_file():
-        return {}
-    try:
-        return json.loads(_MANIFEST.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
+    for path in _manifest_paths():
+        if not path.is_file():
+            continue
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+    return {}
 
 
 def vite_entry() -> str:

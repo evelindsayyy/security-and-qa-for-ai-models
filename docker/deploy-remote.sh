@@ -52,6 +52,11 @@ _sync_repo "$GIT_REF"
 # shellcheck source=docker/host-env.sh
 source docker/host-env.sh
 
+# Per-UID Docker CLI homes under .docker-home; group-writable so deploy user and
+# interactive VM users (different UIDs) can each mkdir their own subdir.
+mkdir -p "${DEPLOY_PATH}/.docker-home"
+chmod 2775 "${DEPLOY_PATH}/.docker-home" 2>/dev/null || chmod 775 "${DEPLOY_PATH}/.docker-home" 2>/dev/null || true
+
 printf '%s' "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin "$CI_REGISTRY"
 
 if [ "${BUILD_PILLARS:-0}" = "1" ]; then

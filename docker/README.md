@@ -66,6 +66,33 @@ ls -la .docker-home/*/.docker/config.json 2>/dev/null
 so `entrypoint.sh` creates a per-UID HOME. Do not share one `.docker-home` across
 users.
 
+### UI has no styling (unstyled HTML, `/static/dist/main.js` 404)
+
+Symptom: pages render as plain HTML; browser network tab shows `404` on
+`/static/dist/main.js` and no hashed CSS under `/static/dist/assets/`.
+
+**Cause:** `frontend/static/dist/` is gitignored. A bind-mounted repo after
+`git pull` has no Vite build. `vite_assets.py` falls back to `dist/main.js`,
+which does not exist (production bundles are hashed, e.g. `main-BE6YOoG2.js`).
+
+**Fix:** restart the web container so `entrypoint.sh` seeds dist from the image
+bake at `/opt/frontend-dist`:
+
+```bash
+./docker/run.sh up -d --force-recreate
+```
+
+Or copy manually inside the running container:
+
+```bash
+docker compose --project-name qa-ai-models exec web \
+  cp -a /opt/frontend-dist/. "${HOST_REPO}/frontend/static/dist/"
+```
+
+**Prevent:** deploy pulls a CI-built `WEB_IMAGE` that already contains
+`/opt/frontend-dist`; entrypoint copies it on start when the host manifest is
+missing.
+
 ### Port 5000 already in use
 
 ```bash
