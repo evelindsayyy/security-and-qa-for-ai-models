@@ -18,11 +18,10 @@
   {% with title="Scan reference & guide", intro="How tools combine into the risk tier and reference score matrix." %}
   {% include '_scan_guide.html' %}
   {% endwith %}
-  <p class="mb-6 text-sm"><a href="{{ url_for('scan_reference') }}">Full reference page →</a></p>
   {% endif %}
 
-  <details class="key card p-4 mb-6">
-    <summary>How to read this</summary>
+  <section class="key card p-4 mb-6">
+    <h2 class="subsection-title">How to read this</h2>
     <dl class="legend-grid mt-3">
       <dt>Tier</dt>
       <dd>Worst severity across all scanners — max, not averaged.</dd>
@@ -30,7 +29,7 @@
       <dd>0–100 from tier anchors plus bumps; corroborated tools noted on detail.</dd>
       {% if has_comparison %}<dt>Compare</dt><dd>Tool × HF model heatmap.</dd>{% endif %}
     </dl>
-  </details>
+  </section>
 
   {% if not has_scans %}
     {{ empty_state('No scans yet. Start a scan or run the CLI.', cli_scan_docker()) }}

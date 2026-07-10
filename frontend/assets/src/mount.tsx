@@ -3,16 +3,14 @@ import { FindingsPanel } from "./islands/FindingsPanel";
 import { ComparisonHeatmap } from "./islands/ComparisonHeatmap";
 import { LiveRunProgress } from "./islands/LiveRunProgress";
 import { CompareCharts } from "./islands/CompareCharts";
-import { OverviewCharts } from "./islands/OverviewCharts";
 import type {
   CompareChartsPayload,
   ComparisonPayload,
   Finding,
   LiveRunPayload,
-  OverviewChartsPayload,
 } from "./types";
 
-type IslandName = "findings" | "comparison-heatmap" | "live-run" | "compare-charts" | "overview-charts";
+type IslandName = "findings" | "comparison-heatmap" | "live-run" | "compare-charts";
 
 export function hydrateIsland(name: IslandName, el: HTMLElement, payload: unknown): void {
   switch (name) {
@@ -27,9 +25,6 @@ export function hydrateIsland(name: IslandName, el: HTMLElement, payload: unknow
       break;
     case "compare-charts":
       render(<CompareCharts data={payload as CompareChartsPayload} />, el);
-      break;
-    case "overview-charts":
-      render(<OverviewCharts data={payload as OverviewChartsPayload} />, el);
       break;
     default:
       console.warn(`Unknown island: ${name}`);

@@ -21,7 +21,7 @@ cd "$(dirname "$0")/.."
 source docker/host-env.sh
 
 if [ -d frontend/assets ] && command -v npm >/dev/null 2>&1; then
-  ./scripts/build-frontend.sh || echo "warning: frontend asset build failed" >&2
+  bash scripts/build-frontend.sh || echo "warning: frontend asset build failed" >&2
 fi
 
 ENV_ARGS=()

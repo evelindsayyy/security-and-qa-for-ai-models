@@ -1,14 +1,11 @@
-"""Overview dashboard data: KPIs, chart aggregates, and recent activity feed."""
+"""Overview dashboard data: KPIs and recent activity feed."""
 
 from __future__ import annotations
 
-from collections import Counter
 from datetime import datetime
 from typing import Any
 
 from frontend import launch_registry
-
-_TIER_ORDER = ("critical", "high", "medium", "low", "unknown")
 
 
 def _parse_ts(value: str | None) -> datetime | None:
@@ -97,72 +94,7 @@ def _collect_stale_and_critical() -> dict[str, Any]:
     }
 
 
-def _chart_aggregates() -> dict[str, Any]:
-    scan_tiers: Counter[str] = Counter()
-    safety_pass: list[dict[str, Any]] = []
-    pillar_counts = {"scan": 0, "safety": 0, "eval": 0, "benchmark": 0}
-
-    try:
-        from frontend.scan_data import get_scans_data
-
-        scans = get_scans_data().get("scans", [])
-        pillar_counts["scan"] = len(scans)
-        for row in scans:
-            tier = (row.get("severity_tier") or "unknown").lower()
-            scan_tiers[tier] += 1
-    except Exception:
-        pass
-
-    try:
-        from frontend.safety_data import get_safety_data
-
-        models = get_safety_data().get("models", [])
-        pillar_counts["safety"] = len(models)
-        for row in models[:12]:
-            rate = row.get("summary_pass_rate")
-            if rate is None:
-                continue
-            label = row.get("display_name") or row.get("slug") or "—"
-            safety_pass.append({"label": label, "value": round(rate * 100, 1)})
-    except Exception:
-        pass
-
-    try:
-        from frontend.eval_run_data import get_runs_data
-
-        pillar_counts["eval"] = len(get_runs_data().get("runs", []))
-    except Exception:
-        pass
-
-    try:
-        from frontend.benchmark_data import get_benchmarks_data
-
-        pillar_counts["benchmark"] = len(get_benchmarks_data().get("runs", []))
-    except Exception:
-        pass
-
-    tier_labels = [t for t in _TIER_ORDER if scan_tiers.get(t)]
-    return {
-        "scan_tier_labels": tier_labels,
-        "scan_tier_counts": [scan_tiers[t] for t in tier_labels],
-        "safety_pass_labels": [p["label"] for p in safety_pass],
-        "safety_pass_values": [p["value"] for p in safety_pass],
-        "pillar_count_labels": ["Scans", "Safety", "Eval", "Benchmarks"],
-        "pillar_count_values": [
-            pillar_counts["scan"],
-            pillar_counts["safety"],
-            pillar_counts["eval"],
-            pillar_counts["benchmark"],
-        ],
-        "has_overview_charts": bool(
-            scan_tiers
-            or safety_pass
-            or any(pillar_counts.values())
-        ),
-    }
-
-
-def _activity_events(limit: int = 12) -> list[dict[str, Any]]:
+def _activity_events(limit: int = 5) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
 
     def add(
@@ -267,7 +199,6 @@ def get_overview_data() -> dict[str, Any]:
         pass
 
     stale_stats = _collect_stale_and_critical()
-    charts = _chart_aggregates()
 
     inflight = 0
     try:
@@ -278,7 +209,6 @@ def get_overview_data() -> dict[str, Any]:
     return {
         **hub,
         **stale_stats,
-        **charts,
         "rollup_count": rollup_count,
         "inflight_count": inflight,
         "activity": _activity_events(),

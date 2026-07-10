@@ -18,12 +18,11 @@
   {% with title="Safety reference & guide", intro="How suites combine into composite tier and pass rates." %}
   {% include '_safety_guide.html' %}
   {% endwith %}
-  <p class="mb-6 text-sm"><a href="{{ url_for('safety_reference') }}">Full reference page →</a></p>
   {% endif %}
 
-  <details class="key card p-4 mb-6">
-    <summary>How to read this</summary>
-    <dl class="legend-grid">
+  <section class="key card p-4 mb-6">
+    <h2 class="subsection-title">How to read this</h2>
+    <dl class="legend-grid mt-3">
       <dt><span class="tier tier-low">Tier</span></dt>
       <dd>Weighted pass rates: Duke policy <b>40%</b>, red-team <b>35%</b>, Garak <b>25%</b> (renormalized if a suite was skipped). Escalates when a curated policy probe fails.</dd>
       <dt class="num-sample">Pass rate</dt>
@@ -35,7 +34,7 @@
       <dd>Matrix of per-suite pass rates (suite × model). Empty cells mean that suite did not run for that model.</dd>
       {% endif %}
     </dl>
-  </details>
+  </section>
 
   {% if not has_safety %}
     {{ empty_state('No safety results yet.', cli_safety_docker()) }}

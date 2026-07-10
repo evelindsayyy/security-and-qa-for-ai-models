@@ -156,14 +156,6 @@
     @apply flex flex-col items-end gap-1;
   }
 
-  .auth-login-fallback {
-    @apply max-w-xs text-right text-xs text-text-muted;
-  }
-
-  .auth-login-fallback a {
-    @apply font-semibold;
-  }
-
   .page-header {
     @apply mb-6 flex flex-wrap items-start justify-between gap-4;
   }
@@ -462,6 +454,34 @@
 
   .recommendation-section dd {
     @apply body m-0;
+  }
+
+  .pillar-cta-list {
+    @apply m-0 list-none space-y-3 p-0 text-sm;
+  }
+
+  .pillar-cta-list li {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .model-findings-list {
+    @apply m-0 list-none space-y-3 p-0 text-sm;
+  }
+
+  .model-findings-list li {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .pillar-list-meta {
+    @apply space-y-2;
+  }
+
+  .pillar-table-controls {
+    @apply mb-4 flex flex-wrap items-end gap-4;
+  }
+
+  .pillar-table-controls .controls-hint {
+    @apply w-full text-xs text-text-subtle sm:ml-auto sm:w-auto;
   }
 
   .callout {

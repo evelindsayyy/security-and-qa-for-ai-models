@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import start_button, stat_card, page_header, island_mount with context %}
+{% from '_macros.html' import start_button, stat_card, page_header with context %}
 
 {% block title %}Overview — Model Advisor{% endblock %}
 
@@ -48,19 +48,6 @@
         <p class="mt-2 text-sm">{% if benchmark_has %}<b>{{ benchmark_count }}</b> latest runs{% else %}No benchmarks yet{% endif %}</p>
         <p class="pillar-actions mt-3">{{ start_button(url_for('benchmark_run_new'), 'Start benchmark', 'btn-primary btn-sm') }}<a class="btn-secondary btn-sm" href="{{ url_for('benchmarks') }}">View</a></p>
       </div>
-    </div>
-
-    <div class="overview-charts-embed{% if has_overview_charts %} mt-6 border-t border-border pt-5{% endif %}">
-      {% if has_overview_charts %}
-      {{ island_mount('overview-charts', {
-        'scanTierLabels': scan_tier_labels,
-        'scanTierCounts': scan_tier_counts,
-        'safetyPassLabels': safety_pass_labels,
-        'safetyPassValues': safety_pass_values,
-        'pillarCountLabels': pillar_count_labels,
-        'pillarCountValues': pillar_count_values,
-      }) }}
-      {% endif %}
     </div>
   </section>
 

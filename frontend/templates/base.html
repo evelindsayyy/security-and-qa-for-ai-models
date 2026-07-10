@@ -72,13 +72,6 @@
           {% elif auth_enabled or dev_login_available %}
             <div class="auth-login-wrap">
               <button type="button" id="auth-login-btn" class="btn-primary btn-sm">Sign in with Duke NetID</button>
-              <p id="auth-login-fallback" class="auth-login-fallback" hidden>
-                Login taking too long?
-                <a href="{{ url_for('auth.login') }}">Sign in this tab instead</a>
-                — or use a stable tunnel:
-                <code class="mono">ssh -L 5000:localhost:5000 &lt;host&gt;</code>
-                then open <code class="mono">http://localhost:5000/</code>.
-              </p>
             </div>
           {% endif %}
         </div>
@@ -100,63 +93,10 @@
   <script>
   (function () {
     var loginBtn = document.getElementById("auth-login-btn");
-    var fallbackEl = document.getElementById("auth-login-fallback");
-    var keepaliveTimer = null;
-    var fallbackTimer = null;
-    var keepaliveWin = null;
-    var pingPath = "{{ url_for('auth.ping') }}";
-    var ephemeralTunnel =
-      (location.hostname === "localhost" || location.hostname === "127.0.0.1") &&
-      location.port &&
-      location.port !== "5000";
-
-    function pingTunnel() {
-      var url = location.origin + pingPath + "?t=" + Date.now();
-      fetch(url, { cache: "no-store", credentials: "same-origin" }).catch(function () {});
-      new Image().src = url;
-    }
-
-    function stopLoginKeepalive() {
-      if (keepaliveTimer) {
-        clearInterval(keepaliveTimer);
-        keepaliveTimer = null;
-      }
-      if (fallbackTimer) {
-        clearTimeout(fallbackTimer);
-        fallbackTimer = null;
-      }
-      if (keepaliveWin && !keepaliveWin.closed) {
-        keepaliveWin.close();
-        keepaliveWin = null;
-      }
-      if (fallbackEl) fallbackEl.hidden = true;
-    }
-
-    function startLoginKeepalive() {
-      stopLoginKeepalive();
-      pingTunnel();
-      keepaliveWin = window.open(
-        "{{ url_for('auth.keepalive') }}",
-        "oauth-keepalive",
-        "width=360,height=100,menubar=no,toolbar=no"
-      );
-      keepaliveTimer = setInterval(pingTunnel, 1000);
-      var fallbackDelay = ephemeralTunnel ? 15000 : 90000;
-      fallbackTimer = setTimeout(function () {
-        if (fallbackEl) fallbackEl.hidden = false;
-      }, fallbackDelay);
-      setTimeout(stopLoginKeepalive, 180000);
-    }
 
     if (loginBtn) {
-      loginBtn.addEventListener("mousedown", function () {
-        {% if auth_enabled %}
-        startLoginKeepalive();
-        {% endif %}
-      });
       loginBtn.addEventListener("click", function () {
         {% if auth_enabled %}
-        startLoginKeepalive();
         window.open("{{ url_for('auth.login', popup=1) }}", "duke-login", "width=520,height=720");
         {% else %}
         window.location.href = "{{ url_for('auth.login') }}";
@@ -175,10 +115,7 @@
       }
       window.addEventListener("message", function (ev) {
         if (!isTrustedAuthOrigin(ev.origin)) return;
-        if (ev.data && ev.data.type === "auth-complete") {
-          stopLoginKeepalive();
-          window.location.reload();
-        }
+        if (ev.data && ev.data.type === "auth-complete") window.location.reload();
       });
     }
 

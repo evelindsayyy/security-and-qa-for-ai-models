@@ -18,12 +18,11 @@
   {% with title="Benchmark reference & guide", intro="Pilot runs and scoring orientation per benchmark kind." %}
   {% include '_benchmark_guide.html' %}
   {% endwith %}
-  <p class="mb-6 text-sm"><a href="{{ url_for('benchmark_reference') }}">Full reference page →</a></p>
   {% endif %}
 
-  <details class="key card p-4 mb-6">
-    <summary>How to read this</summary>
-    <dl class="legend-grid">
+  <section class="key card p-4 mb-6">
+    <h2 class="subsection-title">How to read this</h2>
+    <dl class="legend-grid mt-3">
       <dt>Score</dt>
       <dd>
         Headline metric per benchmark (<code>accuracy</code>, <code>pass rate</code>, etc.).
@@ -49,13 +48,11 @@
       {% if has_reference %}
       <dt>Reference</dt>
       <dd>
-        Committed gateway baselines on default pilot sizes —
-        <a href="{{ url_for('benchmark_reference') }}">open reference &amp; guide</a>
-        for what each benchmark measures.
+        Committed gateway baselines on default pilot sizes — expand the guide above for what each benchmark measures.
       </dd>
       {% endif %}
     </dl>
-  </details>
+  </section>
 
   <h2>Runs</h2>
   {% if not has_runs %}

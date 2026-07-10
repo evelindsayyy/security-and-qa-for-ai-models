@@ -69,12 +69,3 @@ export type CompareChartsPayload = {
   mode?: "page" | "picker";
   compareUrl?: string;
 };
-
-export type OverviewChartsPayload = {
-  scanTierLabels: string[];
-  scanTierCounts: number[];
-  safetyPassLabels: string[];
-  safetyPassValues: number[];
-  pillarCountLabels: string[];
-  pillarCountValues: number[];
-};

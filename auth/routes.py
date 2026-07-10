@@ -40,52 +40,6 @@ _POPUP_DONE_HTML = """
 </body></html>
 """
 
-_LOGIN_BRIDGE_HTML = """
-<!doctype html>
-<html><head><meta charset="utf-8"><title>Redirecting to Duke</title></head>
-<body>
-<p>Redirecting to Duke NetID sign-in…</p>
-<script>
-(function () {
-  var pingUrl = {{ ping_url|tojson }};
-  var authUrl = {{ auth_url|tojson }};
-  function ping() {
-    var url = pingUrl + "?t=" + Date.now();
-    fetch(url, { cache: "no-store", credentials: "same-origin" }).catch(function () {});
-    new Image().src = url;
-  }
-  ping();
-  var timer = setInterval(ping, 500);
-  setTimeout(function () {
-    clearInterval(timer);
-    window.location.replace(authUrl);
-  }, 300);
-})();
-</script>
-</body></html>
-"""
-
-_KEEPALIVE_HTML = """
-<!doctype html>
-<html><head><meta charset="utf-8"><title>Sign-in connection</title></head>
-<body>
-<p>Keeping your connection alive for Duke sign-in…</p>
-<script>
-(function () {
-  var pingUrl = {{ ping_url|tojson }};
-  function ping() {
-    var url = pingUrl + "?t=" + Date.now();
-    fetch(url, { cache: "no-store", credentials: "same-origin" }).catch(function () {});
-    new Image().src = url;
-    if (navigator.sendBeacon) navigator.sendBeacon(pingUrl);
-  }
-  ping();
-  setInterval(ping, 1000);
-})();
-</script>
-</body></html>
-"""
-
 
 def register_auth(app) -> None:
     init_oauth(app)
@@ -133,22 +87,11 @@ def login():
     )
     try:
         # First network call of the flow: fetches Duke's OIDC discovery
-        # document (cached after) and builds the authorize URL. A timeout
-        # or connection error here must not become an unhandled 500 — the
-        # public (signed-out) site must keep working regardless of whether
-        # this specific login attempt succeeds.
-        #
-        # Return a short bridge page (not an immediate 302) so the popup
-        # keeps pinging our loopback origin while the IDE port-forward
-        # tunnel is still warm, before navigating away to Duke's external
-        # Shibboleth page. The parent tab opens /auth/keepalive separately.
-        auth_data = client.create_authorization_url(callback_uri, state=state)
-        client.save_authorize_data(redirect_uri=callback_uri, **auth_data)
-        return render_template_string(
-            _LOGIN_BRIDGE_HTML,
-            auth_url=auth_data["url"],
-            ping_url=url_for("auth.ping"),
-        )
+        # document (cached after) and builds the authorize redirect. A
+        # timeout or connection error here must not become an unhandled
+        # 500 — the public (signed-out) site must keep working regardless
+        # of whether this specific login attempt succeeds.
+        return client.authorize_redirect(callback_uri, state=state)
     except Exception as exc:
         current_app.logger.warning("oauth authorize redirect failed: %s", exc)
         for key in ("oauth_state", "oauth_popup", "oauth_next", "oauth_opener_origin"):
@@ -273,18 +216,6 @@ def logout():
     if request.headers.get("Accept", "").startswith("application/json"):
         return jsonify({"ok": True})
     return redirect(request.referrer or url_for("index"))
-
-
-@bp.route("/ping")
-def ping():
-    """Lightweight keepalive for IDE port-forward tunnels during OIDC login."""
-    return "", 204
-
-
-@bp.route("/keepalive")
-def keepalive():
-    """Dedicated window that pings during OIDC while the Duke popup is external."""
-    return render_template_string(_KEEPALIVE_HTML, ping_url=url_for("auth.ping"))
 
 
 @bp.route("/me")

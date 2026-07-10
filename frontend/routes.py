@@ -128,12 +128,6 @@ def register_routes(app):
         data.update(get_scan_guide_data(data.get("scans")))
         return render_template("scans.html", **data)
 
-    @app.route("/scans/reference")
-    def scan_reference():
-        from frontend.scan_data import get_scan_reference_data
-
-        return render_template("scan_reference.html", **get_scan_reference_data())
-
     @app.route("/scans/new")
     @require_login()
     def scan_run_new():
@@ -586,17 +580,6 @@ def register_routes(app):
         data.update(get_benchmark_guide_data())
         return render_template("benchmarks.html", **data)
 
-    @app.route("/benchmarks/reference")
-    def benchmark_reference():
-        from flask import redirect, url_for
-
-        from frontend.benchmark_data import get_benchmark_reference_data
-
-        data = get_benchmark_reference_data()
-        if not data.get("has_reference"):
-            return redirect(url_for("benchmarks"))
-        return render_template("benchmark_reference.html", **data)
-
     @app.route("/benchmarks/new")
     @require_login()
     def benchmark_run_new():
@@ -902,18 +885,6 @@ def register_routes(app):
         data.update(get_safety_guide_data())
         return render_template("safety.html", **data)
 
-    @app.route("/safety/reference")
-    def safety_reference():
-        from frontend.safety_data import get_safety_reference_data
-
-        return render_template("safety_reference.html", **get_safety_reference_data())
-
-    @app.route("/eval-run/reference")
-    def eval_reference():
-        from frontend.eval_run_data import get_eval_reference_data
-
-        return render_template("eval_reference.html", **get_eval_reference_data())
-
     @app.route("/safety/new")
     @require_login()
     def safety_run_new():
@@ -1194,11 +1165,15 @@ def register_routes(app):
         }
         recommendation = model_summary.get_recommendation_summary(rollup)
         can_hf_scan = gateway_is_hf_scannable(rollup["display_name"])
+        from frontend.model_findings import get_model_findings
+
+        pillar_findings = get_model_findings(rollup)
         return render_template(
             "model_detail.html",
             missing=False,
             rollup=rollup,
             recommendation=recommendation,
+            pillar_findings=pillar_findings,
             gateway_profile=gateway_profile,
             gateway_id=gateway_id,
             can_hf_scan=can_hf_scan,
