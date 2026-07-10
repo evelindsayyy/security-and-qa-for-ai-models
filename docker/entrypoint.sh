@@ -21,35 +21,13 @@ _setup_home() {
 }
 _setup_home
 
-# Bind-mounted repos never include frontend/static/dist (gitignored). After a git
-# pull or fresh clone the UI needs the Vite bundle. frontend/vite_assets.py
-# already prefers /opt/frontend-dist (fresh for the running image) over the
-# bind mount, so the app is correctly styled regardless of this step. But we
-# still resync the bind mount unconditionally (not just "if missing") so that
-# on-disk state — direct file inspection, `docker cp`, host tooling — matches
-# what's actually served; a one-time seed would otherwise go stale the moment
-# a later image build ships newer assets.
-if [ -n "${HOST_REPO:-}" ]; then
-  DIST="${HOST_REPO}/frontend/static/dist"
-  if [ -f /opt/frontend-dist/.vite/manifest.json ]; then
-    # Clean replace (not merge) so hashed assets from older builds don't pile
-    # up on disk across deploys. Safe even if this fails partway: the app
-    # reads /opt/frontend-dist directly and doesn't depend on this bind-mount
-    # copy for correct serving.
-    if rm -rf "$DIST" 2>/dev/null && mkdir -p "$DIST" 2>/dev/null && cp -a /opt/frontend-dist/. "$DIST/" 2>/dev/null; then
-      echo "Synced frontend static dist from image bake ($DIST)."
-    else
-      echo "warning: cannot write ${DIST} — serving styles from image bake only" >&2
-    fi
-  elif [ ! -f "${DIST}/.vite/manifest.json" ]; then
-    if [ -d "${HOST_REPO}/frontend/assets" ] && command -v npm >/dev/null 2>&1; then
-      echo "Building frontend assets (no image seed, running npm run build)..."
-      (cd "${HOST_REPO}/frontend/assets" && { [ -d node_modules ] || npm ci; } && npm run build) \
-        || echo "warning: frontend asset build failed — UI may lack styles" >&2
-    else
-      echo "warning: no frontend dist and cannot build — UI will lack styles" >&2
-    fi
-  fi
-fi
+# Frontend assets are resolved by frontend/vite_assets.py, which prefers the
+# working-tree build (frontend/static/dist, rebuilt by run.sh in dev) and falls
+# back to the image bake (/opt/frontend-dist, always present in this image).
+# The entrypoint deliberately does NOT copy between the two: an earlier
+# "seed the bind mount from the image" step went stale (a bind mount seeded by
+# an old image was never refreshed) and could shadow a fresh host build. On the
+# VM, deploy-remote.sh removes the working-tree dist so the fresh image bake is
+# always served; in dev, run.sh builds the working-tree dist before start.
 
 exec "$@"

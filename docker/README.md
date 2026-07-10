@@ -73,40 +73,47 @@ shows `404` on `/static/dist/main.js` and no hashed CSS under
 `/static/dist/assets/`.
 
 Symptom B — partially/incorrectly styled: hashed assets return `200`, but the
-UI still looks outdated (missing layout/design changes you know are on
-`main`).
+UI still looks outdated (missing layout/design changes you know are on `main`).
 
-**Cause:** `frontend/static/dist/` is gitignored, so a bind-mounted repo has no
-Vite build after `git pull`. `frontend/vite_assets.py` resolves both the
-manifest and the served files from `/opt/frontend-dist` — the copy baked into
-the image at build time from current source — so the UI is correctly styled
-even when the bind-mounted `frontend/static/dist/` is empty (Symptom A) or
-contains a stale build seeded by an older image (Symptom B). `entrypoint.sh`
-additionally resyncs the bind mount from the image on every container start
-(clean replace, not merge) purely so on-disk state matches what's served; this
-is not required for correct rendering.
+**How assets resolve.** `frontend/vite_assets.py` serves the Vite bundle from
+the first of these that has a build, and reads the manifest from the same place:
 
-**Fix:** rebuild and recreate the web container so the image bakes fresh
-assets from current source and the entrypoint resyncs the bind mount:
+1. `frontend/static/dist` — the *working-tree* build. `docker/run.sh` (and
+   `main.py`) rebuild this on the host via `scripts/build-frontend.sh` right
+   before starting, so in dev it reflects your latest edits. Gitignored.
+2. `/opt/frontend-dist` — the build baked into the image. Production (the VM)
+   serves this, because a freshly pulled repo has no working-tree build.
+
+`deploy-remote.sh` removes `frontend/static/dist` on the VM after git sync, so
+the VM always serves the fresh image bake (no stale leftover can shadow it).
+
+**Root cause of Symptom B (historical).** Tailwind's `content` scans
+`../templates/**/*.html` (see `frontend/assets/tailwind.config.js`). The Docker
+`frontend-build` stage must copy `frontend/templates/` into the build context;
+otherwise Tailwind can't see class usage in templates and purges every
+template-only class (`pillar-toolbar`, `launch-page`, `form-section`, …), baking
+an incomplete stylesheet. The Dockerfile now copies templates before
+`npm run build`; `unit_tests/test_vite_assets.py` guards against regression.
+
+**Fix:** rebuild so the image bakes a complete, current stylesheet:
 
 ```bash
+# Dev host:
 ./docker/run.sh up -d --build --force-recreate
+# VM: use the CI deploy (builds a fresh image via buildah, then pulls it).
 ```
 
-If styling still looks wrong after that, confirm the image actually contains a
-fresh bake (compare the hash in the page's `<script>`/`<link>` tags against a
-local `npm run build` in `frontend/assets/`), and check the container logs for
-`Synced frontend static dist from image bake` — its absence with a
-`warning: cannot write` means the bind mount isn't writable by the container
-UID (harmless for styling, but worth fixing per the `.docker-home` section
-above).
-
-**Verify:**
+**Verify** the served bundle matches a local build and includes a template-only
+class:
 
 ```bash
+# hash the web container serves:
 docker compose --project-name qa-ai-models exec -T web \
   python3 -c "from frontend.vite_assets import vite_entry; print(vite_entry())"
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:5000/static/$(docker compose --project-name qa-ai-models exec -T web python3 -c 'from frontend.vite_assets import vite_entry; print(vite_entry())' | tr -d '\r')"
+# should match:  (cd frontend/assets && npm run build) and the printed hash
+# confirm a template-only class survived purge:
+CSS=$(curl -s http://localhost:5000/ | grep -oE '/static/dist/assets/main[^"]*\.css' | head -1)
+curl -s "http://localhost:5000$CSS" | grep -c pillar-toolbar   # expect >= 1
 ```
 
 ### Port 5000 already in use

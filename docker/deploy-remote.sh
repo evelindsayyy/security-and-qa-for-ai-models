@@ -49,6 +49,13 @@ _sync_repo() {
 
 _sync_repo "$GIT_REF"
 
+# The VM never builds frontend assets on the host; production serves the Vite
+# bundle baked into the CI-built image (/opt/frontend-dist). frontend/static/dist
+# is gitignored and must not exist here, or a stale leftover (e.g. from an older
+# deploy) would shadow the fresh image bake and the UI would render with outdated
+# styles. Remove it so vite_assets.py falls through to the image bake.
+rm -rf "${DEPLOY_PATH}/frontend/static/dist"
+
 # shellcheck source=docker/host-env.sh
 source docker/host-env.sh
 

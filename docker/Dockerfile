@@ -7,6 +7,11 @@ WORKDIR /build/frontend/assets
 COPY frontend/assets/package.json frontend/assets/package-lock.json* ./
 RUN npm ci
 COPY frontend/assets/ ./
+# Tailwind's content scan includes ../templates/**/*.html (see tailwind.config.js).
+# The templates must be present in the build context or Tailwind purges every
+# class used only in templates (pillar-toolbar, launch-page, form-section, …),
+# baking an incomplete stylesheet and an unstyled production UI.
+COPY frontend/templates/ /build/frontend/templates/
 RUN npm run build
 
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim

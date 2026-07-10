@@ -1,21 +1,27 @@
 """Resolve Vite-built asset URLs and serve the built bundle.
 
-The Vite build output (``frontend/static/dist``) is gitignored, so a
-bind-mounted repo on the VM has no build after ``git pull``. The Docker image
-bakes a copy at ``/opt/frontend-dist`` from the *current* source on every
-``docker build``, so it is always fresh for whatever image is running.
+There are two possible sources of the Vite build, with clear ownership:
 
-Two bugs to avoid:
+- ``frontend/static/dist`` (``_DIST``) — the build for the *current working
+  tree*. In local/dev runs, ``docker/run.sh`` (and ``main.py``) rebuild this on
+  the host via ``scripts/build-frontend.sh`` immediately before starting, so it
+  reflects whatever source you just edited. It is gitignored.
+- ``/opt/frontend-dist`` (``_IMAGE_DIST``) — the build baked into the Docker
+  image at image-build time. This is what production (the VM) serves, because
+  a freshly cloned/pulled repo has no working-tree build.
 
-1. "Split brain" — reading the manifest from one location while Flask serves
-   files from another. Both the manifest lookup and the ``/static/dist`` file
-   route resolve to the *same* directory.
-2. Staleness — the entrypoint seeds the bind mount from the image once (only
-   when the bind mount has no manifest at all), so a bind mount seeded by an
-   older image build never gets refreshed by later image builds. The image
-   bake is therefore preferred whenever it exists; the bind-mounted dist is
-   only used as a fallback for bare-metal (non-Docker) host dev where
-   ``/opt/frontend-dist`` doesn't exist.
+Priority is therefore **working-tree build first, image bake as fallback**: in
+dev you see your edits; on the VM (no working-tree build) you get the image's
+baked assets. To keep this deterministic:
+
+- ``deploy-remote.sh`` removes ``frontend/static/dist`` on the VM after git
+  sync, so the VM never shadows the fresh image bake with a stale leftover.
+- The entrypoint does NOT copy between the two (an earlier "seed once" step
+  caused staleness — a bind mount seeded by an old image never refreshed).
+
+Both the manifest lookup and the ``/static/dist`` file route resolve to the
+*same* directory (``_active_dist_dir``), so the files the browser fetches always
+match the manifest that generated their hashed URLs (no "split brain").
 """
 
 from __future__ import annotations
@@ -31,17 +37,15 @@ _ENTRY = "src/main.ts"
 
 
 def _dist_dirs() -> list[Path]:
-    """Candidate dist dirs, in priority order.
+    """Candidate dist dirs, in priority order (working-tree build, then image).
 
-    The image bake is always fresh for the running image's source, so it is
-    preferred over a bind-mounted dist, which may have been seeded once from
-    an older image build and never refreshed. The bind mount is only relied
-    on for bare-metal (non-Docker) host dev, where the image path is absent.
+    The working-tree build (``_DIST``) reflects the current source and is
+    rebuilt before every dev start, so it wins. The image bake (``_IMAGE_DIST``)
+    is the fallback used in production, where no working-tree build exists.
     """
-    dirs = []
+    dirs = [_DIST]
     if _IMAGE_DIST != _DIST:
         dirs.append(_IMAGE_DIST)
-    dirs.append(_DIST)
     return dirs
 
 
@@ -89,9 +93,9 @@ def register_vite_template_globals(app) -> None:
     """Expose asset helpers to Jinja templates and serve /static/dist files.
 
     A dedicated ``/static/dist/<path>`` route serves the built bundle from the
-    resolved active dist dir (bind mount preferred, image bake fallback), so the
-    files the browser fetches always match the manifest that produced their URLs
-    — even when the bind-mounted repo has no build (VM after git pull)."""
+    resolved active dist dir (working-tree build preferred, image bake fallback),
+    so the files the browser fetches always match the manifest that produced
+    their URLs — even when the working tree has no build (VM after git pull)."""
 
     @app.context_processor
     def _vite_context():
