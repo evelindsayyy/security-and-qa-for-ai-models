@@ -130,6 +130,38 @@ class DccLaunchRouteTest(_Base):
         sr.assert_called_once()
 
 
+class DockerUnavailable503Test(_Base):
+    """When the pillar image isn't built / Docker is unreachable, the launcher
+    raises DockerUnavailableError. The start routes must render it as a readable
+    503 rather than letting it become a bare 500 (the live-site symptom)."""
+
+    def _boom(self):
+        from frontend import docker_launch
+        return docker_launch.DockerUnavailableError(
+            "Docker is required for browser-launched evaluator runs — "
+            "build the pillar image or set FRONTEND_LAUNCH_MODE=host")
+
+    def test_gateway_start_returns_503(self) -> None:
+        with mock.patch.object(eval_launch, "validate_launch", return_value=None), \
+             mock.patch("frontend.pipeline.require_ready_for_downstream", return_value=None), \
+             mock.patch.object(eval_launch, "start_run", side_effect=self._boom()):
+            r = _client().post("/eval-run/start",
+                               data={"candidate": "gpt-5-chat", "judge": _JUDGE,
+                                     "suite": "it_support_v1", "max_tokens": "2000"})
+        self.assertEqual(r.status_code, 503)
+        self.assertIn(b"Docker is required", r.data)
+
+    def test_hf_start_returns_503(self) -> None:
+        with mock.patch.object(hf_intake, "validate", return_value=_GOOD), \
+             mock.patch.object(eval_launch, "validate_hf_scan_gate", return_value=_SCAN_OK), \
+             mock.patch.object(eval_launch, "start_dcc_run", side_effect=self._boom()):
+            r = _client().post("/eval-run/start",
+                               data={"source": "hf", "hf_repo": _REPO, "judge": _JUDGE,
+                                     "suite": "it_support_v1", "max_tokens": "2000"})
+        self.assertEqual(r.status_code, 503)
+        self.assertIn(b"Docker is required", r.data)
+
+
 class DccValidateParamsTest(_Base):
     def test_good_params_pass(self) -> None:
         self.assertIsNone(
