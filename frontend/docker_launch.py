@@ -43,6 +43,12 @@ _ready: set[str] = set()
 _lock = threading.Lock()
 
 
+class DockerUnavailableError(RuntimeError):
+    """A browser-launched run needs Docker, but it isn't usable here — the daemon
+    is unreachable or the pillar image hasn't been built on this host. Callers
+    should surface the message (503) instead of letting it become a bare 500."""
+
+
 def use_docker() -> bool:
     mode = os.environ.get(
         "FRONTEND_LAUNCH_MODE",
@@ -190,9 +196,23 @@ def ensure_stack(stack: str) -> None:
     with _lock:
         if stack in _ready:
             return
+        # Pre-flight: fail fast with a readable reason when the daemon/socket
+        # isn't reachable, rather than letting the build subprocess emit a raw
+        # 500 to the browser.
+        if not docker_available():
+            raise DockerUnavailableError(docker_required_message(stack))
         _export_uid_gid()
         compose, service = _stack_paths(stack)
-        _compose_build(compose, service)
+        try:
+            _compose_build(compose, service)
+        except DockerUnavailableError:
+            raise
+        except Exception as exc:
+            # Missing compose file / build failure (e.g. pillar image was never
+            # built on this host) — surface it as the actionable message.
+            raise DockerUnavailableError(
+                f"{docker_required_message(stack)} (detail: {exc})"
+            ) from exc
         _ready.add(stack)
 
 
