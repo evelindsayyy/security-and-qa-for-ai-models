@@ -22,6 +22,7 @@ from frontend import safety_data, safety_db_data
 def _merged_data_dict(**overrides):
     base = {
         "gateway_model_id": "gpt-4.1",
+        "redteam_profile": "base",
         "display_name": "GPT 4.1",
         "status": "complete",
         "deployment_context": {"deployment_type": "chatbot", "has_guardrails": True},
@@ -68,6 +69,7 @@ def _db_run_tuple(data: dict):
     return (
         "run-uuid",
         data["gateway_model_id"],
+        data.get("redteam_profile") or "base",
         data.get("display_name"),
         data["status"],
         data.get("deployment_context") or {},
@@ -186,13 +188,12 @@ class AvailabilityTest(unittest.TestCase):
             data = safety_data.get_safety_data()
         self.assertIn("has_safety", data)
 
-    def test_detail_dispatcher_falls_back_when_slug_not_in_db(self) -> None:
-        sentinel = {"slug": "from-files"}
+    def test_detail_returns_none_when_slug_not_in_db(self) -> None:
         with mock.patch.object(safety_db_data, "available", return_value=True), \
              mock.patch.object(safety_db_data, "get_safety_detail_db", return_value=None), \
-             mock.patch.object(safety_data, "_get_safety_detail_files", return_value=sentinel):
+             mock.patch.object(safety_data, "_get_safety_detail_files", return_value={"slug": "from-files"}):
             detail = safety_data.get_safety_detail("some-slug")
-        self.assertIs(detail, sentinel)
+        self.assertIsNone(detail)
 
     def test_dispatcher_survives_db_exceptions(self) -> None:
         with mock.patch.object(safety_db_data, "available", side_effect=RuntimeError("db down")):

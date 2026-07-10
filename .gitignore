@@ -29,8 +29,8 @@ testing/**/output/*
 # removed spike tree (OSV/pip-audit experiments lived elsewhere; no re-add)
 testing/security_scanning_tests/
 .gitlab/gitlab-transfer.md
-context.md
 PROJECT_GUIDE.md
+frontend/.summary-cache/
 
 # eval spikes — regenerate locally
 testing/eval/output/*
@@ -80,5 +80,7 @@ safety/promptfoo/output/*
 safety/promptfoo/.promptfoo/
 safety/garak/output/*
 !safety/garak/output/README.md
+safety/garak/tmp*.yaml
+safety/garak/.runtime/
 safety/output/*
 !safety/output/README.md

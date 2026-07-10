@@ -5,8 +5,8 @@ be evaluated or benchmarked.
 Read-only over the scanner + safety artifacts. This module never runs, edits, or
 imports the pillars' launch code at import time — every pillar import is lazy
 (inside a function), matching frontend/routes.py. "Cleared" is defined once here
-and mirrors the scanner gate in eval_launch.validate_hf_scan_gate: a completed
-artifact whose headline tier is 'low'.
+and mirrors the scanner gate in eval_launch.validate_hf_scan_gate: any completed
+safety run (under any red-team profile) whose headline tier isn't high/critical.
 
 Source-aware:
   gateway model -> nothing to scan (N/A); must clear safety red-teaming.
@@ -25,36 +25,49 @@ from markupsafe import escape
 ROOT = Path(__file__).parent.parent
 SAFETY_OUTPUT_DIR = ROOT / "safety" / "output"
 
-CLEARED_TIER = "low"
+# A completed safety run clears the gate unless it flagged the model as high
+# risk. Blocking only high/critical (not medium) keeps the gate meaningful
+# while letting normal models through — most gateway models score medium, so a
+# low-only bar blocks nearly every eval in practice.
+CLEARED_TIERS = frozenset({"low", "medium"})
 COMPLETE_STATUSES = frozenset({"complete", "completed"})
-DEFAULT_SAFETY_PROFILE = "base"
 
 
-def _safety_result_path(model: str, profile: str = DEFAULT_SAFETY_PROFILE) -> Path:
-    """Published safety artifact for a gateway model id (read-only)."""
+def _safety_result_paths(model: str) -> list[tuple[str, Path]]:
+    """(profile, merged-result path) for every red-team profile this gateway
+    model has a run under — ``safety/output/<slug>/<profile>/…`` plus the legacy
+    profile-less path. Read-only; private per-user copies (``.private/``) are
+    ignored (the gate reads the public results)."""
     from safety.gateway_ids import normalize_gateway_model_id
-    from safety.merged_paths import merged_result_path
 
     slug = normalize_gateway_model_id(model)
-    return merged_result_path(SAFETY_OUTPUT_DIR, slug, profile)
+    model_dir = SAFETY_OUTPUT_DIR / slug
+    out: list[tuple[str, Path]] = []
+    if not model_dir.is_dir():
+        return out
+    legacy = model_dir / "merged_safety_result.json"
+    if legacy.is_file():
+        out.append(("base", legacy))
+    for prof_dir in sorted(model_dir.iterdir()):
+        if prof_dir.is_dir() and not prof_dir.name.startswith("."):
+            mp = prof_dir / "merged_safety_result.json"
+            if mp.is_file():
+                out.append((prof_dir.name, mp))
+    return out
 
 
-def validate_safety_gate(model: str, *, profile: str = DEFAULT_SAFETY_PROFILE) -> dict:
-    """Require a completed, low-tier safety run before eval/benchmark.
+def validate_safety_gate(model: str) -> dict:
+    """Approve a model that has ANY completed, non-high-risk safety run in
+    history — under any red-team profile (base, education, finance, …).
 
-    Mirrors eval_launch.validate_hf_scan_gate: only a completed run whose
-    composite_tier is 'low' clears the gate. Reflected values are HTML-escaped
-    (errors render as HTML).
+    This "connects" previous scannings: once red-teaming has run and did not flag
+    the model high/critical, the eval is approved without re-running. A model
+    whose only completed runs are high/critical is blocked; a model with no
+    completed run at all still needs safety. Reflected values are HTML-escaped.
     """
-    path = _safety_result_path(model, profile)
-    base = {
-        "model": model,
-        "profile": profile,
-        "path": str(path),
-        "status": None,
-        "tier": None,
-    }
-    if not path.is_file():
+    base = {"model": model, "profile": None, "status": None, "tier": None}
+    paths = _safety_result_paths(model)
+    if not paths:
         return {
             **base,
             "ok": False,
@@ -63,35 +76,35 @@ def validate_safety_gate(model: str, *, profile: str = DEFAULT_SAFETY_PROFILE) -
                 f"'{escape(model)}' first, then retry"
             ),
         }
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception as e:  # noqa: BLE001 — malformed artifact must never 500
-        return {
-            **base,
-            # Non-None status so the /pipeline badge reads "blocked" (a present
-            # but corrupt artifact), not "missing" (no run at all). The gate
-            # still fails closed either way.
-            "status": "unreadable",
-            "ok": False,
-            "error": f"safety result is unreadable: {type(e).__name__}: {e}",
-        }
 
-    status = str(data.get("status") or "unknown").lower()
-    tier = str(data.get("composite_tier") or "unknown").lower()
-    out = {**base, "status": status, "tier": tier}
-    if status not in COMPLETE_STATUSES:
-        return {**out, "ok": False,
-                "error": f"safety run is not complete yet (status={status})"}
-    if tier != CLEARED_TIER:
-        return {
-            **out,
-            "ok": False,
-            "error": (
-                "safety red-teaming did not clear this model "
-                f"(tier={tier}); eval/benchmark is blocked"
-            ),
-        }
-    return {**out, "ok": True, "error": None}
+    # Approve on the first completed non-high-risk run; otherwise keep the most
+    # informative block reason (a completed high-risk run beats an in-progress
+    # or unreadable one).
+    block: dict | None = None
+    for profile, mp in paths:
+        try:
+            data = json.loads(mp.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 — a corrupt artifact must never 500
+            block = block or {
+                **base, "profile": profile, "status": "unreadable", "ok": False,
+                "error": f"safety result is unreadable ({escape(profile)} profile)",
+            }
+            continue
+        status = str(data.get("status") or "unknown").lower()
+        tier = str(data.get("composite_tier") or "unknown").lower()
+        out = {**base, "profile": profile, "status": status, "tier": tier}
+        if status not in COMPLETE_STATUSES:
+            block = block or {**out, "ok": False,
+                              "error": f"safety run is not complete yet (status={status})"}
+            continue
+        if tier not in CLEARED_TIERS:
+            block = {**out, "ok": False,
+                     "error": ("safety red-teaming flagged this model as high risk "
+                               f"(tier={tier}); eval/benchmark is blocked")}
+            continue
+        return {**out, "ok": True, "error": None}
+
+    return block  # non-None: a non-empty paths list always sets a block reason
 
 
 def require_ready_for_downstream(model: str, source: str) -> str | None:

@@ -1,15 +1,21 @@
 {% extends "base.html" %}
-{% from '_macros.html' import cli_safety_docker, cli_safety_host %}
+{% from '_macros.html' import cli_safety_docker, cli_safety_host, start_button, delete_button, rerun_button, staleness_badge, tier_label, pillar_guide_callout with context %}
 
 {% block title %}Safety red-team{% endblock %}
 
 {% block content %}
 <div class="eval-comparison">
   <h1>Safety red-team</h1>
-  <p><a class="btn-primary" href="{{ url_for('safety_run_new') }}">▶ Start a new run</a></p>
+  <p>{{ start_button(url_for('safety_run_new'), '▶ Start a new run') }}</p>
 
-  <section class="key">
-    <h2>How to read this</h2>
+  {{ pillar_guide_callout(
+       'Reference scores & safety guide',
+       'How policy probes, red-team plugins, and garak modules combine into the composite tier.',
+       url_for('safety_reference')
+     ) }}
+
+  <details class="key" open>
+    <summary>How to read this</summary>
     <dl class="legend-grid">
       <dt><span class="tier tier-low">Tier</span></dt>
       <dd>Weighted pass rates: Duke policy <b>40%</b>, red-team <b>35%</b>, Garak <b>25%</b> (renormalized if a suite was skipped). Escalates when a curated policy probe fails.</dd>
@@ -17,8 +23,12 @@
       <dd>Share of all probes the model resisted across suites that ran.</dd>
       <dt>Suite columns</dt>
       <dd>Per-suite pass rates — policy (hand-written Duke rules), red-team (Promptfoo adversarial plugins), Garak (automated attack modules).</dd>
+      {% if has_comparison %}
+      <dt>Compare</dt>
+      <dd>Matrix of per-suite pass rates (suite × model). Empty cells mean that suite did not run for that model.</dd>
+      {% endif %}
     </dl>
-  </section>
+  </details>
 
   {% if not has_safety %}
     <p class="sub">
@@ -27,6 +37,15 @@
       <span class="dim">(host: <code>{{ cli_safety_host() }}</code>)</span>
     </p>
   {% else %}
+    <h2>Runs</h2>
+    <div class="bench-view-tabs" role="tablist" aria-label="Safety results view">
+      <button type="button" class="bench-view-tab is-active" data-view="list" role="tab" aria-selected="true">List</button>
+      {% if has_comparison %}
+      <button type="button" class="bench-view-tab" data-view="compare" role="tab" aria-selected="false">Compare</button>
+      {% endif %}
+    </div>
+
+    <div id="pillar-view-list" class="bench-view-panel" role="tabpanel">
     <p class="sub">
       {{ models|length }} model{{ "" if models|length == 1 else "s" }} ·
       highest risk first
@@ -45,29 +64,48 @@
           {% endfor %}
           <th class="num">Failed</th>
           <th class="col-nowrap">Completed</th>
+          <th class="col-actions">Actions</th>
         </tr>
       </thead>
       <tbody>
         {% for m in models %}
         <tr class="row-link {% if m.tier in ('critical', 'high') %}row-warn{% endif %}"
-            data-href="{{ url_for('safety_detail', slug=m.slug, profile=m.profile) }}"
+            data-href="{{ url_for('safety_detail_private' if view_mode == 'private' else 'safety_detail', slug=m.slug, profile=m.profile) }}"
             tabindex="0"
             role="link"
             aria-label="Open safety results for {{ m.gateway_model_id }} ({{ m.profile }})">
-          <td><span class="model">{{ m.gateway_model_id }}</span></td>
+          <td><span class="model">{{ m.gateway_model_id }}</span> {{ staleness_badge(m.staleness) }}</td>
           <td class="col-nowrap"><span class="badge">{{ m.profile }}</span></td>
-          <td class="col-nowrap"><span class="tier tier-{{ m.tier }}">{{ m.tier }}</span></td>
+          <td class="col-nowrap">{{ tier_label(m.tier) }}</td>
           <td class="num overall {{ m.pass_rate_class }}">{{ m.pass_rate_display }}</td>
           {% for col in m.suite_columns %}
           <td class="num {{ col.rate_class }}">{{ col.display }}</td>
           {% endfor %}
           <td class="num dim">{{ m.n_failed }}</td>
           <td class="col-nowrap dim">{{ m.completed_at[:10] if m.completed_at != "—" else "—" }}</td>
+          <td class="col-actions" onclick="event.stopPropagation()">
+            {{ rerun_button(url_for('safety_run_new', from=m.slug, profile=m.profile), 'Rerun', 'btn-primary btn-sm' if m.staleness and m.staleness.stale else 'btn-secondary btn-sm') }}
+            {{ delete_button(url_for('safety_delete_private' if view_mode == 'private' else 'safety_delete', slug=m.slug, profile=m.profile), 'Delete', classes='btn-danger btn-sm') }}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
     </div>
+    </div>
+
+    {% if has_comparison %}
+    <div id="pillar-view-compare" class="bench-view-panel" role="tabpanel" hidden>
+      <p class="sub">
+        Per-suite pass rates — click a cell for probe-level detail.
+        Empty cells mean that suite did not run for that model.
+      </p>
+      {% with detail_endpoint='safety_detail' %}
+      {% include '_pillar_comparison_matrix.html' %}
+      {% endwith %}
+    </div>
+    <script src="{{ url_for('static', filename='pillar-view-tabs.js') }}"></script>
+    {% endif %}
   {% endif %}
 </div>
 {% endblock %}

@@ -1,0 +1,47 @@
+{% from '_macros.html' import expandable, benchmark_item_status with context %}
+{% if show_heading|default(true) %}
+<h2>Sample questions ({{ items_loaded or results|length }}{% if raw_row_count > (items_loaded or results|length) %} of {{ raw_row_count }}{% endif %})</h2>
+{% endif %}
+{% if results %}
+  {% for r in results %}
+  <details class="finding-detail {% if r.answered is defined and not r.answered %}finding-skip{% elif not r.passed %}finding-fail{% endif %}"
+           data-item-outcome="{% if r.answered is defined and not r.answered %}skip{% elif r.passed %}pass{% else %}fail{% endif %}">
+    <summary>
+      {{ benchmark_item_status(r) }}
+      · {{ r.subject|replace("_", " ") }}
+      · correct <b>{{ r.correct_answer }}</b>
+      · model <b>{% if r.answered is defined and not r.answered %}<span class="dim">(no answer)</span>{% else %}{{ r.model_answer }}{% endif %}</b>
+      {% if r.question %}
+        · <span class="finding-summary-title">{{ r.question[:70] }}{% if r.question|length > 70 %}…{% endif %}</span>
+      {% endif %}
+    </summary>
+    <div class="finding-detail-panel benchmark-item-panel">
+      <h3>Question</h3>
+      {{ expandable(r.question or "—", clamp=4) }}
+      {% if r.choices %}
+      <h3>Choices</h3>
+      <ul class="benchmark-choice-list">
+        {% for choice in r.choices %}
+        {% set letter = "ABCD"[loop.index0] %}
+        <li class="{% if letter == r.correct_answer %}choice-correct{% elif letter == r.model_answer and not r.passed %}choice-wrong{% endif %}">
+          <b>{{ letter }}.</b> {{ choice }}
+          {% if letter == r.correct_answer %}<span class="dim"> (correct)</span>{% endif %}
+          {% if letter == r.model_answer %}<span class="dim"> (model)</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      <dl class="benchmark-meta-dl">
+        <dt>Subject</dt><dd>{{ r.subject|replace("_", " ") }}</dd>
+        <dt>Correct</dt><dd>{{ r.correct_answer }}</dd>
+        <dt>Model picked</dt>
+        <dd>{% if r.answered is defined and not r.answered %}<span class="dim">Skipped — no usable answer</span>{% else %}{{ r.model_answer }}{% endif %}</dd>
+        {% if r.answered is defined and not r.answered %}
+        <dt>Why skipped?</dt>
+        <dd class="form-hint">{{ coverage_skip_explanation }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+  </details>
+  {% endfor %}
+{% endif %}

@@ -1,12 +1,12 @@
-# Judge selection — interim decision (week 4)
+# Judge selection — interim decision
 
-**Status: INTERIM.** Based on cross-judge experiments run weeks 3–4. The
-weeks 7–8 validation study (human raters, Pearson + Cohen's Kappa per
-dimension) is the final arbiter; this document records what we use until
-then and why. Reproduce all numbers with:
+**Status: INTERIM.** Based on cross-judge experiments from early pilot runs. A
+future human-validation study (Pearson + Cohen's Kappa per dimension) is the
+final arbiter; this document records what we use until then and why. Reproduce
+all numbers with:
 
 ```bash
-cd evaluator && python compare_judges.py --from-results --suite it_support_v1
+uv run python evaluator/compare_judges.py --from-results --suite it_support_v1
 ```
 
 ## Decision
@@ -33,7 +33,7 @@ now in the launcher allowlist (`frontend/eval_launch.py`).
   goes through `litellm.oit.duke.edu`, so eval data is covered by the Gateway's
   agreement (which routes OpenAI via Azure OpenAI).
 - **Still options, not the new primary.** Maverick stays the documented primary
-  judge until the weeks 7–8 human-validation study decides primacy; these are
+  judge until the human-validation study decides primacy; these are
   available for cross-judge comparison and for users who want a stronger grader.
 - **Cross-family rule still applies.** An OpenAI judge must not score an OpenAI
   candidate (self-preference). `model_family()` now treats Qwen as its own
@@ -105,20 +105,20 @@ The rule says judge family ≠ candidate family. Our position:
 
 ## Known history / caveats
 
-- Week-3 baseline rows were judged with `reference_based_v1` (hardcoded
-  IT-support dims); weeks 4+ use `reference_based_v2` (rubric-aware).
+- Early baseline rows were judged with `reference_based_v1` (hardcoded
+  IT-support dims); later runs use `reference_based_v2` (rubric-aware).
   `judge_prompt_version` in each row disambiguates.
 - gpt-oss-120b initially failed 9/12 judgments by exhausting its 600-token
   budget on hidden reasoning — fixed via `--judge-max-tokens`. Its strict
   completeness scores cite real reference omissions (verified by reading
   rationales), so strictness is calibration, not noise.
 - All scores still rest on PLACEHOLDER references (OIT/policy-office
-  validation is week 5); judge comparisons are methodology validation, not
+  validation is pending); judge comparisons are methodology validation, not
   authoritative model quality claims.
 
 ## Reconsideration triggers
 
-1. The weeks 7–8 human validation study (decides which judge tracks human
+1. The human validation study (decides which judge tracks human
    raters — overrides everything here).
 2. Any future cross-judge run showing rank concordance < 100% on ≥3 shared
    candidates.

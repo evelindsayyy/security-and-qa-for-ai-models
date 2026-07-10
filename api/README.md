@@ -7,6 +7,8 @@ Thin handlers over `frontend/*_data.py` (reads) and `frontend/*_launch.py`
 (writes). Same payloads as the dashboard; envelope in `api/responses.py`.
 Bulk Postgres ingest is CLI-only: `python -m api.ingest` (see [`docs/cli.md`](../docs/cli.md)).
 
+**Auth:** List/detail reads respect session view mode (public vs private). Custom eval POST requires private mode + allowlisted session. See [`auth/README.md`](../auth/README.md).
+
 ## Mounted routes
 
 | Method | Path | Data / launch layer |
@@ -24,7 +26,8 @@ Bulk Postgres ingest is CLI-only: `python -m api.ingest` (see [`docs/cli.md`](..
 | GET | `/api/evals/<slug>` | `eval_run_data` |
 | GET | `/api/evals/<slug>/status` | `eval_launch.get_status` |
 | POST | `/api/evals` | `eval_launch` → `202` + `job_id` |
-| GET | `/api/models/<slug>` | `eval_run_data` — rollup across suites |
+| GET | `/api/models` | `model_rollup` — every model with data in >=1 pillar, paged |
+| GET | `/api/models/<slug>` | `model_rollup` — full cross-pillar rollup (scan + safety + eval + benchmark) |
 | GET | `/api/benchmarks` | `benchmark_data` — paged |
 | GET | `/api/benchmarks/<slug>` | `benchmark_data` |
 | GET | `/api/benchmarks/<slug>/status` | `benchmark_launch.get_status` |
@@ -93,7 +96,7 @@ Poll `status_url` until `status` is `complete` or `failed`, then GET the detail 
 
 ### Troubleshooting
 
-- **503 on POST** — output directory not writable (often root-owned from an old Docker run). **Application VM (no sudo):** `docker run --rm -v "$PWD/scanner/output:/out" -u root busybox chown -R "$(id -u):$(id -g)" /out`. **With sudo:** `chown -R "$USER" scanner/output`. Export `UID`/`GID` before compose so new runs write as your user.
+- **503 on POST** — output directory not writable (often root-owned from an old Docker run). **Application VM (no sudo):** `docker run --rm -v "$PWD/scanner/output:/out" -u root busybox chown -R "$(id -u):$(id -g)" /out`. Use `env UID=$(id -u) GID=$(id -g)` before compose so new runs write as your user.
 - **`db_available: false`** — DSN missing, Postgres unreachable, or schemas not applied. Reads fall back to disk JSON. Run `GET /api/health` after setting `POSTGRES_DSN` and applying schemas.
 
 ### Pagination (list endpoints)
@@ -141,13 +144,14 @@ Every response is the same shape:
 | `health.py` | Liveness blueprint |
 | `scans.py` | Scan read/write |
 | `safety.py` | Safety read/write |
-| `evals.py` | Efficacy read/write + model rollup |
+| `evals.py` | Efficacy read/write |
 | `benchmarks.py` | Benchmark read/write |
+| `models.py` | Cross-pillar model list + rollup (`frontend.model_rollup`) |
 | `ingest.py` | CLI orchestrator — `python -m api.ingest` (not a REST route) |
 | `__init__.py` | `register_api(app)` |
 
 ## Planned
 
-| Method | Path | Notes |
-|--------|------|-------|
-| GET | `/api/models` | cross-pillar catalog |
+Nothing outstanding — `GET /api/models` (list) and the full cross-pillar
+`GET /api/models/<slug>` rollup are both live (`api/models.py` →
+`frontend/model_rollup.py`).

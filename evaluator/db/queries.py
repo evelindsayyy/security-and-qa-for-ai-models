@@ -82,10 +82,27 @@ def connect():
 # SQL — column order matches the reconstruction tuples below
 # ---------------------------------------------------------------------------
 
+def _run_visibility(
+    *, visibility: str | None = None, owner_user_id: str | None = None
+) -> tuple[str, dict]:
+    """SQL visibility clause. Explicit ``visibility``/``owner_user_id`` (the
+    resolved route scope) take precedence over the ambient session — omit
+    both only for the list page, which still tracks the current toggle."""
+    from dbutils.visibility import visibility_clause
+
+    if visibility is None:
+        from frontend.read_context import read_context
+
+        visibility, owner_user_id = read_context()
+    clause, params = visibility_clause("r", view_mode=visibility, user_id=owner_user_id, links_alias=True)
+    return clause, params
+
+
 _RUNS_SQL = """
 SELECT r.id::text, r.source_file, r.gateway_model_id, r.judge_model,
        r.started_at, r.adaptation
 FROM public.eval_runs r
+WHERE {visibility_filter}
 """
 
 _RESULTS_SQL = """
@@ -95,7 +112,12 @@ FROM public.eval_results
 ORDER BY task_id
 """
 
-_DETAIL_RUN_SQL = _RUNS_SQL + " WHERE r.source_file = %(source_file)s"
+_DETAIL_RUN_SQL = """
+SELECT r.id::text, r.source_file, r.gateway_model_id, r.judge_model,
+       r.started_at, r.adaptation
+FROM public.eval_runs r
+WHERE r.source_file = %(source_file)s AND ({visibility_filter})
+"""
 _DETAIL_RESULTS_SQL = """
 SELECT task_id, score, latency_ms, tokens_in, tokens_out, cost_usd,
        candidate_failed, judge_failed, detail
@@ -132,8 +154,9 @@ def fetch_runs(conn) -> list[dict]:
 
     Runs with no results, or no source_file, are skipped (the same tolerance
     the dashboard's merge already assumed)."""
+    vis_clause, vis_params = _run_visibility()
     with conn.cursor() as cur:
-        cur.execute(_RUNS_SQL)
+        cur.execute(_RUNS_SQL.format(visibility_filter=vis_clause), vis_params)
         runs = [_run_dict(r) for r in cur.fetchall()]
         cur.execute(_RESULTS_SQL)
         by_run: dict[str, list[dict]] = {}
@@ -154,13 +177,17 @@ def fetch_runs(conn) -> list[dict]:
     ]
 
 
-def fetch_run(conn, source_file: str) -> dict | None:
+def fetch_run(
+    conn, source_file: str, *, visibility: str | None = None, owner_user_id: str | None = None
+) -> dict | None:
     """One run by its source_file as a RunRecord, or None if absent.
 
     Returns the record even when ``results`` is empty; the caller decides
     whether an empty run is meaningful."""
+    vis_clause, vis_params = _run_visibility(visibility=visibility, owner_user_id=owner_user_id)
     with conn.cursor() as cur:
-        cur.execute(_DETAIL_RUN_SQL, {"source_file": source_file})
+        params = {"source_file": source_file, **vis_params}
+        cur.execute(_DETAIL_RUN_SQL.format(visibility_filter=vis_clause), params)
         hit = cur.fetchone()
         if hit is None:
             return None

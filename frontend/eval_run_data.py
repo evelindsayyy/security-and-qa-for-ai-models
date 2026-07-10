@@ -66,31 +66,43 @@ def _percentile(values: list[float], p: float) -> float:
     return s[f] + (s[c] - s[f]) * (k - f)
 
 
+# Bump to invalidate cached execution sidecars written by an older scorer. v2
+# fixes judge-only suites (e.g. it_support) that an early scorer mis-scored as
+# all-fail SQL — those stale sidecars are now ignored and recomputed.
+_EXEC_CACHE_VERSION = 2
+
+
 def _execution_summary(path: Path) -> dict | None:
     """Functional pass/fail for an execution (SQL/JSON/numeric) run, cached to a
-    ``<slug>_execution.json`` sidecar. None for a judge-scored suite (or any
-    error) — the dashboard just shows nothing when absent. Never raises.
+    ``<slug>_execution.json`` sidecar. None for a judge-scored suite (a suite
+    with no execution rows) or any error — the dashboard shows nothing when
+    absent. Never raises.
 
     Lazy + cached: the first view of an execution run runs the checks (fast,
     in-memory) and writes the sidecar; later views read it. The sidecar is
     ``.json`` (not ``.jsonl``) so the runs glob never mistakes it for a run.
+    A sidecar from an older scorer version is ignored and recomputed.
     """
     sidecar = path.with_name(f"{path.stem}_execution.json")
     if sidecar.is_file():
         try:
             data = json.loads(sidecar.read_text(encoding="utf-8"))
         except Exception:
-            return None
-        return data if data.get("applicable") else None
+            data = None
+        # Trust the cache only if it came from the current scorer; otherwise
+        # recompute (a stale sidecar may have mis-scored a judge-only suite).
+        if isinstance(data, dict) and data.get("cache_version") == _EXEC_CACHE_VERSION:
+            return data if data.get("applicable") else None
     try:
         import execution_eval  # lazy: a bad import mustn't break the dashboard
 
         summary = execution_eval.score_results_file(path)
-        summary["applicable"] = True
+        # A suite with no execution rows is judge-only, not an execution suite.
+        summary["applicable"] = summary.get("n", 0) > 0
     except Exception:
-        # not an execution suite, or scoring failed → cache a marker so we don't
-        # re-attempt on every page load.
+        # scoring failed → cache a marker so we don't re-attempt every page load.
         summary = {"applicable": False}
+    summary["cache_version"] = _EXEC_CACHE_VERSION
     try:
         sidecar.write_text(json.dumps(summary), encoding="utf-8")
     except Exception:
@@ -221,18 +233,29 @@ def _load_suite_questions(suite_version: str) -> dict[str, str]:
     return questions
 
 
-def _get_run_detail_files(slug: str) -> dict | None:
+def _get_run_detail_files(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
     """Full payload for one results JSONL — per-question rows with rationales.
 
-    Slug is the JSONL filename without the .jsonl extension. Returns None
-    if the file is missing or unreadable.
+    Slug is the JSONL filename without the .jsonl extension (globally unique
+    regardless of visibility — eval never nests private output under a
+    different directory). Returns None if the file is missing/unreadable, or
+    the run's own recorded visibility doesn't match the requested scope
+    (the URL the caller resolved to, not the viewer's ambient session).
     """
+    from dbutils.run_meta import read_run_meta_for_pillar
+    from dbutils.visibility import artifact_visible
+
     # slug comes straight from the URL — refuse anything that could
     # traverse outside RESULTS_DIR before touching the filesystem.
     if not is_safe_slug(slug):
         return None
     path = RESULTS_DIR / f"{slug}.jsonl"
     if not resolves_inside(RESULTS_DIR, path) or not path.is_file():
+        return None
+    meta = read_run_meta_for_pillar(RESULTS_DIR / slug, pillar="eval")
+    if not artifact_visible(meta, view_mode=visibility, user_id=owner_user_id):
         return None
     try:
         with path.open("r", encoding="utf-8") as f:
@@ -384,9 +407,13 @@ def _postprocess_runs(runs: list[dict]) -> dict:
 
 def _get_runs_data_files() -> dict:
     """Comparison data: aggregate every results JSONL in the evaluator output dir."""
+    from frontend.read_context import artifact_path_visible
+    from dbutils import fs_safe
+
     if not RESULTS_DIR.exists():
         return {"has_runs": False, "results_dir": str(RESULTS_DIR), "runs": []}
-    files = [p for p in RESULTS_DIR.glob("*.jsonl") if "_trace" not in p.name]
+    files = [p for p in fs_safe.glob(RESULTS_DIR, "*.jsonl") if "_trace" not in p.name]
+    files = [p for p in files if artifact_path_visible(RESULTS_DIR / p.stem, pillar="eval")]
     runs = [r for r in (_aggregate_file(p) for p in files) if r is not None]
     return _postprocess_runs(runs)
 
@@ -610,26 +637,310 @@ def attach_cost_perf(data: dict, weights: CostPerfWeights = BALANCED) -> dict:
 
 
 def get_runs_data() -> dict:
+    from frontend import eval_db_data
+    from frontend.db_fallback import get_data_with_db_fallback
+
+    data = attach_cost_perf(
+        get_data_with_db_fallback(
+            eval_db_data.available,
+            eval_db_data.get_runs_data_db,
+            _get_runs_data_files,
+        )
+    )
+    runs = data.get("runs") or []
+    from frontend.staleness import attach_staleness
+
+    attach_staleness(runs, "eval")
+    data.update(_build_eval_comparison_section(runs))
+    return data
+
+
+def _eval_matrix_cell(run: dict) -> dict | None:
+    overall = run.get("overall")
+    if overall is None:
+        return None
+    return {
+        "display": f"{overall:.2f}",
+        "score_class": "",
+        "slug": run.get("slug"),
+    }
+
+
+def _build_eval_comparison_section(runs: list[dict]) -> dict:
+    """Pivot eval runs into suite×model overall matrix."""
+    from frontend.eval_launch import SUITES
+    from frontend.reference_constants import order_models
+
+    if not runs:
+        return {"has_comparison": False, "comparison_models": [], "comparison_rows": []}
+
+    by_suite_model: dict[str, dict[str, dict]] = {}
+    for r in runs:
+        suite = r.get("suite")
+        model = r.get("candidate_model")
+        if not suite or not model:
+            continue
+        bucket = by_suite_model.setdefault(suite, {})
+        existing = bucket.get(model)
+        if existing is None or (r.get("overall") or 0) > (existing.get("overall") or 0):
+            bucket[model] = r
+
+    models_set = {m for per in by_suite_model.values() for m in per}
+    comparison_models = order_models(models_set)
+
+    comparison_rows: list[dict] = []
+    for suite_key in sorted(set(by_suite_model.keys()) | set(SUITES.keys())):
+        label = SUITES.get(suite_key, {}).get("label", suite_key)
+        cells: dict[str, dict] = {}
+        for model_name in comparison_models:
+            row = by_suite_model.get(suite_key, {}).get(model_name)
+            if row:
+                cell = _eval_matrix_cell(row)
+                if cell:
+                    cells[model_name] = cell
+        comparison_rows.append({
+            "key": suite_key,
+            "label": label,
+            "badge_class": "badge-eval",
+            "cells": cells,
+        })
+
+    return {
+        "has_comparison": bool(comparison_models),
+        "comparison_models": comparison_models,
+        "comparison_rows": comparison_rows,
+    }
+
+
+def _build_eval_reference_scores(runs: list[dict]) -> dict:
+    from frontend.eval_launch import SUITES
+    from frontend.reference_constants import PREFERRED_REFERENCE_MODELS
+
+    by_suite_model: dict[str, dict[str, dict]] = {}
+    for r in runs:
+        suite = r.get("suite")
+        model = r.get("candidate_model")
+        if not suite or not model or model not in PREFERRED_REFERENCE_MODELS:
+            continue
+        bucket = by_suite_model.setdefault(suite, {})
+        existing = bucket.get(model)
+        if existing is None or (r.get("overall") or 0) > (existing.get("overall") or 0):
+            bucket[model] = r
+
+    reference_models = list(PREFERRED_REFERENCE_MODELS)
+    reference_rows: list[dict] = []
+    for suite_key in sorted(set(by_suite_model) | set(SUITES)):
+        label = SUITES.get(suite_key, {}).get("label", suite_key)
+        cells: dict[str, dict] = {}
+        for model_name in reference_models:
+            row = by_suite_model.get(suite_key, {}).get(model_name)
+            if row:
+                cell = _eval_matrix_cell(row)
+                if cell:
+                    cells[model_name] = cell
+        if suite_key in by_suite_model or suite_key in SUITES:
+            reference_rows.append({
+                "key": suite_key,
+                "label": label,
+                "badge_class": "badge-eval",
+                "cells": cells,
+            })
+
+    has_scores = any(c for row in reference_rows for c in row["cells"].values())
+    return {
+        "has_reference_scores": has_scores,
+        "reference_models": reference_models,
+        "reference_rows": reference_rows,
+    }
+
+
+def get_run_detail(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
+    """Detail payload for one eval run. Defaults to the public catalog; pass
+    ``visibility="private", owner_user_id=...`` for a signed-in user's own copy."""
     try:
         from frontend import eval_db_data
 
         if eval_db_data.available():
-            return attach_cost_perf(eval_db_data.get_runs_data_db())
-    except Exception:
-        pass  # any DB hiccup -> files, never a broken page
-    return attach_cost_perf(_get_runs_data_files())
-
-
-def get_run_detail(slug: str) -> dict | None:
-    try:
-        from frontend import eval_db_data
-
-        if eval_db_data.available():
-            detail = eval_db_data.get_run_detail_db(slug)
-            if detail is not None:
-                return detail
-            # slug not loaded into the DB yet (e.g. a just-finished run) —
-            # fall through to the file.
+            return eval_db_data.get_run_detail_db(
+                slug, visibility=visibility, owner_user_id=owner_user_id
+            )
     except Exception:
         pass
-    return _get_run_detail_files(slug)
+    return _get_run_detail_files(slug, visibility=visibility, owner_user_id=owner_user_id)
+
+
+def get_eval_rerun_params(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
+    """Launch-form prefill from a completed eval run."""
+    detail = get_run_detail(slug, visibility=visibility, owner_user_id=owner_user_id)
+    if detail is None:
+        return None
+    return {
+        "candidate_model": detail.get("candidate_model"),
+        "judge_model": detail.get("judge_model"),
+        "suite": detail.get("suite_version") or detail.get("suite"),
+    }
+
+
+_EVAL_ARTIFACT_SUFFIXES = (".jsonl", ".log", "_trace.jsonl")
+
+
+def delete_eval_run_paths(slug: str) -> list[str]:
+    if not is_safe_slug(slug):
+        return []
+    return [f"evaluator/results/{slug}{suffix}" for suffix in _EVAL_ARTIFACT_SUFFIXES]
+
+
+def delete_eval_run(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> str | None:
+    """Remove eval run artifacts (and DB row when configured). Returns error or None.
+
+    ``visibility``/``owner_user_id`` must match the run's own recorded scope —
+    a public-mode delete can't remove another user's private run and vice versa.
+    """
+    from dbutils.run_meta import read_run_meta_for_pillar
+    from dbutils.visibility import artifact_visible
+    from frontend.delete_db import db_delete_error
+    from frontend.eval_launch import is_eval_run_in_progress
+
+    if not is_safe_slug(slug):
+        return f"invalid slug: {slug!r}"
+
+    exists = False
+    try:
+        from frontend import eval_db_data
+
+        if eval_db_data.available():
+            exists = (
+                eval_db_data.get_run_detail_db(
+                    slug, visibility=visibility, owner_user_id=owner_user_id
+                )
+                is not None
+            )
+    except Exception:
+        pass
+    if not exists:
+        meta = read_run_meta_for_pillar(RESULTS_DIR / slug, pillar="eval")
+        if not artifact_visible(meta, view_mode=visibility, user_id=owner_user_id):
+            return f"no eval run found for slug {slug!r}"
+    if is_eval_run_in_progress(slug):
+        return "cannot delete while the run is still in progress"
+
+    removed_files = 0
+    for suffix in _EVAL_ARTIFACT_SUFFIXES:
+        path = RESULTS_DIR / f"{slug}{suffix}"
+        if path.is_file():
+            try:
+                path.unlink()
+                removed_files += 1
+            except OSError as exc:
+                return f"could not delete {path.name}: {exc}"
+
+    removed_db = False
+    db_available = False
+    db_row_existed = False
+    db_exc: BaseException | None = None
+    try:
+        from frontend import eval_db_data
+
+        db_available = eval_db_data.available()
+        if db_available:
+            try:
+                db_row_existed = (
+                    eval_db_data.get_run_detail_db(
+                        slug, visibility=visibility, owner_user_id=owner_user_id
+                    )
+                    is not None
+                )
+            except Exception:
+                pass
+            try:
+                removed_db = eval_db_data.delete_run(
+                    slug, visibility=visibility, owner_user_id=owner_user_id
+                )
+            except Exception as exc:
+                db_exc = exc
+    except Exception as exc:
+        db_exc = exc
+
+    err = db_delete_error(
+        db_available=db_available,
+        db_row_existed=db_row_existed,
+        removed_db=removed_db,
+        db_exc=db_exc,
+    )
+    if err:
+        return err
+
+    if removed_files == 0 and not removed_db:
+        return f"no eval run found for slug {slug!r}"
+    return None
+
+
+_EVAL_SUITE_ABOUT = {
+    "it_support": (
+        "Duke IT-support scenarios — troubleshooting, policy Q&A, and ticket-style "
+        "requests scored against reference answers."
+    ),
+    "plain_language": (
+        "Plain-language rewriting — dense bureaucratic passages rewritten for a "
+        "general audience; faithfulness and clarity weighted in the rubric."
+    ),
+    "email_drafting": (
+        "Professional email drafting — tone, structure, and constraint handling "
+        "for Duke-flavored workplace scenarios."
+    ),
+    "tutoring": (
+        "Tutoring scenarios — confused students asking for help; pedagogy and "
+        "misconception correction weighted highest."
+    ),
+    "robustness": (
+        "Robustness perturbations — same base questions with typos, informal "
+        "phrasing, and ambiguity to measure score stability."
+    ),
+}
+
+
+def get_eval_guide_data() -> dict:
+    """Rows for the eval reference/guide pages."""
+    from frontend.eval_launch import SUITES, suite_question_count
+
+    runs = get_runs_data().get("runs") or []
+    example = runs[0] if runs else None
+    rows = []
+    for key, cfg in SUITES.items():
+        rows.append({
+            "key": key,
+            "label": cfg["label"],
+            "badge_class": "badge-eval",
+            "about": _EVAL_SUITE_ABOUT.get(key, cfg.get("label", key)),
+            "procedure": (
+                f"LLM-as-judge scores each of {suite_question_count(key)} questions "
+                "against a reference answer using the suite rubric."
+            ),
+            "scoring": (
+                "Per-dimension rubric scores (usually 1–5) roll up to an overall "
+                "0–5 headline; higher is better."
+            ),
+            "default_sample": suite_question_count(key),
+            "sample_unit": "questions",
+        })
+    return {
+        "guide_rows": rows,
+        "has_example": example is not None,
+        "example_slug": example["slug"] if example else None,
+        "example_model": example["candidate_model"] if example else None,
+        "example_suite": example["suite"] if example else None,
+    }
+
+
+def get_eval_reference_data() -> dict:
+    runs = get_runs_data().get("runs") or []
+    data = get_eval_guide_data()
+    data["has_reference"] = data["has_example"]
+    data.update(_build_eval_reference_scores(runs))
+    return data

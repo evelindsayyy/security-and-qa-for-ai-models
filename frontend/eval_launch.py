@@ -26,8 +26,11 @@ from pathlib import Path
 from markupsafe import escape
 
 from frontend import docker_launch
-from frontend.log_status import status_message
+from frontend.launch_registry import check_inflight_combo
+from frontend.log_status import run_log_payload, status_message
+from frontend.output_dirs import OutputDirError
 from frontend.path_safety import is_safe_slug
+from frontend.run_paths import inflight_scope_key
 
 ROOT = Path(__file__).parent.parent
 EVALUATOR = ROOT / "evaluator"
@@ -217,7 +220,9 @@ SUITES: dict[str, dict] = {
 JUDGE_PROMPT = EVALUATOR / "prompts" / "judge" / "reference_based_v2.txt"
 
 MAX_TOKENS_MIN, MAX_TOKENS_MAX = 50, 4000
-SCAN_ALLOWED_TIERS = frozenset({"low"})
+# Clear a completed scan unless it flagged the repo as high risk — block only
+# high/critical (low + medium pass), matching the safety gate in pipeline.py.
+SCAN_ALLOWED_TIERS = frozenset({"low", "medium"})
 SCAN_COMPLETE_STATUSES = frozenset({"complete", "completed"})
 
 # --- Custom ("bring your own") question sets -------------------------------
@@ -259,9 +264,11 @@ def _suite_cfg(suite_key: str) -> dict | None:
 
 def _all_suite_keys() -> list[str]:
     """Curated suite keys plus any saved custom suites."""
+    from dbutils import fs_safe
+
     custom = []
-    if CUSTOM_SUITES_DIR.is_dir():
-        custom = sorted(p.stem for p in CUSTOM_SUITES_DIR.glob(f"{CUSTOM_PREFIX}*.jsonl"))
+    if fs_safe.is_dir(CUSTOM_SUITES_DIR):
+        custom = sorted(p.stem for p in fs_safe.glob(CUSTOM_SUITES_DIR, f"{CUSTOM_PREFIX}*.jsonl"))
     return list(SUITES) + custom
 
 
@@ -470,43 +477,88 @@ def predict_stem(suite_key: str, candidate: str) -> str:
     return f"{ts}_{suite_key}_{_safe_slug(candidate)}"
 
 
-def _wipe_prior_runs(suite_key: str, candidate: str) -> None:
-    """Delete previous result/trace/log files for this (suite, candidate).
+def _stem_from_artifact_path(path: Path) -> str:
+    name = path.name
+    for suffix in ("_trace.jsonl", ".jsonl", ".log"):
+        if name.endswith(suffix):
+            return name[: -len(suffix)]
+    return path.stem
+
+
+def _wipe_prior_runs(
+    suite_key: str, candidate: str, *, visibility: str, owner_user_id: str | None
+) -> None:
+    """Delete previous result/trace/log files for this (suite, candidate)
+    **in the same visibility/owner scope only** — never touch another
+    user's, or the public catalog's, run for the same model+suite.
 
     Runner output is timestamped, so old runs would otherwise pile up in the
     comparison table (e.g. a stale "12/12 empty" row next to a fixed one).
-    Wiping on launch keeps exactly one run per model+suite in the results dir.
+    Wiping on launch keeps exactly one run per model+suite per scope.
     """
+    from dbutils.run_meta import read_run_meta_for_pillar
+    from dbutils import fs_safe
+
     suffix = f"_{suite_key}_{_safe_slug(candidate)}"
-    for path in RESULTS_DIR.glob(f"*{suffix}*"):
-        if path.suffix in (".jsonl", ".log"):
-            path.unlink(missing_ok=True)
+    for path in fs_safe.glob(RESULTS_DIR, f"*{suffix}*"):
+        if path.suffix not in (".jsonl", ".log"):
+            continue
+        stem = _stem_from_artifact_path(path)
+        meta = read_run_meta_for_pillar(RESULTS_DIR / stem, pillar="eval")
+        if (meta.get("visibility") or "public") != visibility:
+            continue
+        if visibility == "private" and meta.get("owner_user_id") != owner_user_id:
+            continue
+        path.unlink(missing_ok=True)
 
 
 def start_run(
     candidate: str, judge: str, suite_key: str, max_tokens: int
-) -> tuple[str, bool]:
-    """Spawn a runner subprocess. Returns (slug, was_already_running).
+) -> tuple[str, bool, str]:
+    """Spawn a runner subprocess. Returns (slug, was_already_running, visibility).
 
     Caller must have passed validate_launch first; this function assumes
     allowlisted inputs.
     """
-    combo = (candidate, judge, suite_key, max_tokens)
-    with _LOCK:
-        existing = _INFLIGHT.get(combo)
-        if existing and _RUNNING.get(existing) is not None \
-                and _RUNNING[existing].poll() is None:
-            return existing, True
+    from frontend.run_launch import build_launch_plan, persist_run_meta_dir
 
-        # Fresh run — drop prior outputs for this model+suite so the table
-        # shows one current result instead of accumulating stale runs.
-        _wipe_prior_runs(suite_key, candidate)
+    force_private = suite_key.startswith(CUSTOM_PREFIX)
+    plan = build_launch_plan(
+        "eval",
+        force_private=force_private,
+        candidate=candidate,
+        judge=judge,
+        suite_key=suite_key,
+        max_tokens=max_tokens,
+    )
+    # Explicit browser Start/Rerun must always spawn a fresh run (see scan_launch).
+
+    combo = (
+        candidate, judge, suite_key, max_tokens,
+        *inflight_scope_key(plan.visibility, plan.owner_user_id),
+    )
+    with _LOCK:
+        existing = check_inflight_combo(_RUNNING, _INFLIGHT, combo)
+        if existing:
+            return existing, True, plan.visibility
+
+        from frontend.purge_rerun import purge_eval_for_launch
+
+        err = purge_eval_for_launch(
+            suite_key,
+            candidate,
+            visibility=plan.visibility,
+            owner_user_id=plan.owner_user_id,
+        )
+        if err:
+            raise OutputDirError(err)
 
         if docker_launch.use_docker():
             docker_launch.ensure_stack("evaluator")
 
         stem = predict_stem(suite_key, candidate)
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        persist_run_meta_dir(RESULTS_DIR / stem, plan)
         log_path = RESULTS_DIR / f"{stem}.log"
         cmd = build_command(candidate, judge, suite_key, max_tokens, stem)
         with log_path.open("wb") as log_f:
@@ -529,7 +581,7 @@ def start_run(
             )
         _RUNNING[stem] = proc
         _INFLIGHT[combo] = stem
-        return stem, False
+        return stem, False, plan.visibility
 
 
 def build_dcc_command(
@@ -617,7 +669,9 @@ def _dcc_phase(log_path: Path) -> str | None:
     return phase
 
 
-def get_status(slug: str) -> dict:
+def get_status(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict:
     """Run status from the results artifact + the process registry.
 
     done:     file has one row per suite question
@@ -625,7 +679,13 @@ def get_status(slug: str) -> dict:
               DCC process is alive and phase markers are available
     running:  non-DCC process alive (or file growing)
     failed:   process exited non-zero, or exited with an incomplete file
+
+    ``visibility``/``owner_user_id`` are accepted for signature parity with
+    the other three pillars' ``get_status`` (routes.py calls all four the
+    same way) — eval's result path is a globally-unique timestamped stem
+    regardless of visibility, so there's no separate location to resolve.
     """
+    del visibility, owner_user_id
     if not is_safe_slug(slug):
         return {"status": "not_found", "progress": 0, "total": 0}
 
@@ -668,9 +728,9 @@ def get_status(slug: str) -> dict:
             "status": status,
             "progress": progress,
             "total": total,
-            "message": status_message(log_path),
             "log_path": rel_log,
             "phase": phase,
+            **run_log_payload(log_path),
         }
     if proc is not None:  # exited without a complete file
         return {
@@ -692,6 +752,16 @@ def get_status(slug: str) -> dict:
             "phase": phase,
         }
     return {"status": "not_found", "progress": 0, "total": 0, "message": ""}
+
+
+def is_eval_run_in_progress(slug: str) -> bool:
+    """True when a registered subprocess for *slug* is still running."""
+    if not is_safe_slug(slug):
+        return False
+    proc = _RUNNING.get(slug)
+    if proc is not None and proc.poll() is None:
+        return True
+    return get_status(slug)["status"] == "running"
 
 
 def validate_custom_questions(

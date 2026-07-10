@@ -23,7 +23,11 @@ from frontend import create_app, eval_launch  # noqa: E402
 
 
 def _client():
-    return create_app(test_config={"TESTING": True}).test_client()
+    # /eval-run/new and /eval-run/start require a signed-in user.
+    client = create_app(test_config={"TESTING": True}).test_client()
+    with client.session_transaction() as sess:
+        sess["user"] = {"id": "u-test", "netid": "testuser", "display_name": "Test"}
+    return client
 
 
 _GOOD = hf_intake.ValidationResult(
@@ -50,6 +54,11 @@ class _Base(unittest.TestCase):
                               return_value=eval_launch._CANDIDATE_FALLBACK)
         p.start()
         self.addCleanup(p.stop)
+        # force the dev-auth bypass on regardless of the real .env AUTH_ENABLED,
+        # so a session user (set by _client()) is allowlisted.
+        env_patch = mock.patch.dict(os.environ, {"AUTH_ENABLED": "0"})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
 
 
 class HfLaunchFormTest(_Base):
@@ -97,10 +106,22 @@ class CustomHfLaunchTest(_Base):
     """The 'bring your own questions' form supports HF models the same way the
     standard start-run form does: a gateway/hf source toggle, an HF repo field,
     and a /eval-run/start-custom HF branch that launches through DCC once the
-    model passes servability and scanner clearance."""
+    model passes servability and scanner clearance. Custom eval requires a
+    private view + allowlisted user (dev-auth bypass)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        os.environ["AUTH_ENABLED"] = "0"
+        os.environ["AUTH_DEV_NETID"] = "testuser"
+        os.environ["AUTH_ALLOWED_NETIDS"] = "testuser"
+        self.app = create_app({"TESTING": True, "SECRET_KEY": "test"})
+        self.client = self.app.test_client()
+        with self.client.session_transaction() as sess:
+            sess["view_mode"] = "private"
+            sess["user"] = {"id": "u-test", "netid": "testuser", "display_name": "Test"}
 
     def test_custom_form_offers_hf_source(self) -> None:
-        r = _client().get("/eval-run/new")
+        r = self.client.get("/eval-run/new")
         self.assertEqual(r.status_code, 200)
         self.assertIn(b'id="hf_repo_c"', r.data)   # the custom form's HF field
 
@@ -112,7 +133,7 @@ class CustomHfLaunchTest(_Base):
              mock.patch.object(eval_launch, "validate_dcc_params", return_value=None), \
              mock.patch.object(eval_launch, "start_dcc_run",
                                return_value=("stem123", False)) as sr:
-            r = _client().post("/eval-run/start-custom",
+            r = self.client.post("/eval-run/start-custom",
                                data={"source": "hf",
                                      "hf_repo": "Qwen/Qwen2.5-7B-Instruct",
                                      "judge": "Llama 4 Maverick",
@@ -123,7 +144,7 @@ class CustomHfLaunchTest(_Base):
 
     def test_post_custom_hf_invalid_shows_reason(self) -> None:
         with mock.patch.object(hf_intake, "validate", return_value=_BAD):
-            r = _client().post("/eval-run/start-custom",
+            r = self.client.post("/eval-run/start-custom",
                                data={"source": "hf", "hf_repo": "org/gated"})
         self.assertEqual(r.status_code, 200)
         self.assertIn(b"gated", r.data)
@@ -133,7 +154,7 @@ class CustomHfLaunchTest(_Base):
         with mock.patch.object(hf_intake, "validate", return_value=_GOOD), \
              mock.patch.object(eval_launch, "validate_hf_scan_gate", return_value=blocked), \
              mock.patch.object(eval_launch, "start_dcc_run") as sr:
-            r = _client().post("/eval-run/start-custom",
+            r = self.client.post("/eval-run/start-custom",
                                data={"source": "hf",
                                      "hf_repo": "Qwen/Qwen2.5-7B-Instruct",
                                      "judge": "Llama 4 Maverick",
@@ -146,13 +167,13 @@ class CustomHfLaunchTest(_Base):
     def test_post_custom_gateway_still_starts_a_run(self) -> None:
         # Regression: the gateway custom path is unchanged by the HF branch.
         with mock.patch.object(eval_launch, "start_run",
-                               return_value=("slug123", False)) as sr, \
+                               return_value=("slug123", False, "public")) as sr, \
              mock.patch.object(eval_launch, "write_custom_suite",
                                return_value="custom_x"), \
              mock.patch.object(eval_launch, "validate_launch", return_value=None), \
              mock.patch("frontend.pipeline.require_ready_for_downstream",
                         return_value=None):
-            r = _client().post(
+            r = self.client.post(
                 "/eval-run/start-custom",
                 data={"candidate": "gpt-5-chat", "judge": "Llama 4 Maverick",
                       "max_tokens": "2000",

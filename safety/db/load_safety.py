@@ -1,9 +1,9 @@
 """
 load_safety.py — merged_safety_result.json -> public.safety_runs / public.safety_findings.
 
-Reads every ``merged_safety_result.json`` under ``safety/output/<model>/`` and loads
-validated ``MergedSafetyResult`` rows into Postgres. Uses shared ``dbutils`` for env,
-file IO, connect, JSONB params, and the dry-run CLI contract.
+Reads every ``merged_safety_result.json`` under ``safety/output/<model>/<profile>/``
+and loads validated ``MergedSafetyResult`` rows into Postgres. Uses shared ``dbutils``
+for env, file IO, connect, JSONB params, and the dry-run CLI contract.
 
 SAFE BY DEFAULT: without ``--apply`` this is a dry run — it prints what WOULD
 be loaded and never opens a database connection.
@@ -29,7 +29,8 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from dbutils import apply_loader, jsonb_param, load_repo_env, read_json
+from dbutils import apply_loader, jsonb_param, load_repo_env, read_json, run_paths
+from dbutils.auth_columns import apply_auth_defaults, auth_fields_from_artifact
 from dbutils.cli import add_ingest_arguments
 from dbutils.ingest import exit_if_apply_without_dsn, print_dry_run_hint
 from safety.merged_paths import iter_merged_result_paths
@@ -70,6 +71,7 @@ def safety_run_row(data: dict[str, Any]) -> dict:
     return {
         "model_id": None,
         "gateway_model_id": data["gateway_model_id"],
+        "redteam_profile": data.get("redteam_profile") or "base",
         "display_name": data.get("display_name"),
         "status": data.get("status") or "complete",
         "deployment_context": data.get("deployment_context") or {},
@@ -83,6 +85,11 @@ def safety_run_row(data: dict[str, Any]) -> dict:
         "tool_results": data.get("tool_results") or {},
         "started_at": _parse_iso_timestamp(data.get("started_at")),
         "completed_at": _parse_iso_timestamp(data.get("completed_at")),
+        # visibility/owner_user_id/config_fingerprint/config_json intentionally
+        # absent — apply_auth_defaults() fills them in from the run's actual
+        # run_meta.json sidecar via dict.setdefault(). Pre-populating them
+        # here would make that setdefault() a silent no-op (see the matching
+        # comment in scanner/db/load_scans.py::scan_row for the full story).
     }
 
 
@@ -129,6 +136,7 @@ def load_file(path: Path) -> tuple[dict, list[dict]] | None:
     run = safety_run_row(payload)
     if not run["completed_at"]:
         return None
+    apply_auth_defaults(run, auth_fields_from_artifact(path, pillar="safety"))
     findings = finding_rows(payload)
     return run, findings
 
@@ -139,21 +147,25 @@ def load_file(path: Path) -> tuple[dict, list[dict]] | None:
 
 _RUN_INSERT = """
 INSERT INTO public.safety_runs (
-    model_id, gateway_model_id, display_name, status, deployment_context,
+    model_id, gateway_model_id, redteam_profile, display_name, status, deployment_context,
     summary_pass_rate, safety_tier, adversarial_tier, composite_tier,
-    composite_score, missing_suites, runs, tool_results, started_at, completed_at)
+    composite_score, missing_suites, runs, tool_results, started_at, completed_at,
+    visibility, owner_user_id, config_fingerprint, config_json)
 VALUES (
-    %(model_id)s, %(gateway_model_id)s, %(display_name)s, %(status)s,
+    %(model_id)s, %(gateway_model_id)s, %(redteam_profile)s, %(display_name)s, %(status)s,
     %(deployment_context)s::jsonb, %(summary_pass_rate)s, %(safety_tier)s,
     %(adversarial_tier)s, %(composite_tier)s, %(composite_score)s,
     %(missing_suites)s::jsonb, %(runs)s::jsonb, %(tool_results)s::jsonb,
-    %(started_at)s, %(completed_at)s)
-ON CONFLICT (gateway_model_id, completed_at) DO NOTHING
+    %(started_at)s, %(completed_at)s,
+    %(visibility)s, %(owner_user_id)s, %(config_fingerprint)s, %(config_json)s::jsonb)
+ON CONFLICT (gateway_model_id, redteam_profile, completed_at) DO NOTHING
 """
 
 _RUN_SELECT = """
 SELECT id FROM public.safety_runs
-WHERE gateway_model_id = %(gateway_model_id)s AND completed_at = %(completed_at)s
+WHERE gateway_model_id = %(gateway_model_id)s
+  AND redteam_profile = %(redteam_profile)s
+  AND completed_at = %(completed_at)s
 """
 
 _FINDING_INSERT = """
@@ -175,6 +187,7 @@ def _run_params(run: dict) -> dict:
         "missing_suites": jsonb_param(run["missing_suites"]),
         "runs": jsonb_param(run["runs"]),
         "tool_results": jsonb_param(run["tool_results"]),
+        "config_json": jsonb_param(run.get("config_json") or {}),
     }
 
 
@@ -224,18 +237,44 @@ def run_ingest(
     dsn: str | None,
     output_dir: Path | None = None,
 ) -> IngestResult:
-    """Collect and optionally load safety runs. Used by CLI and api.ingest."""
+    """Collect and optionally load safety runs. Used by CLI and api.ingest.
+
+    Two passes: the public catalog (unchanged) and every owner's private
+    runs (``<slug>/<profile>/.private/<owner_user_id>/``, discovered by
+    listing the owner-id directories actually present on disk — no DB round
+    trip needed) — without the second pass, private runs would never reach
+    Postgres and the DB-backed reuse/dedup path would never see them.
+    """
     root = output_dir or OUTPUT_DIR
     parsed: list[tuple[dict, list[dict]]] = []
-    for path, _slug, _profile in iter_merged_result_paths(root):
+    seen: set[Path] = set()
+
+    def _collect(path: Path) -> None:
+        if path in seen:
+            return
+        seen.add(path)
         loaded = load_file(path)
         if loaded is not None:
             parsed.append(loaded)
 
+    for path, _slug, _profile in iter_merged_result_paths(root):
+        _collect(path)
+
+    # Safety's ".private" lives nested one level inside *each slug's own*
+    # directory (<slug>/.private/<owner>/<profile>/…) — not a single
+    # top-level sibling like scanner's — so owner ids are discovered by
+    # globbing across every slug, not by listing one shared directory.
+    owner_ids = {
+        p.name for p in root.glob(f"*/{run_paths.PRIVATE_SEGMENT}/*") if p.is_dir()
+    }
+    for owner_id in sorted(owner_ids):
+        for path, _slug, _profile in iter_merged_result_paths(root, owner_user_id=owner_id):
+            _collect(path)
+
     print(f"{len(parsed)} loadable safety run(s) in {root}:")
     for run, findings in parsed:
         print(
-            f"  {run['gateway_model_id']}:  "
+            f"  {run['gateway_model_id']}/{run['redteam_profile']}:  "
             f"composite_tier={run['composite_tier']}  "
             f"score={run['composite_score']:.2f}  "
             f"findings={len(findings)}  "

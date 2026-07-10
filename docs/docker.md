@@ -9,7 +9,7 @@ How the images fit together. For commands, see [`cli.md`](cli.md).
 python3 main.py               # containerized UI (default); same as ./docker/run.sh up --build
 ```
 
-Production on the application VM uses the same scripts. Host Flask (`uv run flask …`) is a development alternative only.
+Production on the application VM uses the same scripts with optional **Caddy HTTPS** when `CADDY_DOMAIN` is set in `.env`. See [`../docker/compose.caddy.yml`](../docker/compose.caddy.yml). Host Flask (`uv run flask ...`) is a development alternative only.
 
 ## Two layers
 
@@ -59,8 +59,20 @@ registry. No gateway secrets are required.
 
 **Deploy (manual by default on `main`):** after lint, tests, and `build-web-image`,
 the **`deploy`** job SSHs to the application VM, runs `git pull`, logs into the
-registry, pulls the tagged web image, and restarts the stack. Click **Play** in
-GitLab, or set CI/CD variable **`DEPLOY_AUTO=true`** for automatic deploy. See
+registry, pulls the tagged web image, and **recreates** the web container
+(`--force-recreate`) so Flask reloads bind-mounted code and refreshes
+`HOST_UID` / `DOCKER_GID`. Click **Play** in GitLab, or set CI/CD variable
+**`DEPLOY_AUTO=true`** for automatic deploy. See
 [`.gitlab/README.md`](../.gitlab/README.md) for CI/CD variables.
 
 Postgres is external (`POSTGRES_DSN` on OIT host). End-to-end flow diagram: [`architecture.md`](architecture.md#how-a-run-flows).
+
+## Production HTTPS (Caddy)
+
+On the application VM, set `CADDY_DOMAIN` in `.env`. [`docker/run.sh`](../docker/run.sh) automatically adds [`compose.caddy.yml`](../docker/compose.caddy.yml):
+
+- **Caddy** listens on ports 80/443 with Duke Locksmith ACME (`locksmith.oit.duke.edu`)
+- **web** is reachable only inside the Docker network (not published on `:5000`)
+- Set `TRUST_PROXY=1` so Flask trusts `X-Forwarded-Proto`
+
+Do not run Caddy locally; the production overlay is [`../docker/compose.caddy.yml`](../docker/compose.caddy.yml).

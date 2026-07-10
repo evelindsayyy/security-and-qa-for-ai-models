@@ -110,18 +110,57 @@ class AvailabilityTest(unittest.TestCase):
             data = scan_data.get_scans_data()
         self.assertIn("has_scans", data)
 
-    def test_detail_dispatcher_falls_back_when_slug_not_in_db(self) -> None:
-        sentinel = {"slug": "from-files"}
+    def test_detail_returns_none_when_slug_not_in_db(self) -> None:
         with mock.patch.object(scan_db_data, "available", return_value=True), \
              mock.patch.object(scan_db_data, "get_scan_detail_db", return_value=None), \
-             mock.patch.object(scan_data, "_get_scan_detail_files", return_value=sentinel):
+             mock.patch.object(scan_data, "_get_scan_detail_files", return_value={"slug": "from-files"}):
             detail = scan_data.get_scan_detail("some-slug")
-        self.assertIs(detail, sentinel)
+        self.assertIsNone(detail)
 
     def test_dispatcher_survives_db_exceptions(self) -> None:
         with mock.patch.object(scan_db_data, "available", side_effect=RuntimeError("db down")):
             data = scan_data.get_scans_data()
         self.assertIn("has_scans", data)
+
+
+def _fake_empty_connection():
+    """A connection whose scans query always returns zero rows, so
+    get_scans_data_db() falls all the way through to its file-merge branch."""
+    conn = mock.MagicMock()
+    conn.__enter__.return_value = conn
+    cur = conn.cursor.return_value.__enter__.return_value
+    cur.fetchall.return_value = []
+    return conn
+
+
+class GetScansDataDbPostgresOnlyTest(unittest.TestCase):
+    """When DSN is reachable, get_scans_data_db() must not merge disk artifacts."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.out = Path(self._tmp.name)
+        patcher = mock.patch.object(scan_db_data, "OUTPUT_DIR", self.out)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        connect_patcher = mock.patch.object(
+            scan_db_data, "_connect", side_effect=_fake_empty_connection
+        )
+        connect_patcher.start()
+        self.addCleanup(connect_patcher.stop)
+
+    def _write_disk_scan(self) -> None:
+        scan_dir = self.out / "gpt2"
+        scan_dir.mkdir(parents=True)
+        (scan_dir / "scan_result.json").write_text(
+            json.dumps(_scan_data_dict()), encoding="utf-8"
+        )
+
+    def test_disk_scan_not_merged_when_db_empty(self) -> None:
+        self._write_disk_scan()
+        data = scan_db_data.get_scans_data_db()
+        self.assertFalse(data["has_scans"])
+        self.assertEqual(data["scans"], [])
 
 
 if __name__ == "__main__":

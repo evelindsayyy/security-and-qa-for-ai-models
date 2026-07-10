@@ -20,6 +20,11 @@ Each pillar keeps its own ``pillar/db/`` directory (transforms + INSERT SQL).
 | `compose` | `compose_cmd`, `compose_run` — shared Docker Compose helpers |
 | `post_run.py` | `maybe_sync_artifact` — auto-ingest after successful pillar runs |
 | `startup.py` | Flask startup log for Postgres read path |
+| `run_fingerprint.py` | Config normalize + SHA-256 for run dedup |
+| `run_access.py` | Postgres lookup for reusable runs; `user_run_links` |
+| `run_meta.py` | `run_meta.json` sidecar read/write at launch |
+| `auth_columns.py` | Merge auth fields into loader rows |
+| `visibility.py` | SQL + artifact filters for public/private views |
 | `run_lock.py` | File-based `run.lock` for scan/safety/benchmark job coordination |
 | `log_tail.py` | `read_log_tail` — tail of run logs for UI status polling |
 
@@ -92,7 +97,7 @@ When ``POSTGRES_DSN`` (or ``EFFICACY_DB_DSN``) is set, each pillar calls ``maybe
 | Pillar | Directory | Input |
 |--------|-----------|-------|
 | Scanner | `scanner/db/` | `scanner/output/<slug>/scan_result.json` |
-| Safety | `safety/db/` | `safety/output/<model>/merged_safety_result.json` |
+| Safety | `safety/db/` | `safety/output/<model>/<profile>/merged_safety_result.json` |
 | Evaluator | `evaluator/db/` | `evaluator/results/*.jsonl` (standalone CLI; shares DSN via `api.ingest`) |
 | Benchmarks | `benchmarks/db/` | `benchmarks/results/*.{json,jsonl}` |
 

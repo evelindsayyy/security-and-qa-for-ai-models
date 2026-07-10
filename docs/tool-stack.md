@@ -40,7 +40,7 @@ Run: `scanner/` via Docker (`scanner/docker/` → `scanner/models`, `scanner/out
 | Duke probes | In use | Duke-only prompts in the promptfoo policy config (`safety/promptfoo/promptfooconfig.yaml`) |
 | LiteLLM guardrails | Planned (doc) | Gateway integration path (ITSO) |
 
-Run: `uv run python -m safety.run "GPT 4.1 Mini"` (thin wrapper: `./safety/run_safety.sh`) → per-tool exports merged by `python -m safety.merge` into `safety/output/<model>/merged_safety_result.json`.
+Run: `uv run python -m safety.run "GPT 4.1 Mini"` (thin wrapper: `./safety/run_safety.sh`) → per-tool exports merged by `python -m safety.merge` into `safety/output/<slug>/<profile>/merged_safety_result.json` (default profile `base`).
 
 ### Not used (summer)
 
@@ -62,10 +62,10 @@ Run: `uv run python -m safety.run "GPT 4.1 Mini"` (thin wrapper: `./safety/run_s
 | Tool | Status | Role |
 |------|--------|------|
 | LiteLLM | In use | Gateway inference |
-| Duke YAML suites | Planned | Primary efficacy tasks (`tasks/`, rubrics) |
-| ROUGE-L | Planned | Summarization |
-| LLM-as-judge | Planned | Graded tasks |
-| IFEval / DocBench-style | Evaluate | Optional benchmark subsets |
+| Duke YAML suites | In use | Primary efficacy tasks (`evaluator/tasks/`, rubrics) |
+| ROUGE-L | In use | Summarization scoring |
+| LLM-as-judge | In use | Graded Duke task suites |
+| IFEval / TruthfulQA | In use | Public benchmarks (`benchmarks/`) |
 
 Reference: MT-Bench, AlpacaEval, full SWE-bench, HELM. See [`track-b-framework.md`](track-b-framework.md).
 

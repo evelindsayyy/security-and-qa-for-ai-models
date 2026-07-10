@@ -12,6 +12,7 @@ Run from repo root:
 
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -82,6 +83,36 @@ class ExecutionSummaryHelperTest(unittest.TestCase):
                 self.assertIsNone(erd._execution_summary(p))
                 self.assertIsNone(erd._execution_summary(p))  # from the marker
             m.assert_called_once()
+
+    def test_zero_execution_rows_is_not_applicable(self) -> None:
+        # A completed run whose suite has no execution rows (a judge-only suite
+        # like it_support) is not an execution suite, even though scoring didn't
+        # raise — so no misleading EXEC pass/fail is shown.
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "run.jsonl"
+            p.write_text("{}\n", encoding="utf-8")
+            with mock.patch.object(execution_eval, "score_results_file",
+                                   return_value={"n": 0, "passed": 0, "pass_rate": 0.0, "rows": []}):
+                self.assertIsNone(erd._execution_summary(p))
+
+    def test_stale_sidecar_without_version_is_ignored(self) -> None:
+        # An old scorer mis-scored judge-only suites as all-fail SQL and cached
+        # it. That sidecar (no cache_version) must be ignored and recomputed —
+        # otherwise the dashboard keeps showing EXEC "fail" for it_support.
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "run.jsonl"
+            p.write_text("{}\n", encoding="utf-8")
+            stale = {"applicable": True, "n": 12, "passed": 0, "pass_rate": 0.0,
+                     "rows": [{"question_id": "it-support-001", "passed": False,
+                               "error": "forbidden statement"}]}
+            sidecar = Path(td) / "run_execution.json"
+            sidecar.write_text(json.dumps(stale), encoding="utf-8")
+            with mock.patch.object(execution_eval, "score_results_file",
+                                   return_value={"n": 0, "passed": 0, "pass_rate": 0.0, "rows": []}):
+                self.assertIsNone(erd._execution_summary(p))     # stale fail-rows ignored
+            fresh = json.loads(sidecar.read_text(encoding="utf-8"))
+            self.assertFalse(fresh["applicable"])
+            self.assertEqual(fresh["cache_version"], erd._EXEC_CACHE_VERSION)
 
 
 class RobustnessSummaryHelperTest(unittest.TestCase):

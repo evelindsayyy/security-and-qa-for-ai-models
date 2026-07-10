@@ -36,7 +36,7 @@ HERE = Path(__file__).resolve().parent
 # other runners). IFEVAL_OUTPUT_FILE optionally pins a full file path.
 OUTPUT_FILE = os.getenv("IFEVAL_OUTPUT_FILE")
 OUTPUT_DIR = os.getenv("IFEVAL_OUTPUT", str(HERE / "results"))
-SAMPLE_SIZE = int(os.getenv("IFEVAL_SAMPLE", "10"))
+SAMPLE_SIZE = int(os.getenv("IFEVAL_SAMPLE", "20"))
 SEED = int(os.getenv("IFEVAL_SEED", "42"))
 
 def safe_get_response(response):

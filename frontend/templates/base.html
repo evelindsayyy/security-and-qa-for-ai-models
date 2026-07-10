@@ -5,7 +5,7 @@
   <title>{% block title %}AI Model Advisor{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body data-compare-url="{{ url_for('compare_models') }}">
   <header>
     <nav>
       <a href="{{ url_for('index') }}">Home</a>
@@ -16,7 +16,26 @@
       <a href="{{ url_for('eval_run') }}">Eval</a>
       <a href="{{ url_for('benchmarks') }}">Benchmarks</a>
     </nav>
+    <div class="header-auth">
+      {% if is_logged_in and current_user %}
+        <span class="auth-user">Signed in as {{ current_user.netid }}</span>
+        <form method="post" action="{{ url_for('auth.logout') }}" class="logout-form">
+          <button type="submit">Logout</button>
+        </form>
+        <form class="view-mode-form" method="post" action="{{ url_for('auth.view_mode') }}">
+          <span class="view-mode-label">View:</span>
+          <button type="submit" name="mode" value="public" class="view-mode-btn{% if view_mode == 'public' %} is-active{% endif %}">Public</button>
+          <button type="submit" name="mode" value="private" class="view-mode-btn{% if view_mode == 'private' %} is-active{% endif %}">Private</button>
+        </form>
+      {% elif auth_enabled or dev_login_available %}
+        <button type="button" id="auth-login-btn" class="auth-login-btn">Sign in with Duke NetID</button>
+      {% endif %}
+    </div>
   </header>
+
+  {% if view_mode == 'private' and is_logged_in and not is_allowlisted %}
+  <div class="auth-banner auth-banner-warn">Your NetID is not on the allowlist for private mode.</div>
+  {% endif %}
 
   <main>
     {% block content %}{% endblock %}
@@ -68,6 +87,32 @@
       document.addEventListener("DOMContentLoaded", function () { initExpandables(); });
     } else {
       initExpandables();
+    }
+
+    var loginBtn = document.getElementById("auth-login-btn");
+    if (loginBtn) {
+      loginBtn.addEventListener("click", function () {
+        {% if auth_enabled %}
+        window.open("{{ url_for('auth.login', popup=1) }}", "duke-login", "width=520,height=720");
+        {% else %}
+        window.location.href = "{{ url_for('auth.login') }}";
+        {% endif %}
+      });
+      function isTrustedAuthOrigin(origin) {
+        if (origin === window.location.origin) return true;
+        try {
+          var from = new URL(origin);
+          var here = window.location;
+          var loopback = from.hostname === "localhost" || from.hostname === "127.0.0.1";
+          return loopback && from.protocol === here.protocol && from.hostname === here.hostname;
+        } catch (err) {
+          return false;
+        }
+      }
+      window.addEventListener("message", function (ev) {
+        if (!isTrustedAuthOrigin(ev.origin)) return;
+        if (ev.data && ev.data.type === "auth-complete") window.location.reload();
+      });
     }
   })();
   </script>

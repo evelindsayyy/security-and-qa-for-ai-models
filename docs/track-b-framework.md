@@ -48,7 +48,7 @@ First wave for gateway eval — not the full table above. Start on **one** cheap
 | P1 | Document summarization | ROUGE-L + judge |
 | P1 | Student study | Undergrad help — not graded submissions |
 
-Other suites (creative writing, med education, coding, etc.) follow in later weeks. GitLab: [`.gitlab/README.md`](../.gitlab/README.md).
+Other suites (creative writing, med education, coding, etc.) follow in later milestones. GitLab: [`.gitlab/README.md`](../.gitlab/README.md).
 
 ## Rollout
 

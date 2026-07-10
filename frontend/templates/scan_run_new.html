@@ -6,6 +6,9 @@
 <div class="eval-comparison">
   <p class="back"><a href="{{ url_for('scans') }}">← all scans</a></p>
   <h1>Start an HF scan</h1>
+  {% if rerun %}
+  <p class="sub benchmark-rerun-hint">Pre-filled from a previous scan — starting will delete the prior results and replace them.</p>
+  {% endif %}
   <p class="sub">
     Launches the scanner via Docker Compose
     (<code>{{ compose_file }}</code>) — same isolated image as the CLI in <code>docs/cli.md</code>.
@@ -53,10 +56,16 @@
 <script>
   const EXISTING_SLUGS = new Set({{ existing_scan_slugs | tojson }});
   const INFLIGHT_SLUGS = new Set({{ inflight_scan_slugs | tojson }});
+  const RERUN = {{ rerun | default(none) | tojson }};
 
   function repoSlug(repo) {
     const trimmed = repo.trim();
     return trimmed.includes("/") ? trimmed.replace("/", "--") : trimmed;
+  }
+
+  function applyRerunPrefill() {
+    if (!RERUN || !RERUN.hf_repo) return;
+    document.getElementById("hf_repo").value = RERUN.hf_repo;
   }
 
   function updateWarning() {
@@ -70,5 +79,7 @@
 
   document.getElementById("hf_repo").addEventListener("input", updateWarning);
   document.getElementById("hf_repo").addEventListener("change", updateWarning);
+  applyRerunPrefill();
+  updateWarning();
 </script>
 {% endblock %}

@@ -45,11 +45,23 @@ _SCAN_OK = {
 
 
 def _client():
-    return create_app(test_config={"TESTING": True}).test_client()
+    # /eval-run/start is @require_login, which checks for a session user —
+    # establish an allowlisted signed-in session (auth is disabled in _Base
+    # setUp, so any netid is allowlisted).
+    client = create_app(test_config={"TESTING": True, "SECRET_KEY": "test"}).test_client()
+    with client.session_transaction() as sess:
+        sess["view_mode"] = "private"
+        sess["user"] = {"id": "u-test", "netid": "testuser", "display_name": "Test"}
+    return client
 
 
 class _Base(unittest.TestCase):
     def setUp(self) -> None:
+        # /eval-run/start is @require_login; disable auth for these route tests
+        # (auth reads AUTH_ENABLED per request, and the real .env turns it on).
+        env_patch = mock.patch.dict(os.environ, {"AUTH_ENABLED": "0"})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
         p = mock.patch.object(eval_launch, "candidate_models",
                               return_value=eval_launch._CANDIDATE_FALLBACK)
         p.start()
@@ -107,7 +119,7 @@ class DccLaunchRouteTest(_Base):
 
     def test_gateway_path_unchanged(self) -> None:
         with mock.patch.object(eval_launch, "start_run",
-                               return_value=("slug1", False)) as sr, \
+                               return_value=("slug1", False, "public")) as sr, \
              mock.patch.object(eval_launch, "validate_launch", return_value=None), \
              mock.patch("frontend.pipeline.require_ready_for_downstream",
                         return_value=None):

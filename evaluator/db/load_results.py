@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from dbutils.env import load_repo_env, resolve_dsn
+from dbutils.auth_columns import apply_auth_defaults, auth_fields_from_artifact
 
 load_repo_env()
 
@@ -115,6 +116,11 @@ def run_row(rows: list[dict], source_file: str) -> dict:
         "source_file": source_file,
         "started_at": rows[0]["timestamp"],
         "completed_at": rows[-1]["timestamp"],
+        # visibility/owner_user_id/config_fingerprint/config_json intentionally
+        # absent — apply_auth_defaults() fills them in from the run's actual
+        # run_meta.json sidecar via dict.setdefault(). Pre-populating them
+        # here would make that setdefault() a silent no-op (see the matching
+        # comment in scanner/db/load_scans.py::scan_row for the full story).
     }
 
 
@@ -159,7 +165,10 @@ def load_file(path: Path) -> tuple[dict, dict, list[dict]] | None:
         return None
     if not rows:
         return None
-    return suite_row(rows), run_row(rows, path.name), result_rows(rows)
+    suite = suite_row(rows)
+    run = run_row(rows, path.name)
+    apply_auth_defaults(run, auth_fields_from_artifact(path, pillar="eval"))
+    return suite, run, result_rows(rows)
 
 
 # ---------------------------------------------------------------------------
@@ -180,12 +189,14 @@ _RUN_INSERT = """
 INSERT INTO public.eval_runs (
     id, suite_id, gateway_model_id, judge_model, status, aggregate_score,
     latency_p50_ms, latency_p95_ms, tokens_in_total, tokens_out_total,
-    cost_usd_total, adaptation, source_file, started_at, completed_at)
+    cost_usd_total, adaptation, source_file, started_at, completed_at,
+    visibility, owner_user_id, config_fingerprint, config_json)
 VALUES (
     %(id)s, %(suite_id)s, %(gateway_model_id)s, %(judge_model)s, %(status)s,
     %(aggregate_score)s, %(latency_p50_ms)s, %(latency_p95_ms)s,
     %(tokens_in_total)s, %(tokens_out_total)s, %(cost_usd_total)s,
-    %(adaptation)s::jsonb, %(source_file)s, %(started_at)s, %(completed_at)s)
+    %(adaptation)s::jsonb, %(source_file)s, %(started_at)s, %(completed_at)s,
+    %(visibility)s, %(owner_user_id)s, %(config_fingerprint)s, %(config_json)s::jsonb)
 ON CONFLICT (id) DO NOTHING
 """
 
@@ -211,8 +222,12 @@ def load_into(conn, parsed: list[tuple[dict, dict, list[dict]]]) -> None:
             cur.execute(_SUITE_SELECT, suite)
             suite_id = cur.fetchone()[0]
 
-            run_params = {**run, "suite_id": suite_id,
-                          "adaptation": json.dumps(run["adaptation"])}
+            run_params = {
+                **run,
+                "suite_id": suite_id,
+                "adaptation": json.dumps(run["adaptation"]),
+                "config_json": json.dumps(run.get("config_json") or {}),
+            }
             cur.execute(_RUN_INSERT, run_params)
 
             for res in results:
