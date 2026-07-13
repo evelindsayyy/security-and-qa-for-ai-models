@@ -65,7 +65,7 @@ def _evidence_blob(rollup: dict) -> str:
     if rollup.get("eval"):
         e = rollup["eval"]
         parts.append(
-            f"Eval: best_overall={e.get('best_overall')}/5, suites={e.get('suites')}, "
+            f"Eval: avg_overall={e.get('avg_overall', e.get('best_overall'))}/5, suites={e.get('suites')}, "
             f"cost_usd={e.get('total_cost_usd')}, latency_ms={e.get('mean_latency_ms')}"
         )
     if rollup.get("benchmark") and rollup["benchmark"].get("kinds"):

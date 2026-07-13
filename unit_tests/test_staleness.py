@@ -154,6 +154,12 @@ class EvalStalenessTest(unittest.TestCase):
             "timestamp": "2026-05-01T12:00:00Z",
             "suite": "it_support_v1",
             **current,
+            "dim_means": {
+                "accuracy": 4.5,
+                "completeness": 4.5,
+                "policy_adherence": 4.5,
+                "tone": 3.0,
+            },
         }
         result = staleness_for("eval", row)
         self.assertFalse(result["stale"])

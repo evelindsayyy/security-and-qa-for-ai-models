@@ -70,7 +70,8 @@ class GetModelsUnionTest(unittest.TestCase):
         self.assertEqual(row["slug"], "gpt-4.1-mini")
         self.assertIsNotNone(row["safety"])
         self.assertEqual(row["eval"]["n_runs"], 2)
-        self.assertEqual(row["eval"]["best_overall"], 4.5)
+        self.assertEqual(row["eval"]["avg_overall"], 4.25)
+        self.assertEqual(row["eval"]["best_overall"], 4.25)  # alias
         self.assertEqual(sorted(row["eval"]["suites"]), ["it_support", "policy_qa"])
         self.assertEqual(row["eval"]["mean_latency_ms"], 850)
         self.assertAlmostEqual(row["eval"]["total_cost_usd"], 0.03)

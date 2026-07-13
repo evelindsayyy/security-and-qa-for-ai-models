@@ -26,9 +26,8 @@ One GitLab milestone per week during the summer term. Current status and issue b
 
 GitLab jobs run on Duke **shared runners** (`docker+machine`).
 
-1. Pipeline: **lint** (ruff) → **unit-tests** (~800).
-2. On **`main`**: Buildah builds `docker/Dockerfile` → GitLab container registry (`web:${CI_COMMIT_SHORT_SHA}`).
-3. **`deploy`** — default **manual** on `main` (click Play after `build-web-image`). Set CI/CD variable **`DEPLOY_AUTO=true`** for automatic deploy.
+1. Pipeline: **lint** → **unit-tests** → **frontend-build** → on **`main`**, Buildah builds `docker/Dockerfile` → registry (`web:${CI_COMMIT_SHORT_SHA}`).
+2. **`deploy`** — manual Play on `main` by default (`DEPLOY_AUTO=true` for automatic).
 
 Config: [`.gitlab-ci.yml`](../.gitlab-ci.yml). Detail: [`docs/docker.md`](../docs/docker.md).
 
@@ -46,7 +45,7 @@ Set in **Settings → CI/CD → Variables** (maintainers):
 | `DEPLOY_AUTO` | Variable (optional) | `true` — deploy automatically on every `main` pipeline (default: manual) |
 | `BUILD_PILLARS` | Variable (optional) | `1` to rebuild pillar images on deploy |
 
-**VM prerequisites:** git clone + deploy key, `.env`, Docker, one-time `./docker/build-pillars.sh`. The web container bind-mounts the repo; deploy pulls the CI-built image for Python deps and runs `git pull` for app code.
+**VM prerequisites:** git clone + deploy key, `.env` (include `CADDY_DOMAIN` + `TRUST_PROXY` for HTTPS), Docker, one-time `./docker/build-pillars.sh`. Deploy pulls the CI web image and runs `git pull` for app code.
 
 ---
 

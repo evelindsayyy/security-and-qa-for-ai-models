@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_scan_docker, start_button, delete_button, rerun_button, staleness_badge, tier_label, page_header, list_compare_tabs, empty_state with context %}
+{% from '_macros.html' import expandable, start_button, delete_button, rerun_button, staleness_badge, tier_label, page_header, list_compare_tabs, empty_state with context %}
 
 {% block title %}HF artifact scans{% endblock %}
 
@@ -32,7 +32,7 @@
   </section>
 
   {% if not has_scans %}
-    {{ empty_state('No scans yet. Start a scan or run the CLI.', cli_scan_docker()) }}
+    {{ empty_state('No scans yet. Start a scan from the button above.') }}
   {% else %}
     {{ list_compare_tabs(has_comparison) }}
 

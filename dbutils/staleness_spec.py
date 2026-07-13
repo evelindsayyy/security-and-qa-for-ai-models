@@ -167,13 +167,48 @@ def _eval_suite_cfg(suite_key: str) -> dict[str, Path] | None:
     }
 
 
+def _read_yaml_field(path: Path, field: str) -> str | None:
+    """Read a top-level scalar from a YAML file without importing heavy deps at startup."""
+    if not path.is_file():
+        return None
+    try:
+        import yaml
+
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    val = data.get(field)
+    return str(val).strip() if val is not None else None
+
+
+def _rubric_dimension_keys(path: Path) -> list[str]:
+    """Dimension ids defined in a rubric YAML (including shared refs by key name)."""
+    if not path.is_file():
+        return []
+    try:
+        import yaml
+
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    if not isinstance(data, dict):
+        return []
+    dims = data.get("dimensions")
+    if isinstance(dims, dict):
+        return list(dims.keys())
+    return []
+
+
 def current_eval_suite_versions(suite_key: str) -> dict[str, str] | None:
     cfg = _eval_suite_cfg(suite_key)
     if not cfg:
         return None
+    rubric_version = _read_yaml_field(cfg["rubric"], "rubric_version")
     return {
         "suite": suite_key,
-        "rubric_version": cfg["rubric"].stem,
+        "rubric_version": rubric_version or cfg["rubric"].stem,
         "system_prompt_version": cfg["system_prompt"].stem,
     }
 
@@ -210,6 +245,18 @@ def eval_staleness_reasons(row: dict[str, Any]) -> list[str]:
             digest = _file_digest(path)
             if digest is None:
                 reasons.append(f"suite file missing: {path.name}")
+
+        expected_dims = _rubric_dimension_keys(cfg["rubric"])
+        dim_means = row.get("dim_means") or {}
+        if isinstance(dim_means, dict) and expected_dims:
+            missing = [
+                d for d in expected_dims
+                if dim_means.get(d) is None
+            ]
+            if missing:
+                reasons.append(
+                    f"missing rubric dimensions: {', '.join(missing)}"
+                )
     return reasons
 
 

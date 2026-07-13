@@ -29,6 +29,13 @@ def _private_scope() -> tuple[str, str]:
     return "private", current_user_id()
 
 
+def _attach_pillar_summary(detail: dict, *, pillar: str) -> dict:
+    from frontend.pillar_summary import attach_pillar_summary
+
+    attach_pillar_summary(detail, pillar=pillar)
+    return detail
+
+
 def _hub_context() -> dict:
     """build home page counts — never crash if one data dir is missing."""
     scan_count = 0
@@ -133,6 +140,12 @@ def register_routes(app):
 
         return render_template("index.html", **get_overview_data())
 
+    @app.route("/jobs")
+    def inflight_jobs():
+        from frontend.launch_registry import list_inflight_jobs
+
+        return render_template("jobs.html", jobs=list_inflight_jobs())
+
     @app.route("/scans")
     def scans():
         from frontend.scan_data import get_scan_guide_data, get_scans_data
@@ -164,6 +177,7 @@ def register_routes(app):
     def scan_run_start():
         from flask import redirect, request, url_for
 
+        from frontend import docker_launch
         from frontend.output_dirs import OutputDirError
         from frontend.scan_launch import start_run, validate_launch
 
@@ -188,6 +202,8 @@ def register_routes(app):
                 skip_secrets=not request.form.get("run_secrets"),
             )
         except OutputDirError as exc:
+            return str(exc), 503
+        except docker_launch.DockerUnavailableError as exc:
             return str(exc), 503
         status = "reused" if already else "running"
         endpoint = "scan_detail_private" if visibility == "private" else "scan_detail"
@@ -237,7 +253,7 @@ def register_routes(app):
                 missing=True,
                 slug=slug,
             )
-        return render_template("scan_detail.html", missing=False, **detail)
+        return render_template("scan_detail.html", missing=False, **_attach_pillar_summary(detail, pillar="scan"))
 
     @app.route("/scans/<slug>/private")
     @require_login()
@@ -269,7 +285,7 @@ def register_routes(app):
                 slug=slug,
                 is_private=True,
             )
-        return render_template("scan_detail.html", missing=False, is_private=True, **detail)
+        return render_template("scan_detail.html", missing=False, is_private=True, **_attach_pillar_summary(detail, pillar="scan"))
 
     @app.route("/scans/<slug>/delete", methods=["GET", "POST"])
     @require_login()
@@ -369,6 +385,7 @@ def register_routes(app):
             validate_hf_scan_gate,
             validate_launch,
         )
+        from frontend import docker_launch
         from frontend.output_dirs import OutputDirError
 
         # Candidate source: a gateway model (runs on the gateway) or a Hugging
@@ -401,7 +418,10 @@ def register_routes(app):
             error = validate_dcc_params(hf_repo, judge, suite_key, max_tokens)
             if error is not None:
                 return error, 400
-            slug, _already = start_dcc_run(hf_repo, judge, suite_key, max_tokens)
+            try:
+                slug, _already = start_dcc_run(hf_repo, judge, suite_key, max_tokens)
+            except docker_launch.DockerUnavailableError as exc:
+                return str(exc), 503
             return redirect(url_for("eval_run_detail", slug=slug, status="running"))
 
         candidate = request.form.get("candidate", "")
@@ -430,6 +450,8 @@ def register_routes(app):
             slug, _already, visibility = start_run(candidate, judge, suite_key, max_tokens)
         except OutputDirError as exc:
             return str(exc), 503
+        except docker_launch.DockerUnavailableError as exc:
+            return str(exc), 503
         endpoint = "eval_run_detail_private" if visibility == "private" else "eval_run_detail"
         return redirect(url_for(endpoint, slug=slug, status="running"))
 
@@ -449,6 +471,7 @@ def register_routes(app):
             validate_launch,
             write_custom_suite,
         )
+        from frontend import docker_launch
 
         user, auth_err = require_private_access()
         if auth_err:
@@ -485,7 +508,10 @@ def register_routes(app):
             if error is not None:
                 return error, 400
 
-            slug, _already = start_dcc_run(hf_repo, judge, suite_key, max_tokens)
+            try:
+                slug, _already = start_dcc_run(hf_repo, judge, suite_key, max_tokens)
+            except docker_launch.DockerUnavailableError as exc:
+                return str(exc), 503
             return redirect(url_for("eval_run_detail", slug=slug, status="running"))
 
         candidate = request.form.get("candidate", "")
@@ -524,7 +550,10 @@ def register_routes(app):
         if error is not None:
             return error, 400
 
-        slug, _already, visibility = start_run(candidate, judge, suite_key, max_tokens)
+        try:
+            slug, _already, visibility = start_run(candidate, judge, suite_key, max_tokens)
+        except docker_launch.DockerUnavailableError as exc:
+            return str(exc), 503
         endpoint = "eval_run_detail_private" if visibility == "private" else "eval_run_detail"
         return redirect(url_for(endpoint, slug=slug, status="running"))
 
@@ -575,7 +604,7 @@ def register_routes(app):
                 missing=True,
                 slug=slug,
             )
-        return render_template("eval_run_detail.html", missing=False, **detail)
+        return render_template("eval_run_detail.html", missing=False, **_attach_pillar_summary(detail, pillar="eval"))
 
     @app.route("/eval-run/<slug>/private")
     @require_login()
@@ -608,31 +637,25 @@ def register_routes(app):
                 slug=slug,
                 is_private=True,
             )
-        return render_template("eval_run_detail.html", missing=False, is_private=True, **detail)
+        return render_template("eval_run_detail.html", missing=False, is_private=True, **_attach_pillar_summary(detail, pillar="eval"))
 
     @app.route("/eval-run/<slug>/delete", methods=["GET", "POST"])
     @require_login()
     def eval_run_delete(slug: str):
         from flask import redirect, render_template, request, url_for
 
-        from frontend.eval_run_data import delete_eval_run
+        from frontend.eval_run_data import delete_eval_combo_from_slug
         from frontend.result_delete import eval_delete_context
 
         if request.method == "GET":
             ctx = eval_delete_context(slug)
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
         if request.form.get("confirm") != "1":
             ctx = eval_delete_context(slug, error_message="Confirmation required.")
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
-        error = delete_eval_run(slug)
+        error = delete_eval_combo_from_slug(slug)
         if error:
             ctx = eval_delete_context(slug, error_message=error)
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
         return redirect(url_for("eval_run"))
 
@@ -641,30 +664,26 @@ def register_routes(app):
     def eval_run_delete_private(slug: str):
         from flask import redirect, render_template, request, url_for
 
-        from frontend.eval_run_data import delete_eval_run
+        from frontend.eval_run_data import delete_eval_combo_from_slug
         from frontend.result_delete import eval_delete_context
 
         visibility, owner_user_id = _private_scope()
         if request.method == "GET":
             ctx = eval_delete_context(slug, visibility=visibility, owner_user_id=owner_user_id)
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
         if request.form.get("confirm") != "1":
             ctx = eval_delete_context(
                 slug, visibility=visibility, owner_user_id=owner_user_id,
                 error_message="Confirmation required.",
             )
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
-        error = delete_eval_run(slug, visibility=visibility, owner_user_id=owner_user_id)
+        error = delete_eval_combo_from_slug(
+            slug, visibility=visibility, owner_user_id=owner_user_id
+        )
         if error:
             ctx = eval_delete_context(
                 slug, visibility=visibility, owner_user_id=owner_user_id, error_message=error,
             )
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
         return redirect(url_for("eval_run"))
 
@@ -730,6 +749,19 @@ def register_routes(app):
             model = request.form.get("model", "")
             base_url = None
             api_key = None
+
+        # Same cross-pillar gate as eval: gateway → safety; HF hosted → scan.
+        from frontend import pipeline
+
+        if model_source == "hosted":
+            gate_error = pipeline.require_ready_for_downstream(model, "hf")
+            if gate_error is not None:
+                return gate_error, 400
+        elif model_source == "gateway":
+            gate_error = pipeline.require_ready_for_downstream(model, "gateway")
+            if gate_error is not None:
+                return gate_error, 400
+
         error = validate_launch(
             benchmark_key,
             model,
@@ -833,7 +865,7 @@ def register_routes(app):
                 missing=True,
                 slug=slug,
             )
-        return render_template("benchmark_detail.html", missing=False, **detail)
+        return render_template("benchmark_detail.html", missing=False, **_attach_pillar_summary(detail, pillar="benchmark"))
 
     @app.route("/benchmarks/<slug>/private")
     @require_login()
@@ -865,7 +897,7 @@ def register_routes(app):
                 slug=slug,
                 is_private=True,
             )
-        return render_template("benchmark_detail.html", missing=False, is_private=True, **detail)
+        return render_template("benchmark_detail.html", missing=False, is_private=True, **_attach_pillar_summary(detail, pillar="benchmark"))
 
     @app.route("/benchmarks/<slug>/items")
     def benchmark_detail_items(slug: str):
@@ -1006,6 +1038,7 @@ def register_routes(app):
         from flask import redirect, request, url_for
 
         from frontend.safety_launch import start_run, validate_launch
+        from frontend import docker_launch
         from frontend.output_dirs import OutputDirError
 
         model = request.form.get("gateway_model", "")
@@ -1042,6 +1075,8 @@ def register_routes(app):
                 garak_probes=garak_probes or None,
             )
         except OutputDirError as exc:
+            return str(exc), 503
+        except docker_launch.DockerUnavailableError as exc:
             return str(exc), 503
         slug, profile = run_key.split("/", 1)
         endpoint = "safety_detail_private" if visibility == "private" else "safety_detail"
@@ -1106,7 +1141,7 @@ def register_routes(app):
                 slug=slug,
                 profile=profile,
             )
-        return render_template("safety_detail.html", missing=False, **detail)
+        return render_template("safety_detail.html", missing=False, **_attach_pillar_summary(detail, pillar="safety"))
 
     @app.route("/safety/<slug>/<profile>/private")
     @require_login()
@@ -1141,7 +1176,7 @@ def register_routes(app):
                 profile=profile,
                 is_private=True,
             )
-        return render_template("safety_detail.html", missing=False, is_private=True, **detail)
+        return render_template("safety_detail.html", missing=False, is_private=True, **_attach_pillar_summary(detail, pillar="safety"))
 
     @app.route("/safety/<slug>/<profile>/delete", methods=["GET", "POST"])
     @require_login()
@@ -1257,13 +1292,20 @@ def register_routes(app):
 
         detail = get_model_detail(slug) or {
             "model": rollup["display_name"], "runs": [], "dim_columns": [],
-            "n_runs": 0, "suites": [], "best_overall": None, "total_cost_usd": 0,
+            "n_runs": 0, "suites": [], "avg_overall": None, "best_overall": None, "total_cost_usd": 0,
         }
         recommendation = model_summary.get_recommendation_summary(rollup)
         can_hf_scan = gateway_is_hf_scannable(rollup["display_name"])
         from frontend.model_findings import get_model_findings
+        from frontend import scan_data
+        from frontend.scan_links import get_linked_scan
 
         pillar_findings = get_model_findings(rollup)
+        linked_scan_slug = get_linked_scan(rollup["display_name"])
+        available_scans = [
+            {"slug": s["slug"], "model_id": s.get("model_id"), "tier": s.get("severity_tier")}
+            for s in scan_data.get_scans_data().get("scans", [])
+        ]
         return render_template(
             "model_detail.html",
             missing=False,
@@ -1271,8 +1313,10 @@ def register_routes(app):
             recommendation=recommendation,
             pillar_findings=pillar_findings,
             gateway_profile=gateway_profile,
-            gateway_id=gateway_id,
+            gateway_id=gateway_id or rollup["display_name"],
             can_hf_scan=can_hf_scan,
+            linked_scan_slug=linked_scan_slug,
+            available_scans=available_scans,
             **detail,
         )
 
@@ -1332,6 +1376,37 @@ def register_routes(app):
             benchmark_kinds=benchmark_kinds,
             chart_models=chart_models,
         )
+
+    @app.route("/models/<slug>/link-scan", methods=["POST"])
+    @require_login()
+    def model_link_scan(slug: str):
+        from flask import flash, redirect, request, url_for
+
+        from frontend import model_rollup
+        from frontend.scan_links import set_link
+
+        rollup = model_rollup.get_model_rollup(slug)
+        gateway_id = (rollup or {}).get("display_name") or slug
+        scan_slug = (request.form.get("scan_slug") or "").strip()
+        err = set_link(gateway_model_id=gateway_id, scan_slug=scan_slug)
+        if err:
+            flash(err, "error")
+        else:
+            flash(f"Linked scan {scan_slug!r} to this model.", "success")
+        return redirect(url_for("model_detail", slug=slug))
+
+    @app.route("/models/<slug>/unlink-scan", methods=["POST"])
+    @require_login()
+    def model_unlink_scan(slug: str):
+        from flask import redirect, url_for
+
+        from frontend import model_rollup
+        from frontend.scan_links import remove_link
+
+        rollup = model_rollup.get_model_rollup(slug)
+        gateway_id = (rollup or {}).get("display_name") or slug
+        remove_link(gateway_model_id=gateway_id)
+        return redirect(url_for("model_detail", slug=slug))
 
     @app.route("/gateway/refresh", methods=["POST"])
     def gateway_refresh():

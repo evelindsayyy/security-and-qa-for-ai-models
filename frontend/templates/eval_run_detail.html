@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button, private_badge, back_link, rerun_button, progress_terminal with context %}
+{% from '_macros.html' import expandable, start_button, delete_button, private_badge, back_link, rerun_button, progress_terminal, pillar_summary_card with context %}
 
 {% block title %}{% if missing %}Run not found{% else %}{{ candidate_model }} — run{% endif %}{% endblock %}
 
@@ -8,10 +8,10 @@
   {% if missing %}
     <h1>Run not found</h1>
     <p class="sub empty">no results JSONL for slug <code>{{ slug }}</code>.</p>
-    <p class="form-hint">{{ start_button(url_for('eval_run_new'), 'Start an eval run', classes='') }} or CLI: <code>{{ cli_eval_docker() }}</code></p>
-    <p><a href="{{ url_for('eval_run') }}">← all runs</a></p>
+    <p class="form-hint">{{ start_button(url_for('eval_run_new'), 'Start an eval run', classes='') }}</p>
+    <p><a class="font-semibold text-duke-blue" href="{{ url_for('eval_run') }}">← all eval runs</a></p>
   {% elif running %}
-    {{ back_link(url_for('eval_run'), '← all runs') }}
+    {{ back_link(url_for('eval_run'), 'all eval runs') }}
     <h1 class="page-title">Run in progress</h1>
     <p class="sub">slug <code>{{ slug }}</code> · live updates every 5 seconds</p>
     {{ progress_terminal(
@@ -28,7 +28,7 @@
     </p>
     {% endif %}
   {% else %}
-    {{ back_link(url_for('eval_run'), '← all runs') }}
+    {{ back_link(url_for('eval_run'), 'all eval runs') }}
     <h1>{{ candidate_model }}{% if is_private %} {{ private_badge() }}{% endif %}</h1>
     <p class="sub">
       slug <code>{{ slug }}</code> ·
@@ -55,7 +55,9 @@
       <span class="dim">{{ ok }}/{{ n }} OK · {{ cand_fail }} cand_fail · {{ judge_fail }} judge_fail</span>
     </div>
 
-    <h2>Per question ({{ n }})</h2>
+    {{ pillar_summary_card(pillar_summary) }}
+
+    <h2 class="section-title">Per question ({{ n }})</h2>
     <table class="run-table">
       <thead>
         <tr>
@@ -132,10 +134,11 @@
     </table>
     {% endif %}
 
-    <h2>Judge rationales</h2>
-    <p class="dim">one sentence per dimension per question; click to expand.</p>
+    <h2 class="section-title mt-10">Judge rationales</h2>
+    <p class="body mt-1 mb-4">One sentence per dimension per question; click to expand.</p>
+    <div class="space-y-3">
     {% for q in questions %}
-      <details>
+      <details class="tool-panel">
         <summary>
           <code>{{ q.question_id }}</code>
           {% if q.overall is not none %}
@@ -165,9 +168,10 @@
         {% endif %}
       </details>
     {% endfor %}
+    </div>
 
-    <h2>Adaptation</h2>
-    <pre class="json-block">{
+    <h2 class="section-title mt-10">Adaptation</h2>
+    <pre class="json-block mt-3">{
   "candidate_model": {{ candidate_model|tojson }},
   "candidate_model_version": {{ candidate_model_version|tojson }},
   "judge_model": {{ judge_model|tojson }},

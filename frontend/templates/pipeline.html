@@ -37,6 +37,16 @@
       <dt>Hugging Face repos</dt>
       <dd>Must clear the <b>artifact scan</b> (completed, low tier); safety red-teaming isn't yet supported for served HF models.</dd>
     </dl>
+    <form method="post" action="{{ url_for('gateway_refresh') }}" class="refresh-form mt-4">
+      <input type="hidden" name="next" value="{{ url_for('pipeline_overview') }}">
+      <button type="submit" class="btn-secondary btn-sm" title="Re-fetch GET /v1/models now">↻ Refresh gateway catalog</button>
+      {% if gateway_count %}
+      <span class="form-hint ml-2">{{ gateway_count }} live gateway model{{ "" if gateway_count == 1 else "s" }}</span>
+      {% endif %}
+      {% if gateway_error %}
+      <span class="form-warning ml-2">Catalog issue: {{ gateway_error }}</span>
+      {% endif %}
+    </form>
   </section>
 
   {% if not has_rows %}

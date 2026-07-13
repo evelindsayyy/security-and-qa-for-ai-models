@@ -380,8 +380,11 @@ def _postprocess_runs(runs: list[dict]) -> dict:
     for r in sorted(runs, key=lambda r: r["filename"]):
         latest[(r["candidate_model"], r["judge_model"], r["suite"])] = r
     runs = list(latest.values())
+    from frontend.model_identity import gateway_slug
+
     for r in runs:
-        r["model_slug"] = model_slug(r["candidate_model"])  # for /models/<slug>
+        # Catalog /models/<slug> URLs use gateway_slug (lowercase).
+        r["model_slug"] = gateway_slug(r["candidate_model"])
 
     # Best first by overall mean; None sinks to bottom.
     runs.sort(key=lambda r: (r["overall"] or 0), reverse=True)
@@ -435,15 +438,26 @@ def get_model_detail(slug: str) -> dict | None:
 
     Reuses the dispatched ``get_runs_data()`` (DB when available, files
     otherwise), so this works on both paths. Returns None if no run matches.
+
+    Catalog URLs use ``gateway_slug`` (lowercase); also accept the legacy
+    case-preserving ``model_slug`` so older bookmarks still resolve.
     """
     if not is_safe_slug(slug):
         return None
-    runs = [r for r in get_runs_data()["runs"] if model_slug(r["candidate_model"]) == slug]
+    from frontend.model_identity import gateway_slug
+
+    runs = [
+        r
+        for r in get_runs_data()["runs"]
+        if gateway_slug(r["candidate_model"]) == slug
+        or model_slug(r["candidate_model"]) == slug
+    ]
     if not runs:
         return None
     runs.sort(key=lambda r: (r["suite"], r["judge_model"]))
     dim_columns = list(dict.fromkeys(d for r in runs for d in r["dims"]))
     overalls = [r["overall"] for r in runs if r["overall"] is not None]
+    avg_overall = round(sum(overalls) / len(overalls), 2) if overalls else None
     return {
         "slug": slug,
         "model": runs[0]["candidate_model"],
@@ -451,7 +465,9 @@ def get_model_detail(slug: str) -> dict | None:
         "dim_columns": dim_columns,
         "n_runs": len(runs),
         "suites": sorted({r["suite"] for r in runs}),
-        "best_overall": max(overalls) if overalls else None,
+        "avg_overall": avg_overall,
+        # Alias kept for older callers/templates during transition.
+        "best_overall": avg_overall,
         "total_cost_usd": sum(r["total_cost_usd"] for r in runs),
     }
 
@@ -762,14 +778,20 @@ def get_run_detail(
     slug: str, *, visibility: str = "public", owner_user_id: str | None = None
 ) -> dict | None:
     """Detail payload for one eval run. Defaults to the public catalog; pass
-    ``visibility="private", owner_user_id=...`` for a signed-in user's own copy."""
+    ``visibility="private", owner_user_id=...`` for a signed-in user's own copy.
+
+    When Postgres is reachable but the slug is not loaded yet (common for local
+    smoke / stub runs that only exist on disk), fall back to the JSONL artifact.
+    """
     try:
         from frontend import eval_db_data
 
         if eval_db_data.available():
-            return eval_db_data.get_run_detail_db(
+            detail = eval_db_data.get_run_detail_db(
                 slug, visibility=visibility, owner_user_id=owner_user_id
             )
+            if detail is not None:
+                return detail
     except Exception:
         pass
     return _get_run_detail_files(slug, visibility=visibility, owner_user_id=owner_user_id)
@@ -782,10 +804,21 @@ def get_eval_rerun_params(
     detail = get_run_detail(slug, visibility=visibility, owner_user_id=owner_user_id)
     if detail is None:
         return None
+    suite = detail.get("suite_version") or detail.get("suite")
+    # Prefer the curated suite key when adaptation recorded a path-like value.
+    if isinstance(suite, str) and suite.endswith(".jsonl"):
+        suite = Path(suite).stem
+    max_tokens = detail.get("max_tokens")
+    try:
+        max_tokens = int(max_tokens) if max_tokens is not None else None
+    except (TypeError, ValueError):
+        max_tokens = None
     return {
         "candidate_model": detail.get("candidate_model"),
         "judge_model": detail.get("judge_model"),
-        "suite": detail.get("suite_version") or detail.get("suite"),
+        "suite": suite,
+        "max_tokens": max_tokens,
+        "temperature": detail.get("temperature"),
     }
 
 
@@ -814,25 +847,41 @@ def delete_eval_run(
     if not is_safe_slug(slug):
         return f"invalid slug: {slug!r}"
 
+    if is_eval_run_in_progress(slug):
+        return "cannot delete while the run is still in progress"
+
     exists = False
     try:
         from frontend import eval_db_data
 
         if eval_db_data.available():
-            exists = (
-                eval_db_data.get_run_detail_db(
-                    slug, visibility=visibility, owner_user_id=owner_user_id
-                )
-                is not None
+            exists = eval_db_data.run_row_exists(
+                slug, visibility=visibility, owner_user_id=owner_user_id
             )
     except Exception:
         pass
     if not exists:
+        # Disk-only run (or DB miss): require a visible artifact.
+        jsonl = RESULTS_DIR / f"{slug}.jsonl"
+        log = RESULTS_DIR / f"{slug}.log"
         meta = read_run_meta_for_pillar(RESULTS_DIR / slug, pillar="eval")
-        if not artifact_visible(meta, view_mode=visibility, user_id=owner_user_id):
+        if not jsonl.is_file() and not log.is_file() and not (RESULTS_DIR / slug).is_dir():
             return f"no eval run found for slug {slug!r}"
-    if is_eval_run_in_progress(slug):
-        return "cannot delete while the run is still in progress"
+        if not artifact_visible(
+            meta if meta else {"visibility": "public"},
+            view_mode=visibility,
+            user_id=owner_user_id,
+        ):
+            return f"no eval run found for slug {slug!r}"
+
+    # Drop a leftover lock even when the process already exited so a later
+    # re-ingest / re-run is not blocked by a stale frontend_launch lock.
+    try:
+        from dbutils import run_lock
+
+        run_lock.release(RESULTS_DIR / f"{slug}.run.lock")
+    except Exception:
+        pass
 
     removed_files = 0
     for suffix in _EVAL_ARTIFACT_SUFFIXES:
@@ -843,6 +892,16 @@ def delete_eval_run(
                 removed_files += 1
             except OSError as exc:
                 return f"could not delete {path.name}: {exc}"
+    # Also remove the per-run meta directory if present.
+    meta_dir = RESULTS_DIR / slug
+    if meta_dir.is_dir():
+        try:
+            import shutil
+
+            shutil.rmtree(meta_dir)
+            removed_files += 1
+        except OSError as exc:
+            return f"could not delete {meta_dir.name}/: {exc}"
 
     removed_db = False
     db_available = False
@@ -854,11 +913,8 @@ def delete_eval_run(
         db_available = eval_db_data.available()
         if db_available:
             try:
-                db_row_existed = (
-                    eval_db_data.get_run_detail_db(
-                        slug, visibility=visibility, owner_user_id=owner_user_id
-                    )
-                    is not None
+                db_row_existed = eval_db_data.run_row_exists(
+                    slug, visibility=visibility, owner_user_id=owner_user_id
                 )
             except Exception:
                 pass
@@ -883,6 +939,32 @@ def delete_eval_run(
     if removed_files == 0 and not removed_db:
         return f"no eval run found for slug {slug!r}"
     return None
+
+
+def delete_eval_combo_from_slug(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> str | None:
+    """Delete every run for this slug's (suite, candidate) in the current scope.
+
+    The eval list collapses history to one row per combo, so a single-slug
+    delete leaves the next duplicate looking identical ("Delete did nothing").
+    UI delete uses this; relaunch already purges via ``purge_eval_for_launch``.
+    """
+    detail = get_run_detail(slug, visibility=visibility, owner_user_id=owner_user_id)
+    if detail is None:
+        return delete_eval_run(slug, visibility=visibility, owner_user_id=owner_user_id)
+    suite = str(detail.get("suite_version") or detail.get("suite") or "").strip()
+    candidate = str(detail.get("candidate_model") or "").strip()
+    if not suite or not candidate:
+        return delete_eval_run(slug, visibility=visibility, owner_user_id=owner_user_id)
+    from frontend.purge_rerun import purge_eval_for_launch
+
+    return purge_eval_for_launch(
+        suite,
+        candidate,
+        visibility=visibility,
+        owner_user_id=owner_user_id,
+    )
 
 
 _EVAL_SUITE_ABOUT = {

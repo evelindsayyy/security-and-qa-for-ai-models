@@ -61,7 +61,7 @@ curl -s -X POST http://127.0.0.1:5000/auth/logout
 
 Login is browser-only: header **Sign in with Duke NetID** opens `/auth/login?popup=1` → Duke OIDC → `/login` (or `/auth/callback`).
 
-Production HTTPS runs through the Caddy compose overlay in [`docker/`](../docker/).
+Production HTTPS runs through Caddy when `CADDY_DOMAIN` is set — see [`docker/README.md`](../docker/README.md).
 
 ### OIDC callback ports (local dev / IDE port-forwarding)
 

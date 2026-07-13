@@ -58,7 +58,7 @@ Pillar groups (`scanner`, `safety`, `benchmarks`) conflict — use Docker for pi
 
 lint (ruff) → frontend-build (npm ci + build + vitest) → unit-tests. On `main`: Buildah → GitLab registry → `deploy` job to VM (manual Play or `DEPLOY_AUTO=true`), target `/home/vcm/security-and-qa-for-ai-models`.
 
-Always start the production UI via `./docker/run.sh` or `python3 main.py` — never bare `docker compose` without the pinned project name `qa-ai-models`.
+Always start the production UI via `./docker/run.sh` or `python3 main.py` — never bare `docker compose` without the pinned project name `qa-ai-models`. After code changes on a detached stack, use `./docker/run.sh restart` (rebuild + recreate) instead of hunting for a VS Code forwarded port.
 
 ## Environment (`.env`)
 
@@ -68,6 +68,7 @@ Always start the production UI via `./docker/run.sh` or `python3 main.py` — ne
 | `HF_TOKEN` | Scanner gated downloads |
 | `POSTGRES_DSN` | Scan, safety, benchmark loaders + UI reads |
 | `EFFICACY_DB_DSN` | Eval loader + `/eval-run` (same server usually) |
+| `CADDY_DOMAIN`, `TRUST_PROXY` | Production HTTPS (VM); blank locally — see `docker/README.md` |
 | `FRONTEND_LAUNCH_MODE=docker` | Browser Start buttons use Docker (default) |
 | `AUTO_INGEST=0` | Disable post-run sync |
 | `AUTH_ENABLED`, `DUKE_OIDC_*`, `AUTH_ALLOWED_NETIDS` | Duke OIDC login — see `auth/README.md` |

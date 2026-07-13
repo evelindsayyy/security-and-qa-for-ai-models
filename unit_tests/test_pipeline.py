@@ -2,8 +2,9 @@
 Tests for the cross-pillar launch gates in frontend/pipeline.py.
 
 Offline + deterministic: safety artifacts are written to a temp dir and
-_safety_result_paths is patched to point at them (no real safety/output, no
-dependency on normalize_gateway_model_id here).
+_safety_result_paths is patched to point at them (no real safety/output).
+UI catalog (_safety_runs_from_ui_catalog) is stubbed empty unless a test
+opts in — that keeps disk-only cases isolated from a live Postgres DSN.
 
 Run from repo root:
   uv run python -m unittest unit_tests.test_pipeline -v
@@ -25,6 +26,10 @@ class ValidateSafetyGateTest(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
         self.addCleanup(self._tmp.cleanup)
+        # Isolate from host Postgres /safety catalog during disk-path tests.
+        m = mock.patch.object(pipeline, "_safety_runs_from_ui_catalog", return_value=[])
+        m.start()
+        self.addCleanup(m.stop)
 
     def _patch_paths(self, *pairs) -> None:
         # pairs: (profile, payload) where payload is a dict (written as JSON),
@@ -114,6 +119,38 @@ class ValidateSafetyGateTest(unittest.TestCase):
         # not "missing", on the /pipeline badge.
         self.assertEqual(gate["status"], "unreadable")
         self.assertEqual(pipeline._gate_stage(gate)["state"], "blocked")
+
+    def test_ui_catalog_clears_when_disk_empty(self) -> None:
+        # Matches production: /safety shows a Postgres row but public disk
+        # under safety/output/<slug>/ is empty → gate must still clear.
+        self._patch_paths()
+        with mock.patch.object(
+            pipeline,
+            "_safety_runs_from_ui_catalog",
+            return_value=[
+                {
+                    "profile": "base",
+                    "status": "complete",
+                    "tier": "medium",
+                }
+            ],
+        ):
+            gate = pipeline.validate_safety_gate("Llama 4 Scout")
+        self.assertTrue(gate["ok"])
+        self.assertEqual(gate["tier"], "medium")
+
+    def test_cleared_catalog_wins_over_stale_disk_high(self) -> None:
+        self._patch_paths(("base", {"status": "complete", "composite_tier": "high"}))
+        with mock.patch.object(
+            pipeline,
+            "_safety_runs_from_ui_catalog",
+            return_value=[
+                {"profile": "base", "status": "complete", "tier": "low"},
+            ],
+        ):
+            gate = pipeline.validate_safety_gate("Llama 4 Scout")
+        self.assertTrue(gate["ok"])
+        self.assertEqual(gate["tier"], "low")
 
 
 class RequireReadyTest(unittest.TestCase):

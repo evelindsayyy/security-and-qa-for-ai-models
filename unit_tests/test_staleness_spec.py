@@ -109,6 +109,12 @@ class EvalStalenessSpecTest(unittest.TestCase):
             "timestamp": "2026-05-01T12:00:00Z",
             "suite": "it_support_v1",
             **current,
+            "dim_means": {
+                "accuracy": 4.5,
+                "completeness": 4.5,
+                "policy_adherence": 4.5,
+                "tone": 3.0,
+            },
         }
         self.assertEqual(staleness_spec.eval_staleness_reasons(row), [])
 
@@ -123,9 +129,35 @@ class EvalStalenessSpecTest(unittest.TestCase):
             "suite": "it_support_v1",
             "rubric_version": "old_rubric",
             "system_prompt_version": current["system_prompt_version"],
+            "dim_means": {
+                "accuracy": 4.0,
+                "completeness": 4.0,
+                "policy_adherence": 4.0,
+                "tone": 3.0,
+            },
         }
         reasons = staleness_spec.eval_staleness_reasons(row)
         self.assertTrue(any("rubric_version changed" in r for r in reasons))
+
+    def test_it_support_rubric_version_uses_yaml_not_stem(self) -> None:
+        current = staleness_spec.current_eval_suite_versions("it_support_v1")
+        self.assertEqual(current["rubric_version"], "it_support_v1")
+
+    def test_missing_rubric_dimensions_is_stale(self) -> None:
+        current = staleness_spec.current_eval_suite_versions("policy_qa_v1.1")
+        if current is None:
+            self.skipTest("policy_qa_v1.1 suite not configured")
+        row = {
+            "suite": "policy_qa_v1.1",
+            **current,
+            "dim_means": {
+                "accuracy": 4.0,
+                "completeness": 4.0,
+                # faithfulness, coverage, citation_precision intentionally missing
+            },
+        }
+        reasons = staleness_spec.eval_staleness_reasons(row)
+        self.assertTrue(any("missing rubric dimensions" in r for r in reasons))
 
 
 class BenchmarkStalenessSpecTest(unittest.TestCase):

@@ -7,6 +7,11 @@ WORKDIR /build/frontend/assets
 COPY frontend/assets/package.json frontend/assets/package-lock.json* ./
 RUN npm ci
 COPY frontend/assets/ ./
+# Tailwind's content scan includes ../templates/**/*.html (see tailwind.config.js).
+# The templates must be present in the build context or Tailwind purges every
+# class used only in templates (pillar-toolbar, launch-page, form-section, …),
+# baking an incomplete stylesheet and an unstyled production UI.
+COPY frontend/templates/ /build/frontend/templates/
 RUN npm run build
 
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
@@ -29,7 +34,7 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 RUN uv sync --frozen --no-dev --no-install-project
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Seed built frontend assets (bind-mounted repo may overwrite; entrypoint rebuilds if missing).
+# Baked frontend assets; vite_assets.py falls back here when no working-tree build exists.
 COPY --from=frontend-build /build/frontend/static/dist /opt/frontend-dist
 
 COPY docker/entrypoint.sh /entrypoint.sh

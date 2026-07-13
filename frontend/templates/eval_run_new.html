@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import launch_back, rerun_callout, guide_panel with context %}
+{% from '_macros.html' import launch_back, rerun_callout with context %}
 
 {% block title %}Start an evaluation run{% endblock %}
 
@@ -22,14 +22,6 @@
   .suite-badge--execution { background:#e6f4ea; color:#1e7a43; border:1px solid #bfe3cd; }
   .suite-badge--judge { background:#eaeff9; color:#2f43a0; border:1px solid #ccd6f2; }
 
-  .eval-guide-steps { display:grid; grid-template-columns:repeat(3,1fr); gap:.6rem; margin:.55rem 0 .85rem; }
-  .eval-guide-steps b { color: var(--color-duke-blue); }
-  .eval-guide-steps span { color: var(--color-text-subtle); }
-  .eval-guide-pick { display:grid; grid-template-columns:1fr 1fr; gap:.6rem; }
-  .eval-guide-pick > div { background: var(--color-surface-raised); border: 1px solid var(--color-border); border-radius: 8px; padding:.5rem .7rem; }
-  .eval-guide-pick strong { display:block; color: var(--color-duke-blue); margin-bottom:.15rem; }
-  .eval-guide-pick small { color: var(--color-text-subtle); }
-
   .qb-row { border: 1px solid var(--color-border); border-radius: 8px; padding:.6rem .7rem; margin-bottom:.55rem; }
   .qb-rowhead { display:flex; justify-content:space-between; align-items:center; font-size:.78rem; color: var(--color-text-subtle); margin-bottom:.25rem; }
   .qb-remove { background:none; border:none; color: var(--color-text-subtle); font-size:1.15rem; line-height:1; cursor:pointer; padding:0 .2rem; }
@@ -47,29 +39,14 @@
 </style>
 
 <div class="launch-page">
-  {{ launch_back(url_for('eval_run'), 'all runs') }}
+  {{ launch_back(url_for('eval_run'), 'all eval runs') }}
 
   <header>
     <h1 class="page-title">Start an evaluation run</h1>
     <p class="page-subtitle">
-      Launches <code>evaluator/runner.py</code> via Docker Compose (default).
-      One run at a time; an identical in-flight request returns the existing run.
+      Choose a candidate model, judge, and task suite. One run at a time; an identical in-flight request returns the existing run.
     </p>
   </header>
-
-  {% set eval_guide_body %}
-  <p>An evaluation tests one model and has a second model grade the answers. You choose three things:</p>
-  <div class="eval-guide-steps">
-    <div><b>1 · Model</b><br><span>the one being tested</span></div>
-    <div><b>2 · What to test</b><br><span>a ready task or your own</span></div>
-    <div><b>3 · Judge</b><br><span>grades the answers</span></div>
-  </div>
-  <div class="eval-guide-pick">
-    <div><strong>Use a task suite</strong><small>to compare models on a standard Duke task — references already written.</small></div>
-    <div><strong>Bring your own questions</strong><small>for your specific use case — you provide the ideal answer for each.</small></div>
-  </div>
-  {% endset %}
-  {{ guide_panel('ⓘ How this works — which should I pick?', eval_guide_body, open_default=true) }}
 
   {% if rerun %}{{ rerun_callout() }}{% endif %}
   {% if not docker_available %}
@@ -279,8 +256,20 @@
       }
     }
     if (RERUN.suite) {
-      const suite = form.querySelector(`input[name="suite"][value="${RERUN.suite}"]`);
-      if (suite) suite.checked = true;
+      // Don't use querySelector value=… for suite keys like policy_qa_v1.1 —
+      // attribute selectors are fragile; match by .value instead.
+      const suiteInput = [...form.querySelectorAll('input[name="suite"]')]
+        .find((el) => el.value === RERUN.suite);
+      if (suiteInput) {
+        suiteInput.checked = true;
+        form.querySelectorAll('input[name="suite"]').forEach((el) => {
+          if (el !== suiteInput) el.checked = false;
+        });
+      }
+    }
+    if (RERUN.max_tokens != null) {
+      const maxTok = form.querySelector('input[name="max_tokens"]');
+      if (maxTok) maxTok.value = String(RERUN.max_tokens);
     }
   }
 

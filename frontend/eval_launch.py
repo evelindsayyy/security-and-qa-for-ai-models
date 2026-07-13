@@ -31,6 +31,7 @@ from frontend.log_status import run_log_payload, status_message
 from frontend.output_dirs import OutputDirError
 from frontend.path_safety import is_safe_slug
 from frontend.run_paths import inflight_scope_key
+from dbutils import run_lock
 
 ROOT = Path(__file__).parent.parent
 EVALUATOR = ROOT / "evaluator"
@@ -180,6 +181,19 @@ SUITES: dict[str, dict] = {
         "rubric": _INERT_RUBRIC,                     # inert (judge auto-skipped)
         "system_prompt": _SYS / "numeric_v1.txt",
     },
+    "tool_use_duke_v1": {
+        "label": "Tool use / function calling (15 tasks, execution-scored)",
+        "description": "Given a set of tools, the model must reply with the "
+                       "correct function call (name + arguments) — or decline "
+                       "when no tool fits. Scored by parsing and comparing the "
+                       "call, no LLM judge.",
+        "example": "\"I can't get on the VPN with NetID ar455\" → "
+                   "check_vpn_status(netid=\"ar455\")",
+        "scoring": "execution",
+        "suite": EVALUATOR / "tasks" / "tool_use_duke_v1.jsonl",
+        "rubric": _INERT_RUBRIC,                     # inert (judge auto-skipped)
+        "system_prompt": _SYS / "tool_use_v1.txt",
+    },
     # --- More judge-scored task domains --------------------------------------
     "email_drafting_v1": {
         "label": "Email drafting (5 scenarios, judge-scored)",
@@ -242,6 +256,34 @@ CUSTOM_PREFIX = "custom_"
 _RUNNING: dict[str, subprocess.Popen] = {}
 _INFLIGHT: dict[tuple, str] = {}
 _LOCK = threading.Lock()
+
+
+def _run_lock_path(stem: str) -> Path:
+    return RESULTS_DIR / f"{stem}.run.lock"
+
+
+def _watch_process(stem: str, proc: subprocess.Popen, lock_path: Path) -> None:
+    proc.wait()
+    run_lock.release(lock_path)
+    with _LOCK:
+        if _RUNNING.get(stem) is proc:
+            _RUNNING.pop(stem, None)
+
+
+def inflight_eval_slugs() -> set[str]:
+    """Slugs with an active run.lock or in-memory subprocess."""
+    from dbutils import fs_safe
+
+    slugs: set[str] = set()
+    if fs_safe.is_dir(RESULTS_DIR):
+        for path in fs_safe.glob(RESULTS_DIR, "*.run.lock"):
+            if run_lock.is_active(path):
+                slugs.add(path.name[: -len(".run.lock")])
+    with _LOCK:
+        for slug, proc in _RUNNING.items():
+            if proc.poll() is None:
+                slugs.add(slug)
+    return slugs
 
 
 def _suite_cfg(suite_key: str) -> dict | None:
@@ -560,9 +602,11 @@ def start_run(
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         persist_run_meta_dir(RESULTS_DIR / stem, plan)
         log_path = RESULTS_DIR / f"{stem}.log"
+        lock_file = _run_lock_path(stem)
         cmd = build_command(candidate, judge, suite_key, max_tokens, stem)
+        cmd_str = " ".join(cmd)
         with log_path.open("wb") as log_f:
-            log_f.write(f"=== command: {' '.join(cmd)} ===\n".encode())
+            log_f.write(f"=== command: {cmd_str} ===\n".encode())
             # PYTHONUNBUFFERED: stream the runner's stdout into the log as it
             # happens — without it, a killed process loses everything Python
             # had buffered (observed: a .log with only this header line).
@@ -579,8 +623,21 @@ def start_run(
                 # question, so orphaned completion is safe and useful).
                 start_new_session=True,
             )
+        if not run_lock.try_acquire(
+            lock_file,
+            pid=proc.pid,
+            command=cmd_str,
+            source=run_lock.FRONTEND_SOURCE,
+        ):
+            proc.terminate()
+            return stem, True, plan.visibility
         _RUNNING[stem] = proc
         _INFLIGHT[combo] = stem
+        threading.Thread(
+            target=_watch_process,
+            args=(stem, proc, lock_file),
+            daemon=True,
+        ).start()
         return stem, False, plan.visibility
 
 
@@ -632,9 +689,11 @@ def start_dcc_run(
         stem = predict_stem(suite_key, candidate)
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         log_path = RESULTS_DIR / f"{stem}.log"
+        lock_file = _run_lock_path(stem)
         cmd = build_dcc_command(candidate, judge, suite_key, max_tokens, stem)
+        cmd_str = " ".join(cmd)
         with log_path.open("wb") as log_f:
-            log_f.write(f"=== command: {' '.join(cmd)} ===\n".encode())
+            log_f.write(f"=== command: {cmd_str} ===\n".encode())
             env = os.environ.copy()
             env["PYTHONUNBUFFERED"] = "1"
             # cwd = repo root so `-m evaluator.dcc_orchestrate` resolves and its
@@ -648,8 +707,21 @@ def start_dcc_run(
                 env=env,
                 start_new_session=True,
             )
+        if not run_lock.try_acquire(
+            lock_file,
+            pid=proc.pid,
+            command=cmd_str,
+            source=run_lock.FRONTEND_SOURCE,
+        ):
+            proc.terminate()
+            return stem, True
         _RUNNING[stem] = proc
         _INFLIGHT[combo] = stem
+        threading.Thread(
+            target=_watch_process,
+            args=(stem, proc, lock_file),
+            daemon=True,
+        ).start()
         return stem, False
 
 
@@ -714,6 +786,16 @@ def get_status(
     # simply doesn't render.
     phase = _dcc_phase(log_path)
 
+    def _running_payload(status: str) -> dict:
+        return {
+            "status": status,
+            "progress": progress,
+            "total": total,
+            "log_path": rel_log,
+            "phase": phase,
+            **run_log_payload(log_path),
+        }
+
     proc = _RUNNING.get(slug)
     if proc is not None and proc.poll() is None:
         status = phase or "running"
@@ -724,14 +806,21 @@ def get_status(
                 head = ""
             if "evaluator.dcc_orchestrate" in head:
                 status = "queued"
-        return {
-            "status": status,
-            "progress": progress,
-            "total": total,
-            "log_path": rel_log,
-            "phase": phase,
-            **run_log_payload(log_path),
-        }
+        return _running_payload(status)
+
+    # Flask/web restart: PID registry is empty but the durable lock + log
+    # still show the docker/host job is alive.
+    if run_lock.is_active(_run_lock_path(slug)):
+        status = phase or "running"
+        if phase is None and log_path.is_file():
+            try:
+                head = log_path.read_text(encoding="utf-8", errors="replace")[:500]
+            except OSError:
+                head = ""
+            if "evaluator.dcc_orchestrate" in head:
+                status = "queued"
+        return _running_payload(status)
+
     if proc is not None:  # exited without a complete file
         return {
             "status": "failed",
@@ -742,7 +831,7 @@ def get_status(
             "phase": phase,
         }
     if path.is_file():
-        # partial file, no registered process (e.g. Flask restarted mid-run)
+        # partial file, no registered process and no active lock
         return {
             "status": "failed",
             "progress": progress,
@@ -761,7 +850,10 @@ def is_eval_run_in_progress(slug: str) -> bool:
     proc = _RUNNING.get(slug)
     if proc is not None and proc.poll() is None:
         return True
-    return get_status(slug)["status"] == "running"
+    if run_lock.is_active(_run_lock_path(slug)):
+        return True
+    status = get_status(slug)["status"]
+    return status in {"running", "queued", "provisioning", "serving", "evaluating", "tearing-down"}
 
 
 def validate_custom_questions(

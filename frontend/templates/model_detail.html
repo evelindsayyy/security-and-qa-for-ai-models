@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import cli_eval_docker, start_button, tier_label, page_header, stat_card, section_header, expandable with context %}
+{% from '_macros.html' import start_button, delete_button, rerun_button, tier_label, page_header, stat_card, section_header, expandable with context %}
 
 {% block title %}{% if missing %}Model not found{% else %}{{ model }} — nutrition label{% endif %}{% endblock %}
 
@@ -23,7 +23,7 @@
       {{ stat_card('Aggregate', '%.0f'|format(rollup.aggregate) if rollup.aggregate is not none else '—', '/ 100') }}
       {{ stat_card('Scan', rollup.scan.tier if rollup.scan else '—', 'risk ' ~ rollup.scan.overall_risk_score if rollup.scan else '') }}
       {{ stat_card('Safety', rollup.safety.tier if rollup.safety else '—', '%.0f%% pass'|format(rollup.safety.pass_rate * 100) if rollup.safety else '') }}
-      {{ stat_card('Eval best', '%.2f'|format(best_overall) if best_overall is not none else '—', '/ 5') }}
+      {{ stat_card('Eval avg', '%.2f'|format(avg_overall if avg_overall is not none else best_overall) if (avg_overall is not none or best_overall is not none) else '—', '/ 5') }}
     </div>
 
     <section class="key card p-5 mb-6">
@@ -60,47 +60,93 @@
     <section class="key card p-5 mb-6">
       {{ section_header('Pillar coverage') }}
       <ul class="pillar-cta-list">
-        <li>
-          <span class="dim">Scan:</span>
-          {% if rollup.scan %}
-            {{ tier_label(rollup.scan.tier) }}
-            <a href="{{ url_for('scan_detail', slug=rollup.scan.slug) }}">detail</a>
-          {% elif can_hf_scan %}
-            <span class="dim">no scan yet</span> —
-            {{ start_button(url_for('scan_run_new'), 'Run scan', classes='btn-secondary btn-sm') }}
-          {% else %}
-            <span class="dim">not applicable (closed-source API model)</span>
+        <li class="pillar-cta-row">
+          <span class="pillar-cta-label dim">Scan</span>
+          <div class="pillar-cta-status">
+            {% if rollup.scan %}
+              {{ tier_label(rollup.scan.tier) }}
+              <a href="{{ url_for('scan_detail', slug=rollup.scan.slug) }}">detail</a>
+              {% if linked_scan_slug %}<span class="badge badge-pilot">linked</span>{% endif %}
+            {% elif can_hf_scan %}
+              <span class="dim">no scan yet</span>
+            {% else %}
+              <span class="dim">not applicable (closed-source API model)</span>
+            {% endif %}
+          </div>
+          <div class="pillar-cta-actions">
+            {% if rollup.scan and linked_scan_slug and is_logged_in %}
+            <form method="post" action="{{ url_for('model_unlink_scan', slug=rollup.slug) }}" class="inline-form">
+              <button type="submit" class="btn-secondary btn-sm">Unlink</button>
+            </form>
+            {% elif not rollup.scan and can_hf_scan %}
+              {{ start_button(url_for('scan_run_new'), 'Run scan', classes='btn-secondary btn-sm') }}
+            {% endif %}
+          </div>
+          {% if is_logged_in and available_scans %}
+          <details class="scan-link-panel pillar-cta-extra">
+            <summary>Link existing scan</summary>
+            <form method="post" action="{{ url_for('model_link_scan', slug=rollup.slug) }}" class="scan-link-form">
+              <label class="sr-only" for="scan-link-{{ rollup.slug }}">Choose scan to link</label>
+              <select id="scan-link-{{ rollup.slug }}" name="scan_slug" class="form-control" required>
+                <option value="">Choose a scan…</option>
+                {% for s in available_scans %}
+                <option value="{{ s.slug }}" {% if s.slug == linked_scan_slug %}selected{% endif %}>
+                  {{ s.model_id or s.slug }} ({{ s.tier }})
+                </option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn-primary btn-sm">Link scan</button>
+            </form>
+          </details>
           {% endif %}
         </li>
-        <li>
-          <span class="dim">Safety:</span>
-          {% if rollup.safety %}
-            {{ tier_label(rollup.safety.tier) }}
-            <a href="{{ url_for('safety_detail', slug=rollup.safety.slug, profile=rollup.safety.profile) }}">detail</a>
-          {% else %}
-            <span class="dim">no safety run</span> —
-            {{ start_button(url_for('safety_run_new'), 'Run safety', classes='btn-secondary btn-sm') }}
-          {% endif %}
+        <li class="pillar-cta-row">
+          <span class="pillar-cta-label dim">Safety</span>
+          <div class="pillar-cta-status">
+            {% if rollup.safety %}
+              {{ tier_label(rollup.safety.tier) }}
+              <a href="{{ url_for('safety_detail', slug=rollup.safety.slug, profile=rollup.safety.profile) }}">detail</a>
+            {% else %}
+              <span class="dim">no safety run</span>
+            {% endif %}
+          </div>
+          <div class="pillar-cta-actions">
+            {% if not rollup.safety %}
+              {{ start_button(url_for('safety_run_new'), 'Run safety', classes='btn-secondary btn-sm') }}
+            {% endif %}
+          </div>
         </li>
-        <li>
-          <span class="dim">Eval:</span>
-          {% if rollup.eval and rollup.eval.best_overall is not none %}
-            best {{ "%.2f"|format(rollup.eval.best_overall) }} / 5
-            <a href="{{ url_for('eval_run') }}">runs</a>
-          {% else %}
-            <span class="dim">no eval runs</span> —
-            {{ start_button(url_for('eval_run_new'), 'Run eval', classes='btn-secondary btn-sm') }}
-          {% endif %}
+        <li class="pillar-cta-row">
+          <span class="pillar-cta-label dim">Eval</span>
+          <div class="pillar-cta-status">
+            {% if rollup.eval and (rollup.eval.avg_overall is defined and rollup.eval.avg_overall is not none or rollup.eval.best_overall is not none) %}
+              avg {{ "%.2f"|format(rollup.eval.avg_overall if rollup.eval.avg_overall is defined and rollup.eval.avg_overall is not none else rollup.eval.best_overall) }} / 5
+              <a href="{{ url_for('eval_run') }}">runs</a>
+            {% else %}
+              <span class="dim">no eval runs</span>
+            {% endif %}
+          </div>
+          <div class="pillar-cta-actions">
+            {% if not rollup.eval or not (rollup.eval.avg_overall is defined and rollup.eval.avg_overall is not none or rollup.eval.best_overall is not none) %}
+              {{ start_button(url_for('eval_run_new'), 'Run eval', classes='btn-secondary btn-sm') }}
+            {% endif %}
+          </div>
         </li>
-        <li>
-          <span class="dim">Benchmarks:</span>
-          {% if rollup.benchmark and rollup.benchmark.kinds %}
-            {% for kind, info in rollup.benchmark.kinds.items() %}<span>{{ kind }} <b>{{ info.headline_display }}</b></span>{% if not loop.last %}, {% endif %}{% endfor %}
-            <a href="{{ url_for('benchmarks') }}">detail</a>
-          {% else %}
-            <span class="dim">no benchmarks</span> —
-            {{ start_button(url_for('benchmark_run_new'), 'Run benchmark', classes='btn-secondary btn-sm') }}
-          {% endif %}
+        <li class="pillar-cta-row">
+          <span class="pillar-cta-label dim">Benchmarks</span>
+          <div class="pillar-cta-status">
+            {% if rollup.benchmark and rollup.benchmark.kinds %}
+              {% for kind, info in rollup.benchmark.kinds.items() %}<span>{{ kind }} <b>{{ info.headline_display }}</b></span>{% if not loop.last %}, {% endif %}{% endfor %}
+              <a href="{{ url_for('benchmarks') }}">detail</a>
+            {% else %}
+              <span class="dim">no benchmarks</span>
+            {% endif %}
+          </div>
+          <div class="pillar-cta-actions">
+            {% if not rollup.benchmark or not rollup.benchmark.kinds %}
+              {{ start_button(url_for('benchmark_run_new'), 'Run benchmark', classes='btn-secondary btn-sm') }}
+            {% endif %}
+          </div>
         </li>
       </ul>
       <p class="form-hint mt-4">
@@ -185,7 +231,11 @@
             <td class="num overall">{{ "%.2f"|format(r.overall) if r.overall is not none else "—" }}</td>
             <td class="num">{{ r.mean_latency_ms }} / {{ r.p95_latency_ms }} ms</td>
             <td class="num">${{ "%.4f"|format(r.total_cost_usd) }}</td>
-            <td><a href="{{ url_for('eval_run_detail', slug=r.slug) }}">detail</a></td>
+            <td class="col-nowrap">
+              <a href="{{ url_for('eval_run_detail_private' if view_mode == 'private' else 'eval_run_detail', slug=r.slug) }}">detail</a>
+              {{ rerun_button(url_for('eval_run_new', from=r.slug), 'Rerun', 'btn-secondary btn-sm') }}
+              {{ delete_button(url_for('eval_run_delete_private' if view_mode == 'private' else 'eval_run_delete', slug=r.slug), 'Delete', classes='btn-danger btn-sm') }}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -193,7 +243,7 @@
       </div>
     </section>
     {% else %}
-    <p class="sub empty">No eval runs yet. {{ start_button(url_for('eval_run_new'), 'Start an eval run', classes='') }} or CLI: <code>{{ cli_eval_docker() }}</code></p>
+    <p class="sub empty">No eval runs yet. {{ start_button(url_for('eval_run_new'), 'Start an eval run', classes='') }}</p>
     {% endif %}
   {% endif %}
 </div>

@@ -122,8 +122,8 @@ class SuiteReadinessTest(unittest.TestCase):
                         finally:
                             conn.close()
                     else:
-                        # json/numeric: feeding the gold back must pass its checker
-                        resp = (json.dumps(r["expected"]) if check == "json"
+                        # json/numeric/tool: feeding the gold back must pass its checker
+                        resp = (json.dumps(r["expected"]) if check in ("json", "tool")
                                 else str(r["expected"]))
                         ok, err = ee.CHECKERS[check](resp, r)
                         self.assertTrue(ok, f"{r['id']} gold fails its checker: {err}")

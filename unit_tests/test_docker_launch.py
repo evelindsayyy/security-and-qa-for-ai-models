@@ -68,5 +68,38 @@ class DockerSocketPingTest(unittest.TestCase):
             self.assertFalse(docker_launch._docker_socket_ping())
 
 
+class EnsureStackGuardTest(unittest.TestCase):
+    """The request-time guard turns an unusable Docker into a readable
+    DockerUnavailableError (surfaced as 503) instead of a bare 500."""
+
+    def setUp(self) -> None:
+        docker_launch._ready.discard("evaluator")
+        self.addCleanup(docker_launch._ready.discard, "evaluator")
+
+    def test_raises_when_daemon_unreachable(self) -> None:
+        with (
+            mock.patch.object(docker_launch, "use_docker", return_value=True),
+            mock.patch.object(docker_launch, "docker_available", return_value=False),
+        ):
+            with self.assertRaises(docker_launch.DockerUnavailableError):
+                docker_launch.ensure_stack("evaluator")
+
+    def test_wraps_build_failure(self) -> None:
+        with (
+            mock.patch.object(docker_launch, "use_docker", return_value=True),
+            mock.patch.object(docker_launch, "docker_available", return_value=True),
+            mock.patch.object(docker_launch, "_export_uid_gid"),
+            mock.patch.object(docker_launch, "_compose_build",
+                              side_effect=RuntimeError("build blew up")),
+        ):
+            with self.assertRaises(docker_launch.DockerUnavailableError) as ctx:
+                docker_launch.ensure_stack("evaluator")
+        self.assertIn("build blew up", str(ctx.exception))
+
+    def test_noop_when_host_mode(self) -> None:
+        with mock.patch.object(docker_launch, "use_docker", return_value=False):
+            self.assertIsNone(docker_launch.ensure_stack("evaluator"))
+
+
 if __name__ == "__main__":
     unittest.main()

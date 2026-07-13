@@ -40,9 +40,47 @@ def _detail_path(kind: str, slug: str, *, profile: str = "base") -> str:
     return ""
 
 
+_PILLAR_LIST_ENDPOINTS = {
+    "scan": "scans",
+    "safety": "safety",
+    "eval": "eval_run",
+    "benchmark": "benchmarks",
+}
+# Tie-break order when two pillars share the same count (prefer earlier).
+_STALE_PILLAR_ORDER = ("scan", "safety", "eval", "benchmark")
+_CRITICAL_PILLAR_ORDER = ("scan", "safety")
+
+
+def _dominant_pillar(counts: dict[str, int], order: tuple[str, ...]) -> str | None:
+    best: str | None = None
+    best_n = 0
+    for pillar in order:
+        n = int(counts.get(pillar) or 0)
+        if n > best_n:
+            best_n = n
+            best = pillar
+    return best if best_n else None
+
+
+def _pillar_list_url(pillar: str | None) -> str:
+    if not pillar:
+        return ""
+    endpoint = _PILLAR_LIST_ENDPOINTS.get(pillar)
+    if not endpoint:
+        return ""
+    try:
+        from flask import has_request_context, url_for
+
+        if has_request_context():
+            return url_for(endpoint)
+    except Exception:
+        pass
+    return f"/{endpoint}" if endpoint != "eval_run" else "/eval-run"
+
+
 def _collect_stale_and_critical() -> dict[str, Any]:
-    stale_count = 0
-    critical_count = 0
+    stale_by: dict[str, int] = {p: 0 for p in _STALE_PILLAR_ORDER}
+    critical_by: dict[str, int] = {p: 0 for p in _CRITICAL_PILLAR_ORDER}
     high_risk_scans = 0
 
     try:
@@ -50,9 +88,9 @@ def _collect_stale_and_critical() -> dict[str, Any]:
 
         for row in get_scans_data().get("scans", []):
             if row.get("staleness", {}).get("stale"):
-                stale_count += 1
+                stale_by["scan"] += 1
             if row.get("severity_tier") == "critical":
-                critical_count += 1
+                critical_by["scan"] += 1
             if row.get("severity_tier") in ("critical", "high"):
                 high_risk_scans += 1
     except Exception:
@@ -63,9 +101,9 @@ def _collect_stale_and_critical() -> dict[str, Any]:
 
         for row in get_safety_data().get("models", []):
             if row.get("staleness", {}).get("stale"):
-                stale_count += 1
+                stale_by["safety"] += 1
             if row.get("tier") == "critical":
-                critical_count += 1
+                critical_by["safety"] += 1
     except Exception:
         pass
 
@@ -74,7 +112,7 @@ def _collect_stale_and_critical() -> dict[str, Any]:
 
         for row in get_runs_data().get("runs", []):
             if row.get("staleness", {}).get("stale"):
-                stale_count += 1
+                stale_by["eval"] += 1
     except Exception:
         pass
 
@@ -83,14 +121,20 @@ def _collect_stale_and_critical() -> dict[str, Any]:
 
         for row in get_benchmarks_data().get("runs", []):
             if row.get("staleness", {}).get("stale"):
-                stale_count += 1
+                stale_by["benchmark"] += 1
     except Exception:
         pass
 
+    stale_count = sum(stale_by.values())
+    critical_count = sum(critical_by.values())
     return {
         "stale_count": stale_count,
         "critical_count": critical_count,
         "high_risk_scans": high_risk_scans,
+        "stale_href": _pillar_list_url(_dominant_pillar(stale_by, _STALE_PILLAR_ORDER)),
+        "critical_href": _pillar_list_url(
+            _dominant_pillar(critical_by, _CRITICAL_PILLAR_ORDER)
+        ),
     }
 
 

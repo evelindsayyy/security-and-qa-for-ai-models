@@ -112,13 +112,16 @@
 
   @media (min-width: 1024px) {
     .app-sidebar {
-      @apply static;
       transform: translateX(0);
+    }
+
+    .app-main {
+      @apply ml-64;
     }
   }
 
   .app-main {
-    @apply flex min-h-screen flex-1 flex-col lg:ml-0;
+    @apply flex min-h-screen flex-1 flex-col;
   }
 
   .app-topbar {
@@ -190,6 +193,10 @@
 
   .stat-card {
     @apply rounded-[var(--radius-xl)] border border-border bg-surface-raised p-4 shadow-card;
+  }
+
+  .stat-card-link {
+    @apply block no-underline transition-colors hover:border-duke-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-duke-blue;
   }
 
   .stat-value {
@@ -288,6 +295,15 @@
 
   .run-table tr.row-link {
     @apply cursor-pointer transition hover:bg-duke-blue-muted;
+  }
+
+  .run-table td.col-candidate {
+    @apply align-middle;
+  }
+
+  .run-table td.col-candidate .staleness-pill,
+  .run-table td.col-candidate .badge {
+    @apply ml-1 inline-block align-middle;
   }
 
   .run-table tr.row-warn {
@@ -457,11 +473,83 @@
   }
 
   .pillar-cta-list {
-    @apply m-0 list-none space-y-3 p-0 text-sm;
+    @apply m-0 list-none space-y-0 p-0 text-sm;
   }
 
-  .pillar-cta-list li {
+  .pillar-cta-list li,
+  .pillar-cta-row {
+    @apply grid items-start gap-x-3 gap-y-2 border-b border-border py-3.5;
+    grid-template-columns: 6.5rem minmax(0, 1fr) auto;
+  }
+
+  .pillar-cta-list li:last-child,
+  .pillar-cta-row:last-child {
+    @apply border-b-0 pb-0;
+  }
+
+  .pillar-cta-list li:first-child,
+  .pillar-cta-row:first-child {
+    @apply pt-0;
+  }
+
+  .pillar-cta-label {
+    @apply pt-0.5 text-xs font-semibold uppercase tracking-wide;
+  }
+
+  .pillar-cta-status {
+    @apply flex min-w-0 flex-wrap items-center gap-2;
+  }
+
+  .pillar-cta-actions {
+    @apply flex flex-wrap items-center justify-end gap-2;
+  }
+
+  .pillar-cta-extra {
+    grid-column: 1 / -1;
+  }
+
+  .scan-link-panel {
+    @apply mt-0;
+  }
+
+  .scan-link-panel > summary {
+    @apply cursor-pointer list-none text-sm font-semibold text-duke-blue;
+  }
+
+  .scan-link-panel > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .scan-link-form {
+    @apply mt-2 flex max-w-xl flex-wrap items-end gap-2 rounded-[var(--radius-lg)] border border-border bg-surface p-3;
+  }
+
+  .scan-link-form .form-control {
+    @apply min-w-[14rem] flex-1;
+  }
+
+  .jobs-list-row {
+    @apply flex flex-wrap items-start justify-between gap-3 border-b border-border py-4;
+  }
+
+  .jobs-list-row:last-child {
+    @apply border-b-0 pb-0;
+  }
+
+  .jobs-list-row:first-child {
+    @apply pt-0;
+  }
+
+  .jobs-list-label {
+    @apply m-0 text-sm font-semibold text-text;
+  }
+
+  .jobs-list-actions {
     @apply flex flex-wrap items-center gap-2;
+  }
+
+  .inline-form {
+    @apply inline;
   }
 
   .model-findings-list {
