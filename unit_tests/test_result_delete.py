@@ -249,6 +249,45 @@ class DeleteEvalRunTest(unittest.TestCase):
                 self.assertIsNone(delete_eval_run(slug))
                 self.assertEqual(list(results.glob(f"{slug}*")), [])
 
+    def test_combo_delete_purges_suite_candidate(self) -> None:
+        from frontend.eval_run_data import delete_eval_combo_from_slug
+
+        detail = {
+            "slug": "20260624T152651Z_smoke_v1_stub-model",
+            "candidate_model": "stub-model",
+            "suite_version": "smoke_v1",
+            "judge_model": "stub-judge",
+        }
+        with mock.patch(
+            "frontend.eval_run_data.get_run_detail", return_value=detail
+        ), mock.patch(
+            "frontend.purge_rerun.purge_eval_for_launch", return_value=None
+        ) as purge:
+            err = delete_eval_combo_from_slug("20260624T152651Z_smoke_v1_stub-model")
+        self.assertIsNone(err)
+        purge.assert_called_once_with(
+            "smoke_v1",
+            "stub-model",
+            visibility="public",
+            owner_user_id=None,
+        )
+
+    def test_delete_confirm_never_returns_none(self) -> None:
+        from frontend import create_app
+        from frontend.result_delete import eval_delete_context
+
+        app = create_app({"TESTING": True})
+        with app.app_context(), app.test_request_context(), mock.patch(
+            "frontend.eval_launch.is_eval_run_in_progress", return_value=False
+        ), mock.patch(
+            "frontend.eval_run_data.get_run_detail", return_value=None
+        ):
+            ctx = eval_delete_context("missing-slug")
+        self.assertIsNotNone(ctx)
+        assert ctx is not None
+        self.assertTrue(ctx.get("delete_disabled"))
+        self.assertIn("No eval run found", ctx.get("error_message") or "")
+
 
 class DeleteConfirmContextTest(unittest.TestCase):
     def test_scan_context_has_user_facing_fields(self) -> None:

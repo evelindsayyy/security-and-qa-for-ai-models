@@ -644,24 +644,18 @@ def register_routes(app):
     def eval_run_delete(slug: str):
         from flask import redirect, render_template, request, url_for
 
-        from frontend.eval_run_data import delete_eval_run
+        from frontend.eval_run_data import delete_eval_combo_from_slug
         from frontend.result_delete import eval_delete_context
 
         if request.method == "GET":
             ctx = eval_delete_context(slug)
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
         if request.form.get("confirm") != "1":
             ctx = eval_delete_context(slug, error_message="Confirmation required.")
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
-        error = delete_eval_run(slug)
+        error = delete_eval_combo_from_slug(slug)
         if error:
             ctx = eval_delete_context(slug, error_message=error)
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
         return redirect(url_for("eval_run"))
 
@@ -670,30 +664,26 @@ def register_routes(app):
     def eval_run_delete_private(slug: str):
         from flask import redirect, render_template, request, url_for
 
-        from frontend.eval_run_data import delete_eval_run
+        from frontend.eval_run_data import delete_eval_combo_from_slug
         from frontend.result_delete import eval_delete_context
 
         visibility, owner_user_id = _private_scope()
         if request.method == "GET":
             ctx = eval_delete_context(slug, visibility=visibility, owner_user_id=owner_user_id)
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
         if request.form.get("confirm") != "1":
             ctx = eval_delete_context(
                 slug, visibility=visibility, owner_user_id=owner_user_id,
                 error_message="Confirmation required.",
             )
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
-        error = delete_eval_run(slug, visibility=visibility, owner_user_id=owner_user_id)
+        error = delete_eval_combo_from_slug(
+            slug, visibility=visibility, owner_user_id=owner_user_id
+        )
         if error:
             ctx = eval_delete_context(
                 slug, visibility=visibility, owner_user_id=owner_user_id, error_message=error,
             )
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
         return redirect(url_for("eval_run"))
 
@@ -759,6 +749,19 @@ def register_routes(app):
             model = request.form.get("model", "")
             base_url = None
             api_key = None
+
+        # Same cross-pillar gate as eval: gateway → safety; HF hosted → scan.
+        from frontend import pipeline
+
+        if model_source == "hosted":
+            gate_error = pipeline.require_ready_for_downstream(model, "hf")
+            if gate_error is not None:
+                return gate_error, 400
+        elif model_source == "gateway":
+            gate_error = pipeline.require_ready_for_downstream(model, "gateway")
+            if gate_error is not None:
+                return gate_error, 400
+
         error = validate_launch(
             benchmark_key,
             model,

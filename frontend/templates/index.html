@@ -15,8 +15,8 @@
 
 <div class="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
   {{ stat_card('Models with results', rollup_count, 'In model catalog rollup') }}
-  {{ stat_card('Stale runs', stale_count, 'Need rerun per current spec', 'text-stale' if stale_count else '') }}
-  {{ stat_card('Critical findings', critical_count, 'Scan + safety critical tiers', 'text-red-700' if critical_count else '') }}
+  {{ stat_card('Stale runs', stale_count, 'Need rerun per current spec — click for pillar with most', 'text-stale' if stale_count else '', stale_href) }}
+  {{ stat_card('Critical findings', critical_count, 'Scan + safety critical tiers — click for pillar with most', 'text-red-700' if critical_count else '', critical_href) }}
   {{ stat_card('In-flight jobs', inflight_count, 'Background pillar runs — click for list', 'text-duke-blue' if inflight_count else '', url_for('inflight_jobs')) }}
 </div>
 

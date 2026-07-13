@@ -302,5 +302,5 @@ curl -s http://127.0.0.1:5000/api/health | python3 -m json.tool
 curl -s https://model-advisor.colab.duke.edu/api/health | python3 -m json.tool
 ```
 
-**Ongoing updates:** GitLab CI deploy (preferred) or `git pull && ./docker/run.sh up -d --build`.
+**Ongoing updates:** GitLab CI deploy (preferred) or `git pull && ./docker/run.sh restart`.
 Enable OIDC when ready: [`auth/README.md`](../auth/README.md).

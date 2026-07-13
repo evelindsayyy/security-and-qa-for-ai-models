@@ -194,7 +194,7 @@ uv run python -m gateway
   {% endif %}
 {% endmacro %}
 
-{% macro progress_terminal(poll_url, interval, hint='', show_retry=false, retry_url='', initial_status='running', initial_message='', cancel_url='', stages=none) %}
+{% macro progress_terminal(poll_url, interval, hint='', show_retry=false, retry_url='', initial_status='running', initial_message='', cancel_url='', stages=none, progressLabel='') %}
 {{ island_mount('live-run', {
   'pollUrl': poll_url,
   'intervalMs': interval,
@@ -204,7 +204,8 @@ uv run python -m gateway
   'initialStatus': initial_status,
   'initialMessage': initial_message,
   'cancelUrl': cancel_url,
-  'stages': stages or []
+  'stages': stages or [],
+  'progressLabel': progressLabel or 'Progress'
 }) }}
 {% endmacro %}
 

@@ -46,6 +46,8 @@ class StartBenchmarkTest(unittest.TestCase):
     def test_accepted(self) -> None:
         with mock.patch.object(api_benchmarks.benchmark_launch, "validate_launch",
                                return_value=None), \
+             mock.patch("frontend.pipeline.require_ready_for_downstream",
+                        return_value=None), \
              mock.patch.object(api_benchmarks.benchmark_launch, "start_run",
                                return_value=("truthfulqa-gpt-4.1-mini", True, "public")):
             resp = _client().post(
@@ -56,6 +58,21 @@ class StartBenchmarkTest(unittest.TestCase):
         self.assertEqual(resp.status_code, 202)
         body = resp.get_json()
         self.assertTrue(body["data"]["already_running"])
+
+    def test_blocked_when_safety_missing(self) -> None:
+        with mock.patch.object(api_benchmarks.benchmark_launch, "validate_launch",
+                               return_value=None), \
+             mock.patch("frontend.pipeline.require_ready_for_downstream",
+                        return_value="safety red-teaming required before this step"), \
+             mock.patch.object(api_benchmarks.benchmark_launch, "start_run") as start:
+            resp = _client().post(
+                "/api/benchmarks",
+                data=json.dumps({"benchmark": "truthfulqa", "model": "GPT 4.1 Mini"}),
+                content_type="application/json",
+            )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("safety", resp.get_json()["error"].lower())
+        start.assert_not_called()
 
 
 if __name__ == "__main__":

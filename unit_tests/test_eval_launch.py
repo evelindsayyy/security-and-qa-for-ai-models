@@ -613,7 +613,9 @@ class RerunReusesScanHistoryTest(unittest.TestCase):
 
     def test_rerun_start_reuses_existing_safety_history(self) -> None:
         from frontend import pipeline
-        with mock.patch.object(pipeline, "_safety_result_paths",
+        with mock.patch.object(pipeline, "_safety_runs_from_ui_catalog",
+                               return_value=[]), \
+             mock.patch.object(pipeline, "_safety_result_paths",
                                return_value=self._history("medium")), \
              mock.patch.object(eval_launch, "start_run",
                                return_value=("slug1", False, "public")) as sr:
@@ -624,7 +626,9 @@ class RerunReusesScanHistoryTest(unittest.TestCase):
 
     def test_rerun_start_blocked_without_history(self) -> None:
         from frontend import pipeline
-        with mock.patch.object(pipeline, "_safety_result_paths", return_value=[]), \
+        with mock.patch.object(pipeline, "_safety_runs_from_ui_catalog",
+                               return_value=[]), \
+             mock.patch.object(pipeline, "_safety_result_paths", return_value=[]), \
              mock.patch.object(eval_launch, "start_run") as sr:
             r = self._rerun_post()
         self.assertEqual(r.status_code, 400)

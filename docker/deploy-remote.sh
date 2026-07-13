@@ -95,6 +95,15 @@ fi
 docker compose --project-name qa-ai-models --env-file .env \
   "${COMPOSE_FILES[@]}" pull web
 
+# Always tear down this project's web/caddy first so a half-finished prior
+# deploy or a host-side `main.py` / run.sh session cannot leave a stale
+# container serving old bind-mounted code on APP_PORT.
+echo "Recreating qa-ai-models services for ${WEB_IMAGE}…"
+docker compose --project-name qa-ai-models --env-file .env \
+  "${COMPOSE_FILES[@]}" stop "${SERVICES[@]}" 2>/dev/null || true
+docker compose --project-name qa-ai-models --env-file .env \
+  "${COMPOSE_FILES[@]}" rm -f "${SERVICES[@]}" 2>/dev/null || true
+
 # Recreate containers so Flask reloads bind-mounted code and refreshes
 # HOST_UID / DOCKER_GID from host-env.sh (git pull alone does not restart the process).
 #
@@ -106,7 +115,7 @@ docker compose --project-name qa-ai-models --env-file .env \
 _compose_up() {
   docker compose --project-name qa-ai-models --env-file .env \
     "${COMPOSE_FILES[@]}" \
-    up -d --force-recreate --no-build --pull missing --no-deps --remove-orphans \
+    up -d --force-recreate --no-build --pull always --no-deps --remove-orphans \
     --wait --wait-timeout 90 "${SERVICES[@]}"
 }
 

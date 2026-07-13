@@ -6,8 +6,8 @@ How images and compose stacks fit together. Commands: [`cli.md`](cli.md).
 
 | Environment | Start |
 |-------------|-------|
-| Local / DGX dev | `python3 main.py` or `./docker/run.sh up -d --build` |
-| Application VM | CI **deploy** (preferred) or `./docker/run.sh up -d --build` with production `.env` |
+| Local / DGX | `./docker/run.sh up -d --build` · after pulls/code changes: `./docker/run.sh restart` |
+| Application VM | CI **deploy** (preferred) or `./docker/run.sh restart` with production `.env` |
 
 Host Flask (`python3 main.py --host`) is for UI-only iteration; pillar jobs still
 use Docker unless `FRONTEND_LAUNCH_MODE=host`.
