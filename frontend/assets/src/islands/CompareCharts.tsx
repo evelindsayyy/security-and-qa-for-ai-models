@@ -46,7 +46,7 @@ export function CompareCharts({ data }: Props) {
 
     const labels = models.map((m) => m.display_name || m.slug);
     const safetyData = models.map((m) => (m.safety?.pass_rate != null ? m.safety.pass_rate * 100 : null));
-    const evalData = models.map((m) => m.eval?.best_overall ?? null);
+    const evalData = models.map((m) => m.eval?.avg_overall ?? m.eval?.best_overall ?? null);
 
     if (safetyRef.current && safetyData.some((v) => v != null)) {
       chartsRef.current.push(
@@ -67,7 +67,7 @@ export function CompareCharts({ data }: Props) {
           type: "bar",
           data: {
             labels,
-            datasets: [{ label: "Best eval (/5)", data: evalData, backgroundColor: "#166534" }],
+            datasets: [{ label: "Avg eval (/5)", data: evalData, backgroundColor: "#166534" }],
           },
           options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { max: 5 } } },
         }),
@@ -126,7 +126,7 @@ export function CompareCharts({ data }: Props) {
         <canvas ref={safetyRef} height="200" />
       </div>
       <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4 shadow-[var(--shadow-card)]">
-        <h3 class="mb-3 text-sm font-semibold">Best eval score</h3>
+        <h3 class="mb-3 text-sm font-semibold">Avg eval score</h3>
         <canvas ref={evalRef} height="200" />
       </div>
       <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4 shadow-[var(--shadow-card)] md:col-span-2">

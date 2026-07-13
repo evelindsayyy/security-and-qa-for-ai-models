@@ -73,7 +73,14 @@ class DbRowMatchesFileRowTest(unittest.TestCase):
         self.assertAlmostEqual(file_row["headline_value"], db_row["headline_value"])
 
 
-class AvailabilityTest(unittest.TestCase):
+class DetailSqlShapeTest(unittest.TestCase):
+    def test_detail_sql_selects_config_json(self) -> None:
+        # Must match _summarize_db_run's 12-field unpack (was missing and 404'd).
+        self.assertIn("config_json", benchmark_db_data._DETAIL_SQL)
+        self.assertRegex(
+            benchmark_db_data._DETAIL_SQL,
+            r"completed_at,\s*config_json",
+        )
     def test_no_dsn_means_unavailable(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=True):
             os.environ.pop("POSTGRES_DSN", None)

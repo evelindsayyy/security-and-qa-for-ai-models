@@ -55,7 +55,7 @@
       <tr><td class="dim">Scan tier</td>{% for r in rollups %}<td>{% if r.scan %}{{ tier_label(r.scan.tier) }}{% else %}<span class="dim">—</span>{% endif %}</td>{% endfor %}</tr>
       <tr><td class="dim">Safety tier</td>{% for r in rollups %}<td>{% if r.safety %}{{ tier_label(r.safety.tier) }}{% else %}<span class="dim">—</span>{% endif %}</td>{% endfor %}</tr>
       <tr><td class="dim">Safety pass rate</td>{% for r in rollups %}<td class="num">{% if r.safety %}{{ "%.0f%%"|format(r.safety.pass_rate * 100) }}{% else %}<span class="dim">—</span>{% endif %}</td>{% endfor %}</tr>
-      <tr><td class="dim">Best eval</td>{% for r in rollups %}<td class="num">{% if r.eval and r.eval.best_overall is not none %}{{ "%.2f"|format(r.eval.best_overall) }} / 5{% else %}<span class="dim">—</span>{% endif %}</td>{% endfor %}</tr>
+      <tr><td class="dim">Avg eval</td>{% for r in rollups %}<td class="num">{% if r.eval and (r.eval.avg_overall is defined and r.eval.avg_overall is not none or r.eval.best_overall is not none) %}{{ "%.2f"|format(r.eval.avg_overall if r.eval.avg_overall is defined and r.eval.avg_overall is not none else r.eval.best_overall) }} / 5{% else %}<span class="dim">—</span>{% endif %}</td>{% endfor %}</tr>
       <tr><td class="dim">Eval cost</td>{% for r in rollups %}<td class="num">{% if r.eval %}${{ "%.4f"|format(r.eval.total_cost_usd) }}{% else %}<span class="dim">—</span>{% endif %}</td>{% endfor %}</tr>
     </tbody>
   </table>

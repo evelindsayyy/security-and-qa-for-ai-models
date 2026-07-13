@@ -380,8 +380,11 @@ def _postprocess_runs(runs: list[dict]) -> dict:
     for r in sorted(runs, key=lambda r: r["filename"]):
         latest[(r["candidate_model"], r["judge_model"], r["suite"])] = r
     runs = list(latest.values())
+    from frontend.model_identity import gateway_slug
+
     for r in runs:
-        r["model_slug"] = model_slug(r["candidate_model"])  # for /models/<slug>
+        # Catalog /models/<slug> URLs use gateway_slug (lowercase).
+        r["model_slug"] = gateway_slug(r["candidate_model"])
 
     # Best first by overall mean; None sinks to bottom.
     runs.sort(key=lambda r: (r["overall"] or 0), reverse=True)
@@ -435,15 +438,26 @@ def get_model_detail(slug: str) -> dict | None:
 
     Reuses the dispatched ``get_runs_data()`` (DB when available, files
     otherwise), so this works on both paths. Returns None if no run matches.
+
+    Catalog URLs use ``gateway_slug`` (lowercase); also accept the legacy
+    case-preserving ``model_slug`` so older bookmarks still resolve.
     """
     if not is_safe_slug(slug):
         return None
-    runs = [r for r in get_runs_data()["runs"] if model_slug(r["candidate_model"]) == slug]
+    from frontend.model_identity import gateway_slug
+
+    runs = [
+        r
+        for r in get_runs_data()["runs"]
+        if gateway_slug(r["candidate_model"]) == slug
+        or model_slug(r["candidate_model"]) == slug
+    ]
     if not runs:
         return None
     runs.sort(key=lambda r: (r["suite"], r["judge_model"]))
     dim_columns = list(dict.fromkeys(d for r in runs for d in r["dims"]))
     overalls = [r["overall"] for r in runs if r["overall"] is not None]
+    avg_overall = round(sum(overalls) / len(overalls), 2) if overalls else None
     return {
         "slug": slug,
         "model": runs[0]["candidate_model"],
@@ -451,7 +465,9 @@ def get_model_detail(slug: str) -> dict | None:
         "dim_columns": dim_columns,
         "n_runs": len(runs),
         "suites": sorted({r["suite"] for r in runs}),
-        "best_overall": max(overalls) if overalls else None,
+        "avg_overall": avg_overall,
+        # Alias kept for older callers/templates during transition.
+        "best_overall": avg_overall,
         "total_cost_usd": sum(r["total_cost_usd"] for r in runs),
     }
 

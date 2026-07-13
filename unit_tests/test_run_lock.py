@@ -50,7 +50,16 @@ class RunLockTest(unittest.TestCase):
         with mock.patch.object(Path, "is_file", side_effect=PermissionError("denied")):
             self.assertFalse(run_lock.is_active(self.lock))
 
-    def test_read_log_tail(self) -> None:
+    def test_mock_pid_falls_back_to_os_getpid(self) -> None:
+        from unittest import mock
+
+        from dbutils import run_lock
+
+        self.assertTrue(
+            run_lock.try_acquire(self.lock, pid=mock.Mock(), source=run_lock.FRONTEND_SOURCE)
+        )
+        self.assertTrue(run_lock.is_active(self.lock))
+        run_lock.release(self.lock)
         from dbutils.log_tail import read_log_tail
 
         log = Path(self._tmp.name) / "run.log"

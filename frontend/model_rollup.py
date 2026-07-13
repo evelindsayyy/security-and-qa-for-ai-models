@@ -73,8 +73,12 @@ def pillar_subscores(row: dict) -> dict[str, float | None]:
             else None
         ),
         "eval": (
-            float(eval_["best_overall"]) / 5 * 100
-            if eval_ and eval_.get("best_overall") is not None
+            float(eval_.get("avg_overall", eval_.get("best_overall"))) / 5 * 100
+            if eval_
+            and (
+                eval_.get("avg_overall") is not None
+                or eval_.get("best_overall") is not None
+            )
             else None
         ),
         "benchmark": bench * 100 if bench is not None else None,
@@ -190,10 +194,13 @@ def _add_eval_rows(by_key: dict[str, dict]) -> None:
         row = _row(by_key, key, runs[0]["candidate_model"])
         overalls = [r["overall"] for r in runs if r.get("overall") is not None]
         latencies = [r["mean_latency_ms"] for r in runs if r.get("mean_latency_ms") is not None]
+        avg_overall = round(sum(overalls) / len(overalls), 2) if overalls else None
         row["eval"] = {
             "n_runs": len(runs),
             "suites": sorted({r["suite"] for r in runs}),
-            "best_overall": max(overalls) if overalls else None,
+            "avg_overall": avg_overall,
+            # Alias kept for older callers/templates during transition.
+            "best_overall": avg_overall,
             "mean_latency_ms": round(sum(latencies) / len(latencies)) if latencies else None,
             "total_cost_usd": sum(r.get("total_cost_usd") or 0 for r in runs),
         }

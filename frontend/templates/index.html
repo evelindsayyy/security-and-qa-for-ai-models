@@ -39,7 +39,7 @@
       <div class="rounded-lg border border-border p-4">
         <h3 class="subsection-title">Eval</h3>
         <p class="mt-1 body">LLM-as-judge task suites</p>
-        <p class="mt-2 text-sm">{% if eval_has %}<b>{{ eval_count }}</b> runs{% if eval_best_overall is not none %} · best {{ '%.2f'|format(eval_best_overall) }}{% endif %}{% else %}No eval runs yet{% endif %}</p>
+        <p class="mt-2 text-sm">{% if eval_has %}<b>{{ eval_count }}</b> runs{% if eval_best_overall is not none %} · avg {{ '%.2f'|format(eval_best_overall) }}{% endif %}{% else %}No eval runs yet{% endif %}</p>
         <p class="pillar-actions mt-3">{{ start_button(url_for('eval_run_new'), 'Start eval', 'btn-primary btn-sm') }}<a class="btn-secondary btn-sm" href="{{ url_for('eval_run') }}">View</a></p>
       </div>
       <div class="rounded-lg border border-border p-4">

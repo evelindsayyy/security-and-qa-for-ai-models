@@ -23,7 +23,7 @@
       {{ stat_card('Aggregate', '%.0f'|format(rollup.aggregate) if rollup.aggregate is not none else '—', '/ 100') }}
       {{ stat_card('Scan', rollup.scan.tier if rollup.scan else '—', 'risk ' ~ rollup.scan.overall_risk_score if rollup.scan else '') }}
       {{ stat_card('Safety', rollup.safety.tier if rollup.safety else '—', '%.0f%% pass'|format(rollup.safety.pass_rate * 100) if rollup.safety else '') }}
-      {{ stat_card('Eval best', '%.2f'|format(best_overall) if best_overall is not none else '—', '/ 5') }}
+      {{ stat_card('Eval avg', '%.2f'|format(avg_overall if avg_overall is not none else best_overall) if (avg_overall is not none or best_overall is not none) else '—', '/ 5') }}
     </div>
 
     <section class="key card p-5 mb-6">
@@ -119,15 +119,15 @@
         <li class="pillar-cta-row">
           <span class="pillar-cta-label dim">Eval</span>
           <div class="pillar-cta-status">
-            {% if rollup.eval and rollup.eval.best_overall is not none %}
-              best {{ "%.2f"|format(rollup.eval.best_overall) }} / 5
+            {% if rollup.eval and (rollup.eval.avg_overall is defined and rollup.eval.avg_overall is not none or rollup.eval.best_overall is not none) %}
+              avg {{ "%.2f"|format(rollup.eval.avg_overall if rollup.eval.avg_overall is defined and rollup.eval.avg_overall is not none else rollup.eval.best_overall) }} / 5
               <a href="{{ url_for('eval_run') }}">runs</a>
             {% else %}
               <span class="dim">no eval runs</span>
             {% endif %}
           </div>
           <div class="pillar-cta-actions">
-            {% if not rollup.eval or rollup.eval.best_overall is none %}
+            {% if not rollup.eval or not (rollup.eval.avg_overall is defined and rollup.eval.avg_overall is not none or rollup.eval.best_overall is not none) %}
               {{ start_button(url_for('eval_run_new'), 'Run eval', classes='btn-secondary btn-sm') }}
             {% endif %}
           </div>

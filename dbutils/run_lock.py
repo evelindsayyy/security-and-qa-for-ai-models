@@ -156,8 +156,13 @@ def try_acquire(
     if is_active(p):
         return False
     p.unlink(missing_ok=True)
+    try:
+        lock_pid = int(pid) if pid is not None else os.getpid()
+    except (TypeError, ValueError):
+        # Unit tests often pass a Mock Popen without a numeric .pid.
+        lock_pid = os.getpid()
     payload = {
-        "pid": int(pid) if pid is not None else os.getpid(),
+        "pid": lock_pid,
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "command": command,
         "source": source,

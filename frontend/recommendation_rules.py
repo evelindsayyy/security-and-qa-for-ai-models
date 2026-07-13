@@ -74,11 +74,17 @@ def build_recommendation(rollup: dict) -> dict:
         tradeoffs.append(f"Security (artifact scan): {scan_line}")
         sections.append({"label": "Security", "text": f"Artifact scan: {scan_line}"})
 
-    if eval_ and eval_.get("best_overall") is not None:
-        best = eval_["best_overall"]
-        text = _eval_language(best)
+    if eval_ and (
+        eval_.get("avg_overall") is not None or eval_.get("best_overall") is not None
+    ):
+        avg = eval_.get("avg_overall", eval_.get("best_overall"))
+        text = _eval_language(avg)
         suites = ", ".join(eval_.get("suites") or [])
-        detail = f"{text} (best overall {best:.1f}/5 across {suites})." if suites else f"{text}."
+        detail = (
+            f"{text} (avg overall {avg:.1f}/5 across {suites})."
+            if suites
+            else f"{text}."
+        )
         tradeoffs.append(f"Efficacy: {detail}")
         sections.append({"label": "Efficacy", "text": detail})
         summary_parts.append(text)

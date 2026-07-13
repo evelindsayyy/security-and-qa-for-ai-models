@@ -1289,7 +1289,7 @@ def register_routes(app):
 
         detail = get_model_detail(slug) or {
             "model": rollup["display_name"], "runs": [], "dim_columns": [],
-            "n_runs": 0, "suites": [], "best_overall": None, "total_cost_usd": 0,
+            "n_runs": 0, "suites": [], "avg_overall": None, "best_overall": None, "total_cost_usd": 0,
         }
         recommendation = model_summary.get_recommendation_summary(rollup)
         can_hf_scan = gateway_is_hf_scannable(rollup["display_name"])
