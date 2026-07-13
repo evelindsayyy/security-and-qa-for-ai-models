@@ -84,3 +84,9 @@ safety/garak/tmp*.yaml
 safety/garak/.runtime/
 safety/output/*
 !safety/output/README.md
+
+# Validation-study rater exports contain PII (IP, geolocation) — never commit
+docs/validation-study/responses_csv/*
+!docs/validation-study/responses_csv/README.md
+# Track-3 DPO preference export — local only until mentor sign-off
+docs/validation-study/dpo_pairs.jsonl
