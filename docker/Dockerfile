@@ -34,7 +34,7 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 RUN uv sync --frozen --no-dev --no-install-project
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Seed built frontend assets (bind-mounted repo may overwrite; entrypoint rebuilds if missing).
+# Baked frontend assets; vite_assets.py falls back here when no working-tree build exists.
 COPY --from=frontend-build /build/frontend/static/dist /opt/frontend-dist
 
 COPY docker/entrypoint.sh /entrypoint.sh

@@ -1,80 +1,96 @@
 # Docker model
 
-How the images fit together. For commands, see [`cli.md`](cli.md).
+How images and compose stacks fit together. Commands: [`cli.md`](cli.md).
 
-## Recommended local path
+## Recommended paths
 
-```bash
-./docker/build-pillars.sh    # one-time pillar images
-python3 main.py               # containerized UI (default); same as ./docker/run.sh up --build
-```
+| Environment | Start |
+|-------------|-------|
+| Local / DGX dev | `python3 main.py` or `./docker/run.sh up -d --build` |
+| Application VM | CI **deploy** (preferred) or `./docker/run.sh up -d --build` with production `.env` |
 
-Production on the application VM uses the same scripts with optional **Caddy HTTPS** when `CADDY_DOMAIN` is set in `.env`. See [`../docker/compose.caddy.yml`](../docker/compose.caddy.yml). Host Flask (`uv run flask ...`) is a development alternative only.
+Host Flask (`python3 main.py --host`) is for UI-only iteration; pillar jobs still
+use Docker unless `FRONTEND_LAUNCH_MODE=host`.
 
-## Two layers
+## Layers
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| App | `docker/` | Long-lived Flask UI (multi-stage build includes Node asset compile) |
+| App | `docker/` | Long-lived Flask UI (multi-stage: Node + Python) |
 | Job sandboxes | `*/docker/` | One-shot scan / safety / eval / benchmark runs |
 | Safety sub-tools | `safety/promptfoo/docker/`, `safety/garak/docker/` | Nested from the safety orchestrator |
 
-The web image [`docker/Dockerfile`](../docker/Dockerfile) uses a **Node build stage** to run `npm ci && npm run build` in `frontend/assets/`, copying `frontend/static/dist/` into the final Python image. [`docker/run.sh`](../docker/run.sh) and [`docker/entrypoint.sh`](../docker/entrypoint.sh) rebuild assets on start when dist is missing.
-
-Dependencies live in [`pyproject.toml`](../pyproject.toml) + [`uv.lock`](../uv.lock). Core deps include **psycopg**; optional groups: `dev` (pytest, ruff), and **one of** `scanner`, `safety`, or `benchmarks` (mutually exclusive — baked into pillar images instead).
+Dependencies: [`pyproject.toml`](../pyproject.toml) + [`uv.lock`](../uv.lock). Core
+includes **psycopg**; optional groups `dev`, and **one of** `scanner` / `safety` /
+`benchmarks` (mutually exclusive on the host — baked into pillar images instead).
 
 ## When Docker is used
 
 | Task | Docker? |
 |------|---------|
 | Unit tests | No (`uv run …`) |
-| **UI (default)** | Yes — `./docker/run.sh` |
-| Browser "Start" buttons | Yes (default) |
-| HF scanning (untrusted files) | Yes |
-| Safety / eval / benchmark jobs from the UI | Yes |
+| UI (default) | Yes — `./docker/run.sh` |
+| Browser Start buttons | Yes (default) |
+| HF scanning | Yes |
+| Safety / eval / benchmark from UI | Yes |
 
-Set `FRONTEND_LAUNCH_MODE=host` to run pillar jobs as host Python instead of Docker.
+Set `FRONTEND_LAUNCH_MODE=host` to run pillar jobs as host Python instead.
 
-## How the containerized UI launches jobs
+## How the UI launches jobs
 
-The app container talks to the **host** Docker daemon through the mounted socket
-(`/var/run/docker.sock`) and starts pillar containers as siblings — not nested.
-For that to work, [`docker/run.sh`](../docker/run.sh) auto-detects three
-host-specific values so they never live in `.env`:
+The app container uses the **host** Docker daemon via `/var/run/docker.sock` and
+starts pillar containers as siblings. `docker/run.sh` auto-detects:
 
 | Value | Why |
 |-------|-----|
-| `HOST_UID` / `HOST_GID` | Run as you, so outputs are not root-owned |
-| `DOCKER_GID` | Group of the Docker socket, so the container can reach the daemon |
-| `HOST_REPO` | The repo is mounted at the **same absolute path** inside and out, so pillar bind mounts (resolved by the host daemon) point at real files |
+| `HOST_UID` / `HOST_GID` | Run as the host user; outputs not root-owned |
+| `DOCKER_GID` | Access to the Docker socket |
+| `HOST_REPO` | Same absolute repo path in and out of the container |
 
-All stacks share `COMPOSE_PROJECT_NAME=qa-ai-models`, so an image built on the
-host or in CI is reused when the UI launches a job.
+All stacks share `COMPOSE_PROJECT_NAME=qa-ai-models`.
 
-## CI
+## Frontend assets
 
-GitLab runs lint, **frontend-build** (Vite bundle + Vitest), and unit tests on Duke **shared runners**. On `main`, the
-`build-web-image` job uses the dedicated `oit-shared-buildah` runner to build
-`docker/Dockerfile` without a Docker socket or DinD, then pushes
-`${CI_REGISTRY_IMAGE}/web:${CI_COMMIT_SHORT_SHA}` to the GitLab container
-registry. No gateway secrets are required.
+| Source | When | Location |
+|--------|------|----------|
+| Working-tree build | Dev: `run.sh` runs `scripts/build-frontend.sh` before start | `frontend/static/dist/` (gitignored) |
+| Image bake | CI / `docker build`; VM when no working-tree build | `/opt/frontend-dist` in the container |
 
-**Deploy (manual by default on `main`):** after lint, tests, and `build-web-image`,
-the **`deploy`** job SSHs to the application VM, runs `git pull`, logs into the
-registry, pulls the tagged web image, and **recreates** the web container
-(`--force-recreate`) so Flask reloads bind-mounted code and refreshes
-`HOST_UID` / `DOCKER_GID`. Click **Play** in GitLab, or set CI/CD variable
-**`DEPLOY_AUTO=true`** for automatic deploy. See
-[`.gitlab/README.md`](../.gitlab/README.md) for CI/CD variables.
+The Dockerfile frontend-build stage runs `npm ci && npm run build` and copies
+`frontend/templates/` into the build context (Tailwind scans `../templates/**/*.html`).
+`frontend/vite_assets.py` resolves manifest + file serving from one directory:
+working-tree first, image bake as fallback.
 
-Postgres is external (`POSTGRES_DSN` on OIT host). End-to-end flow diagram: [`architecture.md`](architecture.md#how-a-run-flows).
+## CI and deploy
+
+GitLab pipeline on shared runners:
+
+1. **lint** (ruff) → **unit-tests** → **frontend-build** (`npm ci`, `npm run build`, vitest)
+2. On **`main`**: **build-web-image** (Buildah, `oit-shared-buildah`) → registry `web:${CI_COMMIT_SHORT_SHA}`
+3. **deploy** — manual Play on `main` by default (`DEPLOY_AUTO=true` for automatic)
+
+The deploy job SSHs to the application VM, runs `git pull`, pulls `WEB_IMAGE`,
+and recreates `web` (+ `caddy` when `CADDY_DOMAIN` is set). See
+[`.gitlab/README.md`](../.gitlab/README.md).
+
+Postgres is external. End-to-end flow: [`architecture.md`](architecture.md#how-a-run-flows).
 
 ## Production HTTPS (Caddy)
 
-On the application VM, set `CADDY_DOMAIN` in `.env`. [`docker/run.sh`](../docker/run.sh) automatically adds [`compose.caddy.yml`](../docker/compose.caddy.yml):
+On the application VM, set in `.env`:
 
-- **Caddy** listens on ports 80/443 with Duke Locksmith ACME (`locksmith.oit.duke.edu`)
-- **web** is reachable only inside the Docker network (not published on `:5000`)
-- Set `TRUST_PROXY=1` so Flask trusts `X-Forwarded-Proto`
+```env
+CADDY_DOMAIN=model-advisor.colab.duke.edu
+TRUST_PROXY=1
+CADDY_EMAIL=your-netid@duke.edu
+```
 
-Do not run Caddy locally; the production overlay is [`../docker/compose.caddy.yml`](../docker/compose.caddy.yml).
+`docker/run.sh` and `deploy-remote.sh` add [`compose.caddy.yml`](../docker/compose.caddy.yml):
+
+- **Caddy** — ports 80/443, Duke Locksmith ACME (`locksmith.oit.duke.edu`)
+- **web** — internal only (not published on `:5000` when Caddy is active)
+- Flask trusts `X-Forwarded-Proto` when `TRUST_PROXY=1`
+
+Do not enable Caddy locally; the overlay targets the production domain only.
+
+Troubleshooting: [`docker/README.md`](../docker/README.md).

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import cli_safety_docker, cli_safety_host, start_button, delete_button, rerun_button, staleness_badge, tier_label, page_header, list_compare_tabs, empty_state with context %}
+{% from '_macros.html' import start_button, delete_button, rerun_button, staleness_badge, tier_label, page_header, list_compare_tabs, empty_state with context %}
 
 {% block title %}Safety red-team{% endblock %}
 
@@ -37,7 +37,7 @@
   </section>
 
   {% if not has_safety %}
-    {{ empty_state('No safety results yet.', cli_safety_docker()) }}
+    {{ empty_state('No safety results yet. Start a safety run from the button above.') }}
   {% else %}
     {{ list_compare_tabs(has_comparison) }}
 

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_benchmark_docker, start_button, delete_button, rerun_button, staleness_badge, page_header, list_compare_tabs, empty_state with context %}
+{% from '_macros.html' import expandable, start_button, delete_button, rerun_button, staleness_badge, page_header, list_compare_tabs, empty_state with context %}
 
 {% block title %}Benchmark results{% endblock %}
 
@@ -55,7 +55,7 @@
   </section>
 
   {% if not has_runs %}
-    {{ empty_state('No benchmark output yet. Start a new run or run the CLI.', cli_benchmark_docker()) }}
+    {{ empty_state('No benchmark results yet. Start a benchmark from the button above.') }}
   {% else %}
     <div class="bench-view-tabs" role="tablist" aria-label="Benchmark results view">
       <button type="button" class="bench-view-tab is-active" data-view="list" role="tab" aria-selected="true" id="bench-tab-list">List</button>

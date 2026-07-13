@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_benchmark_docker, benchmark_item_status, start_button, delete_button, private_badge, back_link, progress_terminal with context %}
+{% from '_macros.html' import expandable, benchmark_item_status, start_button, delete_button, private_badge, back_link, progress_terminal, pillar_summary_card with context %}
 
 {% block title %}{% if missing %}Benchmark not found{% else %}{{ kind_label }} — {{ model }}{% endif %}{% endblock %}
 
@@ -7,11 +7,11 @@
 <div class="scan-detail">
   {% if missing %}
     <h1>Benchmark not found</h1>
-    <p class="sub empty">no file matching slug <code>{{ slug }}</code> in benchmark results.</p>
-    <p class="form-hint">{{ start_button(url_for('benchmark_run_new'), 'Start a benchmark', classes='') }} or CLI: <code>{{ cli_benchmark_docker() }}</code></p>
-    <p><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
+    <p class="sub empty">No benchmark result found for <code>{{ slug }}</code>.</p>
+    <p class="form-hint">{{ start_button(url_for('benchmark_run_new'), 'Start a benchmark', classes='') }}</p>
+    <p><a class="font-semibold text-duke-blue" href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
   {% elif running %}
-    {{ back_link(url_for('benchmarks'), '← all benchmarks') }}
+    {{ back_link(url_for('benchmarks'), 'all benchmarks') }}
     <h1 class="page-title">Benchmark run in progress</h1>
     <p class="sub">
       {% if run_status.benchmark_label %}<strong>{{ run_status.benchmark_label }}</strong>{% endif %}
@@ -33,7 +33,7 @@
     </p>
     {% endif %}
   {% else %}
-    {{ back_link(url_for('benchmarks'), '← all benchmarks') }}
+    {{ back_link(url_for('benchmarks'), 'all benchmarks') }}
     <h1>{{ kind_label }} — {{ model }}{% if is_reference %} <span class="badge badge-pilot">Reference</span>{% endif %}{% if is_private %} {{ private_badge() }}{% endif %}</h1>
     <p class="sub">
       slug <code>{{ slug }}</code> ·
@@ -99,6 +99,8 @@
         {% endif %}
       </div>
     </div>
+
+    {{ pillar_summary_card(pillar_summary) }}
 
     {% include '_benchmark_coverage.html' %}
 

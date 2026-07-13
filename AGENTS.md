@@ -68,6 +68,7 @@ Always start the production UI via `./docker/run.sh` or `python3 main.py` — ne
 | `HF_TOKEN` | Scanner gated downloads |
 | `POSTGRES_DSN` | Scan, safety, benchmark loaders + UI reads |
 | `EFFICACY_DB_DSN` | Eval loader + `/eval-run` (same server usually) |
+| `CADDY_DOMAIN`, `TRUST_PROXY` | Production HTTPS (VM); blank locally — see `docker/README.md` |
 | `FRONTEND_LAUNCH_MODE=docker` | Browser Start buttons use Docker (default) |
 | `AUTO_INGEST=0` | Disable post-run sync |
 | `AUTH_ENABLED`, `DUKE_OIDC_*`, `AUTH_ALLOWED_NETIDS` | Duke OIDC login — see `auth/README.md` |

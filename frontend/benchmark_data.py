@@ -1635,6 +1635,10 @@ def get_benchmark_detail(
                 detail = benchmark_db_data.get_benchmark_detail_db(
                     slug, visibility=visibility, owner_user_id=owner_user_id
                 )
+                if detail is None:
+                    detail = _get_benchmark_detail_files(
+                        slug, visibility=visibility, owner_user_id=owner_user_id
+                    )
             else:
                 detail = _get_benchmark_detail_files(
                     slug, visibility=visibility, owner_user_id=owner_user_id

@@ -115,13 +115,18 @@ Dependencies: [`pyproject.toml`](pyproject.toml) + [`uv.lock`](uv.lock).
 
 One repo-root [`.env.example`](.env.example) → `.env` (never commit). Key variables:
 
-- `DUKE_GATEWAY_URL`, `DUKE_GATEWAY_KEY` — gateway chat and catalog (aliases: `OPENAI_*`)
-- `HF_TOKEN` — gated Hugging Face downloads (scanning)
-- `POSTGRES_DSN`, `EFFICACY_DB_DSN` — Postgres (set both to the same DSN); UI/API read DB when reachable
-- `APP_PORT` — containerized UI port (default 5000 via `./docker/run.sh`)
-- `FRONTEND_LAUNCH_MODE` — defaults to `docker` for Start buttons; set `host` for legacy dev
+| Variable | Role |
+|----------|------|
+| `DUKE_GATEWAY_URL`, `DUKE_GATEWAY_KEY` | Gateway chat and catalog (aliases: `OPENAI_*`) |
+| `HF_TOKEN` | Gated Hugging Face downloads (scanning) |
+| `POSTGRES_DSN`, `EFFICACY_DB_DSN` | Postgres (usually the same DSN) |
+| `APP_PORT` | UI port (default 5000) |
+| `CADDY_DOMAIN`, `TRUST_PROXY` | Production HTTPS on the VM — see [`docker/README.md`](docker/README.md) |
+| `FRONTEND_LAUNCH_MODE` | `docker` (default) for Start buttons |
+| `AUTH_ENABLED`, `DUKE_OIDC_*`, `AUTH_ALLOWED_NETIDS` | Duke OIDC — [`auth/README.md`](auth/README.md) |
 
-Host-specific values (user id, Docker socket group, repo path) are auto-detected by `./docker/run.sh` and `./docker/build-pillars.sh`.
+Host-specific values (`HOST_UID`, `DOCKER_GID`, `HOST_REPO`) are auto-detected by
+`./docker/run.sh` and `./docker/build-pillars.sh`.
 
 ---
 

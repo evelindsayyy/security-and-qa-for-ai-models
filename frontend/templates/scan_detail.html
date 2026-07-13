@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_scan_docker, progress_terminal, start_button, delete_button, tier_label, source_badge, private_badge, back_link, rerun_button, island_mount with context %}
+{% from '_macros.html' import expandable, progress_terminal, start_button, delete_button, tier_label, source_badge, private_badge, back_link, rerun_button, island_mount, pillar_summary_card with context %}
 
 {% block title %}{% if missing %}Scan not found{% else %}{{ model_id }} — scan{% endif %}{% endblock %}
 
@@ -8,16 +8,16 @@
   {% if missing %}
     <h1>Scan not found</h1>
     <p class="sub empty">no <code>scan_result.json</code> for slug <code>{{ slug }}</code>.</p>
-    <p class="form-hint">{{ start_button(url_for('scan_run_new'), 'Start a scan', classes='') }} or CLI: <code>{{ cli_scan_docker() }}</code></p>
-    <p><a href="{{ url_for('scans') }}">← all scans</a></p>
+    <p class="form-hint">{{ start_button(url_for('scan_run_new'), 'Start a scan', classes='') }}</p>
+    <p><a class="font-semibold text-duke-blue" href="{{ url_for('scans') }}">← all scans</a></p>
   {% elif running %}
-    {{ back_link(url_for('scans'), '← all scans') }}
+    {{ back_link(url_for('scans'), 'all scans') }}
     <h1>Scan in progress</h1>
     <p class="sub">slug <code>{{ slug }}</code> · live log updates every 5 seconds</p>
     {{ progress_terminal(
          url_for('scan_run_status_private' if is_private else 'scan_run_status', slug=slug),
          5000,
-         hint='Run continues in the background if you switch tabs. Full log: scanner/output/' ~ slug ~ '/scan_run.log',
+         hint='Run continues in the background if you switch tabs.',
          show_retry=true,
          retry_url=url_for('scan_run_new'),
          initial_status=run_status.status,
@@ -29,27 +29,31 @@
     </p>
     {% endif %}
   {% else %}
-    {{ back_link(url_for('scans'), '← all scans') }}
+    {{ back_link(url_for('scans'), 'all scans') }}
     <h1><span class="model">{{ model_id }}</span>{% if is_private %} {{ private_badge() }}{% endif %}</h1>
-    <p class="sub">
-      {{ tier_label(severity_tier) }}
-      · risk {{ overall_risk_score }} · {{ n_findings }} finding{{ "" if n_findings == 1 else "s" }} ·
-      scanned {{ scanned_at[:10] if scanned_at != "—" else "—" }}
-    </p>
 
     <p class="detail-delete-form">
       {{ rerun_button(url_for('scan_run_new', from=slug), '↻ Run again') }}
       {{ delete_button(url_for('scan_delete_private' if is_private else 'scan_delete', slug=slug)) }}
     </p>
 
-    <h2>Findings ({{ n_findings }})</h2>
+    <div class="summary-row">
+      {{ tier_label(severity_tier) }}
+      <span class="dim">risk {{ overall_risk_score }}</span>
+      <span class="dim">{{ n_findings }} finding{{ "" if n_findings == 1 else "s" }}</span>
+      <span class="dim">scanned {{ scanned_at[:10] if scanned_at != "—" else "—" }}</span>
+    </div>
+
+    {{ pillar_summary_card(pillar_summary) }}
+
+    <h2 class="section-title">Findings ({{ n_findings }})</h2>
     {% if findings %}
     {{ island_mount('findings', findings) }}
     {% else %}
     <p class="empty">no normalized findings — check scanner tools below (benign pytorch pickles often show fickling signal with tier still low).</p>
     {% endif %}
 
-    <h2>Scanner tools</h2>
+    <h2 class="section-title">Scanner tools</h2>
     <p class="sub dim">Collapsed by default — expand a tool for its findings.</p>
 
     {% if tool_panels.modelscan %}
@@ -210,7 +214,7 @@
     {% endif %}
 
     {% if coverage_stats %}
-    <h2>Coverage</h2>
+    <h2 class="section-title">Coverage</h2>
     <table class="run-table compact-table">
       <tbody>
         {% for s in coverage_stats %}

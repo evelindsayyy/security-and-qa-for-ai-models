@@ -46,7 +46,7 @@
 {%- endmacro %}
 
 {% macro back_link(url, label) -%}
-<p class="back"><a href="{{ url }}">← {{ label }}</a></p>
+<p class="back"><a class="font-semibold text-duke-blue" href="{{ url }}">← {{ label }}</a></p>
 {%- endmacro %}
 
 {% macro staleness_badge(staleness) %}
@@ -121,6 +121,25 @@
 </div>
 {% endmacro %}
 
+{% macro pillar_summary_card(summary) %}
+{% if summary and summary.summary %}
+<section class="key card p-4 mb-6 pillar-summary-card">
+  <h2 class="section-title mb-2">Summary</h2>
+  <p class="body">{{ summary.summary }}</p>
+  {% if summary.tradeoffs %}
+  <ul class="mt-2 list-disc pl-5 text-sm text-text-muted">
+    {% for t in summary.tradeoffs %}
+    <li>{{ t }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if summary.source == 'rules_v1' %}
+  <p class="mt-2 text-xs text-text-subtle">Rules-based summary — gateway unavailable.</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endmacro %}
+
 {% macro rerun_callout() %}
 <div class="form-warning" role="status">
   Pre-filled from a previous run — <strong>starting will delete the prior results</strong> for this configuration.
@@ -128,7 +147,7 @@
 {% endmacro %}
 
 {% macro launch_back(url, label) %}
-<p class="back-link"><a href="{{ url }}">← {{ label }}</a></p>
+<p class="back-link"><a class="font-semibold text-duke-blue" href="{{ url }}">← {{ label }}</a></p>
 {% endmacro %}
 
 {% macro cli_scan_docker() -%}

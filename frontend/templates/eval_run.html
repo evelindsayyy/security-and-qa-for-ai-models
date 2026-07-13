@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button, rerun_button, staleness_badge, page_header, list_compare_tabs, empty_state with context %}
+{% from '_macros.html' import expandable, start_button, delete_button, rerun_button, staleness_badge, page_header, list_compare_tabs, empty_state with context %}
 
 {% block title %}Eval runs{% endblock %}
 
@@ -41,7 +41,7 @@
   </section>
 
   {% if not has_runs %}
-    {{ empty_state('No eval runs yet.', cli_eval_docker()) }}
+    {{ empty_state('No eval runs yet. Start an eval run from the button above.') }}
   {% else %}
     {{ list_compare_tabs(has_comparison) }}
 
@@ -101,12 +101,9 @@
     <table class="run-table" id="runs-table">
       <thead>
         <tr>
-          <th>Candidate</th>
+          <th class="col-candidate min-w-[11rem]">Candidate</th>
           <th>Judge</th>
           <th>Suite</th>
-          {% for dim in dim_columns %}
-          <th class="num">{{ dim|replace("_", " ") }}</th>
-          {% endfor %}
           <th class="num sortable" data-sort="overall" style="cursor: pointer;">Overall <span class="s-ind">▼</span></th>
           <th class="num" title="Functional pass-rate — execution-scored suites (SQL/JSON/numeric) only; the oracle, not the judge">Exec</th>
           <th class="num sortable" data-sort="latency" style="cursor: pointer;">Latency (mean / p95) <span class="s-ind"></span></th>
@@ -135,7 +132,7 @@
             data-qnorm="{{ "%.6f"|format(r.cost_perf.quality_norm) if r.cost_perf else '' }}"
             data-cnorm="{{ "%.6f"|format(r.cost_perf.cost_norm) if r.cost_perf else '' }}"
             data-lnorm="{{ "%.6f"|format(r.cost_perf.latency_norm) if r.cost_perf else '' }}">
-          <td>
+          <td class="col-candidate min-w-[11rem]">
             <a class="model" href="{{ url_for('model_detail', slug=r.model_slug) }}">{{ r.candidate_model }}</a>
             {{ staleness_badge(r.staleness) }}
             {% if r.is_best %}<span class="badge badge-best">best</span>{% endif %}
@@ -143,9 +140,6 @@
           </td>
           <td><span class="dim">{{ r.judge_model }}</span></td>
           <td><span class="dim">{{ r.suite }}</span></td>
-          {% for dim in dim_columns %}
-          <td class="num">{{ "%.2f"|format(r.dim_means[dim]) if r.dim_means.get(dim) is not none else "—" }}</td>
-          {% endfor %}
           <td class="num overall">{{ "%.2f"|format(r.overall) if r.overall is not none else "—" }}</td>
           <td class="num">{% if r.execution_pass_rate is defined and r.execution_pass_rate is not none %}{{ "%.0f%%"|format(r.execution_pass_rate * 100) }}{% else %}<span class="dim">—</span>{% endif %}</td>
           <td class="num">{{ r.mean_latency_ms }} / {{ r.p95_latency_ms }} ms</td>

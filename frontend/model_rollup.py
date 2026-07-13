@@ -226,6 +226,9 @@ def get_models_union() -> list[dict]:
 
     by_key: dict[str, dict] = {}
     _add_scan_rows(by_key)
+    from frontend.scan_links import apply_scan_links
+
+    apply_scan_links(by_key)
     _add_safety_rows(by_key)
     _add_eval_rows(by_key)
     _add_benchmark_rows(by_key)

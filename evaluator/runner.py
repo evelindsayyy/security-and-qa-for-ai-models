@@ -81,6 +81,12 @@ _COST_PER_M_TOKENS: dict[str, tuple[float, float]] = {
     # 5.4) to the Gateway's live billing rate (GET /model_group/info). gpt-5.5
     # is not on the public KB page, so the Gateway is the authoritative source.
     "gpt-5.5":        (5.00, 30.00),
+    # GPT-5.6 family (OpenAI July 2026; Gateway ids may use sol/terra/luna suffixes)
+    "gpt-5.6":            (5.00, 30.00),
+    "gpt-5.6-sol":        (5.00, 30.00),
+    "gpt-5.6-terra":      (2.50, 15.00),
+    "gpt-5.6-luna":       (1.00,  6.00),
+    "gpt-5.6-chat":       (5.00, 30.00),
     # GPT-4.1 family — note: Gateway allowlist returns these with spaces and
     # capitals (e.g. "GPT 4.1 Mini"), not the rate-sheet's hyphenated form.
     # Keys must match the model id the user passes via --candidate-model.

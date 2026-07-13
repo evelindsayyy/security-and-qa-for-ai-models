@@ -112,13 +112,16 @@
 
   @media (min-width: 1024px) {
     .app-sidebar {
-      @apply static;
       transform: translateX(0);
+    }
+
+    .app-main {
+      @apply ml-64;
     }
   }
 
   .app-main {
-    @apply flex min-h-screen flex-1 flex-col lg:ml-0;
+    @apply flex min-h-screen flex-1 flex-col;
   }
 
   .app-topbar {
@@ -290,6 +293,15 @@
     @apply cursor-pointer transition hover:bg-duke-blue-muted;
   }
 
+  .run-table td.col-candidate {
+    @apply align-middle;
+  }
+
+  .run-table td.col-candidate .staleness-pill,
+  .run-table td.col-candidate .badge {
+    @apply ml-1 inline-block align-middle;
+  }
+
   .run-table tr.row-warn {
     @apply bg-red-50/50;
   }
@@ -457,11 +469,55 @@
   }
 
   .pillar-cta-list {
-    @apply m-0 list-none space-y-3 p-0 text-sm;
+    @apply m-0 list-none space-y-0 p-0 text-sm;
   }
 
-  .pillar-cta-list li {
-    @apply flex flex-wrap items-center gap-2;
+  .pillar-cta-list li,
+  .pillar-cta-row {
+    @apply grid items-start gap-2 border-b border-border py-3;
+    grid-template-columns: 6.5rem minmax(0, 1fr) auto;
+  }
+
+  .pillar-cta-list li:last-child,
+  .pillar-cta-row:last-child {
+    @apply border-b-0 pb-0;
+  }
+
+  .pillar-cta-list li:first-child,
+  .pillar-cta-row:first-child {
+    @apply pt-0;
+  }
+
+  .pillar-cta-label {
+    @apply pt-0.5 text-xs font-semibold uppercase tracking-wide;
+  }
+
+  .pillar-cta-status {
+    @apply flex min-w-0 flex-wrap items-center gap-2;
+  }
+
+  .pillar-cta-actions {
+    @apply flex flex-wrap items-start justify-end gap-2;
+  }
+
+  .scan-link-panel {
+    @apply relative;
+  }
+
+  .scan-link-panel > summary {
+    @apply cursor-pointer list-none text-sm font-semibold text-duke-blue;
+  }
+
+  .scan-link-panel > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .scan-link-form {
+    @apply absolute right-0 z-10 mt-2 flex min-w-[16rem] flex-col gap-2 rounded-[var(--radius-lg)] border border-border bg-surface-raised p-3 shadow-card;
+  }
+
+  .inline-form {
+    @apply inline;
   }
 
   .model-findings-list {

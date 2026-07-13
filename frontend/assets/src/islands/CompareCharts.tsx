@@ -15,6 +15,24 @@ Chart.register(BarController, BarElement, CategoryScale, LinearScale, Legend, Ti
 
 type Props = { data: CompareChartsPayload };
 
+function yAxisMax(values: (number | null)[]): number {
+  const finite = values.filter((v): v is number => v != null && Number.isFinite(v));
+  if (!finite.length) return 100;
+  const peak = Math.max(...finite);
+  if (peak <= 1) return 100;
+  return Math.ceil(peak * 1.1);
+}
+
+function normalizeBenchmarkValues(values: (number | null)[]): (number | null)[] {
+  const finite = values.filter((v): v is number => v != null && Number.isFinite(v));
+  if (!finite.length) return values;
+  const peak = Math.max(...finite);
+  if (peak <= 1) {
+    return values.map((v) => (v == null ? null : v * 100));
+  }
+  return values;
+}
+
 export function CompareCharts({ data }: Props) {
   const { models } = data;
   const safetyRef = useRef<HTMLCanvasElement>(null);
@@ -62,6 +80,14 @@ export function CompareCharts({ data }: Props) {
     });
     if (benchRef.current && benchKinds.size) {
       const kinds = [...benchKinds];
+      const rawSeries = kinds.map((kind) =>
+        models.map((m) => m.benchmark?.[kind]?.headline_value ?? null),
+      );
+      const normalizedSeries = rawSeries.map((series) => normalizeBenchmarkValues(series));
+      const allBenchValues = normalizedSeries.flat();
+      const benchMax = yAxisMax(allBenchValues);
+      const benchIsPercent = allBenchValues.every((v) => v == null || v <= 100);
+
       chartsRef.current.push(
         new Chart(benchRef.current, {
           type: "bar",
@@ -69,11 +95,19 @@ export function CompareCharts({ data }: Props) {
             labels,
             datasets: kinds.map((kind, i) => ({
               label: kind,
-              data: models.map((m) => m.benchmark?.[kind]?.headline_value ?? null),
+              data: normalizedSeries[i],
               backgroundColor: ["#012169", "#166534", "#a16207", "#7c3aed"][i % 4],
             })),
           },
-          options: { responsive: true, scales: { y: { max: 100 } } },
+          options: {
+            responsive: true,
+            scales: {
+              y: {
+                max: benchMax,
+                ticks: benchIsPercent ? { callback: (v) => `${v}%` } : undefined,
+              },
+            },
+          },
         }),
       );
     }

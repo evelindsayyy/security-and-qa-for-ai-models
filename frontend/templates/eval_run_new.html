@@ -47,29 +47,14 @@
 </style>
 
 <div class="launch-page">
-  {{ launch_back(url_for('eval_run'), 'all runs') }}
+  {{ launch_back(url_for('eval_run'), 'all eval runs') }}
 
   <header>
     <h1 class="page-title">Start an evaluation run</h1>
     <p class="page-subtitle">
-      Launches <code>evaluator/runner.py</code> via Docker Compose (default).
-      One run at a time; an identical in-flight request returns the existing run.
+      Choose a candidate model, judge, and task suite. One run at a time; an identical in-flight request returns the existing run.
     </p>
   </header>
-
-  {% set eval_guide_body %}
-  <p>An evaluation tests one model and has a second model grade the answers. You choose three things:</p>
-  <div class="eval-guide-steps">
-    <div><b>1 · Model</b><br><span>the one being tested</span></div>
-    <div><b>2 · What to test</b><br><span>a ready task or your own</span></div>
-    <div><b>3 · Judge</b><br><span>grades the answers</span></div>
-  </div>
-  <div class="eval-guide-pick">
-    <div><strong>Use a task suite</strong><small>to compare models on a standard Duke task — references already written.</small></div>
-    <div><strong>Bring your own questions</strong><small>for your specific use case — you provide the ideal answer for each.</small></div>
-  </div>
-  {% endset %}
-  {{ guide_panel('ⓘ How this works — which should I pick?', eval_guide_body, open_default=true) }}
 
   {% if rerun %}{{ rerun_callout() }}{% endif %}
   {% if not docker_available %}
