@@ -82,6 +82,11 @@ def _completion_present(lock_file: Path) -> bool:
                 done = int(prog.get("progress") or 0)
                 if total and done < total and not prog.get("cancelled"):
                     return False
+                return True
+            # Eval writes a growing .jsonl during the run — presence alone is
+            # not completion. Rely on lock release / stale-log cleanup.
+            if ext == ".jsonl":
+                return False
             return True
     return False
 

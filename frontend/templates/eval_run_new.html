@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import launch_back, rerun_callout, guide_panel with context %}
+{% from '_macros.html' import launch_back, rerun_callout with context %}
 
 {% block title %}Start an evaluation run{% endblock %}
 
@@ -21,14 +21,6 @@
   .suite-badge { display:inline-block; font-size:.64rem; font-weight:600; text-transform:uppercase; letter-spacing:.03em; padding:.06rem .4rem; border-radius:10px; line-height:1.55; white-space:nowrap; }
   .suite-badge--execution { background:#e6f4ea; color:#1e7a43; border:1px solid #bfe3cd; }
   .suite-badge--judge { background:#eaeff9; color:#2f43a0; border:1px solid #ccd6f2; }
-
-  .eval-guide-steps { display:grid; grid-template-columns:repeat(3,1fr); gap:.6rem; margin:.55rem 0 .85rem; }
-  .eval-guide-steps b { color: var(--color-duke-blue); }
-  .eval-guide-steps span { color: var(--color-text-subtle); }
-  .eval-guide-pick { display:grid; grid-template-columns:1fr 1fr; gap:.6rem; }
-  .eval-guide-pick > div { background: var(--color-surface-raised); border: 1px solid var(--color-border); border-radius: 8px; padding:.5rem .7rem; }
-  .eval-guide-pick strong { display:block; color: var(--color-duke-blue); margin-bottom:.15rem; }
-  .eval-guide-pick small { color: var(--color-text-subtle); }
 
   .qb-row { border: 1px solid var(--color-border); border-radius: 8px; padding:.6rem .7rem; margin-bottom:.55rem; }
   .qb-rowhead { display:flex; justify-content:space-between; align-items:center; font-size:.78rem; color: var(--color-text-subtle); margin-bottom:.25rem; }

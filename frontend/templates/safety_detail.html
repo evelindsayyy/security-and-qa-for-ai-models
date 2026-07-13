@@ -57,8 +57,8 @@
     <p class="empty">no findings recorded in this merge.</p>
     {% endif %}
 
-    <h2 class="section-title mt-8">Probe suites</h2>
-    <p class="sub dim mb-3">Collapsed by default — expand a suite for its probes and per-probe detail.</p>
+    <h2 class="section-title mt-10">Probe suites</h2>
+    <p class="body mt-1 mb-4">Collapsed by default — expand a suite for its probes and per-probe detail.</p>
 
     {% macro probe_block(f) %}
     <div class="probe-item {% if not f.passed %}probe-fail{% endif %}">
@@ -107,7 +107,7 @@
     {% endfor %}
 
     {% if deployment_rows %}
-    <h2 class="section-title mt-8">Deployment context</h2>
+    <h2 class="section-title mt-10">Deployment context</h2>
     <table class="run-table compact-table mt-3">
       <tbody>
         {% for r in deployment_rows %}
@@ -117,7 +117,7 @@
     </table>
     {% endif %}
 
-    <details class="tool-panel mt-8">
+    <details class="tool-panel mt-10">
       <summary>Raw safety summary</summary>
       <pre class="json-block">{{ raw_summary|tojson(indent=2) }}</pre>
     </details>

@@ -140,6 +140,12 @@ def register_routes(app):
 
         return render_template("index.html", **get_overview_data())
 
+    @app.route("/jobs")
+    def inflight_jobs():
+        from frontend.launch_registry import list_inflight_jobs
+
+        return render_template("jobs.html", jobs=list_inflight_jobs())
+
     @app.route("/scans")
     def scans():
         from frontend.scan_data import get_scan_guide_data, get_scans_data

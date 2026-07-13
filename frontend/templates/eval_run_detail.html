@@ -134,9 +134,9 @@
     </table>
     {% endif %}
 
-    <h2 class="section-title mt-8">Judge rationales</h2>
-    <p class="body mt-1 mb-3">One sentence per dimension per question; click to expand.</p>
-    <div class="space-y-2">
+    <h2 class="section-title mt-10">Judge rationales</h2>
+    <p class="body mt-1 mb-4">One sentence per dimension per question; click to expand.</p>
+    <div class="space-y-3">
     {% for q in questions %}
       <details class="tool-panel">
         <summary>
@@ -170,7 +170,7 @@
     {% endfor %}
     </div>
 
-    <h2 class="section-title mt-8">Adaptation</h2>
+    <h2 class="section-title mt-10">Adaptation</h2>
     <pre class="json-block mt-3">{
   "candidate_model": {{ candidate_model|tojson }},
   "candidate_model_version": {{ candidate_model_version|tojson }},

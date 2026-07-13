@@ -275,6 +275,22 @@ def _run_lock_path(stem: str) -> Path:
     return RESULTS_DIR / f"{stem}.run.lock"
 
 
+def inflight_benchmark_slugs() -> set[str]:
+    """Stems with an active run.lock or in-memory subprocess."""
+    from dbutils import fs_safe
+
+    slugs: set[str] = set()
+    if fs_safe.is_dir(RESULTS_DIR):
+        for path in fs_safe.glob(RESULTS_DIR, "*.run.lock"):
+            if run_lock.is_active(path):
+                slugs.add(path.name[: -len(".run.lock")])
+    with _LOCK:
+        for slug, proc in _RUNNING.items():
+            if proc.poll() is None:
+                slugs.add(slug)
+    return slugs
+
+
 def _run_options_path(stem: str) -> Path:
     return RESULTS_DIR / f"{stem}.run_options.json"
 

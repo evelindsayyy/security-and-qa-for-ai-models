@@ -59,12 +59,20 @@
 {% endif %}
 {% endmacro %}
 
-{% macro stat_card(label, value, meta='', tone='') %}
+{% macro stat_card(label, value, meta='', tone='', href='') %}
+{% if href %}
+<a href="{{ href }}" class="stat-card stat-card-link">
+{% else %}
 <div class="stat-card">
+{% endif %}
   <p class="stat-label">{{ label }}</p>
   <p class="stat-value {{ tone }}">{{ value }}</p>
   {% if meta %}<p class="mt-1 text-sm text-text-muted">{{ meta }}</p>{% endif %}
+{% if href %}
+</a>
+{% else %}
 </div>
+{% endif %}
 {% endmacro %}
 
 {% macro page_header(title, subtitle='', actions='') %}

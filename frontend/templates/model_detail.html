@@ -81,23 +81,24 @@
             {% elif not rollup.scan and can_hf_scan %}
               {{ start_button(url_for('scan_run_new'), 'Run scan', classes='btn-secondary btn-sm') }}
             {% endif %}
-            {% if is_logged_in and available_scans %}
-            <details class="scan-link-panel">
-              <summary>Link existing scan</summary>
-              <form method="post" action="{{ url_for('model_link_scan', slug=rollup.slug) }}" class="scan-link-form">
-                <select name="scan_slug" class="form-control" required aria-label="Choose scan to link">
-                  <option value="">Choose a scan…</option>
-                  {% for s in available_scans %}
-                  <option value="{{ s.slug }}" {% if s.slug == linked_scan_slug %}selected{% endif %}>
-                    {{ s.model_id or s.slug }} ({{ s.tier }})
-                  </option>
-                  {% endfor %}
-                </select>
-                <button type="submit" class="btn-primary btn-sm">Link</button>
-              </form>
-            </details>
-            {% endif %}
           </div>
+          {% if is_logged_in and available_scans %}
+          <details class="scan-link-panel pillar-cta-extra">
+            <summary>Link existing scan</summary>
+            <form method="post" action="{{ url_for('model_link_scan', slug=rollup.slug) }}" class="scan-link-form">
+              <label class="sr-only" for="scan-link-{{ rollup.slug }}">Choose scan to link</label>
+              <select id="scan-link-{{ rollup.slug }}" name="scan_slug" class="form-control" required>
+                <option value="">Choose a scan…</option>
+                {% for s in available_scans %}
+                <option value="{{ s.slug }}" {% if s.slug == linked_scan_slug %}selected{% endif %}>
+                  {{ s.model_id or s.slug }} ({{ s.tier }})
+                </option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn-primary btn-sm">Link scan</button>
+            </form>
+          </details>
+          {% endif %}
         </li>
         <li class="pillar-cta-row">
           <span class="pillar-cta-label dim">Safety</span>
