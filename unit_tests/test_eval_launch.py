@@ -14,17 +14,33 @@ from __future__ import annotations
 import os
 
 # Browser launches default to Docker; unit tests exercise the host argv path.
-os.environ.setdefault("FRONTEND_LAUNCH_MODE", "host")
+# Force (don't setdefault) so a developer .env with FRONTEND_LAUNCH_MODE=docker
+# cannot break spawn tests that patch subprocess.Popen.
+os.environ["FRONTEND_LAUNCH_MODE"] = "host"
 
 import json
 import re
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from frontend import create_app
 from frontend import eval_launch
+
+
+def _alive_proc(*, pid: int = 4242) -> mock.Mock:
+    """Mock Popen that stays in-flight for watch-thread / dedupe tests.
+
+    ``Mock.wait()`` returns immediately by default, which lets the new
+    run-lock watch thread clear ``_RUNNING`` before a duplicate POST.
+    """
+    proc = mock.Mock()
+    proc.poll.return_value = None
+    proc.pid = pid
+    proc.wait = mock.Mock(side_effect=lambda *a, **k: threading.Event().wait(timeout=60))
+    return proc
 
 
 def _isolate_eval_output(test_case: unittest.TestCase) -> Path:
@@ -333,8 +349,7 @@ class LaunchRoutesTest(unittest.TestCase):
         self.assertEqual(r.status_code, 400)
 
     def test_start_valid_spawns_and_redirects(self) -> None:
-        fake_proc = mock.Mock()
-        fake_proc.poll.return_value = None
+        fake_proc = _alive_proc()
         with mock.patch.object(
             eval_launch.subprocess, "Popen", return_value=fake_proc
         ) as popen:
@@ -350,8 +365,7 @@ class LaunchRoutesTest(unittest.TestCase):
         self.assertIn("GPT 4.1 Mini", argv)
 
     def test_duplicate_start_returns_same_slug_without_second_spawn(self) -> None:
-        fake_proc = mock.Mock()
-        fake_proc.poll.return_value = None  # still running
+        fake_proc = _alive_proc()
         data = {
             "candidate": "gpt-5.1-chat", "judge": "Llama 4 Maverick",
             "suite": "policy_qa_v1.1", "max_tokens": "500",
@@ -517,8 +531,7 @@ class CustomRouteTest(unittest.TestCase):
         self.assertEqual(r.status_code, 400)
 
     def test_valid_custom_spawns_and_redirects(self) -> None:
-        fake = mock.Mock()
-        fake.poll.return_value = None
+        fake = _alive_proc()
         with mock.patch.object(eval_launch.subprocess, "Popen", return_value=fake):
             r = self.client.post("/eval-run/start-custom", data={
                 "candidate": "gpt-5-chat", "judge": "Llama 4 Maverick",
@@ -600,7 +613,9 @@ class RerunReusesScanHistoryTest(unittest.TestCase):
 
     def test_rerun_start_reuses_existing_safety_history(self) -> None:
         from frontend import pipeline
-        with mock.patch.object(pipeline, "_safety_result_paths",
+        with mock.patch.object(pipeline, "_safety_runs_from_ui_catalog",
+                               return_value=[]), \
+             mock.patch.object(pipeline, "_safety_result_paths",
                                return_value=self._history("medium")), \
              mock.patch.object(eval_launch, "start_run",
                                return_value=("slug1", False, "public")) as sr:
@@ -611,7 +626,9 @@ class RerunReusesScanHistoryTest(unittest.TestCase):
 
     def test_rerun_start_blocked_without_history(self) -> None:
         from frontend import pipeline
-        with mock.patch.object(pipeline, "_safety_result_paths", return_value=[]), \
+        with mock.patch.object(pipeline, "_safety_runs_from_ui_catalog",
+                               return_value=[]), \
+             mock.patch.object(pipeline, "_safety_result_paths", return_value=[]), \
              mock.patch.object(eval_launch, "start_run") as sr:
             r = self._rerun_post()
         self.assertEqual(r.status_code, 400)

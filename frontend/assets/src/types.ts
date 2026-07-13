@@ -60,7 +60,7 @@ export type CompareModel = {
   display_name: string;
   scan?: { tier?: string; overall_risk_score?: number };
   safety?: { tier?: string; pass_rate?: number };
-  eval?: { best_overall?: number; mean_latency_ms?: number; total_cost_usd?: number };
+  eval?: { avg_overall?: number; best_overall?: number; mean_latency_ms?: number; total_cost_usd?: number };
   benchmark?: Record<string, { headline_value?: number; headline_display?: string }>;
 };
 

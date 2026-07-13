@@ -80,7 +80,7 @@ ORDER BY completed_at DESC NULLS LAST, output_slug
 _DETAIL_SQL = """
 SELECT output_slug, source_filename, gateway_model_id, benchmark_key,
        headline_metric, headline_value, n_items, metrics, items, run_params,
-       completed_at
+       completed_at, config_json
 FROM public.benchmark_runs b
 WHERE output_slug = %(slug)s AND ({visibility_filter})
 LIMIT 1

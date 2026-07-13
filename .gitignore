@@ -35,6 +35,7 @@ testing/security_scanning_tests/
 .gitlab/gitlab-transfer.md
 PROJECT_GUIDE.md
 frontend/.summary-cache/
+frontend/.scan-links.json
 
 # eval spikes — regenerate locally
 testing/eval/output/*

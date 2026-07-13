@@ -160,5 +160,36 @@ class TestCustomEnv(unittest.TestCase):
         self.assertEqual(env["OPENAI_API_KEY"], "local-vllm")
 
 
+
+class BenchmarkStartGateTest(unittest.TestCase):
+    def setUp(self) -> None:
+        env_patch = mock.patch.dict(os.environ, {"AUTH_ENABLED": "0"})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        self.client = create_app({"TESTING": True}).test_client()
+        with self.client.session_transaction() as sess:
+            sess["user"] = {"id": "u-test", "netid": "testuser", "display_name": "Test"}
+
+    def test_gateway_start_blocked_without_safety(self) -> None:
+        with mock.patch(
+            "frontend.pipeline.require_ready_for_downstream",
+            return_value="safety red-teaming required before this step",
+        ), mock.patch(
+            "frontend.benchmark_launch.validate_launch", return_value=None
+        ), mock.patch(
+            "frontend.benchmark_launch.start_run"
+        ) as start:
+            r = self.client.post(
+                "/benchmarks/start",
+                data={
+                    "benchmark": "truthfulqa",
+                    "model": "GPT 4.1 Mini",
+                    "model_source": "gateway",
+                },
+            )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn(b"safety", r.data)
+        start.assert_not_called()
+
 if __name__ == "__main__":
     unittest.main()

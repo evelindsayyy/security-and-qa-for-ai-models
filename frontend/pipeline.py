@@ -56,18 +56,91 @@ def _safety_result_paths(model: str) -> list[tuple[str, Path]]:
     return out
 
 
+def _safety_runs_from_ui_catalog(model: str) -> list[dict]:
+    """Safety runs for *model* from the same source as ``/safety`` (DB or disk).
+
+    Matches on normalized gateway id so ``Llama 4 Scout`` and ``llama-4-scout``
+    resolve the same way the Safety list page does.
+    """
+    from safety.gateway_ids import normalize_gateway_model_id
+
+    slug = normalize_gateway_model_id(model)
+    try:
+        from frontend.safety_data import get_safety_data
+
+        rows = get_safety_data().get("models") or []
+    except Exception:  # noqa: BLE001 — catalog hiccup must not block the gate
+        return []
+    matched: list[dict] = []
+    for row in rows:
+        gid = str(row.get("gateway_model_id") or row.get("slug") or "")
+        if normalize_gateway_model_id(gid) != slug:
+            continue
+        matched.append(
+            {
+                "profile": row.get("profile") or "base",
+                "status": str(row.get("status") or "unknown").lower(),
+                "tier": str(row.get("tier") or row.get("composite_tier") or "unknown").lower(),
+            }
+        )
+    return matched
+
+
+def _safety_runs_from_disk(model: str) -> list[dict]:
+    """Public on-disk merged results (also covers not-yet-ingested runs)."""
+    out: list[dict] = []
+    for profile, path in _safety_result_paths(model):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            out.append(
+                {
+                    "profile": profile,
+                    "status": "unreadable",
+                    "tier": "unknown",
+                    "unreadable": True,
+                }
+            )
+            continue
+        out.append(
+            {
+                "profile": profile,
+                "status": str(data.get("status") or "unknown").lower(),
+                "tier": str(data.get("composite_tier") or "unknown").lower(),
+            }
+        )
+    return out
+
+
+def _collect_safety_runs(model: str) -> list[dict]:
+    """UI catalog first (matches /safety), then any extra public disk artifacts."""
+    by_profile: dict[str, dict] = {}
+    for run in _safety_runs_from_ui_catalog(model) + _safety_runs_from_disk(model):
+        profile = str(run.get("profile") or "base")
+        # Prefer an already-cleared catalog row over a stale disk copy.
+        existing = by_profile.get(profile)
+        if existing is None:
+            by_profile[profile] = run
+            continue
+        if existing.get("status") in COMPLETE_STATUSES and existing.get("tier") in CLEARED_TIERS:
+            continue
+        by_profile[profile] = run
+    return list(by_profile.values())
+
+
 def validate_safety_gate(model: str) -> dict:
     """Approve a model that has ANY completed, non-high-risk safety run in
     history — under any red-team profile (base, education, finance, …).
 
-    This "connects" previous scannings: once red-teaming has run and did not flag
-    the model high/critical, the eval is approved without re-running. A model
-    whose only completed runs are high/critical is blocked; a model with no
-    completed run at all still needs safety. Reflected values are HTML-escaped.
+    Uses the same evidence the Safety UI shows (Postgres when configured,
+    otherwise on-disk merged results), plus any public disk artifacts not yet
+    ingested. A model whose only completed runs are high/critical is blocked;
+    a model with no completed run at all still needs safety. Reflected values
+    are HTML-escaped.
     """
     base = {"model": model, "profile": None, "status": None, "tier": None}
-    paths = _safety_result_paths(model)
-    if not paths:
+    runs = _collect_safety_runs(model)
+    if not runs:
         return {
             **base,
             "ok": False,
@@ -81,30 +154,40 @@ def validate_safety_gate(model: str) -> dict:
     # informative block reason (a completed high-risk run beats an in-progress
     # or unreadable one).
     block: dict | None = None
-    for profile, mp in paths:
-        try:
-            data = json.loads(mp.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001 — a corrupt artifact must never 500
+    for run in runs:
+        profile = run.get("profile") or "base"
+        if run.get("unreadable"):
             block = block or {
-                **base, "profile": profile, "status": "unreadable", "ok": False,
+                **base,
+                "profile": profile,
+                "status": "unreadable",
+                "ok": False,
                 "error": f"safety result is unreadable ({escape(profile)} profile)",
             }
             continue
-        status = str(data.get("status") or "unknown").lower()
-        tier = str(data.get("composite_tier") or "unknown").lower()
+        status = str(run.get("status") or "unknown").lower()
+        tier = str(run.get("tier") or "unknown").lower()
         out = {**base, "profile": profile, "status": status, "tier": tier}
         if status not in COMPLETE_STATUSES:
-            block = block or {**out, "ok": False,
-                              "error": f"safety run is not complete yet (status={status})"}
+            block = block or {
+                **out,
+                "ok": False,
+                "error": f"safety run is not complete yet (status={status})",
+            }
             continue
         if tier not in CLEARED_TIERS:
-            block = {**out, "ok": False,
-                     "error": ("safety red-teaming flagged this model as high risk "
-                               f"(tier={tier}); eval/benchmark is blocked")}
+            block = {
+                **out,
+                "ok": False,
+                "error": (
+                    "safety red-teaming flagged this model as high risk "
+                    f"(tier={tier}); eval/benchmark is blocked"
+                ),
+            }
             continue
         return {**out, "ok": True, "error": None}
 
-    return block  # non-None: a non-empty paths list always sets a block reason
+    return block  # non-None: a non-empty runs list always sets a block reason
 
 
 def require_ready_for_downstream(model: str, source: str) -> str | None:
@@ -167,13 +250,19 @@ def build_overview() -> dict:
     """All gateway models + every HF repo that already has a scan, each with its
     pipeline stage state. Degrades gracefully if a data source is unavailable."""
     rows: list[dict] = []
+    gateway_count = 0
+    gateway_error: str | None = None
     try:
         from gateway.catalog import get_gateway_catalog
 
-        for m in get_gateway_catalog().get("models", []):
+        catalog = get_gateway_catalog()
+        gateway_error = catalog.get("error")
+        models = catalog.get("models") or []
+        gateway_count = len(models)
+        for m in models:
             rows.append(stage_state(m["id"], "gateway"))
-    except Exception:  # noqa: BLE001 — a catalog hiccup must not 500 the page
-        pass
+    except Exception as exc:  # noqa: BLE001 — a catalog hiccup must not 500 the page
+        gateway_error = str(exc)
     try:
         from frontend.scan_data import get_scans_data
 
@@ -183,4 +272,9 @@ def build_overview() -> dict:
                 rows.append(stage_state(repo, "hf"))
     except Exception:  # noqa: BLE001
         pass
-    return {"rows": rows, "has_rows": bool(rows)}
+    return {
+        "rows": rows,
+        "has_rows": bool(rows),
+        "gateway_count": gateway_count,
+        "gateway_error": gateway_error,
+    }

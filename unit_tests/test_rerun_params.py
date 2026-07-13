@@ -134,6 +134,7 @@ class EvalRerunParamsTest(unittest.TestCase):
         self.assertEqual(params["candidate_model"], "GPT 4.1 Mini")
         self.assertEqual(params["judge_model"], "gpt-5-chat")
         self.assertEqual(params["suite"], "it_support_v1")
+        self.assertEqual(params["max_tokens"], 500)
 
 
 class ScanRerunParamsTest(unittest.TestCase):

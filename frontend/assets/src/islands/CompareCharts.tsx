@@ -15,6 +15,24 @@ Chart.register(BarController, BarElement, CategoryScale, LinearScale, Legend, Ti
 
 type Props = { data: CompareChartsPayload };
 
+function yAxisMax(values: (number | null)[]): number {
+  const finite = values.filter((v): v is number => v != null && Number.isFinite(v));
+  if (!finite.length) return 100;
+  const peak = Math.max(...finite);
+  if (peak <= 1) return 100;
+  return Math.ceil(peak * 1.1);
+}
+
+function normalizeBenchmarkValues(values: (number | null)[]): (number | null)[] {
+  const finite = values.filter((v): v is number => v != null && Number.isFinite(v));
+  if (!finite.length) return values;
+  const peak = Math.max(...finite);
+  if (peak <= 1) {
+    return values.map((v) => (v == null ? null : v * 100));
+  }
+  return values;
+}
+
 export function CompareCharts({ data }: Props) {
   const { models } = data;
   const safetyRef = useRef<HTMLCanvasElement>(null);
@@ -28,7 +46,7 @@ export function CompareCharts({ data }: Props) {
 
     const labels = models.map((m) => m.display_name || m.slug);
     const safetyData = models.map((m) => (m.safety?.pass_rate != null ? m.safety.pass_rate * 100 : null));
-    const evalData = models.map((m) => m.eval?.best_overall ?? null);
+    const evalData = models.map((m) => m.eval?.avg_overall ?? m.eval?.best_overall ?? null);
 
     if (safetyRef.current && safetyData.some((v) => v != null)) {
       chartsRef.current.push(
@@ -49,7 +67,7 @@ export function CompareCharts({ data }: Props) {
           type: "bar",
           data: {
             labels,
-            datasets: [{ label: "Best eval (/5)", data: evalData, backgroundColor: "#166534" }],
+            datasets: [{ label: "Avg eval (/5)", data: evalData, backgroundColor: "#166534" }],
           },
           options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { max: 5 } } },
         }),
@@ -62,6 +80,14 @@ export function CompareCharts({ data }: Props) {
     });
     if (benchRef.current && benchKinds.size) {
       const kinds = [...benchKinds];
+      const rawSeries = kinds.map((kind) =>
+        models.map((m) => m.benchmark?.[kind]?.headline_value ?? null),
+      );
+      const normalizedSeries = rawSeries.map((series) => normalizeBenchmarkValues(series));
+      const allBenchValues = normalizedSeries.flat();
+      const benchMax = yAxisMax(allBenchValues);
+      const benchIsPercent = allBenchValues.every((v) => v == null || v <= 100);
+
       chartsRef.current.push(
         new Chart(benchRef.current, {
           type: "bar",
@@ -69,11 +95,19 @@ export function CompareCharts({ data }: Props) {
             labels,
             datasets: kinds.map((kind, i) => ({
               label: kind,
-              data: models.map((m) => m.benchmark?.[kind]?.headline_value ?? null),
+              data: normalizedSeries[i],
               backgroundColor: ["#012169", "#166534", "#a16207", "#7c3aed"][i % 4],
             })),
           },
-          options: { responsive: true, scales: { y: { max: 100 } } },
+          options: {
+            responsive: true,
+            scales: {
+              y: {
+                max: benchMax,
+                ticks: benchIsPercent ? { callback: (v) => `${v}%` } : undefined,
+              },
+            },
+          },
         }),
       );
     }
@@ -92,7 +126,7 @@ export function CompareCharts({ data }: Props) {
         <canvas ref={safetyRef} height="200" />
       </div>
       <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4 shadow-[var(--shadow-card)]">
-        <h3 class="mb-3 text-sm font-semibold">Best eval score</h3>
+        <h3 class="mb-3 text-sm font-semibold">Avg eval score</h3>
         <canvas ref={evalRef} height="200" />
       </div>
       <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4 shadow-[var(--shadow-card)] md:col-span-2">

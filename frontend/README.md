@@ -1,87 +1,95 @@
 # Frontend (`frontend/`)
 
-AI Model Advisor **UI and JSON API** (one Flask process). Browser **Start** buttons and `POST /api/*` spawn pillar jobs in Docker via [`docker_launch.py`](docker_launch.py). Reads use Postgres when configured, else on-disk JSON.
+AI Model Advisor **UI and JSON API** (one Flask process). Browser **Start** buttons
+and `POST /api/*` spawn pillar jobs via [`docker_launch.py`](docker_launch.py).
+Reads use Postgres when configured, else on-disk JSON.
 
 ## Quick start
 
-### One-time setup
-
 ```bash
 uv sync --group dev
-cp .env.example .env             # DUKE_GATEWAY_KEY required
-./docker/build-pillars.sh        # pillar images for Start buttons
-cd frontend/assets && npm ci && npm run build   # or: ./scripts/build-frontend.sh
+cp .env.example .env
+./docker/build-pillars.sh
+python3 main.py up -d --build    # default; builds assets via run.sh
 ```
 
-Postgres schema and backfill (optional): see [root README — Optional Postgres](../README.md#optional--postgres).
+Open http://127.0.0.1:5000. Launch pages: `/scans/new` · `/safety/new` ·
+`/eval-run/new` · `/benchmarks/new`.
 
-### Run (containerized — default)
+While a job runs, detail pages poll status and show a live log tail. Scan and
+safety start forms warn when the same model/repo is already in progress.
 
-See [`docs/docker.md`](../docs/docker.md).
+## UI stack
+
+Server-rendered **Jinja** templates + **Preact** islands (Vite, TypeScript, Tailwind 3).
+
+| Layer | Path |
+|-------|------|
+| Templates | `frontend/templates/` |
+| Styles | `frontend/assets/src/styles/app.css` + Tailwind |
+| Islands | `frontend/assets/src/islands/` |
+| Built bundle | `frontend/static/dist/` (gitignored) |
+
+[`vite_assets.py`](vite_assets.py) resolves hashed bundle URLs and serves
+`/static/dist/*` from the working-tree build when present, else `/opt/frontend-dist`
+from the image.
 
 ```bash
-python3 main.py                   # or: ./docker/run.sh up --build
-python3 main.py up -d --build     # background
+cd frontend/assets
+npm ci && npm run build    # → ../static/dist/
+npm run dev                # watch (pair with python3 main.py --host)
+npm run test               # Vitest
 ```
 
-Open http://127.0.0.1:5000 · launch pages: `/scans/new` · `/safety/new` · `/eval-run/new` · `/benchmarks/new`
+`docker/run.sh` runs `scripts/build-frontend.sh` before container start. CI
+`frontend-build` job produces the image bake.
 
-While a job runs, its detail page polls status and shows a live log tail. Scan and safety start forms warn when the same model/repo is already in progress (`run.lock` under the output dir).
+### Islands
 
-### Benchmark model sources (`/benchmarks/new`)
+| Island | Role |
+|--------|------|
+| `FindingsPanel` | Filterable findings on detail pages |
+| `ComparisonHeatmap` | Pillar list/compare matrices |
+| `LiveRunProgress` | Run progress + log tail |
+| `CompareCharts` | Charts on `/compare` |
 
-Three ways to pick a model — the form shows a setup guide that changes with your
-selection. Full reference: [`benchmarks/README.md`](../benchmarks/README.md#model-input-cheat-sheet).
+### Key routes
 
-| Source | Model input example |
-|--------|---------------------|
-| Gateway | `GPT 4.1 Mini` (dropdown) |
-| Hosted (HF Inference) | `meta-llama/Llama-3.1-8B-Instruct` + `hf_…` token |
-| Custom (self-hosted API) | `my-finetune-v2` + `http://localhost:8080/v1` |
+| Area | Routes |
+|------|--------|
+| Overview | `/` |
+| Catalog / compare | `/models`, `/compare`, `/models/<slug>` |
+| Pipeline | `/pipeline` |
+| Pillars | `/scans`, `/safety`, `/eval-run`, `/benchmarks` + detail/new pages |
+
+Header: **Public | Private** toggle · **Sign in with Duke NetID** when `AUTH_ENABLED=1`.
 
 ## Modules
 
 | Module | Role |
 |--------|------|
-| `model_rollup.py` | Cross-pillar union for catalog, API, compare (batch lookup + TTL cache) |
-| `model_identity.py` | Gateway slug / HF repo id normalization |
-| `model_summary.py` | Gateway-backed AI summaries (cached); rules-v1 fallback |
-| `recommendation_rules.py` | Rules-v1 analyst summaries (fallback) |
-| `reference_constants.py` | Preferred reference model ordering |
-| `staleness.py` | Per-pillar “needs rerun” rules via `dbutils/staleness_spec.py` (scanner version, garak probes, suite files, etc.) |
-| `oss_gateway_hf.py` | HF mirror repos for open-weight gateway models → catalog scan rollup |
-| `delete_db.py` | DB-delete error surfacing for permanent deletes |
-| `db_fallback.py` | Postgres-only when DSN reachable; logs DB errors; disk fallback offline only |
-| `db_health.py` | Per-pillar read diagnostics (`source`, row counts) for `/api/health` |
-| `vite_assets.py` | Vite manifest helper — resolves hashed island bundles under `static/dist/` |
-| `overview.py` | Overview dashboard KPIs + activity feed |
-| `launch_registry.py` | Shared in-flight job liveness |
+| `routes.py` | Flask routes |
+| `model_rollup.py` | Cross-pillar catalog/compare data |
+| `model_findings.py` | Top findings for model detail |
+| `overview.py` | Overview KPIs + activity |
+| `pipeline.py` | Cross-pillar gating view |
+| `vite_assets.py` | Vite manifest + static dist serving |
 | `docker_launch.py` | Browser-launched pillar Docker stacks |
+| `db_fallback.py` | Postgres-first reads; disk when offline |
+| `staleness.py` | Per-pillar needs-rerun rules |
+| `run_paths.py` | Public/private path scoping |
 
-### Frontend assets (`frontend/assets/`)
+## Benchmark model sources (`/benchmarks/new`)
 
-Server-rendered **Jinja** shells + four **Preact** islands (Vite + TypeScript + Tailwind 3). Built output lands in `frontend/static/dist/` (gitignored; generated at image build and in CI).
+| Source | Example input |
+|--------|---------------|
+| Gateway | `GPT 4.1 Mini` (dropdown) |
+| Hosted (HF Inference) | `meta-llama/Llama-3.1-8B-Instruct` + token |
+| Custom API | `my-model` + `http://host:8080/v1` |
 
-| Island | Role |
-|--------|------|
-| `FindingsPanel` | Filterable findings tables on detail pages |
-| `ComparisonHeatmap` | Pillar List/Compare matrices |
-| `LiveRunProgress` | Poll-based run progress + log tail |
-| `CompareCharts` | Chart.js charts on `/compare` |
+See [`benchmarks/README.md`](../benchmarks/README.md).
 
-```bash
-cd frontend/assets
-npm ci              # once
-npm run build       # production bundle → ../static/dist/
-npm run dev         # watch rebuild (pair with python3 main.py --host)
-npm run test        # Vitest (FindingsPanel)
-```
-
-Production and `python3 main.py` run `npm run build` via `docker/run.sh` / `entrypoint.sh` when dist is missing. For live CSS/TS edits during host Flask dev, run `npm run dev` in a second terminal.
-
-Header: **Public | Private** view toggle · **Sign in with Duke NetID** (when `AUTH_ENABLED=1`).
-
-### Auth (local dev)
+## Auth (local dev)
 
 ```bash
 # .env — no Duke OAuth required
@@ -92,9 +100,11 @@ AUTH_ALLOWED_NETIDS=yournetid
 curl -s localhost:5000/auth/me | python3 -m json.tool
 ```
 
-### JSON API
+Production OIDC: [`auth/README.md`](../auth/README.md).
 
-Same data as the UI. Full routes: [`../api/README.md`](../api/README.md).
+## JSON API
+
+Same data as the UI. Routes: [`api/README.md`](../api/README.md).
 
 ```bash
 curl -s localhost:5000/api/health | python3 -m json.tool
@@ -102,37 +112,26 @@ curl -s localhost:5000/api/scans | python3 -m json.tool
 curl -s -X POST localhost:5000/api/scans \
   -H 'Content-Type: application/json' \
   -d '{"hf_repo":"distilbert-base-uncased"}' | python3 -m json.tool
-curl -s localhost:5000/api/scans/distilbert-base-uncased/status | python3 -m json.tool
 ```
 
-POST returns **202** with `job_id` and `status_url`; poll status, then GET detail.
+POST returns **202** with `job_id` and `status_url`.
 
-### Host Flask (development)
+## Host Flask (development)
 
-UI without containerizing the app; pillar jobs still use Docker unless `FRONTEND_LAUNCH_MODE=host`. Run the asset watcher alongside for live rebuilds:
+UI without containerizing the app; pillar jobs still use Docker by default.
 
 ```bash
-cd frontend/assets && npm run dev    # terminal 1 — Vite watch
+cd frontend/assets && npm run dev    # terminal 1
 python3 main.py --host               # terminal 2
-# Or: uv run flask --app frontend:create_app run --debug --port 5001
 ```
 
 ## Troubleshooting
 
-- **Host has no `python` command** — use `python3 main.py` or `./docker/run.sh` (see [`docs/cli.md`](../docs/cli.md)).
-- **Promptfoo “config not found” / empty eval.json** — missing `HOST_REPO`. `./docker/run.sh` sets it; browser launches pass it via `docker_launch.py`.
-- **Garak `run config not found: tmp*.yaml`** — redeploy after fix in `run_garak.py` (absolute config path).
-- **`POST /api/scans` → 503** (cannot write) — root-owned output from an old run. On the application VM (no sudo needed):
-
-  ```bash
-  docker run --rm -v "$PWD/scanner/output:/out" -u root busybox \
-    chown -R "$(id -u):$(id -g)" /out
-  ```
-
-- **`db_available: false`** — check `POSTGRES_DSN`, schema apply, and network ([`docs/cli.md`](../docs/cli.md)). When DSN is set but reads fail, check `reads` in `/api/health` and logs for `Postgres read failed`; set `FRONTEND_DB_STRICT=1` to surface the exception.
-- **“Docker is required for browser-launched … runs”** — often a UID mismatch on `.docker-home` after CI deploy, or a stale web process. See [`docker/README.md`](../docker/README.md#troubleshooting). Quick fix: `./docker/run.sh up -d --force-recreate`.
-- **Skip Docker for jobs** — `FRONTEND_LAUNCH_MODE=host` in `.env` (legacy; safety may still use nested Docker).
+- **Unstyled UI** — run `npm run build` or restart via `python3 main.py up -d --build`; on VM use CI deploy. See [`docker/README.md`](../docker/README.md).
+- **Docker required for Start** — `.docker-home` UID mismatch or stale web process; `./docker/run.sh up -d --force-recreate`.
+- **`db_available: false`** — check `POSTGRES_DSN`, schema apply, network ([`cli.md`](../docs/cli.md)).
+- **503 on POST /api/scans** — root-owned `scanner/output`; see [`cli.md`](../docs/cli.md).
 
 ## See also
 
-- [`../README.md`](../README.md) · [`docs/cli.md`](../docs/cli.md) · [`docs/docker.md`](../docs/docker.md) · [`../api/README.md`](../api/README.md)
+[`README.md`](../README.md) · [`docs/cli.md`](../docs/cli.md) · [`docs/docker.md`](../docs/docker.md) · [`api/README.md`](../api/README.md)

@@ -54,6 +54,11 @@ ANNOTATIONS: dict[str, str] = {
     "gpt-5.4-nano": "Budget GPT-5.4 chat tier",
     "gpt-5.4-pro": "Premium GPT-5.4; highest capability, highest cost",
     "gpt-5.5": "Latest GPT-5.5 generation chat",
+    "gpt-5.6": "GPT-5.6 flagship (Sol tier); routes to highest capability tier",
+    "gpt-5.6-sol": "GPT-5.6 Sol — flagship reasoning and agentic tasks",
+    "gpt-5.6-terra": "GPT-5.6 Terra — balanced production tier",
+    "gpt-5.6-luna": "GPT-5.6 Luna — fast, low-cost tier",
+    "gpt-5.6-chat": "GPT-5.6 chat-tuned variant",
     "gpt-oss-120b": "Open-weight–style 120B model served via cloud API",
     # General chat — Meta Llama
     "Llama 3.3": "Meta Llama 3.3 70B-class chat; prior generation, still capable",
@@ -103,12 +108,11 @@ def _notes_for(model_id: str, category: str) -> str:
 # stack at app startup; {} if unavailable. Partial coverage — priced chat
 # models only; everything else simply shows no price.
 _pricing_cache: dict[str, tuple[float, float]] | None = None
+_live_pricing_cache: dict[str, tuple[float, float]] | None = None
+_live_pricing_fetched_at: float = 0.0
 
 
-def _pricing_table() -> dict[str, tuple[float, float]]:
-    global _pricing_cache
-    if _pricing_cache is not None:
-        return _pricing_cache
+def _static_pricing_table() -> dict[str, tuple[float, float]]:
     try:
         import sys
         from pathlib import Path
@@ -118,10 +122,111 @@ def _pricing_table() -> dict[str, tuple[float, float]]:
             sys.path.insert(0, str(evaluator))
         from runner import _COST_PER_M_TOKENS
 
-        _pricing_cache = dict(_COST_PER_M_TOKENS)
+        return dict(_COST_PER_M_TOKENS)
     except Exception:  # noqa: BLE001 — pricing is optional decoration
-        _pricing_cache = {}
+        return {}
+
+
+def _gateway_root(url: str) -> str:
+    """Strip trailing /v1 from the OpenAI-compatible base URL."""
+    root = url.rstrip("/")
+    if root.endswith("/v1"):
+        return root[:-3]
+    return root
+
+
+def _parse_live_pricing_payload(data: Any) -> dict[str, tuple[float, float]]:
+    """Extract (input, output) USD per 1M tokens from LiteLLM model_group/info."""
+    out: dict[str, tuple[float, float]] = {}
+
+    def _rates_from_obj(obj: dict[str, Any]) -> tuple[float, float] | None:
+        in_tok = obj.get("input_cost_per_token")
+        out_tok = obj.get("output_cost_per_token")
+        if in_tok is None and out_tok is None:
+            litellm = obj.get("litellm_params") or {}
+            in_tok = litellm.get("input_cost_per_token")
+            out_tok = litellm.get("output_cost_per_token")
+        if in_tok is None or out_tok is None:
+            return None
+        try:
+            return (float(in_tok) * 1_000_000, float(out_tok) * 1_000_000)
+        except (TypeError, ValueError):
+            return None
+
+    def _walk(node: Any) -> None:
+        if isinstance(node, dict):
+            model_id = node.get("model_name") or node.get("model") or node.get("id")
+            if isinstance(model_id, str):
+                rates = _rates_from_obj(node)
+                if rates is not None:
+                    out[model_id] = rates
+            for value in node.values():
+                _walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(data)
+    return out
+
+
+def _fetch_live_pricing(*, force_refresh: bool = False) -> dict[str, tuple[float, float]]:
+    """Live billing rates from Gateway GET /model_group/info when available."""
+    global _live_pricing_cache, _live_pricing_fetched_at
+
+    now = time.time()
+    if (
+        not force_refresh
+        and _live_pricing_cache is not None
+        and now - _live_pricing_fetched_at < _CACHE_TTL_SEC
+    ):
+        return _live_pricing_cache
+
+    url, key = _gateway_credentials()
+    if not url or not key:
+        _live_pricing_cache = {}
+        _live_pricing_fetched_at = now
+        return _live_pricing_cache
+
+    root = _gateway_root(url)
+    endpoint = f"{root}/model_group/info"
+    try:
+        import urllib.error
+        import urllib.request
+
+        req = urllib.request.Request(
+            endpoint,
+            headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            import json
+
+            payload = json.loads(resp.read().decode("utf-8"))
+        _live_pricing_cache = _parse_live_pricing_payload(payload)
+    except Exception:  # noqa: BLE001 — live pricing is optional
+        _live_pricing_cache = {}
+    _live_pricing_fetched_at = now
+    return _live_pricing_cache
+
+
+def _pricing_table(*, force_refresh: bool = False) -> dict[str, tuple[float, float]]:
+    """Merged static + live Gateway rates (live wins on key collision)."""
+    global _pricing_cache
+    if not force_refresh and _pricing_cache is not None:
+        return _pricing_cache
+    merged = _static_pricing_table()
+    merged.update(_fetch_live_pricing(force_refresh=force_refresh))
+    _pricing_cache = merged
     return _pricing_cache
+
+
+def invalidate_pricing_cache() -> None:
+    """Clear merged pricing cache (called on manual catalog refresh)."""
+    global _pricing_cache, _live_pricing_cache, _live_pricing_fetched_at
+    _pricing_cache = None
+    _live_pricing_cache = None
+    _live_pricing_fetched_at = 0.0
 
 
 # Why a live model shows "—" instead of a token price. Two reasons:
@@ -209,7 +314,7 @@ def _categorize(model_id: str) -> str:
     return "other"
 
 
-def _fetch_live_models() -> tuple[list[dict[str, str]], str | None]:
+def _fetch_live_models(*, force_refresh: bool = False) -> tuple[list[dict[str, str]], str | None]:
     """Return (rows, error). Rows sorted by category label then id."""
     url, key = _gateway_credentials()
     if not url or not key:
@@ -226,7 +331,7 @@ def _fetch_live_models() -> tuple[list[dict[str, str]], str | None]:
     except Exception as exc:  # noqa: BLE001 — surface in UI/CLI, never crash
         return [], f"Gateway models.list failed: {type(exc).__name__}: {exc}"
 
-    prices = _pricing_table()
+    prices = _pricing_table(force_refresh=force_refresh)
     rows: list[dict[str, Any]] = []
     for item in response.data:
         mid = item.id
@@ -263,7 +368,10 @@ def get_gateway_catalog(*, force_refresh: bool = False) -> dict[str, Any]:
     ):
         return _cache["payload"]
 
-    models, error = _fetch_live_models()
+    if force_refresh:
+        invalidate_pricing_cache()
+
+    models, error = _fetch_live_models(force_refresh=force_refresh)
     by_category: dict[str, list[dict[str, Any]]] = {}
     for row in models:
         by_category.setdefault(row["category"], []).append(row)

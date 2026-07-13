@@ -213,6 +213,23 @@ def get_run_detail_db(
     }
 
 
+def run_row_exists(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> bool:
+    """True when an ``eval_runs`` row exists for this slug in the given scope.
+
+    Unlike ``get_run_detail_db``, this does not require judge_score results —
+    used so delete can tell "row existed" even for sparse/smoke stubs.
+    """
+    if not is_safe_slug(slug):
+        return False
+    with queries.connect() as conn:
+        rec = queries.fetch_run(
+            conn, f"{slug}.jsonl", visibility=visibility, owner_user_id=owner_user_id
+        )
+    return rec is not None
+
+
 def delete_run(
     slug: str, *, visibility: str = "public", owner_user_id: str | None = None
 ) -> bool:

@@ -34,7 +34,7 @@
         <dt>Safety</dt>
         <dd>Composite red-team tier from policy + garak + promptfoo probes.</dd>
         <dt>Eval</dt>
-        <dd>Best Duke judge-suite overall score (/5) across runs.</dd>
+        <dd>Mean Duke judge-suite overall score (/5) across that model's eval runs.</dd>
         <dt>Benchmark</dt>
         <dd>Mean normalized headline score (%) across benchmark kinds run for this model.</dd>
         <dt>Profile</dt>
@@ -81,7 +81,7 @@
           <td class="num">{{ "$%.2f"|format(m.price_out) if m.price_out is not none else "—" }}</td>
           <td class="col-nowrap">{% if rollup.scan %}{{ tier_label(rollup.scan.tier) }}{% else %}<span class="dim">—</span>{% endif %}</td>
           <td class="col-nowrap">{% if rollup.safety %}{{ tier_label(rollup.safety.tier) }}{% else %}<span class="dim">—</span>{% endif %}</td>
-          <td class="num">{% if rollup.eval and rollup.eval.best_overall is not none %}{{ "%.2f"|format(rollup.eval.best_overall) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+          <td class="num">{% if rollup.eval and (rollup.eval.avg_overall is defined and rollup.eval.avg_overall is not none or rollup.eval.best_overall is not none) %}{{ "%.2f"|format(rollup.eval.avg_overall if rollup.eval.avg_overall is defined and rollup.eval.avg_overall is not none else rollup.eval.best_overall) }}{% else %}<span class="dim">—</span>{% endif %}</td>
           <td class="num">{% if rollup.benchmark and rollup.benchmark.norm is not none %}{{ "%.0f%%"|format(rollup.benchmark.norm) }}{% else %}<span class="dim">—</span>{% endif %}</td>
           <td class="num">{% if rollup.aggregate is not none %}{{ "%.0f"|format(rollup.aggregate) }}{% else %}<span class="dim">—</span>{% endif %}</td>
         </tr>
