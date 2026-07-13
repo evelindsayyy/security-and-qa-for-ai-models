@@ -6,7 +6,7 @@ import hashlib
 import json
 from typing import Any, Literal
 
-Pillar = Literal["scan", "safety", "eval", "benchmark"]
+Pillar = Literal["scan", "safety", "eval", "benchmark", "personality"]
 
 # Curated eval suites (must match frontend/eval_launch.SUITES keys)
 _CURATED_EVAL_SUITES = frozenset(
@@ -114,6 +114,18 @@ def normalize_benchmark_config(
     }
 
 
+def normalize_personality_config(
+    *,
+    model: str,
+    test_key: str = "bfi",
+) -> dict[str, Any]:
+    return {
+        "pillar": "personality",
+        "test_key": test_key.strip().lower(),
+        "model": model.strip(),
+    }
+
+
 def normalize_config(pillar: Pillar, **kwargs: Any) -> dict[str, Any]:
     if pillar == "scan":
         return normalize_scan_config(**kwargs)
@@ -123,6 +135,8 @@ def normalize_config(pillar: Pillar, **kwargs: Any) -> dict[str, Any]:
         return normalize_eval_config(**kwargs)
     if pillar == "benchmark":
         return normalize_benchmark_config(**kwargs)
+    if pillar == "personality":
+        return normalize_personality_config(**kwargs)
     raise ValueError(f"unknown pillar: {pillar!r}")
 
 
@@ -157,6 +171,8 @@ def is_public_default(pillar: Pillar, config: dict[str, Any]) -> bool:
         return bool(suite) and suite in _CURATED_EVAL_SUITES and not str(suite).startswith("custom_")
     if pillar == "benchmark":
         return config.get("benchmark_key") in _BENCHMARK_KEYS
+    if pillar == "personality":
+        return True
     return False
 
 

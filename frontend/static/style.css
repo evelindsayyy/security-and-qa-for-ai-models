@@ -60,3 +60,13 @@
 .catalog-table { width: 100%; }
 .model-card-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .nutrition-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.personality-trait-bars { display: flex; flex-direction: column; gap: 0.75rem; max-width: 36rem; }
+.personality-trait-row { display: grid; grid-template-columns: 9rem 1fr 3rem; gap: 0.75rem; align-items: center; }
+.personality-trait-label { font-size: 0.875rem; font-weight: 600; }
+.personality-trait-track { height: 0.65rem; border-radius: 999px; background: #e8e6e1; overflow: hidden; }
+.personality-trait-fill { height: 100%; border-radius: 999px; background: #012169; min-width: 2px; }
+.personality-trait-score { font-weight: 600; text-align: right; }
+.personality-runs-table th.num,
+.personality-runs-table td.num { text-align: right; }
+.personality-runs-table .col-actions form { display: inline; }
+.run-table tr.run-superseded td { color: #5c5a54; }

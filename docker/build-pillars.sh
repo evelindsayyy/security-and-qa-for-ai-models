@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time: build all four pillar job images (scanner, safety, evaluator, benchmarks).
+# One-time: build pillar job images (scanner, safety, evaluator, benchmarks, personality).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -15,7 +15,8 @@ for compose in \
   scanner/docker/compose.yml \
   safety/docker/compose.yml \
   evaluator/docker/compose.yml \
-  benchmarks/docker/compose.yml; do
+  benchmarks/docker/compose.yml \
+  personality/docker/compose.yml; do
   echo "Building ${compose}..."
   compose_with_pillar_ids docker compose --env-file .env -f "$compose" build
 done

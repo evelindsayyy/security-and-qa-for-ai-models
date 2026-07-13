@@ -93,6 +93,19 @@
           {% endif %}
         </li>
         <li>
+          <span class="dim">Personality <span class="text-text-subtle">(extra)</span>:</span>
+          {% if personality_summary %}
+            BFI
+            {% for row in personality_summary.trait_rows %}
+            · {{ row.label }} <b>{{ "%.2f"|format(row.score) if row.score is not none else "—" }}</b>
+            {% endfor %}
+            <a href="{{ url_for('personality_detail', slug=personality_summary.slug) }}">detail</a>
+          {% else %}
+            <span class="dim">no BFI run</span> —
+            {{ start_button(url_for('personality_run_new'), 'Run BFI', classes='btn-secondary btn-sm') }}
+          {% endif %}
+        </li>
+        <li>
           <span class="dim">Benchmarks:</span>
           {% if rollup.benchmark and rollup.benchmark.kinds %}
             {% for kind, info in rollup.benchmark.kinds.items() %}<span>{{ kind }} <b>{{ info.headline_display }}</b></span>{% if not loop.last %}, {% endif %}{% endfor %}

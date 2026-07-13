@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% from '_macros.html' import back_link, delete_button, private_badge, progress_terminal with context %}
+
+{% block title %}{% if missing %}Personality not found{% else %}{{ test_label }} — {{ model }}{% endif %}{% endblock %}
+
+{% block content %}
+<div class="scan-detail">
+  {% if missing %}
+    <h1>Personality result not found</h1>
+    <p class="sub empty">No personality artifact for slug <code>{{ slug }}</code>.</p>
+    <p><a href="{{ url_for('personality') }}">← all personality results</a></p>
+  {% elif running %}
+    {{ back_link(url_for('personality'), '← all personality results') }}
+    <h1 class="page-title">BFI run in progress</h1>
+    <p class="sub">
+      {% if run_status.model %}{{ run_status.model }}{% endif %}
+      · slug <code>{{ slug }}</code>
+    </p>
+    {{ progress_terminal(
+         url_for('personality_run_status_private' if is_private else 'personality_run_status', slug=slug),
+         5000,
+         hint=(run_status.total or 44)|string + ' items — one API call each.',
+         initial_status=run_status.status,
+         initial_message=run_status.log or run_status.message or '',
+         cancel_url=url_for('personality_cancel_private' if is_private else 'personality_cancel', slug=slug) if is_logged_in else '',
+         progress_label='Items'
+       ) }}
+    {% if run_status.status in ('failed', 'cancelled') %}
+    <p class="detail-delete-form">
+      {{ delete_button(url_for('personality_delete_private' if is_private else 'personality_delete', slug=slug), 'Delete run') }}
+    </p>
+    {% endif %}
+  {% else %}
+    {{ back_link(url_for('personality'), '← all personality results') }}
+    <h1 class="page-title">{{ test_label }} — {{ model }}{% if is_private %} {{ private_badge() }}{% endif %}</h1>
+    <p class="sub">
+      slug <code>{{ slug }}</code> · {{ timestamp }}
+      · {{ scored or 0 }}/{{ attempted or 44 }} items scored
+    </p>
+
+    {% if is_logged_in %}
+    <p class="detail-actions">
+      <form method="post"
+            action="{{ url_for('personality_delete_private' if is_private else 'personality_delete', slug=slug) }}"
+            class="detail-delete-form detail-delete-form--inline"
+            onsubmit="return confirm('Delete this personality result?');">
+        <input type="hidden" name="confirm" value="1">
+        <button type="submit" class="btn-danger">Delete result</button>
+      </form>
+    </p>
+    {% endif %}
+
+    <section class="key card p-5 mb-6">
+      <h2 class="subsection-title">Big Five profile</h2>
+      <p class="form-hint mb-4">Averages on a 1&ndash;5 scale. For entertainment — not a clinical or quality assessment.</p>
+      <details class="mb-4">
+        <summary class="text-sm font-semibold text-duke-blue cursor-pointer">What do these traits mean?</summary>
+        <div class="mt-3">
+          {% include '_personality_bfi_explainer.html' %}
+        </div>
+      </details>
+      <div class="personality-trait-bars">
+        {% for row in trait_rows %}
+        <div class="personality-trait-row">
+          <span class="personality-trait-label">{{ row.label }}</span>
+          <div class="personality-trait-track" aria-hidden="true">
+            {% if row.score is not none %}
+            <div class="personality-trait-fill" style="width: {{ ((row.score - 1) / 4 * 100)|round(1) }}%"></div>
+            {% endif %}
+          </div>
+          <span class="personality-trait-score num">{% if row.score is not none %}{{ "%.2f"|format(row.score) }}{% else %}—{% endif %}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="key card p-5">
+      <h2 class="subsection-title">Item responses</h2>
+      <div class="table-wrap">
+        <table class="run-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Statement</th>
+              <th>Trait</th>
+              <th>Raw</th>
+              <th>Scored</th>
+              <th>Response</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+            <tr{% if not item.scored %} class="row-dim"{% endif %}>
+              <td class="num">{{ item.id }}</td>
+              <td>I see myself as someone who {{ item.text|lower }}</td>
+              <td>{{ item.trait }}</td>
+              <td class="num">{{ item.raw_score if item.raw_score is not none else "—" }}</td>
+              <td class="num">{{ item.scored_value if item.scored_value is not none else "—" }}</td>
+              <td><code class="text-xs">{{ item.response or "—" }}</code></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

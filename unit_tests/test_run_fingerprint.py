@@ -55,6 +55,12 @@ class TestRunFingerprint(unittest.TestCase):
         cfg = normalize_benchmark_config(benchmark_key="ifeval", model="gpt-5-chat")
         self.assertTrue(is_public_default("benchmark", cfg))
 
+    def test_personality_public_default(self):
+        from dbutils.run_fingerprint import normalize_personality_config
+
+        cfg = normalize_personality_config(model="Llama 3.3", test_key="bfi")
+        self.assertTrue(is_public_default("personality", cfg))
+
 
 class TestResolveVisibility(unittest.TestCase):
     """Visibility is the view-mode toggle at launch time, full stop — not

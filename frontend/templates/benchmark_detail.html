@@ -25,7 +25,7 @@
          initial_status=run_status.status,
          initial_message=run_status.log or run_status.message or '',
          cancel_url=url_for('benchmark_cancel_private' if is_private else 'benchmark_cancel', slug=slug) if is_logged_in else '',
-         progressLabel=run_status.unit or 'Items'
+         progress_label=run_status.unit or 'Items'
        ) }}
     {% if run_status.status in ('failed', 'cancelled') %}
     <p class="detail-delete-form">

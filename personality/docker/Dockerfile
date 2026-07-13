@@ -1,0 +1,17 @@
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH=/app
+
+COPY dbutils/ /app/dbutils/
+COPY benchmarks/ /app/benchmarks/
+COPY personality/ /app/personality/
+
+WORKDIR /app/personality
+
+CMD ["python", "run_personality.py", "--help"]

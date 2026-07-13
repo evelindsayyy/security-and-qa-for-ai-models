@@ -989,6 +989,170 @@ def register_routes(app):
             return render_template("delete_confirm.html", **ctx)
         return redirect(url_for("benchmarks"))
 
+    @app.route("/personality")
+    def personality():
+        from frontend.personality_data import get_personality_data
+        from frontend.read_context import read_context
+
+        visibility, owner_user_id = read_context()
+        data = get_personality_data(visibility=visibility, owner_user_id=owner_user_id)
+        return render_template("personality.html", **data)
+
+    @app.route("/personality/new")
+    @require_login()
+    def personality_run_new():
+        from frontend.personality_launch import get_launch_options
+
+        return render_template("personality_run_new.html", **get_launch_options())
+
+    @app.route("/personality/start", methods=["POST"])
+    @require_login()
+    def personality_run_start():
+        from flask import redirect, request, url_for
+
+        from frontend.output_dirs import OutputDirError
+        from frontend.personality_launch import start_run, validate_launch
+
+        model = request.form.get("model", "")
+        error = validate_launch(model)
+        if error:
+            return error, 400
+        try:
+            slug, _already, visibility = start_run(model)
+        except OutputDirError as exc:
+            return str(exc), 503
+        endpoint = "personality_detail_private" if visibility == "private" else "personality_detail"
+        return redirect(url_for(endpoint, slug=slug, status="running"))
+
+    @app.route("/personality/<slug>/status")
+    def personality_run_status(slug: str):
+        from flask import jsonify
+
+        from frontend.personality_launch import get_status
+
+        return jsonify(get_status(slug))
+
+    @app.route("/personality/<slug>/cancel", methods=["POST"])
+    @require_login()
+    def personality_cancel(slug: str):
+        from flask import jsonify, request
+
+        from frontend.personality_launch import cancel_run
+        from frontend.read_context import read_context
+
+        visibility, owner_user_id = read_context()
+        error = cancel_run(slug, visibility=visibility, owner_user_id=owner_user_id)
+        if error:
+            return jsonify({"ok": False, "error": error}), 400
+        if request.accept_mimetypes.best == "application/json":
+            return jsonify({"ok": True, "status": "cancelled"})
+        from flask import redirect, url_for
+
+        return redirect(url_for("personality_detail", slug=slug, status="cancelled"))
+
+    @app.route("/personality/<slug>/private/status")
+    @require_login()
+    def personality_run_status_private(slug: str):
+        from flask import jsonify
+
+        from frontend.personality_launch import get_status
+
+        visibility, owner_user_id = _private_scope()
+        return jsonify(get_status(slug, visibility=visibility, owner_user_id=owner_user_id))
+
+    @app.route("/personality/<slug>/private/cancel", methods=["POST"])
+    @require_login()
+    def personality_cancel_private(slug: str):
+        from flask import jsonify, request
+
+        from frontend.personality_launch import cancel_run
+
+        visibility, owner_user_id = _private_scope()
+        error = cancel_run(slug, visibility=visibility, owner_user_id=owner_user_id)
+        if error:
+            return jsonify({"ok": False, "error": error}), 400
+        if request.accept_mimetypes.best == "application/json":
+            return jsonify({"ok": True, "status": "cancelled"})
+        from flask import redirect, url_for
+
+        return redirect(url_for("personality_detail_private", slug=slug, status="cancelled"))
+
+    @app.route("/personality/<slug>")
+    def personality_detail(slug: str):
+        from flask import request
+
+        from frontend.personality_data import get_personality_detail
+
+        detail = get_personality_detail(slug)
+        if detail is None or request.args.get("status") == "running":
+            from frontend.personality_launch import get_status
+
+            status = get_status(slug)
+            if status["status"] in ("running", "failed", "cancelled"):
+                return render_template(
+                    "personality_detail.html",
+                    missing=False,
+                    running=True,
+                    run_status=status,
+                    slug=slug,
+                )
+        if detail is None:
+            return render_template("personality_detail.html", missing=True, slug=slug)
+        return render_template("personality_detail.html", missing=False, **detail)
+
+    @app.route("/personality/<slug>/private")
+    @require_login()
+    def personality_detail_private(slug: str):
+        from flask import request
+
+        from frontend.personality_data import get_personality_detail
+
+        visibility, owner_user_id = _private_scope()
+        detail = get_personality_detail(slug, visibility=visibility, owner_user_id=owner_user_id)
+        if detail is None or request.args.get("status") == "running":
+            from frontend.personality_launch import get_status
+
+            status = get_status(slug, visibility=visibility, owner_user_id=owner_user_id)
+            if status["status"] in ("running", "failed", "cancelled"):
+                return render_template(
+                    "personality_detail.html",
+                    missing=False,
+                    running=True,
+                    run_status=status,
+                    slug=slug,
+                    is_private=True,
+                )
+        if detail is None:
+            return render_template("personality_detail.html", missing=True, slug=slug, is_private=True)
+        return render_template("personality_detail.html", missing=False, is_private=True, **detail)
+
+    @app.route("/personality/<slug>/delete", methods=["POST"])
+    @require_login()
+    def personality_delete(slug: str):
+        from flask import redirect, request, url_for
+
+        from frontend.personality_data import delete_personality_run
+        from frontend.read_context import read_context
+
+        if request.form.get("confirm") != "1":
+            return redirect(url_for("personality_detail", slug=slug))
+        visibility, owner_user_id = read_context()
+        delete_personality_run(slug, visibility=visibility, owner_user_id=owner_user_id)
+        return redirect(url_for("personality"))
+
+    @app.route("/personality/<slug>/private/delete", methods=["POST"])
+    @require_login()
+    def personality_delete_private(slug: str):
+        from flask import redirect, request, url_for
+
+        from frontend.personality_data import delete_personality_run
+
+        if request.form.get("confirm") != "1":
+            return redirect(url_for("personality_detail_private", slug=slug))
+        visibility, owner_user_id = _private_scope()
+        delete_personality_run(slug, visibility=visibility, owner_user_id=owner_user_id)
+        return redirect(url_for("personality"))
+
     @app.route("/safety")
     def safety():
         from frontend.safety_data import get_safety_data, get_safety_guide_data
@@ -1283,12 +1447,36 @@ def register_routes(app):
         from frontend.model_findings import get_model_findings
 
         pillar_findings = get_model_findings(rollup)
+        from frontend.personality_data import TRAIT_LABELS, TRAIT_ORDER, get_latest_for_model
+        from frontend.read_context import read_context
+
+        visibility, owner_user_id = read_context()
+        personality_row = get_latest_for_model(
+            rollup["display_name"],
+            test_key="bfi",
+            visibility=visibility,
+            owner_user_id=owner_user_id,
+        )
+        personality_summary = None
+        if personality_row:
+            traits = personality_row.get("traits") or {}
+            personality_summary = {
+                "slug": personality_row.get("slug"),
+                "trait_rows": [
+                    {
+                        "label": TRAIT_LABELS[key],
+                        "score": traits.get(key),
+                    }
+                    for key in TRAIT_ORDER
+                ],
+            }
         return render_template(
             "model_detail.html",
             missing=False,
             rollup=rollup,
             recommendation=recommendation,
             pillar_findings=pillar_findings,
+            personality_summary=personality_summary,
             gateway_profile=gateway_profile,
             gateway_id=gateway_id,
             can_hf_scan=can_hf_scan,
