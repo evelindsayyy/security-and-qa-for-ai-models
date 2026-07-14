@@ -60,6 +60,17 @@ def _plan(models: list[str], suites: list[str], judges: tuple[str, ...]) -> list
     return jobs
 
 
+def _result_exists(candidate: str, suite_key: str) -> bool:
+    """True if a completed result file for this (suite, candidate) already
+    exists. Lets --skip-existing resume a partial sweep without re-running.
+    Matches the runner's filename convention ``{ts}_{suite}_{safe_slug}.jsonl``
+    (trace files end ``_trace.jsonl`` and are correctly excluded)."""
+    from frontend.eval_launch import RESULTS_DIR, _safe_slug
+
+    suffix = f"_{suite_key}_{_safe_slug(candidate)}.jsonl"
+    return any(p.name.endswith(suffix) for p in RESULTS_DIR.glob("*.jsonl"))
+
+
 def _run_one(job: dict, max_tokens: int, timeout: int) -> tuple[bool, str]:
     """Build the web-identical runner argv and run it synchronously."""
     from frontend.eval_launch import build_command, predict_stem
@@ -98,6 +109,9 @@ def main() -> int:
                     help="per-run timeout in seconds (default: 1800)")
     ap.add_argument("--limit", type=int, default=0,
                     help="cap the number of jobs (0 = no cap)")
+    ap.add_argument("--skip-existing", action="store_true",
+                    help="skip (model, suite) pairs that already have a result "
+                         "file — use to resume a partial sweep")
     args = ap.parse_args()
 
     models = ([m.strip() for m in args.models.split(",") if m.strip()]
@@ -129,9 +143,14 @@ def main() -> int:
 
     print("\nRunning (results -> evaluator/results/) ...\n")
     ok = 0
+    skipped = 0
     failures: list[str] = []
     for i, job in enumerate(jobs, 1):
         label = f"{job['candidate']} / {job['suite']}"
+        if args.skip_existing and _result_exists(job["candidate"], job["suite"]):
+            skipped += 1
+            print(f"[{i}/{len(jobs)}] skip (exists)  {label}", flush=True)
+            continue
         started = time.strftime("%H:%M:%S", time.gmtime())
         print(f"[{i}/{len(jobs)}] {started}  {label} ...", flush=True)
         success, detail = _run_one(job, args.max_tokens, args.timeout)
@@ -142,7 +161,7 @@ def main() -> int:
             failures.append(f"{label}: {detail}")
             print(f"        FAIL: {detail}")
 
-    print(f"\nDone. {ok}/{len(jobs)} ok, {len(failures)} failed.")
+    print(f"\nDone. {ok}/{len(jobs)} ok, {skipped} skipped, {len(failures)} failed.")
     for f in failures:
         print(f"  FAIL {f}")
     print("\nNext: ingest into the public view once the DSN is rotated —")
