@@ -20,18 +20,43 @@
   {% endif %}
 
   <form method="post" action="{{ url_for('safety_run_start') }}" class="launch-form" id="safety-form">
-    <label>Gateway model
-      <select name="gateway_model" id="gateway_model">
-        {% for group in gateway_groups %}
-        <optgroup label="{{ group.label }}">
-          {% for m in group.models %}
-          <option value="{{ m }}" {% if m == 'GPT 4.1 Mini' %}selected{% endif %}>{{ m }}</option>
+    <fieldset class="candidate-source">
+      <legend>Candidate model</legend>
+      <label class="src-opt"><input type="radio" name="source" value="gateway" id="source_gateway" checked> Gateway model</label>
+      <label class="src-opt"><input type="radio" name="source" value="hf" id="source_hf"> Hugging Face model</label>
+
+      <div id="gateway-fields">
+        <select name="gateway_model" id="gateway_model">
+          {% for group in gateway_groups %}
+          <optgroup label="{{ group.label }}">
+            {% for m in group.models %}
+            <option value="{{ m }}" {% if m == 'GPT 4.1 Mini' %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </optgroup>
           {% endfor %}
-        </optgroup>
-        {% endfor %}
-      </select>
-      <span class="form-hint">chat-capable gateway ids — case-sensitive</span>
-    </label>
+        </select>
+        <span class="form-hint">One of Duke's built-in models. It's already running, so your scan starts right away.</span>
+      </div>
+
+      <div id="hf-fields" style="display: none;">
+        <input type="text" name="hf_repo" id="hf_repo" list="hf_repo_suggestions"
+               placeholder="Qwen/Qwen2.5-7B-Instruct" autocomplete="off" spellcheck="false">
+        <datalist id="hf_repo_suggestions">
+          {% for repo in suggested_hf_repos %}<option value="{{ repo }}"></option>{% endfor %}
+        </datalist>
+        <span class="form-hint">The exact name of a model from huggingface.co, in "account/model-name" form.</span>
+
+        <input type="text" name="hf_endpoint" id="hf_endpoint"
+               placeholder="http://host:port/v1 (optional — server already serving this model)"
+               autocomplete="off" spellcheck="false">
+        <span class="form-hint">
+          Unlike Duke's models, this one isn't running anywhere yet — someone has to start a
+          server for it first. If you already have one running, paste its web address here to
+          actually scan it. Otherwise, leave this blank: submitting will just check whether this
+          model is a valid, scannable one, without running anything yet.
+        </span>
+      </div>
+    </fieldset>
 
     <p id="overwrite-warning" class="form-warning" style="display: none;">
       This model already has safety results — starting again will delete the prior outputs and replace them.
@@ -56,6 +81,21 @@
       <span class="form-hint">attack plugins for the red-team suite — base is the general-purpose default</span>
     </label>
 
+    <fieldset id="attacker-row" style="display: none;">
+      <legend>Attack-generator server <span class="dim">(required for a Hugging Face target)</span></legend>
+      <p class="form-hint">
+        Red-teaming works by having one model write tricky, adversarial questions, then checking
+        whether the model you're scanning falls for them. For a Duke gateway model, it's allowed
+        to write its own tricky questions. A Hugging Face model can't do that — you need a second
+        model just for writing the attacks. That model is fixed to
+        <code>{{ mandatory_attacker_repo }}</code> — you only need to say where it's running.
+      </p>
+      <input type="text" name="attacker_endpoint" id="attacker_endpoint"
+             placeholder="http://host:port/v1 (a server already running the attack-generator)"
+             autocomplete="off" spellcheck="false">
+      <span class="form-hint">The web address of a server already running {{ mandatory_attacker_repo }}.</span>
+    </fieldset>
+
     <label id="garak-probes-row">Garak probe subset <span class="dim">(optional)</span>
       <input type="text" name="garak_probes" id="garak_probes" placeholder="encoding,promptinject">
       <span class="form-hint">comma-separated modules; leave blank for the full default Duke set</span>
@@ -63,6 +103,21 @@
 
     <button type="submit" class="btn-primary" id="submit-btn">▶ Start safety run</button>
   </form>
+
+  {% if hf_result %}
+    {% if hf_result.ok %}
+    <div class="intake-result intake-ok">
+      <h2>✅ {{ hf_result.repo_id }} — ready to scan</h2>
+      <p>Architecture: {{ hf_result.architectures | join(', ') }}{% if hf_result.num_params %} · {{ '%.1f'|format(hf_result.num_params / 1e9) }}B params{% endif %}</p>
+      <p class="form-hint">Scanning will run once a server endpoint can be supplied (next milestone).</p>
+    </div>
+    {% else %}
+    <div class="intake-result intake-error">
+      <h2>❌ Can't scan {{ hf_result.repo_id }}</h2>
+      <p>{{ hf_result.error }}</p>
+    </div>
+    {% endif %}
+  {% endif %}
 </div>
 
 <script>
@@ -78,9 +133,16 @@
   const garakBox   = document.getElementById("run_garak");
   const rtRow      = document.getElementById("redteam-profile-row");
   const gkRow      = document.getElementById("garak-probes-row");
+  const attackerRow = document.getElementById("attacker-row");
   const submitBtn  = document.getElementById("submit-btn");
   const warning    = document.getElementById("overwrite-warning");
   const inflightWarning = document.getElementById("inflight-warning");
+  const sourceHf   = document.getElementById("source_hf");
+  const gatewayFields = document.getElementById("gateway-fields");
+  const hfFields   = document.getElementById("hf-fields");
+  const hfRepoInput = document.getElementById("hf_repo");
+  const hfEndpointInput = document.getElementById("hf_endpoint");
+  const attackerEndpointInput = document.getElementById("attacker_endpoint");
 
   function inflightKey() {
     const slug = MODEL_SLUGS[modelSel.value] || modelSel.value;
@@ -88,8 +150,34 @@
   }
 
   function updateUI() {
+    // Only show the fields for whichever source is actually selected — an
+    // empty form up front is far less intimidating than every field at once.
+    gatewayFields.style.display = sourceHf.checked ? "none" : "";
+    hfFields.style.display = sourceHf.checked ? "" : "none";
+
     rtRow.style.display = redteamBox.checked ? "" : "none";
     gkRow.style.display = garakBox.checked ? "" : "none";
+    // The attacker fields only matter for an HF target's red-team — a
+    // gateway target's red-team still just reuses itself, no attacker needed.
+    attackerRow.style.display = (sourceHf.checked && redteamBox.checked) ? "" : "none";
+
+    if (sourceHf.checked) {
+      warning.style.display = "none";
+      inflightWarning.style.display = "none";
+      const hasRepo = hfRepoInput.value.trim() !== "";
+      const hasEndpoint = hfEndpointInput.value.trim() !== "";
+      const anySuite = policyBox.checked || redteamBox.checked || garakBox.checked;
+      const attackerOk = !redteamBox.checked || attackerEndpointInput.value.trim() !== "";
+      submitBtn.disabled = !hasRepo || !anySuite || !attackerOk;
+      submitBtn.textContent = hasEndpoint ? "▶ Start safety scan" : "🔍 Validate model";
+      submitBtn.title = !hasRepo ? "Enter a Hugging Face repo id"
+        : !anySuite ? "Select at least one suite to run"
+        : !attackerOk ? "Red-team needs the attack-generator's server endpoint"
+        : "";
+      return;
+    }
+
+    submitBtn.textContent = "▶ Start safety run";
 
     const inflight = INFLIGHT.has(inflightKey());
     warning.style.display = HAS_RESULTS[modelSel.value] && !inflight ? "block" : "none";
@@ -105,6 +193,11 @@
   policyBox.addEventListener("change", updateUI);
   redteamBox.addEventListener("change", updateUI);
   garakBox.addEventListener("change", updateUI);
+  document.getElementById("source_gateway").addEventListener("change", updateUI);
+  sourceHf.addEventListener("change", updateUI);
+  hfRepoInput.addEventListener("input", updateUI);
+  hfEndpointInput.addEventListener("input", updateUI);
+  attackerEndpointInput.addEventListener("input", updateUI);
 
   updateUI();
 })();

@@ -868,7 +868,61 @@ def register_routes(app):
     def safety_run_start():
         from flask import redirect, request, url_for
 
-        from frontend.safety_launch import start_run, validate_launch
+        from frontend.safety_launch import (
+            get_launch_options,
+            start_run,
+            validate_hf_candidate,
+            validate_hf_launch,
+            validate_launch,
+        )
+
+        # Candidate source: a gateway model, or a Hugging Face model. An HF
+        # model with no endpoint just validates the repo (no server to scan
+        # against yet); with an endpoint, it actually launches. Red-team for
+        # an HF target needs its own dedicated attacker endpoint (see
+        # validate_hf_launch's docstring) — the attacker model itself is
+        # fixed (safety_launch.MANDATORY_ATTACKER_REPO), not user input.
+        if request.form.get("source") == "hf":
+            hf_repo = request.form.get("hf_repo", "").strip()
+            hf_endpoint = request.form.get("hf_endpoint", "").strip()
+            hf_redteam_profile = request.form.get("redteam_profile", "base")
+            hf_skip_policy = not bool(request.form.get("run_policy"))
+            hf_skip_garak = not bool(request.form.get("run_garak"))
+            hf_redteam = bool(request.form.get("run_redteam"))
+            hf_attacker_endpoint = request.form.get("attacker_endpoint", "").strip()
+
+            if not hf_endpoint:
+                hf_result = validate_hf_candidate(hf_repo)
+                return render_template("safety_run_new.html",
+                                       hf_result=hf_result, **get_launch_options())
+
+            error = validate_hf_launch(
+                hf_repo, hf_endpoint,
+                redteam_profile=hf_redteam_profile,
+                skip_policy=hf_skip_policy,
+                skip_garak=hf_skip_garak,
+                redteam=hf_redteam,
+                attacker_endpoint=hf_attacker_endpoint,
+            )
+            if error:
+                hf_result = {"ok": False, "error": error, "repo_id": hf_repo,
+                            "architectures": None, "num_params": None}
+                return render_template("safety_run_new.html",
+                                       hf_result=hf_result, **get_launch_options()), 400
+
+            run_key, _already, visibility = start_run(
+                hf_repo,
+                redteam_profile=hf_redteam_profile,
+                skip_policy=hf_skip_policy,
+                skip_garak=hf_skip_garak,
+                skip_redteam=not hf_redteam,
+                hf_repo=hf_repo,
+                endpoint=hf_endpoint,
+                attacker_endpoint=hf_attacker_endpoint or None,
+            )
+            slug, profile = run_key.split("/", 1)
+            endpoint_name = "safety_detail_private" if visibility == "private" else "safety_detail"
+            return redirect(url_for(endpoint_name, slug=slug, profile=profile, status="running"))
 
         model = request.form.get("gateway_model", "")
         redteam_profile = request.form.get("redteam_profile", "base")

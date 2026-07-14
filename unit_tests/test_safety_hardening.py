@@ -91,6 +91,38 @@ class RedteamConfigTest(unittest.TestCase):
         self.assertNotIn("{{", grader_url)
 
 
+class ManualEvalConfigTest(unittest.TestCase):
+    """manual/*.yaml run during redteam scans too — same target-URL gap as
+    promptfooconfig.base.yaml applied here independently, since each file
+    has its own providers: block (found by checking after fixing the main
+    redteam config and realizing these were never touched)."""
+
+    MANUAL_YAML_FILES = ("bias.yaml", "remote_policy.yaml", "harmful_content.yaml")
+
+    def test_target_url_templated_with_duke_default(self) -> None:
+        manual_dir = (
+            Path(__file__).resolve().parents[1]
+            / "safety" / "promptfoo" / "manual"
+        )
+        for name in self.MANUAL_YAML_FILES:
+            with self.subTest(file=name):
+                cfg = yaml.safe_load((manual_dir / name).read_text(encoding="utf-8"))
+                api_base_url = cfg["providers"][0]["config"]["apiBaseUrl"]
+                self.assertIn("{{ env.GATEWAY_BASE_URL", api_base_url)
+                self.assertIn("https://litellm.oit.duke.edu/v1", api_base_url)
+
+    def test_grader_still_pinned_to_duke(self) -> None:
+        manual_dir = (
+            Path(__file__).resolve().parents[1]
+            / "safety" / "promptfoo" / "manual"
+        )
+        for name in self.MANUAL_YAML_FILES:
+            with self.subTest(file=name):
+                cfg = yaml.safe_load((manual_dir / name).read_text(encoding="utf-8"))
+                grader_url = cfg["defaultTest"]["options"]["provider"]["config"]["apiBaseUrl"]
+                self.assertEqual(grader_url, "https://litellm.oit.duke.edu/v1")
+
+
 class GarakExecutionTest(unittest.TestCase):
     def test_garak_argv_uses_repo_relative_report_dir(self) -> None:
         slug = "gpt-4.1-mini"
