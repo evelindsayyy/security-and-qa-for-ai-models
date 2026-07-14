@@ -1,49 +1,46 @@
 {% extends "base.html" %}
-{% from '_macros.html' import tier_label %}
+{% from '_macros.html' import tier_label, page_header, section_header with context %}
 
 {% block title %}Model catalog{% endblock %}
 
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span class="breadcrumb-current">Model catalog</span>
+{% endblock %}
+
 {% block content %}
 <div class="catalog-page">
-  <h1>Model catalog</h1>
-  <p class="sub catalog-actions">
-    {% if gateway_count %}
-      <b>{{ gateway_count }}</b> gateway model{{ "" if gateway_count == 1 else "s" }} live
-    {% else %}
-      0 gateway models loaded
-    {% endif %}
-    · profiles from <code>gateway/catalog.py</code> · prices from the evaluator cost table
-    {% if gateway_fetched_at %} · fetched {{ gateway_fetched_at }}{% endif %}
-    <span class="catalog-action-links">
-      <a class="btn-secondary" href="{{ url_for('compare_models') }}">Compare models</a>
-      <form method="post" action="{{ url_for('gateway_refresh') }}" class="refresh-form">
-        <input type="hidden" name="next" value="{{ url_for('models_catalog') }}">
-        <button type="submit" class="btn-secondary" title="Re-fetch GET /v1/models now">&#8635; Refresh</button>
-      </form>
-    </span>
-  </p>
+  {% set actions %}
+  <a class="btn-secondary btn-sm" href="{{ url_for('compare_models') }}">Compare models</a>
+  <form method="post" action="{{ url_for('gateway_refresh') }}" class="refresh-form">
+    <input type="hidden" name="next" value="{{ url_for('models_catalog') }}">
+    <button type="submit" class="btn-secondary btn-sm">↻ Refresh</button>
+  </form>
+  {% endset %}
+  {{ page_header('Model catalog', gateway_count ~ ' gateway models · cross-pillar rollup by section', actions) }}
 
   {% if gateway_error %}
   <p class="empty pillar-stat">{{ gateway_error }}</p>
   {% endif %}
 
-  <details class="key">
-    <summary>How this is ranked / how to read</summary>
-    <dl class="legend-grid">
-      <dt>Aggregate rank</dt>
-      <dd>Mean of available pillar sub-scores (0–100) within each category — higher first. Missing pillars are excluded, not counted as zero.</dd>
-      <dt>Scans</dt>
-      <dd>HF artifact scan tier for open-weight models only; closed-source API models show —.</dd>
-      <dt>Safety</dt>
-      <dd>Composite red-team tier from policy + garak + promptfoo probes.</dd>
-      <dt>Eval</dt>
-      <dd>Best Duke judge-suite overall score (/5) across runs.</dd>
-      <dt>Benchmark</dt>
-      <dd>Mean normalized headline score (%) across benchmark kinds run for this model.</dd>
-      <dt>Profile</dt>
-      <dd>Static gateway catalog note — not generated from test results.</dd>
-    </dl>
-  </details>
+  <section class="key card p-4 mb-8">
+    {{ section_header('How this is ranked / how to read') }}
+    <dl class="legend-grid mt-3">
+        <dt>Aggregate rank</dt>
+        <dd>Mean of available pillar sub-scores (0–100) within each category — higher first. Missing pillars are excluded, not counted as zero.</dd>
+        <dt>Scans</dt>
+        <dd>HF artifact scan tier for open-weight models only; closed-source API models show —.</dd>
+        <dt>Safety</dt>
+        <dd>Composite red-team tier from policy + garak + promptfoo probes.</dd>
+        <dt>Eval</dt>
+        <dd>Mean Duke judge-suite overall score (/5) across that model's eval runs.</dd>
+        <dt>Benchmark</dt>
+        <dd>Mean normalized headline score (%) across benchmark kinds run for this model.</dd>
+        <dt>Profile</dt>
+        <dd>Static gateway catalog note — not generated from test results.</dd>
+      </dl>
+  </section>
 
   <div class="catalog-toolbar">
     <input type="search" id="catalog-search" class="catalog-search"
@@ -54,91 +51,96 @@
   <p class="empty" id="catalog-no-match" hidden>No models match your filter.</p>
 
   {% for section in gateway_by_category %}
-  <section class="catalog-section">
-  <h2 class="section-title">{{ section.label }}</h2>
-  <p class="section-hint">
-    exact liteLLM <code>model=</code> strings — ranked by cross-pillar aggregate within this section.
-  </p>
-  <div class="table-wrap">
-  <table class="run-table catalog-table">
-    <thead>
-      <tr>
-        <th class="col-compare"><span class="sr-only">Compare</span></th>
-        <th>Model id</th>
-        <th>Profile</th>
-        <th class="num">Input $/1M</th>
-        <th class="num">Output $/1M</th>
-        <th class="col-nowrap">Scans</th>
-        <th class="col-nowrap">Safety</th>
-        <th class="num">Eval</th>
-        <th class="num">Benchmark</th>
-        <th class="num">Rank</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for m in section.models %}
-      {% set rollup = rollup_by_gateway_id.get(m.id) %}
-      <tr class="row-link {% if rollup.safety and rollup.safety.tier in ('critical', 'high') %}row-warn{% endif %}"
-          data-href="{{ url_for('model_detail', slug=rollup.slug) }}"
-          tabindex="0"
-          role="link"
-          aria-label="Open model detail for {{ m.id }}">
-        <td class="col-compare" onclick="event.stopPropagation()">
-          <input type="checkbox" class="compare-select" data-slug="{{ rollup.slug }}" aria-label="Select {{ m.id }} for compare">
-        </td>
-        <td>
-          <span class="model">{{ m.id }}</span>
-          {%- if m.price_note %}<div class="price-note">{{ m.price_note }}</div>{% endif %}
-        </td>
-        <td>{{ m.notes or "—" }}</td>
-        <td class="num">{{ "$%.2f"|format(m.price_in) if m.price_in is not none else "—" }}</td>
-        <td class="num">{{ "$%.2f"|format(m.price_out) if m.price_out is not none else "—" }}</td>
-        <td class="col-nowrap">{% if rollup.scan %}{{ tier_label(rollup.scan.tier) }}{% else %}<span class="dim">—</span>{% endif %}</td>
-        <td class="col-nowrap">{% if rollup.safety %}{{ tier_label(rollup.safety.tier) }}{% else %}<span class="dim">—</span>{% endif %}</td>
-        <td class="num">{% if rollup.eval and rollup.eval.best_overall is not none %}{{ "%.2f"|format(rollup.eval.best_overall) }}{% else %}<span class="dim">—</span>{% endif %}</td>
-        <td class="num">{% if rollup.benchmark and rollup.benchmark.norm is not none %}{{ "%.0f%%"|format(rollup.benchmark.norm) }}{% else %}<span class="dim">—</span>{% endif %}</td>
-        <td class="num">{% if rollup.aggregate is not none %}{{ "%.0f"|format(rollup.aggregate) }}{% else %}<span class="dim">—</span>{% endif %}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
+  <section class="catalog-section mb-10">
+    {{ section_header(section.label, 'Ranked by cross-pillar aggregate within this section.') }}
+    <div class="table-wrap">
+    <table class="run-table catalog-table">
+      <thead>
+        <tr>
+          <th class="col-compare"><span class="sr-only">Compare</span></th>
+          <th>Model id</th>
+          <th>Profile</th>
+          <th class="num">Input $/1M</th>
+          <th class="num">Output $/1M</th>
+          <th class="col-nowrap">Scans</th>
+          <th class="col-nowrap">Safety</th>
+          <th class="num">Eval</th>
+          <th class="num">Benchmark</th>
+          <th class="num">Rank</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in section.models %}
+        {% set rollup = rollup_by_gateway_id.get(m.id) %}
+        <tr class="row-link {% if rollup.safety and rollup.safety.tier in ('critical', 'high') %}row-warn{% endif %}"
+            data-href="{{ url_for('model_detail', slug=rollup.slug) }}"
+            tabindex="0"
+            role="link"
+            aria-label="Open model detail for {{ m.id }}">
+          <td class="col-compare" onclick="event.stopPropagation()">
+            <input type="checkbox" class="compare-select" value="{{ rollup.slug }}" aria-label="Select {{ m.id }} for compare">
+          </td>
+          <td>
+            <span class="model">{{ m.id }}</span>
+            {%- if m.price_note %}<div class="price-note">{{ m.price_note }}</div>{% endif %}
+          </td>
+          <td class="body">{{ m.notes or "—" }}</td>
+          <td class="num">{{ "$%.2f"|format(m.price_in) if m.price_in is not none else "—" }}</td>
+          <td class="num">{{ "$%.2f"|format(m.price_out) if m.price_out is not none else "—" }}</td>
+          <td class="col-nowrap">{% if rollup.scan %}{{ tier_label(rollup.scan.tier) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+          <td class="col-nowrap">{% if rollup.safety %}{{ tier_label(rollup.safety.tier) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+          <td class="num">{% if rollup.eval and (rollup.eval.avg_overall is defined and rollup.eval.avg_overall is not none or rollup.eval.best_overall is not none) %}{{ "%.2f"|format(rollup.eval.avg_overall if rollup.eval.avg_overall is defined and rollup.eval.avg_overall is not none else rollup.eval.best_overall) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+          <td class="num">{% if rollup.benchmark and rollup.benchmark.norm is not none %}{{ "%.0f%%"|format(rollup.benchmark.norm) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+          <td class="num">{% if rollup.aggregate is not none %}{{ "%.0f"|format(rollup.aggregate) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
   </section>
   {% endfor %}
 
   {% if gateway_deprecated %}
-  <h2 class="section-title">Deprecated (not on gateway)</h2>
-  <p class="section-hint">historical spike ids — do not use for new runs.</p>
-  <table class="run-table">
-    <thead>
-      <tr>
-        <th>Former id</th>
-        <th>Notes</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for m in gateway_deprecated %}
-      <tr class="row-warn">
-        <td><span class="model">{{ m.id }}</span></td>
-        <td>{{ m.notes }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <section class="catalog-section mb-10">
+    {{ section_header('Deprecated (not on gateway)', 'Historical spike ids — do not use for new runs.') }}
+    <div class="table-wrap">
+    <table class="run-table">
+      <thead>
+        <tr>
+          <th>Former id</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in gateway_deprecated %}
+        <tr class="row-warn">
+          <td><span class="model">{{ m.id }}</span></td>
+          <td class="body">{{ m.notes }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
   {% endif %}
 
   <div class="compare-bar" id="compare-bar" hidden>
-    <button type="button" class="btn-primary" id="compare-selected-btn">Compare selected (0)</button>
-    <a class="btn-secondary" href="{{ url_for('compare_models') }}">Open compare page</a>
+    <div class="mx-auto flex max-w-5xl items-center justify-between gap-3">
+      <p class="text-sm"><span data-compare-count>0</span> model(s) selected</p>
+      <button type="button" class="btn-primary" data-compare-go disabled>Compare selected →</button>
+    </div>
   </div>
 </div>
-<script src="{{ url_for('static', filename='compare-panel.js') }}"></script>
+{% endblock %}
+
+{% block scripts %}
 <style>
   .catalog-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:.75rem;
                      margin:1rem 0 .25rem; }
   .catalog-search { flex:1 1 280px; max-width:420px; padding:.5rem .7rem;
-                    border:1px solid #cfd6e6; border-radius:8px; font-size:1rem; }
-  .catalog-search:focus { outline:2px solid #1b2a5e; outline-offset:1px; }
+                    border:1px solid #e8e6e1; border-radius:8px; font-size:1rem;
+                    background:#fff; color:#1a1a18; }
+  .catalog-search:focus { outline:2px solid #012169; outline-offset:1px; }
 </style>
 <script>
 (function () {

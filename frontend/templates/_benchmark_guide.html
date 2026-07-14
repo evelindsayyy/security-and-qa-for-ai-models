@@ -1,59 +1,59 @@
-<details class="tool-panel benchmark-guide-panel" open>
-  <summary>{{ title or "How each benchmark works" }}</summary>
+<details class="tool-panel benchmark-guide-panel">
+  <summary class="subsection-title">{{ title or "Benchmark reference & guide" }}</summary>
   <div class="benchmark-guide-body">
     {% if intro %}
-    <p class="sub">{{ intro }}</p>
+    <p class="body">{{ intro }}</p>
     {% else %}
-    <p class="sub">
+    <p class="body">
       Each benchmark measures a different capability. Pilot runs use a random sample of items
       (defaults vary by benchmark). Click any result row for per-item PASS, FAIL, or SKIP detail.
     </p>
     {% endif %}
 
-    {% for row in guide_rows %}
-    <article class="benchmark-guide-item" id="guide-{{ row.key }}">
-      <h3 class="benchmark-guide-heading">
-        <span class="badge {{ row.badge_class }}">{{ row.label }}</span>
-      </h3>
-      {% if row.about %}
-      <p>{{ row.about }}</p>
-      {% endif %}
-      <dl class="benchmark-guide-dl">
-        {% if row.default_sample is not none %}
-        <dt>Default sample</dt>
-        <dd title="{{ coverage_n_tooltip | default('') }}">
-          {{ row.default_sample }} {{ row.sample_unit }} in a pilot run
-        </dd>
+    <div class="guide-accordion">
+      {% for row in guide_rows %}
+      <details class="guide-accordion-item" id="guide-{{ row.key }}" open>
+        <summary>
+          <span class="badge {{ row.badge_class }}">{{ row.label }}</span>
+          {% if row.about %}<span class="guide-accordion-summary">{{ row.about }}</span>{% endif %}
+        </summary>
+        <dl class="benchmark-guide-dl">
+          {% if row.default_sample is not none %}
+          <dt>Default sample</dt>
+          <dd title="{{ coverage_n_tooltip | default('') }}">
+            {{ row.default_sample }} {{ row.sample_unit }} in a pilot run
+          </dd>
+          {% endif %}
+          {% if row.procedure %}
+          <dt>What happens in a run</dt>
+          <dd>{{ row.procedure }}</dd>
+          {% endif %}
+          {% if row.scoring %}
+          <dt>How it is scored</dt>
+          <dd>{{ row.scoring }}</dd>
+          {% endif %}
+          {% if row.headline_metric %}
+          <dt>Headline metric</dt>
+          <dd><code>{{ row.headline_metric }}</code> shown in the results table and on each detail page.</dd>
+          {% endif %}
+        </dl>
+        {% if row.source %}
+        <p class="dim benchmark-guide-source">
+          Dataset:
+          {% if row.source.startswith('http') %}
+          <a href="{{ row.source }}" rel="noopener noreferrer">{{ row.source }}</a>
+          {% else %}
+          {{ row.source }}
+          {% endif %}
+        </p>
         {% endif %}
-        {% if row.procedure %}
-        <dt>What happens in a run</dt>
-        <dd>{{ row.procedure }}</dd>
-        {% endif %}
-        {% if row.scoring %}
-        <dt>How it is scored</dt>
-        <dd>{{ row.scoring }}</dd>
-        {% endif %}
-        {% if row.headline_metric %}
-        <dt>Headline metric</dt>
-        <dd><code>{{ row.headline_metric }}</code> shown in the results table and on each detail page.</dd>
-        {% endif %}
-      </dl>
-      {% if row.source %}
-      <p class="dim benchmark-guide-source">
-        Dataset:
-        {% if row.source.startswith('http') %}
-        <a href="{{ row.source }}" rel="noopener noreferrer">{{ row.source }}</a>
-        {% else %}
-        {{ row.source }}
-        {% endif %}
-      </p>
-      {% endif %}
-    </article>
-    {% endfor %}
+      </details>
+      {% endfor %}
+    </div>
 
-    <details class="tool-panel benchmark-guide-skips">
-      <summary>Skipped items and partial runs</summary>
-      <p>{{ coverage_skip_explanation }}</p>
+    <details class="guide-accordion-item benchmark-guide-skips" open>
+      <summary><span class="subsection-title">Skipped items and partial runs</span></summary>
+      <p class="body">{{ coverage_skip_explanation }}</p>
       <p class="form-hint">
         When <code>n=99/100</code> or a <span class="coverage-partial-badge">N skipped</span> badge
         appears, open the run — skipped items are marked <span class="status-skip">SKIP</span>, not FAIL.

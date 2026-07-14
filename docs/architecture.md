@@ -14,6 +14,9 @@ Two AI Model Advisor pillars, two tracks:
 Every run produces structured JSON; optional ingest loads it into Postgres. The
 `frontend/` UI renders the report cards; `api/` exposes JSON REST for all four
 pillars (list, detail, status, POST jobs) — see [`api/README.md`](../api/README.md).
+The UI is **server-rendered Jinja** with **Vite-built Preact islands**
+(findings tables, comparison heatmap, live run progress, compare charts) under
+`frontend/assets/` → `frontend/static/dist/`.
 Teams and schedule: [`team-tracks.md`](team-tracks.md).
 
 ## How a run flows
@@ -203,25 +206,28 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 - **`evaluator/`** (B) — Duke task suites scored by an LLM judge against YAML rubrics; records scores plus cost / latency / tokens → `eval_runs`. Postgres path: [`evaluator/db/`](../evaluator/db/README.md). See [`track-b-framework.md`](track-b-framework.md).
 - **`benchmarks/`** (B) — public benchmarks (IFEval, TruthfulQA, MMLU, ToMi, consistency); ingest + UI read via [`benchmarks/db/`](../benchmarks/db/README.md) and `frontend/benchmark_db_data.py`.
 - **`api/`** — Flask REST under `/api`; see [`api/README.md`](../api/README.md).
-- **`frontend/`** — AI Model Advisor UI; `frontend/*_data.py` + launch helpers. See [`frontend/README.md`](../frontend/README.md).
+- **`auth/`** — Duke OIDC login, sessions, allowlist; see [`auth/README.md`](../auth/README.md).
+- **`frontend/`** — nutrition-label UI (Jinja shells + Preact islands); `frontend/*_data.py` + launch helpers; cross-pillar rollup (`model_rollup.py`, `model_summary.py`, `recommendation_rules.py`); pillar List/Compare matrices, reference guides, and the cross-pillar `/pipeline` gating view (`frontend/pipeline.py`). See [`frontend/README.md`](../frontend/README.md).
 
 ## Deployment and hosts
 
 | Host | Role |
 |------|------|
-| **Application VM** (`vcm@model-advisor.colab.duke.edu`) | Production: `./docker/run.sh up` → Flask UI + `api/`; all pillar jobs via host Docker socket; `.env` holds secrets |
-| **DCC** | SLURM + vLLM for open-weight chat (eval CLI today; safety + benchmarks planned); see [`scripts/dcc/`](../scripts/dcc/README.md) |
-| **Duke AI Gateway** | Default chat backend for safety, eval, benchmarks (HTTPS, no local GPU) |
-| **OIT Postgres** | Shared team DB (`qa_ai_models`); external to the VM |
-| **DGX** (e.g. gx10) | Optional dev workstation — not required for production |
+| **Application VM** (`model-advisor.colab.duke.edu`) | Production: Flask UI + `api/`; Caddy HTTPS when `CADDY_DOMAIN` set; all pillar jobs via host Docker socket |
+| **DCC** | SLURM + vLLM for open-weight chat (eval CLI today) |
+| **Duke AI Gateway** | Default chat backend for safety, eval, benchmarks |
+| **OIT Postgres** | Shared team DB (`qa_ai_models`) |
+| **DGX** | Optional dev workstation |
 
-**VM layout:** git clone + `.env` + `./docker/build-pillars.sh` + `./docker/run.sh up -d --build`. The web container bind-mounts the repo and Docker socket; pillar jobs write JSON on the VM disk. Postgres is external.
+**VM layout:** git clone + `.env` (include `CADDY_DOMAIN` + `TRUST_PROXY` for public HTTPS) +
+`./docker/build-pillars.sh` + `python3 main.py up -d --build`. Web container bind-mounts
+the repo and Docker socket; Postgres is external.
 
-**CI (GitLab):** lint → unit tests → on `main`, Buildah builds `docker/Dockerfile` and pushes to the GitLab container registry. **`deploy`** job SSHs to the application VM (manual Play on `main`, or `DEPLOY_AUTO=true`). See [`.gitlab/README.md`](../.gitlab/README.md).
+**CI (GitLab):** lint → tests → frontend-build → Buildah image on `main` → **deploy**
+(manual Play, or `DEPLOY_AUTO=true`). See [`.gitlab/README.md`](../.gitlab/README.md).
 
 ## Open questions
 
-- Frontend stack — Flask now; possibly Next.js + Tailwind later.
-- Auth — Duke Shibboleth preferred; until then the app may run behind the VM firewall.
+- Frontend stack — Flask + Vite islands now; evaluate Next.js if scope grows.
 - LiteLLM guardrail hooks — integration path TBD.
 - Benchmark catalog — which pilots become standing suites.

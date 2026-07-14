@@ -1,0 +1,29 @@
+# BFI personality test — browser + CLI. See personality/README.md
+#
+#   docker compose --env-file .env \
+#     -f personality/docker/compose.yml run --rm personality \
+#     python run_personality.py --model "GPT 4.1 Mini"
+
+services:
+  personality:
+    build:
+      context: ../..
+      dockerfile: personality/docker/Dockerfile
+
+    user: "${UID:-1000}:${GID:-1000}"
+
+    volumes:
+      - ../results:/app/personality/results
+
+    environment:
+      - DUKE_GATEWAY_URL=${DUKE_GATEWAY_URL:-https://litellm.oit.duke.edu/v1}
+      - DUKE_GATEWAY_KEY=${DUKE_GATEWAY_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://litellm.oit.duke.edu/v1}
+      - LITELLM_BASE_URL=${OPENAI_BASE_URL:-https://litellm.oit.duke.edu/v1}
+      - LITELLM_API_KEY=${OPENAI_API_KEY:-}
+
+    working_dir: /app/personality
+
+    stdin_open: true
+    tty: true

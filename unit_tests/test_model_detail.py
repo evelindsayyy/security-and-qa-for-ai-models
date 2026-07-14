@@ -56,7 +56,16 @@ class GetModelDetailTest(unittest.TestCase):
         self.assertEqual(detail["model"], "gpt-5-chat")
         self.assertEqual(detail["n_runs"], 2)
         self.assertEqual(detail["suites"], ["it_support_v1", "policy_qa_v1.1"])
-        self.assertEqual(detail["best_overall"], 4.9)
+        self.assertEqual(detail["avg_overall"], 4.6)  # mean of 4.9 and 4.3
+        self.assertEqual(detail["best_overall"], 4.6)  # alias
+
+    def test_catalog_gateway_slug_matches(self) -> None:
+        runs = [_run(model="GPT 4.1 Mini", overall=4.2)]
+        with self._stub(runs):
+            detail = erd.get_model_detail("gpt-4.1-mini")
+        self.assertIsNotNone(detail)
+        self.assertEqual(detail["model"], "GPT 4.1 Mini")
+        self.assertEqual(detail["avg_overall"], 4.2)
 
     def test_slug_with_spaces_matches(self) -> None:
         runs = [_run(model="GPT 4.1 Mini", overall=4.2)]

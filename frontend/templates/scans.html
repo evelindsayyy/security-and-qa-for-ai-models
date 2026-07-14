@@ -1,103 +1,87 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_scan_docker, start_button, delete_button, rerun_button, staleness_badge, tier_label, pillar_guide_callout with context %}
+{% from '_macros.html' import expandable, start_button, delete_button, rerun_button, staleness_badge, tier_label, page_header, list_compare_tabs, empty_state with context %}
 
 {% block title %}HF artifact scans{% endblock %}
 
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span class="breadcrumb-current">Scans</span>
+{% endblock %}
+
 {% block content %}
 <div class="eval-comparison">
-  <h1>HF artifact scans</h1>
-  <p>{{ start_button(url_for('scan_run_new'), '▶ Start a new scan') }}</p>
+  {% set actions %}{{ start_button(url_for('scan_run_new'), '▶ Start scan') }}{% endset %}
+  {{ page_header('HF artifact scans', 'ModelScan, Fickling, ModelAudit, dependencies, and secrets on Hugging Face artifacts.', actions) }}
 
-  {{ pillar_guide_callout(
-       'Reference scores & scan guide',
-       'How ModelScan, Fickling, ModelAudit, dependencies, and secrets combine into the risk tier.',
-       url_for('scan_reference')
-     ) }}
+  {% if guide_rows %}
+  {% with title="Scan reference & guide", intro="How tools combine into the risk tier and reference score matrix." %}
+  {% include '_scan_guide.html' %}
+  {% endwith %}
+  {% endif %}
 
-  <details class="key" open>
-    <summary>How to read this</summary>
-    <dl class="legend-grid">
+  <section class="key card p-4 mb-6">
+    <h2 class="subsection-title">How to read this</h2>
+    <dl class="legend-grid mt-3">
       <dt>Tier</dt>
-      <dd>Worst severity across ModelScan, Fickling, ModelAudit, dependencies, and secrets — max, not averaged.</dd>
+      <dd>Worst severity across all scanners — max, not averaged.</dd>
       <dt class="num-sample">Risk</dt>
-      <dd>0–100 from tier anchors (0 / 40 / 70 / 95) plus bumps (e.g. benign Fickling → ~18). Findings dedupe by file+signal; corroborated tools noted on the detail page.</dd>
-      <dt>Fickling</dt>
-      <dd><code>LIKELY_UNSAFE</code> on benign PyTorch pickles often leaves tier <b>low</b>.</dd>
-      {% if has_comparison %}
-      <dt>Compare</dt>
-      <dd>Matrix of per-tool status (tool × HF model). Empty cells mean that scanner did not run.</dd>
-      {% endif %}
+      <dd>0–100 from tier anchors plus bumps; corroborated tools noted on detail.</dd>
+      {% if has_comparison %}<dt>Compare</dt><dd>Tool × HF model heatmap.</dd>{% endif %}
     </dl>
-  </details>
+  </section>
 
   {% if not has_scans %}
-    <p class="sub">
-      No results yet. Use <b>Start a new scan</b> above, or from repo root:
-      <code>{{ cli_scan_docker() }}</code>
-    </p>
+    {{ empty_state('No scans yet. Start a scan from the button above.') }}
   {% else %}
-    <h2>Runs</h2>
-    <div class="bench-view-tabs" role="tablist" aria-label="Scan results view">
-      <button type="button" class="bench-view-tab is-active" data-view="list" role="tab" aria-selected="true">List</button>
-      {% if has_comparison %}
-      <button type="button" class="bench-view-tab" data-view="compare" role="tab" aria-selected="false">Compare</button>
-      {% endif %}
-    </div>
+    {{ list_compare_tabs(has_comparison) }}
 
     <div id="pillar-view-list" class="bench-view-panel" role="tabpanel">
-    <p class="sub">
-      {{ scans|length }} model{{ "" if scans|length == 1 else "s" }} ·
-      highest risk first
-    </p>
-
-    <div class="table-wrap">
-    <table class="run-table">
-      <thead>
-        <tr>
-          <th>HF model</th>
-          <th class="col-nowrap">Tier</th>
-          <th class="num">Risk</th>
-          <th class="num">Findings</th>
-          <th>Breakdown</th>
-          <th class="col-nowrap">Scanned</th>
-          <th class="col-actions">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for s in scans %}
-        <tr class="row-link {% if s.severity_tier in ('critical', 'high') %}row-warn{% endif %}"
-            data-href="{{ url_for('scan_detail_private' if view_mode == 'private' else 'scan_detail', slug=s.slug) }}"
-            tabindex="0"
-            role="link"
-            aria-label="Open scan for {{ s.model_id }}">
-          <td><span class="model">{{ s.model_id }}</span> {{ staleness_badge(s.staleness) }}</td>
-          <td class="col-nowrap">{{ tier_label(s.severity_tier) }}</td>
-          <td class="num overall">{{ s.overall_risk_score }}</td>
-          <td class="num dim">{{ s.n_findings }}</td>
-          <td class="col-long dim">{{ expandable(s.severity_summary, clamp=1) }}</td>
-          <td class="col-nowrap dim">{{ s.scanned_at[:10] if s.scanned_at != "—" else "—" }}</td>
-          <td class="col-actions" onclick="event.stopPropagation()">
-            {{ rerun_button(url_for('scan_run_new', from=s.slug), 'Rerun', 'btn-primary btn-sm' if s.staleness and s.staleness.stale else 'btn-secondary btn-sm') }}
-            {{ delete_button(url_for('scan_delete_private' if view_mode == 'private' else 'scan_delete', slug=s.slug), 'Delete', classes='btn-danger btn-sm') }}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    </div>
+      <div class="pillar-toolbar card p-4 mb-4">
+        <p class="sub mb-0">{{ scans|length }} model{{ "" if scans|length == 1 else "s" }} · highest risk first</p>
+      </div>
+      <div class="table-wrap">
+        <table class="run-table">
+          <thead>
+            <tr>
+              <th>HF model</th>
+              <th class="col-nowrap">Tier</th>
+              <th class="num">Risk</th>
+              <th class="num">Findings</th>
+              <th>Breakdown</th>
+              <th class="col-nowrap">Scanned</th>
+              <th class="col-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in scans %}
+            <tr class="row-link {% if s.severity_tier in ('critical', 'high') %}row-warn{% endif %}"
+                data-href="{{ url_for('scan_detail_private' if view_mode == 'private' else 'scan_detail', slug=s.slug) }}"
+                tabindex="0" role="link" aria-label="Open scan for {{ s.model_id }}">
+              <td><span class="model">{{ s.model_id }}</span> {{ staleness_badge(s.staleness) }}</td>
+              <td class="col-nowrap">{{ tier_label(s.severity_tier) }}</td>
+              <td class="num overall">{{ s.overall_risk_score }}</td>
+              <td class="num dim">{{ s.n_findings }}</td>
+              <td class="col-long dim">{{ expandable(s.severity_summary, clamp=1) }}</td>
+              <td class="col-nowrap dim">{{ s.scanned_at[:10] if s.scanned_at != "—" else "—" }}</td>
+              <td class="col-actions" onclick="event.stopPropagation()">
+                {{ rerun_button(url_for('scan_run_new', from=s.slug), 'Rerun', 'btn-primary btn-sm' if s.staleness and s.staleness.stale else 'btn-secondary btn-sm') }}
+                {{ delete_button(url_for('scan_delete_private' if view_mode == 'private' else 'scan_delete', slug=s.slug), 'Delete', classes='btn-danger btn-sm') }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
 
     {% if has_comparison %}
     <div id="pillar-view-compare" class="bench-view-panel" role="tabpanel" hidden>
-      <p class="sub">
-        Per-tool status per HF model — click a cell for findings detail.
-        Empty cells mean that scanner did not run for that model.
-      </p>
+      <p class="sub mb-4">Per-tool status per HF model — click a cell for detail.</p>
       {% with detail_endpoint='scan_detail' %}
       {% include '_pillar_comparison_matrix.html' %}
       {% endwith %}
     </div>
-    <script src="{{ url_for('static', filename='pillar-view-tabs.js') }}"></script>
     {% endif %}
   {% endif %}
 </div>

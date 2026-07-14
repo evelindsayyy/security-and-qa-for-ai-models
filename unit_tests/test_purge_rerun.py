@@ -101,8 +101,13 @@ class PurgeEvalLaunchTest(unittest.TestCase):
             mock.patch("frontend.eval_launch.docker_launch.use_docker", return_value=False),
             mock.patch("frontend.eval_launch.subprocess.Popen") as popen,
             mock.patch("frontend.run_launch.persist_run_meta_dir"),
+            mock.patch("frontend.eval_launch.threading.Thread"),
         ):
-            popen.return_value = mock.Mock()
+            popen.return_value = mock.Mock(
+                pid=4242,
+                poll=mock.Mock(return_value=None),
+                wait=mock.Mock(),
+            )
             eval_launch.start_run("GPT 4.1 Mini", "GPT 4.1", "it_support", 1024)
         purge.assert_called_once_with(
             "it_support",
@@ -116,7 +121,14 @@ class PurgeBenchmarkLaunchTest(unittest.TestCase):
     def test_start_run_purges_prior_benchmark(self) -> None:
         from frontend import benchmark_launch
 
-        plan = mock.Mock(visibility="public", owner_user_id=None)
+        plan = mock.Mock(
+            visibility="public",
+            owner_user_id=None,
+            config={},
+            config_fingerprint="fp",
+            owner_netid=None,
+            reused=None,
+        )
         with (
             mock.patch("frontend.run_launch.build_launch_plan", return_value=plan),
             mock.patch("frontend.benchmark_launch.check_inflight_combo", return_value=None),

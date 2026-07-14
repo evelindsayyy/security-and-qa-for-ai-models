@@ -83,11 +83,15 @@ def _aggregate_db_run(run: dict, results: list[dict]) -> dict:
                 if not (r["detail"].get("candidate_response") or "").strip())
 
     slug = (run["source_file"] or "").removesuffix(".jsonl")
+    adaptation = run["adaptation"] or {}
     return {
         "filename": run["source_file"],
         "slug": slug,
         "timestamp": _ts(run["started_at"]),
-        "suite": (run["adaptation"] or {}).get("task_suite_version", ""),
+        "suite": adaptation.get("task_suite_version", ""),
+        "rubric_version": adaptation.get("rubric_version", ""),
+        "system_prompt_version": adaptation.get("system_prompt_version", ""),
+        "judge_prompt_version": adaptation.get("judge_prompt_version", ""),
         "candidate_model": run["gateway_model_id"],
         "judge_model": run["judge_model"],
         "inference_backend": (run["adaptation"] or {}).get("inference_backend", "gateway"),
@@ -207,6 +211,23 @@ def get_run_detail_db(
         "total_completion_tokens": sum(r["tokens_out"] or 0 for r in results),
         "questions": questions_rows,
     }
+
+
+def run_row_exists(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> bool:
+    """True when an ``eval_runs`` row exists for this slug in the given scope.
+
+    Unlike ``get_run_detail_db``, this does not require judge_score results —
+    used so delete can tell "row existed" even for sparse/smoke stubs.
+    """
+    if not is_safe_slug(slug):
+        return False
+    with queries.connect() as conn:
+        rec = queries.fetch_run(
+            conn, f"{slug}.jsonl", visibility=visibility, owner_user_id=owner_user_id
+        )
+    return rec is not None
 
 
 def delete_run(

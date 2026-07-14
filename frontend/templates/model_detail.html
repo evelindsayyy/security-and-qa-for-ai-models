@@ -1,42 +1,55 @@
 {% extends "base.html" %}
-{% from '_macros.html' import cli_eval_docker, start_button, tier_label with context %}
-{% from '_model_label_card.html' import model_label_styles, model_label_card with context %}
+{% from '_macros.html' import start_button, delete_button, rerun_button, tier_label, page_header, stat_card, section_header, expandable with context %}
 
-{% block title %}{% if missing %}Model not found{% else %}{{ model }} — model detail{% endif %}{% endblock %}
+{% block title %}{% if missing %}Model not found{% else %}{{ model }} — nutrition label{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span><a href="{{ url_for('models_catalog') }}">Model catalog</a></span>
+<span class="text-text-subtle">›</span>
+<span class="font-medium text-text">{{ model }}</span>
+{% endblock %}
 
 {% block content %}
-<div class="eval-comparison">
+<div class="eval-comparison model-detail-page">
   {% if missing %}
-    <h1>Model not found</h1>
+    <h1 class="page-title">Model not found</h1>
     <p class="sub empty">No gateway model or rollup data for <code>{{ slug }}</code>.</p>
     <p><a href="{{ url_for('models_catalog') }}">← model catalog</a></p>
   {% else %}
-    <p class="back"><a href="{{ url_for('models_catalog') }}">← model catalog</a></p>
-    <h1>{{ model }}</h1>
-    {% if gateway_profile %}
-    <p class="sub dim">Gateway profile: {{ gateway_profile }}</p>
-    {% endif %}
-    <p class="sub">
-      {% if rollup.aggregate is not none %}aggregate score <b>{{ "%.0f"|format(rollup.aggregate) }}</b> / 100 · {% endif %}
-      {% if n_runs %}{{ n_runs }} eval run{{ "" if n_runs == 1 else "s" }}{% endif %}
-      {% if best_overall is not none %}· best eval <b>{{ "%.2f"|format(best_overall) }}</b> / 5{% endif %}
-      {% if total_cost_usd %}· eval cost ${{ "%.4f"|format(total_cost_usd) }}{% endif %}
-    </p>
+    {{ page_header(model, gateway_profile or 'Cross-pillar nutrition label') }}
+    <div class="nutrition-grid mb-8">
+      {{ stat_card('Aggregate', '%.0f'|format(rollup.aggregate) if rollup.aggregate is not none else '—', '/ 100') }}
+      {{ stat_card('Scan', rollup.scan.tier if rollup.scan else '—', 'risk ' ~ rollup.scan.overall_risk_score if rollup.scan else '') }}
+      {{ stat_card('Safety', rollup.safety.tier if rollup.safety else '—', '%.0f%% pass'|format(rollup.safety.pass_rate * 100) if rollup.safety else '') }}
+      {{ stat_card('Eval avg', '%.2f'|format(avg_overall if avg_overall is not none else best_overall) if (avg_overall is not none or best_overall is not none) else '—', '/ 5') }}
+    </div>
 
-    {% if model_card %}
-    {{ model_label_styles() }}
-    <div class="mlabel-featured">{{ model_label_card(model_card, linked=False) }}</div>
-    {% endif %}
-
-    <section class="key">
-      <h2>Recommendation
-        <span class="dim" title="Evidence-backed guidance — does not replace OIT sign-off">
-          ({% if recommendation.source == 'ai' %}AI summary{% else %}rules v1{% endif %})
-        </span>
-      </h2>
-      <p>{{ recommendation.summary }}</p>
+    <section class="key card p-5 mb-6">
+      {{ section_header('Recommendation', 'Evidence-backed guidance — does not replace OIT sign-off') }}
+      {% if recommendation.sections %}
+      <div class="recommendation-chips">
+        {% for s in recommendation.sections %}
+        <span class="recommendation-chip">{{ s.label }}</span>
+        {% endfor %}
+      </div>
+      <dl class="recommendation-sections">
+        {% for s in recommendation.sections %}
+        <div class="recommendation-section">
+          <dt>{{ s.label }}</dt>
+          <dd>{{ s.text }}</dd>
+        </div>
+        {% endfor %}
+      </dl>
+      {% endif %}
+      {% if recommendation.summary %}
+      <div class="recommendation-summary mt-4">
+        {{ expandable(recommendation.summary, clamp=6) }}
+      </div>
+      {% endif %}
       {% if recommendation.tradeoffs %}
-      <ul>
+      <ul class="mt-4 list-disc pl-5 text-sm text-text-muted">
         {% for t in recommendation.tradeoffs %}
         <li>{{ t }}</li>
         {% endfor %}
@@ -44,95 +57,212 @@
       {% endif %}
     </section>
 
-    <section class="key pillar-missing-ctas">
-      <h2>Pillar coverage</h2>
+    <section class="key card p-5 mb-6">
+      {{ section_header('Pillar coverage') }}
       <ul class="pillar-cta-list">
-        <li>
-          <span class="dim">Scan:</span>
-          {% if rollup.scan %}
-            {{ tier_label(rollup.scan.tier) }}
-            <a href="{{ url_for('scan_detail', slug=rollup.scan.slug) }}">detail</a>
-          {% elif can_hf_scan %}
-            <span class="dim">no scan yet</span> —
-            {{ start_button(url_for('scan_run_new'), 'Run scan', classes='btn-secondary btn-sm') }}
-          {% else %}
-            <span class="dim">not applicable (closed-source API model)</span>
+        <li class="pillar-cta-row">
+          <span class="pillar-cta-label dim">Scan</span>
+          <div class="pillar-cta-status">
+            {% if rollup.scan %}
+              {{ tier_label(rollup.scan.tier) }}
+              <a href="{{ url_for('scan_detail', slug=rollup.scan.slug) }}">detail</a>
+              {% if linked_scan_slug %}<span class="badge badge-pilot">linked</span>{% endif %}
+            {% elif can_hf_scan %}
+              <span class="dim">no scan yet</span>
+            {% else %}
+              <span class="dim">not applicable (closed-source API model)</span>
+            {% endif %}
+          </div>
+          <div class="pillar-cta-actions">
+            {% if rollup.scan and linked_scan_slug and is_logged_in %}
+            <form method="post" action="{{ url_for('model_unlink_scan', slug=rollup.slug) }}" class="inline-form">
+              <button type="submit" class="btn-secondary btn-sm">Unlink</button>
+            </form>
+            {% elif not rollup.scan and can_hf_scan %}
+              {{ start_button(url_for('scan_run_new'), 'Run scan', classes='btn-secondary btn-sm') }}
+            {% endif %}
+          </div>
+          {% if is_logged_in and available_scans %}
+          <details class="scan-link-panel pillar-cta-extra">
+            <summary>Link existing scan</summary>
+            <form method="post" action="{{ url_for('model_link_scan', slug=rollup.slug) }}" class="scan-link-form">
+              <label class="sr-only" for="scan-link-{{ rollup.slug }}">Choose scan to link</label>
+              <select id="scan-link-{{ rollup.slug }}" name="scan_slug" class="form-control" required>
+                <option value="">Choose a scan…</option>
+                {% for s in available_scans %}
+                <option value="{{ s.slug }}" {% if s.slug == linked_scan_slug %}selected{% endif %}>
+                  {{ s.model_id or s.slug }} ({{ s.tier }})
+                </option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn-primary btn-sm">Link scan</button>
+            </form>
+          </details>
           {% endif %}
         </li>
-        <li>
-          <span class="dim">Safety:</span>
-          {% if rollup.safety %}
-            {{ tier_label(rollup.safety.tier) }}
-            <a href="{{ url_for('safety_detail', slug=rollup.safety.slug, profile=rollup.safety.profile) }}">detail</a>
-          {% else %}
-            <span class="dim">no safety run</span> —
-            {{ start_button(url_for('safety_run_new'), 'Run safety', classes='btn-secondary btn-sm') }}
-          {% endif %}
+        <li class="pillar-cta-row">
+          <span class="pillar-cta-label dim">Safety</span>
+          <div class="pillar-cta-status">
+            {% if rollup.safety %}
+              {{ tier_label(rollup.safety.tier) }}
+              <a href="{{ url_for('safety_detail', slug=rollup.safety.slug, profile=rollup.safety.profile) }}">detail</a>
+            {% else %}
+              <span class="dim">no safety run</span>
+            {% endif %}
+          </div>
+          <div class="pillar-cta-actions">
+            {% if not rollup.safety %}
+              {{ start_button(url_for('safety_run_new'), 'Run safety', classes='btn-secondary btn-sm') }}
+            {% endif %}
+          </div>
         </li>
-        <li>
-          <span class="dim">Eval:</span>
-          {% if rollup.eval and rollup.eval.best_overall is not none %}
-            best {{ "%.2f"|format(rollup.eval.best_overall) }} / 5
-            <a href="{{ url_for('eval_run') }}">runs</a>
-          {% else %}
-            <span class="dim">no eval runs</span> —
-            {{ start_button(url_for('eval_run_new'), 'Run eval', classes='btn-secondary btn-sm') }}
-          {% endif %}
+        <li class="pillar-cta-row">
+          <span class="pillar-cta-label dim">Eval</span>
+          <div class="pillar-cta-status">
+            {% if rollup.eval and (rollup.eval.avg_overall is defined and rollup.eval.avg_overall is not none or rollup.eval.best_overall is not none) %}
+              avg {{ "%.2f"|format(rollup.eval.avg_overall if rollup.eval.avg_overall is defined and rollup.eval.avg_overall is not none else rollup.eval.best_overall) }} / 5
+              <a href="{{ url_for('eval_run') }}">runs</a>
+            {% else %}
+              <span class="dim">no eval runs</span>
+            {% endif %}
+          </div>
+          <div class="pillar-cta-actions">
+            {% if not rollup.eval or not (rollup.eval.avg_overall is defined and rollup.eval.avg_overall is not none or rollup.eval.best_overall is not none) %}
+              {{ start_button(url_for('eval_run_new'), 'Run eval', classes='btn-secondary btn-sm') }}
+            {% endif %}
+          </div>
         </li>
-        <li>
-          <span class="dim">Benchmarks:</span>
-          {% if rollup.benchmark and rollup.benchmark.kinds %}
-            {% for kind, info in rollup.benchmark.kinds.items() %}<span>{{ kind }} <b>{{ info.headline_display }}</b></span>{% if not loop.last %}, {% endif %}{% endfor %}
-            <a href="{{ url_for('benchmarks') }}">detail</a>
-          {% else %}
-            <span class="dim">no benchmarks</span> —
-            {{ start_button(url_for('benchmark_run_new'), 'Run benchmark', classes='btn-secondary btn-sm') }}
-          {% endif %}
+        <li class="pillar-cta-row">
+          <span class="pillar-cta-label dim">Personality <span class="text-text-subtle">(extra)</span></span>
+          <div class="pillar-cta-status">
+            {% if personality_summary %}
+              BFI
+              {% for row in personality_summary.trait_rows %}
+              · {{ row.label }} <b>{{ "%.2f"|format(row.score) if row.score is not none else "—" }}</b>
+              {% endfor %}
+              <a href="{{ url_for('personality_detail', slug=personality_summary.slug) }}">detail</a>
+            {% else %}
+              <span class="dim">no BFI run</span>
+            {% endif %}
+          </div>
+          <div class="pillar-cta-actions">
+            {% if not personality_summary %}
+              {{ start_button(url_for('personality_run_new'), 'Run BFI', classes='btn-secondary btn-sm') }}
+            {% endif %}
+          </div>
+        </li>
+        <li class="pillar-cta-row">
+          <span class="pillar-cta-label dim">Benchmarks</span>
+          <div class="pillar-cta-status">
+            {% if rollup.benchmark and rollup.benchmark.kinds %}
+              {% for kind, info in rollup.benchmark.kinds.items() %}<span>{{ kind }} <b>{{ info.headline_display }}</b></span>{% if not loop.last %}, {% endif %}{% endfor %}
+              <a href="{{ url_for('benchmarks') }}">detail</a>
+            {% else %}
+              <span class="dim">no benchmarks</span>
+            {% endif %}
+          </div>
+          <div class="pillar-cta-actions">
+            {% if not rollup.benchmark or not rollup.benchmark.kinds %}
+              {{ start_button(url_for('benchmark_run_new'), 'Run benchmark', classes='btn-secondary btn-sm') }}
+            {% endif %}
+          </div>
         </li>
       </ul>
-      <p class="form-hint">
+      <p class="form-hint mt-4">
         <a href="{{ url_for('compare_models') }}?models={{ rollup.slug }}">Compare this model</a> with others on the compare page.
       </p>
     </section>
 
-    {% if runs %}
-    <h2>Eval runs</h2>
-    <table class="run-table">
-      <thead>
-        <tr>
-          <th>Suite</th>
-          <th>Judge</th>
-          {% for dim in dim_columns %}
-          <th class="num">{{ dim|replace("_", " ") }}</th>
-          {% endfor %}
-          <th class="num">Overall</th>
-          <th class="num">Latency (mean / p95)</th>
-          <th class="num">Cost</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in runs %}
-        <tr>
-          <td><span class="model">{{ r.suite }}</span></td>
-          <td><span class="dim">{{ r.judge_model }}</span></td>
-          {% for dim in dim_columns %}
-          <td class="num">{{ "%.2f"|format(r.dim_means[dim]) if r.dim_means.get(dim) is not none else "—" }}</td>
-          {% endfor %}
-          <td class="num overall">{{ "%.2f"|format(r.overall) if r.overall is not none else "—" }}</td>
-          <td class="num">{{ r.mean_latency_ms }} / {{ r.p95_latency_ms }} ms</td>
-          <td class="num">${{ "%.4f"|format(r.total_cost_usd) }}</td>
-          <td><a href="{{ url_for('eval_run_detail', slug=r.slug) }}">detail</a></td>
-        </tr>
+    {% if pillar_findings.scan %}
+    <section class="key card p-5 mb-6">
+      {{ section_header('Top scan findings') }}
+      <ul class="model-findings-list">
+        {% for f in pillar_findings.scan %}
+        <li>
+          {{ tier_label(f.severity) }}
+          <span class="font-medium">{{ f.title }}</span>
+          {% if f.label %}<span class="dim">· {{ f.label }}</span>{% endif %}
+          <a href="{{ f.detail_url }}">detail</a>
+        </li>
         {% endfor %}
-      </tbody>
-    </table>
+      </ul>
+    </section>
+    {% endif %}
+
+    {% if pillar_findings.safety %}
+    <section class="key card p-5 mb-6">
+      {{ section_header('Top safety findings') }}
+      <ul class="model-findings-list">
+        {% for f in pillar_findings.safety %}
+        <li>
+          {{ tier_label(f.severity) }}
+          <span class="font-medium">{{ f.title }}</span>
+          {% if f.label == 'fail' %}<span class="badge badge-warn">fail</span>{% endif %}
+          <a href="{{ f.detail_url }}">detail</a>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    {% if pillar_findings.benchmark %}
+    <section class="key card p-5 mb-6">
+      {{ section_header('Top benchmark findings') }}
+      <ul class="model-findings-list">
+        {% for f in pillar_findings.benchmark %}
+        <li>
+          {{ tier_label(f.severity) }}
+          <span class="font-medium">{{ f.title }}</span>
+          <span class="dim">· {{ f.label }}</span>
+          <a href="{{ f.detail_url }}">detail</a>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    {% if runs %}
+    <section class="key mb-6">
+      {{ section_header('Eval runs') }}
+      <div class="table-wrap">
+      <table class="run-table">
+        <thead>
+          <tr>
+            <th>Suite</th>
+            <th>Judge</th>
+            {% for dim in dim_columns %}
+            <th class="num">{{ dim|replace("_", " ") }}</th>
+            {% endfor %}
+            <th class="num">Overall</th>
+            <th class="num">Latency (mean / p95)</th>
+            <th class="num">Cost</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in runs %}
+          <tr>
+            <td><span class="model">{{ r.suite }}</span></td>
+            <td><span class="dim">{{ r.judge_model }}</span></td>
+            {% for dim in dim_columns %}
+            <td class="num">{{ "%.2f"|format(r.dim_means[dim]) if r.dim_means.get(dim) is not none else "—" }}</td>
+            {% endfor %}
+            <td class="num overall">{{ "%.2f"|format(r.overall) if r.overall is not none else "—" }}</td>
+            <td class="num">{{ r.mean_latency_ms }} / {{ r.p95_latency_ms }} ms</td>
+            <td class="num">${{ "%.4f"|format(r.total_cost_usd) }}</td>
+            <td class="col-nowrap">
+              <a href="{{ url_for('eval_run_detail_private' if view_mode == 'private' else 'eval_run_detail', slug=r.slug) }}">detail</a>
+              {{ rerun_button(url_for('eval_run_new', from=r.slug), 'Rerun', 'btn-secondary btn-sm') }}
+              {{ delete_button(url_for('eval_run_delete_private' if view_mode == 'private' else 'eval_run_delete', slug=r.slug), 'Delete', classes='btn-danger btn-sm') }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </section>
     {% else %}
     <p class="sub empty">No eval runs yet. {{ start_button(url_for('eval_run_new'), 'Start an eval run', classes='') }}</p>
-    <details class="cli-advanced">
-      <summary>Advanced: run from the CLI</summary>
-      <p><code>{{ cli_eval_docker() }}</code></p>
-    </details>
     {% endif %}
   {% endif %}
 </div>

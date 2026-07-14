@@ -6,6 +6,10 @@ Default entry: containerized UI (same as ./docker/run.sh).
     uv run python main.py down
     uv run python main.py --host           # dev Flask (PORT or APP_PORT, default 5000)
 
+Host Flask dev needs the Vite asset watcher in a second terminal:
+``cd frontend/assets && npm run dev`` (or ``npm run build`` once). Production
+images build ``frontend/static/dist/`` during the Docker multi-stage build.
+
 See docs/cli.md and auth/README.md.
 """
 

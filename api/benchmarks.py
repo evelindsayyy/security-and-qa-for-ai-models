@@ -65,6 +65,12 @@ def start_benchmark():
     if launch_err is not None:
         return validation_error(launch_err)
 
+    from frontend import pipeline
+
+    gate_err = pipeline.require_ready_for_downstream(model, "gateway")
+    if gate_err is not None:
+        return validation_error(gate_err)
+
     slug, already, _visibility = benchmark_launch.start_run(benchmark_key, model)
     return accepted(
         slug,

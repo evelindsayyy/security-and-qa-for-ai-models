@@ -38,7 +38,7 @@ Public and private runs of the same model never collide on disk or share a URL (
 | Module | Role |
 |--------|------|
 | `frontend/db_fallback.py` | Postgres-only reads when DSN reachable; disk fallback offline only |
-| `frontend/staleness.py` | Per-pillar needs-rerun rules (`CURRENT_SPEC_CUTOFF`, garak probe count, 0-file scans, etc.) |
+| `frontend/staleness.py` | Per-pillar needs-rerun rules (`dbutils/staleness_spec.py`) |
 | `frontend/oss_gateway_hf.py` | HF mirror map for open-weight gateway catalog scan rollup |
 | `frontend/delete_db.py` | Shared DB-delete error surfacing for permanent deletes |
 | `frontend/launch_registry.py` | In-flight job liveness (`check_inflight_combo`) |
@@ -56,9 +56,9 @@ Pillar groups (`scanner`, `safety`, `benchmarks`) conflict — use Docker for pi
 
 ## CI / deploy
 
-lint (ruff) → unit-tests. On `main`: Buildah → GitLab registry → `deploy` job to VM (manual Play or `DEPLOY_AUTO=true`), target `/home/vcm/security-and-qa-for-ai-models`.
+lint (ruff) → frontend-build (npm ci + build + vitest) → unit-tests. On `main`: Buildah → GitLab registry → `deploy` job to VM (manual Play or `DEPLOY_AUTO=true`), target `/home/vcm/security-and-qa-for-ai-models`.
 
-Always start the production UI via `./docker/run.sh` or `python3 main.py` — never bare `docker compose` without the pinned project name `qa-ai-models`.
+Always start the production UI via `./docker/run.sh` or `python3 main.py` — never bare `docker compose` without the pinned project name `qa-ai-models`. After code changes on a detached stack, use `./docker/run.sh restart` (rebuild + recreate) instead of hunting for a VS Code forwarded port.
 
 ## Environment (`.env`)
 
@@ -68,6 +68,7 @@ Always start the production UI via `./docker/run.sh` or `python3 main.py` — ne
 | `HF_TOKEN` | Scanner gated downloads |
 | `POSTGRES_DSN` | Scan, safety, benchmark loaders + UI reads |
 | `EFFICACY_DB_DSN` | Eval loader + `/eval-run` (same server usually) |
+| `CADDY_DOMAIN`, `TRUST_PROXY` | Production HTTPS (VM); blank locally — see `docker/README.md` |
 | `FRONTEND_LAUNCH_MODE=docker` | Browser Start buttons use Docker (default) |
 | `AUTO_INGEST=0` | Disable post-run sync |
 | `AUTH_ENABLED`, `DUKE_OIDC_*`, `AUTH_ALLOWED_NETIDS` | Duke OIDC login — see `auth/README.md` |
@@ -87,6 +88,7 @@ Flow diagram: [`docs/architecture.md`](docs/architecture.md#how-a-run-flows)
 uv sync --group dev
 cp .env.example .env
 ./docker/build-pillars.sh
+cd frontend/assets && npm ci && npm run build   # CI does this in frontend-build
 python3 main.py up -d --build
 curl -s http://127.0.0.1:5000/api/health | python3 -m json.tool
 ```
@@ -101,6 +103,7 @@ uv run python -m api.ingest --apply
 ## Test and lint
 
 ```bash
+cd frontend/assets && npm run test
 uv run ruff check .
 uv run python -m unittest discover -s unit_tests -q
 ```

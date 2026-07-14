@@ -6,6 +6,7 @@
 stages:
   - lint
   - test
+  - frontend
   - build
   - deploy
 
@@ -34,12 +35,28 @@ unit-tests:
   script:
     - uv run python -m unittest discover -s unit_tests -q
 
+frontend-build:
+  stage: frontend
+  image: node:22-bookworm-slim
+  needs:
+    - lint
+  script:
+    - cd frontend/assets
+    - npm ci
+    - npm run build
+    - npm run test
+  artifacts:
+    paths:
+      - frontend/static/dist/
+    expire_in: 1 day
+
 # Build is like docker but has better security permissions and better licensing
 build-web-image:
   stage: build
   needs:
     - lint
     - unit-tests
+    - frontend-build
   tags:
     # This is a runner designed to be able to build containers
     - oit-shared-buildah

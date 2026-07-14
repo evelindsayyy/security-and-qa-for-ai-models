@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "test": "bfi",
+  "scale": {
+    "min": 1,
+    "max": 5,
+    "labels": {
+      "1": "strongly disagree",
+      "2": "disagree",
+      "3": "neither agree nor disagree",
+      "4": "agree",
+      "5": "strongly agree"
+    }
+  },
+  "traits": {
+    "extraversion": {
+      "label": "Extraversion",
+      "items": [1, 6, 11, 16, 21, 26, 31, 36]
+    },
+    "agreeableness": {
+      "label": "Agreeableness",
+      "items": [2, 7, 12, 17, 22, 27, 32, 37, 42]
+    },
+    "conscientiousness": {
+      "label": "Conscientiousness",
+      "items": [3, 8, 13, 18, 23, 28, 33, 38, 43]
+    },
+    "neuroticism": {
+      "label": "Neuroticism",
+      "items": [4, 9, 14, 19, 24, 29, 34, 39]
+    },
+    "openness": {
+      "label": "Openness",
+      "items": [5, 10, 15, 20, 25, 30, 35, 40, 41, 44]
+    }
+  },
+  "reverse_items": [2, 6, 8, 9, 12, 18, 21, 23, 24, 27, 31, 34, 35, 37, 41, 43],
+  "items": [
+    {"id": 1, "text": "Is talkative"},
+    {"id": 2, "text": "Tends to find fault with others"},
+    {"id": 3, "text": "Does a thorough job"},
+    {"id": 4, "text": "Is depressed, blue"},
+    {"id": 5, "text": "Is original, comes up with new ideas"},
+    {"id": 6, "text": "Is reserved"},
+    {"id": 7, "text": "Is helpful and unselfish with others"},
+    {"id": 8, "text": "Can be somewhat careless"},
+    {"id": 9, "text": "Is relaxed, handles stress well"},
+    {"id": 10, "text": "Is curious about many different things"},
+    {"id": 11, "text": "Is full of energy"},
+    {"id": 12, "text": "Starts quarrels with others"},
+    {"id": 13, "text": "Is a reliable worker"},
+    {"id": 14, "text": "Can be tense"},
+    {"id": 15, "text": "Is ingenious, a deep thinker"},
+    {"id": 16, "text": "Generates a lot of enthusiasm"},
+    {"id": 17, "text": "Has a forgiving nature"},
+    {"id": 18, "text": "Tends to be disorganized"},
+    {"id": 19, "text": "Worries a lot"},
+    {"id": 20, "text": "Has an active imagination"},
+    {"id": 21, "text": "Tends to be quiet"},
+    {"id": 22, "text": "Is generally trusting"},
+    {"id": 23, "text": "Tends to be lazy"},
+    {"id": 24, "text": "Is emotionally stable, not easily upset"},
+    {"id": 25, "text": "Is inventive"},
+    {"id": 26, "text": "Has an assertive personality"},
+    {"id": 27, "text": "Can be cold and aloof"},
+    {"id": 28, "text": "Perseveres until the task is finished"},
+    {"id": 29, "text": "Can be moody"},
+    {"id": 30, "text": "Values artistic, aesthetic experiences"},
+    {"id": 31, "text": "Is sometimes shy, inhibited"},
+    {"id": 32, "text": "Is considerate, kind to almost everyone"},
+    {"id": 33, "text": "Does things efficiently"},
+    {"id": 34, "text": "Remains calm in tense situations"},
+    {"id": 35, "text": "Prefers work that is routine"},
+    {"id": 36, "text": "Is outgoing, sociable"},
+    {"id": 37, "text": "Is sometimes rude to others"},
+    {"id": 38, "text": "Makes plans and follows through on them"},
+    {"id": 39, "text": "Gets nervous easily"},
+    {"id": 40, "text": "Likes to reflect, play with ideas"},
+    {"id": 41, "text": "Has few artistic interests"},
+    {"id": 42, "text": "Likes to cooperate with others"},
+    {"id": 43, "text": "Is easily distracted"},
+    {"id": 44, "text": "Is sophisticated in art, music, or literature"}
+  ]
+}

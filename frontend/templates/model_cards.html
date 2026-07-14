@@ -1,34 +1,34 @@
 {% extends "base.html" %}
-{% from '_macros.html' import start_button with context %}
+{% from '_macros.html' import page_header, empty_state with context %}
 {% from '_model_label_card.html' import model_label_styles, model_label_card with context %}
 
-{% block title %}Model report cards — AI Model Advisor{% endblock %}
+{% block title %}Model report cards — Model Advisor{% endblock %}
+
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span class="breadcrumb-current">Report cards</span>
+{% endblock %}
 
 {% block content %}
-<div class="hub">
-  <h1>Model report cards</h1>
-  <p class="sub">
-    Every evaluated model as an at-a-glance label — file-scan security, red-team
-    safety, and task efficacy in one card. Click any card for the full breakdown.
-  </p>
+{{ page_header(
+     'Model report cards',
+     'Every evaluated model as an at-a-glance label — file-scan security, red-team safety, and task efficacy in one card. Click any card for the full breakdown.'
+   ) }}
 
-  {{ model_label_styles() }}
-  {% if cards %}
-  <p class="mlabel-caption">
-    {{ cards|length }} model{{ "" if cards|length == 1 else "s" }} evaluated ·
-    <a href="{{ url_for('compare_models') }}">compare models →</a> ·
-    <a href="{{ url_for('models_catalog') }}">full catalog →</a>
-  </p>
-  <div class="mlabel-grid">
-    {% for card in cards %}
-    {{ model_label_card(card) }}
-    {% endfor %}
-  </div>
-  {% else %}
-  <p class="empty">
-    No model report cards yet — a card appears here once a model has at least one
-    eval run. {{ start_button(url_for('eval_run_new'), '▶ Start eval') }}
-  </p>
-  {% endif %}
+{{ model_label_styles() }}
+{% if cards %}
+<p class="body mb-4">
+  {{ cards|length }} model{{ "" if cards|length == 1 else "s" }} evaluated ·
+  <a class="font-semibold text-duke-blue" href="{{ url_for('compare_models') }}">Compare models →</a> ·
+  <a class="font-semibold text-duke-blue" href="{{ url_for('models_catalog') }}">Full catalog →</a>
+</p>
+<div class="mlabel-grid">
+  {% for card in cards %}
+  {{ model_label_card(card) }}
+  {% endfor %}
 </div>
+{% else %}
+{{ empty_state('No model report cards yet — a card appears here once a model has at least one eval run.') }}
+{% endif %}
 {% endblock %}

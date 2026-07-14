@@ -1,31 +1,28 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_benchmark_docker, start_button, delete_button, rerun_button, staleness_badge with context %}
+{% from '_macros.html' import expandable, start_button, delete_button, rerun_button, staleness_badge, page_header, list_compare_tabs, empty_state with context %}
 
 {% block title %}Benchmark results{% endblock %}
 
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span class="breadcrumb-current">Benchmarks</span>
+{% endblock %}
+
 {% block content %}
 <div class="eval-comparison">
-  <h1>Benchmark results</h1>
-  <p class="benchmark-page-actions">
-    {{ start_button(url_for('benchmark_run_new'), '▶ Start a new run') }}
-  </p>
+  {% set actions %}{{ start_button(url_for('benchmark_run_new'), '▶ Start benchmark') }}{% endset %}
+  {{ page_header('Benchmark results', 'TruthfulQA · IFEval · MMLU · MBPP · QuALITY and more.', actions) }}
 
-  {% if has_reference %}
-  <aside class="benchmark-reference-callout" aria-label="Benchmark reference and guide">
-    <div class="benchmark-reference-callout-text">
-      <p class="benchmark-reference-callout-kicker">Start here</p>
-      <p class="benchmark-reference-callout-title">Reference scores &amp; benchmark guide</p>
-      <p class="benchmark-reference-callout-desc">
-        Sample pilot runs for gateway models, plus what each benchmark measures and how scores are computed on this site.
-      </p>
-    </div>
-    <a class="btn-reference" href="{{ url_for('benchmark_reference') }}">Open reference &amp; guide →</a>
-  </aside>
+  {% if guide_rows %}
+  {% with title="Benchmark reference & guide", intro="Pilot runs and scoring orientation per benchmark kind." %}
+  {% include '_benchmark_guide.html' %}
+  {% endwith %}
   {% endif %}
 
-  <details class="key" open>
-    <summary>How to read this</summary>
-    <dl class="legend-grid">
+  <section class="key card p-4 mb-6">
+    <h2 class="subsection-title">How to read this</h2>
+    <dl class="legend-grid mt-3">
       <dt>Score</dt>
       <dd>
         Headline metric per benchmark (<code>accuracy</code>, <code>pass rate</code>, etc.).
@@ -51,20 +48,14 @@
       {% if has_reference %}
       <dt>Reference</dt>
       <dd>
-        Committed gateway baselines on default pilot sizes —
-        <a href="{{ url_for('benchmark_reference') }}">open reference &amp; guide</a>
-        for what each benchmark measures.
+        Committed gateway baselines on default pilot sizes — expand the guide above for what each benchmark measures.
       </dd>
       {% endif %}
     </dl>
-  </details>
+  </section>
 
-  <h2>Runs</h2>
   {% if not has_runs %}
-    <p class="sub empty">
-      No benchmark output yet. Use <b>Start a new run</b> above, or from repo root:
-      <code>{{ cli_benchmark_docker() }}</code>
-    </p>
+    {{ empty_state('No benchmark results yet. Start a benchmark from the button above.') }}
   {% else %}
     <div class="bench-view-tabs" role="tablist" aria-label="Benchmark results view">
       <button type="button" class="bench-view-tab is-active" data-view="list" role="tab" aria-selected="true" id="bench-tab-list">List</button>
@@ -74,31 +65,33 @@
     </div>
 
     <div id="bench-view-list" class="bench-view-panel" role="tabpanel" aria-labelledby="bench-tab-list">
-    <p class="sub">
-      {% if all_run_count > run_count %}
-      <b>{{ run_count }}</b> latest per model &amp; benchmark
-      · {{ all_run_count }} total run{{ "" if all_run_count == 1 else "s" }} on disk
-      {% else %}
-      {{ run_count }} result{{ "" if run_count == 1 else "s" }}
-      {% endif %}
-      · {{ kinds|join(" · ") }}
-    </p>
+    <div class="pillar-toolbar card p-4 mb-4">
+      <p class="sub">
+        {% if all_run_count > run_count %}
+        <b>{{ run_count }}</b> latest per model &amp; benchmark
+        · {{ all_run_count }} total run{{ "" if all_run_count == 1 else "s" }} on disk
+        {% else %}
+        {{ run_count }} result{{ "" if run_count == 1 else "s" }}
+        {% endif %}
+        · {{ kinds|join(" · ") }}
+      </p>
 
-    <div class="table-controls">
-      <label>Benchmark <select id="f-kind"><option value="">all</option></select></label>
-      <label>Model <select id="f-model"><option value="">all</option></select></label>
-      <label class="checkbox-inline">
-        <input type="checkbox" id="f-all"> Show all runs
-      </label>
-      <label>Sort
-        <select id="f-sort">
-          <option value="when-desc" selected>Newest first</option>
-          <option value="when-asc">Oldest first</option>
-          <option value="score-desc">Best score</option>
-          <option value="score-asc">Lowest score</option>
-        </select>
-      </label>
-      <span class="controls-hint">click Score / When headers to sort · click a row for detail</span>
+      <div class="table-controls pillar-table-controls mb-0">
+        <label>Benchmark <select id="f-kind"><option value="">all</option></select></label>
+        <label>Model <select id="f-model"><option value="">all</option></select></label>
+        <label class="checkbox-inline">
+          <input type="checkbox" id="f-all"> Show all runs
+        </label>
+        <label>Sort
+          <select id="f-sort">
+            <option value="when-desc" selected>Newest first</option>
+            <option value="when-asc">Oldest first</option>
+            <option value="score-desc">Best score</option>
+            <option value="score-asc">Lowest score</option>
+          </select>
+        </label>
+        <span class="controls-hint">click Score / When headers to sort · click a row for detail</span>
+      </div>
     </div>
 
     <div class="table-wrap">

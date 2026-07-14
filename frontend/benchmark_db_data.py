@@ -71,7 +71,7 @@ def _connect():
 _LIST_SQL = """
 SELECT output_slug, source_filename, gateway_model_id, benchmark_key,
        headline_metric, headline_value, n_items, metrics, items, run_params,
-       completed_at
+       completed_at, config_json
 FROM public.benchmark_runs b
 WHERE {visibility_filter}
 ORDER BY completed_at DESC NULLS LAST, output_slug
@@ -80,7 +80,7 @@ ORDER BY completed_at DESC NULLS LAST, output_slug
 _DETAIL_SQL = """
 SELECT output_slug, source_filename, gateway_model_id, benchmark_key,
        headline_metric, headline_value, n_items, metrics, items, run_params,
-       completed_at
+       completed_at, config_json
 FROM public.benchmark_runs b
 WHERE output_slug = %(slug)s AND ({visibility_filter})
 LIMIT 1
@@ -155,11 +155,12 @@ def _summarize_db_run(row: tuple) -> dict:
         _items,
         _run_params,
         completed_at,
+        config_json,
     ) = row
     metrics = metrics or {}
     kind = benchmark_key
     ts_raw = _ts_raw(completed_at)
-    return {
+    summary = {
         "slug": output_slug,
         "filename": source_filename,
         "kind": kind,
@@ -173,6 +174,9 @@ def _summarize_db_run(row: tuple) -> dict:
         "n": n_items,
         "extras": _extras_from_metrics(kind, metrics),
     }
+    if isinstance(config_json, dict) and config_json.get("benchmark_spec_digest"):
+        summary["benchmark_spec_digest"] = config_json["benchmark_spec_digest"]
+    return summary
 
 
 def _build_detail_db(row: tuple) -> dict:

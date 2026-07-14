@@ -867,35 +867,50 @@ def _summarize_quality(path: Path, data: dict) -> dict:
     }
 
 
+def _attach_benchmark_staleness_fields(row: dict, *, artifact_dir: Path) -> None:
+    from dbutils.run_meta import read_run_meta_for_pillar
+
+    meta = read_run_meta_for_pillar(artifact_dir, pillar="benchmark")
+    config = meta.get("config_json") if isinstance(meta.get("config_json"), dict) else {}
+    if config.get("benchmark_spec_digest"):
+        row["benchmark_spec_digest"] = config["benchmark_spec_digest"]
+
+
 def _summarize_file(path: Path) -> dict | None:
     if path.suffix == ".log":
         return None
     kind = _detect_kind(path)
     if kind is None:
         return None
+    row: dict | None
     if kind == "ifeval":
-        return _summarize_ifeval(path)
-    try:
-        with path.open("r", encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception:
-        return None
-    if kind == "truthfulqa":
-        metrics = data.get("metrics") or data.get("summary") or {}
-        if not metrics.get("total_evaluated") and not data.get("responses"):
+        row = _summarize_ifeval(path)
+    else:
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
             return None
-        return _summarize_truthfulqa(path, data)
-    if kind == "consistency":
-        return _summarize_consistency(path, data)
-    if kind == "mmlu":
-        return _summarize_mmlu(path, data)
-    if kind == "tomi":
-        return _summarize_tomi(path, data)
-    if kind == "mbpp":
-        return _summarize_mbpp(path, data)
-    if kind == "quality":
-        return _summarize_quality(path, data)
-    return None
+        if kind == "truthfulqa":
+            metrics = data.get("metrics") or data.get("summary") or {}
+            if not metrics.get("total_evaluated") and not data.get("responses"):
+                return None
+            row = _summarize_truthfulqa(path, data)
+        elif kind == "consistency":
+            row = _summarize_consistency(path, data)
+        elif kind == "mmlu":
+            row = _summarize_mmlu(path, data)
+        elif kind == "tomi":
+            row = _summarize_tomi(path, data)
+        elif kind == "mbpp":
+            row = _summarize_mbpp(path, data)
+        elif kind == "quality":
+            row = _summarize_quality(path, data)
+        else:
+            row = None
+    if row:
+        _attach_benchmark_staleness_fields(row, artifact_dir=PRIMARY_DIR / row["slug"])
+    return row
 
 
 def _run_stats_chips(rs: dict) -> list[dict[str, str]]:
@@ -1574,6 +1589,7 @@ def get_benchmarks_data() -> dict:
         benchmark_db_data.available,
         benchmark_db_data.get_benchmarks_data_db,
         _get_benchmarks_data_files,
+        pillar="benchmark",
     )
     ref = _build_reference_section()
     data["has_reference"] = ref.get("has_reference", False)
@@ -1619,6 +1635,10 @@ def get_benchmark_detail(
                 detail = benchmark_db_data.get_benchmark_detail_db(
                     slug, visibility=visibility, owner_user_id=owner_user_id
                 )
+                if detail is None:
+                    detail = _get_benchmark_detail_files(
+                        slug, visibility=visibility, owner_user_id=owner_user_id
+                    )
             else:
                 detail = _get_benchmark_detail_files(
                     slug, visibility=visibility, owner_user_id=owner_user_id

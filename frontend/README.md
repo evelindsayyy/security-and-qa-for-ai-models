@@ -1,46 +1,110 @@
 # Frontend (`frontend/`)
 
-AI Model Advisor **UI and JSON API** (one Flask process). Browser **Start** buttons and `POST /api/*` spawn pillar jobs in Docker via [`docker_launch.py`](docker_launch.py). Reads use Postgres when configured, else on-disk JSON.
+AI Model Advisor **UI and JSON API** (one Flask process). Browser **Start** buttons
+and `POST /api/*` spawn pillar jobs via [`docker_launch.py`](docker_launch.py).
+Reads use Postgres when configured, else on-disk JSON.
 
 ## Quick start
 
-### One-time setup
-
 ```bash
 uv sync --group dev
-cp .env.example .env             # DUKE_GATEWAY_KEY required
-./docker/build-pillars.sh        # pillar images for Start buttons
+cp .env.example .env
+./docker/build-pillars.sh
+python3 main.py up -d --build    # default; builds assets via run.sh
 ```
 
-Postgres schema and backfill (optional): see [root README — Optional Postgres](../README.md#optional--postgres).
+Open http://127.0.0.1:5000. Launch pages: `/scans/new` · `/safety/new` ·
+`/eval-run/new` · `/benchmarks/new`.
 
-### Run (containerized — default)
+While a job runs, detail pages poll status and show a live log tail. Scan and
+safety start forms warn when the same model/repo is already in progress.
 
-See [`docs/docker.md`](../docs/docker.md).
+## UI stack
+
+Server-rendered **Jinja** templates + **Preact** islands (Vite, TypeScript, Tailwind 3).
+
+| Layer | Path |
+|-------|------|
+| Templates | `frontend/templates/` |
+| Styles | `frontend/assets/src/styles/app.css` + Tailwind |
+| Islands | `frontend/assets/src/islands/` |
+| Built bundle | `frontend/static/dist/` (gitignored) |
+
+[`vite_assets.py`](vite_assets.py) resolves hashed bundle URLs and serves
+`/static/dist/*` from the working-tree build when present, else `/opt/frontend-dist`
+from the image.
 
 ```bash
-python3 main.py                   # or: ./docker/run.sh up --build
-python3 main.py up -d --build     # background
+cd frontend/assets
+npm ci && npm run build    # → ../static/dist/
+npm run dev                # watch (pair with python3 main.py --host)
+npm run test               # Vitest
 ```
 
-Open http://127.0.0.1:5000 · launch pages: `/scans/new` · `/safety/new` · `/eval-run/new` · `/benchmarks/new`
+`docker/run.sh` runs `scripts/build-frontend.sh` before container start. CI
+`frontend-build` job produces the image bake.
 
-While a job runs, its detail page polls status and shows a live log tail. Scan and safety start forms warn when the same model/repo is already in progress (`run.lock` under the output dir).
+### Islands
 
-### Benchmark model sources (`/benchmarks/new`)
+| Island | Role |
+|--------|------|
+| `FindingsPanel` | Filterable findings on detail pages |
+| `ComparisonHeatmap` | Pillar list/compare matrices |
+| `LiveRunProgress` | Run progress + log tail |
+| `CompareCharts` | Charts on `/compare` |
 
-Three ways to pick a model — the form shows a setup guide that changes with your
-selection. Full reference: [`benchmarks/README.md`](../benchmarks/README.md#model-input-cheat-sheet).
+### Key routes
 
-| Source | Model input example |
-|--------|---------------------|
+| Area | Routes |
+|------|--------|
+| Overview | `/` |
+| Catalog / compare | `/models`, `/compare`, `/models/<slug>` |
+| Pipeline | `/pipeline` |
+| Pillars | `/scans`, `/safety`, `/eval-run`, `/benchmarks` + detail/new pages |
+
+Header: **Public | Private** toggle · **Sign in with Duke NetID** when `AUTH_ENABLED=1`.
+
+## Modules
+
+| Module | Role |
+|--------|------|
+| `routes.py` | Flask routes |
+| `model_rollup.py` | Cross-pillar catalog/compare data |
+| `model_findings.py` | Top findings for model detail |
+| `overview.py` | Overview KPIs + activity |
+| `pipeline.py` | Cross-pillar gating view |
+| `vite_assets.py` | Vite manifest + static dist serving |
+| `docker_launch.py` | Browser-launched pillar Docker stacks |
+| `db_fallback.py` | Postgres-first reads; disk when offline |
+| `staleness.py` | Per-pillar needs-rerun rules |
+| `run_paths.py` | Public/private path scoping |
+
+## Benchmark model sources (`/benchmarks/new`)
+
+| Source | Example input |
+|--------|---------------|
 | Gateway | `GPT 4.1 Mini` (dropdown) |
-| Hosted (HF Inference) | `meta-llama/Llama-3.1-8B-Instruct` + `hf_…` token |
-| Custom (self-hosted API) | `my-finetune-v2` + `http://localhost:8080/v1` |
+| Hosted (HF Inference) | `meta-llama/Llama-3.1-8B-Instruct` + token |
+| Custom API | `my-model` + `http://host:8080/v1` |
 
-### JSON API
+See [`benchmarks/README.md`](../benchmarks/README.md).
 
-Same data as the UI. Full routes: [`../api/README.md`](../api/README.md).
+## Auth (local dev)
+
+```bash
+# .env — no Duke OAuth required
+AUTH_ENABLED=0
+AUTH_DEV_NETID=yournetid
+AUTH_ALLOWED_NETIDS=yournetid
+
+curl -s localhost:5000/auth/me | python3 -m json.tool
+```
+
+Production OIDC: [`auth/README.md`](../auth/README.md).
+
+## JSON API
+
+Same data as the UI. Routes: [`api/README.md`](../api/README.md).
 
 ```bash
 curl -s localhost:5000/api/health | python3 -m json.tool
@@ -48,35 +112,26 @@ curl -s localhost:5000/api/scans | python3 -m json.tool
 curl -s -X POST localhost:5000/api/scans \
   -H 'Content-Type: application/json' \
   -d '{"hf_repo":"distilbert-base-uncased"}' | python3 -m json.tool
-curl -s localhost:5000/api/scans/distilbert-base-uncased/status | python3 -m json.tool
 ```
 
-POST returns **202** with `job_id` and `status_url`; poll status, then GET detail.
+POST returns **202** with `job_id` and `status_url`.
 
-### Host Flask (development)
+## Host Flask (development)
 
-UI without containerizing the app; pillar jobs still use Docker unless `FRONTEND_LAUNCH_MODE=host`:
+UI without containerizing the app; pillar jobs still use Docker by default.
 
 ```bash
-python3 main.py --host
-# Or: uv run flask --app frontend:create_app run --debug --port 5001
+cd frontend/assets && npm run dev    # terminal 1
+python3 main.py --host               # terminal 2
 ```
 
 ## Troubleshooting
 
-- **Host has no `python` command** — use `python3 main.py` or `./docker/run.sh` (see [`docs/cli.md`](../docs/cli.md)).
-- **Promptfoo “config not found” / empty eval.json** — missing `HOST_REPO`. `./docker/run.sh` sets it; browser launches pass it via `docker_launch.py`.
-- **Garak `run config not found: tmp*.yaml`** — redeploy after fix in `run_garak.py` (absolute config path).
-- **`POST /api/scans` → 503** (cannot write) — root-owned output from an old run. On the application VM (no sudo needed):
-
-  ```bash
-  docker run --rm -v "$PWD/scanner/output:/out" -u root busybox \
-    chown -R "$(id -u):$(id -g)" /out
-  ```
-
-- **`db_available: false`** — check `POSTGRES_DSN`, schema apply, and network ([`docs/cli.md`](../docs/cli.md)).
-- **Skip Docker for jobs** — `FRONTEND_LAUNCH_MODE=host` in `.env` (legacy; safety may still use nested Docker).
+- **Unstyled UI** — run `npm run build` or restart via `python3 main.py up -d --build`; on VM use CI deploy. See [`docker/README.md`](../docker/README.md).
+- **Docker required for Start** — `.docker-home` UID mismatch or stale web process; `./docker/run.sh up -d --force-recreate`.
+- **`db_available: false`** — check `POSTGRES_DSN`, schema apply, network ([`cli.md`](../docs/cli.md)).
+- **503 on POST /api/scans** — root-owned `scanner/output`; see [`cli.md`](../docs/cli.md).
 
 ## See also
 
-- [`../README.md`](../README.md) · [`docs/cli.md`](../docs/cli.md) · [`docs/docker.md`](../docs/docker.md) · [`../api/README.md`](../api/README.md)
+[`README.md`](../README.md) · [`docs/cli.md`](../docs/cli.md) · [`docs/docker.md`](../docs/docker.md) · [`api/README.md`](../api/README.md)

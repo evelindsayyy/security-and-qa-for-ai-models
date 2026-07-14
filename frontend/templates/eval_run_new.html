@@ -1,21 +1,18 @@
 {% extends "base.html" %}
+{% from '_macros.html' import launch_back, rerun_callout with context %}
 
 {% block title %}Start an evaluation run{% endblock %}
 
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span><a href="{{ url_for('eval_run') }}">Eval</a></span>
+<span class="text-text-subtle">›</span>
+<span class="font-medium text-text">Start run</span>
+{% endblock %}
+
 {% block content %}
 <style>
-  .eval-guide { border:1px solid #dfe3ee; border-radius:10px; background:#f6f8fd; padding:.75rem 1rem; margin:.4rem 0 1.1rem; }
-  .eval-guide > summary { cursor:pointer; font-weight:600; color:#1b2a5e; list-style:none; display:flex; align-items:center; gap:.45rem; }
-  .eval-guide > summary::-webkit-details-marker { display:none; }
-  .eval-guide-body { margin-top:.65rem; color:#444; font-size:.93rem; line-height:1.5; }
-  .eval-guide-steps { display:grid; grid-template-columns:repeat(3,1fr); gap:.6rem; margin:.55rem 0 .85rem; }
-  .eval-guide-steps b { color:#1b2a5e; }
-  .eval-guide-steps span { color:#7a8195; }
-  .eval-guide-pick { display:grid; grid-template-columns:1fr 1fr; gap:.6rem; }
-  .eval-guide-pick > div { background:#fff; border:1px solid #e2e6f0; border-radius:8px; padding:.5rem .7rem; }
-  .eval-guide-pick strong { display:block; color:#1b2a5e; margin-bottom:.15rem; }
-  .eval-guide-pick small { color:#7a8195; }
-
   .suite-opt { display:flex; align-items:center; gap:.4rem; margin:.2rem 0; }
   .suite-help { position:relative; display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; border:1px solid #b7bed0; color:#556; font-size:11px; line-height:1; cursor:help; }
   .suite-tip { display:none; position:absolute; left:22px; top:50%; transform:translateY(-50%); z-index:20; width:250px; background:#1b2a5e; color:#fff; padding:.5rem .6rem; border-radius:6px; font-size:.8rem; line-height:1.45; box-shadow:0 2px 8px rgba(0,0,0,.15); }
@@ -25,177 +22,180 @@
   .suite-badge--execution { background:#e6f4ea; color:#1e7a43; border:1px solid #bfe3cd; }
   .suite-badge--judge { background:#eaeff9; color:#2f43a0; border:1px solid #ccd6f2; }
 
-  .qb-row { border:1px solid #e2e6f0; border-radius:8px; padding:.6rem .7rem; margin-bottom:.55rem; }
-  .qb-rowhead { display:flex; justify-content:space-between; align-items:center; font-size:.78rem; color:#8890a5; margin-bottom:.25rem; }
-  .qb-remove { background:none; border:none; color:#8890a5; font-size:1.15rem; line-height:1; cursor:pointer; padding:0 .2rem; }
+  .qb-row { border: 1px solid var(--color-border); border-radius: 8px; padding:.6rem .7rem; margin-bottom:.55rem; }
+  .qb-rowhead { display:flex; justify-content:space-between; align-items:center; font-size:.78rem; color: var(--color-text-subtle); margin-bottom:.25rem; }
+  .qb-remove { background:none; border:none; color: var(--color-text-subtle); font-size:1.15rem; line-height:1; cursor:pointer; padding:0 .2rem; }
   .qb-remove:hover { color:#c0392b; }
-  .qb-field { display:block; font-size:.78rem; color:#555; margin-top:.4rem; }
+  .qb-field { display:block; font-size:.78rem; color: var(--color-text-muted); margin-top:.4rem; }
   .qb-field textarea { display:block; width:100%; margin-top:2px; box-sizing:border-box; }
   .qb-actions { display:flex; align-items:center; justify-content:space-between; margin:.2rem 0 .5rem; }
-  .qb-add { background:#fff; border:1px solid #c3cadd; border-radius:8px; padding:.4rem .8rem; cursor:pointer; color:#1b2a5e; }
+  .qb-add { background: var(--color-surface-raised); border: 1px solid var(--color-border-strong); border-radius:8px; padding:.4rem .8rem; cursor:pointer; color: var(--color-duke-blue); }
   .qb-add:disabled { opacity:.5; cursor:not-allowed; }
-  .qb-count { color:#8890a5; font-size:.85rem; }
-  .qb-tip { font-size:.82rem; background:#eef4fb; border-radius:8px; padding:.5rem .65rem; margin:.4rem 0; color:#33447a; }
+  .qb-count { color: var(--color-text-subtle); font-size:.85rem; }
+  .qb-tip { font-size:.82rem; background: var(--color-duke-blue-muted); border-radius:8px; padding:.5rem .65rem; margin:.4rem 0; color: var(--color-duke-blue); }
   .qb-advanced { margin-top:.6rem; }
-  .qb-advanced > summary { cursor:pointer; color:#556; font-size:.85rem; }
+  .qb-advanced > summary { cursor:pointer; color: var(--color-text-muted); font-size:.85rem; }
   .qb-advanced textarea { width:100%; box-sizing:border-box; }
 </style>
 
-<div class="eval-comparison">
-  <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
-  <h1>Start an evaluation run</h1>
+<div class="launch-page">
+  {{ launch_back(url_for('eval_run'), 'all eval runs') }}
 
-  <details class="eval-guide" open>
-    <summary><span>ⓘ</span> How this works — which should I pick?</summary>
-    <div class="eval-guide-body">
-      <p>An evaluation tests one model and has a second model grade the answers. You choose three things:</p>
-      <div class="eval-guide-steps">
-        <div><b>1 · Model</b><br><span>the one being tested</span></div>
-        <div><b>2 · What to test</b><br><span>a ready task or your own</span></div>
-        <div><b>3 · Judge</b><br><span>grades the answers</span></div>
-      </div>
-      <div class="eval-guide-pick">
-        <div><strong>Use a task suite</strong><small>to compare models on a standard Duke task — references already written.</small></div>
-        <div><strong>Bring your own questions</strong><small>for your specific use case — you provide the ideal answer for each.</small></div>
-      </div>
-    </div>
-  </details>
+  <header>
+    <h1 class="page-title">Start an evaluation run</h1>
+    <p class="page-subtitle">
+      Choose a candidate model, judge, and task suite. One run at a time; an identical in-flight request returns the existing run.
+    </p>
+  </header>
 
-  {% if rerun %}
-  <p class="sub benchmark-rerun-hint">Pre-filled from a previous run — starting will delete the prior results and replace them.</p>
+  {% if rerun %}{{ rerun_callout() }}{% endif %}
+  {% if not docker_available %}
+  <p class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</p>
   {% endif %}
 
-  <p class="sub">
-    Launches <code>evaluator/runner.py</code> via Docker Compose (default).
-    One run at a time; an identical in-flight request returns the existing run.
-    {% if not docker_available %}
-    <span class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>
-    {% endif %}
-  </p>
+  <form method="post" action="{{ url_for('eval_run_start') }}" class="launch-form card p-5" id="std-form">
 
-  <form method="post" action="{{ url_for('eval_run_start') }}" class="launch-form" id="std-form">
-
-    <fieldset class="candidate-source">
-      <legend>Candidate model</legend>
-      <label class="src-opt"><input type="radio" name="source" value="gateway" checked> Gateway model</label>
-      <select name="candidate" id="candidate">
-        {% for m in candidates %}
-        <option value="{{ m }}">{{ m }}</option>
-        {% endfor %}
-      </select>
-
-      <label class="src-opt"><input type="radio" name="source" value="hf"> Hugging Face model</label>
-      <input type="text" name="hf_repo" id="hf_repo" list="hf_repo_suggestions"
-             placeholder="Qwen/Qwen2.5-7B-Instruct" autocomplete="off" spellcheck="false">
-      <datalist id="hf_repo_suggestions">
-        {% for repo in suggested_hf_repos %}<option value="{{ repo }}"></option>{% endfor %}
-      </datalist>
-      <span class="form-hint"><b>Public, open-weight models only</b> — gated or private repos (e.g. Meta Llama, Gemma) aren't supported, and no Hugging Face account is needed. Public models must pass the scanner gate, then are served on the DCC GPU, evaluated, and torn down — all from ▶ Start run.</span>
-    </fieldset>
-
-    <label>Judge model
-      <select name="judge" id="judge">
-        {% for m in judges %}
-        <option value="{{ m }}">{{ m }}</option>
-        {% endfor %}
-      </select>
-      <span class="form-hint">must be a different model family than the candidate (MT-Bench rule)</span>
-    </label>
-
-    <fieldset>
-      <legend>Task suite</legend>
-      {% for s in suites %}
-      <div class="suite-opt">
-        <label class="suite-label">
-          <input type="radio" name="suite" value="{{ s.key }}"
-                 data-n="{{ s.n }}" {% if loop.first %}checked{% endif %}>
-          {{ s.label }}
-        </label>
-        {% if s.scoring == 'execution' %}
-        <span class="suite-badge suite-badge--execution"
-              title="checked by running the answer — no LLM judge">run &amp; check</span>
-        {% else %}
-        <span class="suite-badge suite-badge--judge"
-              title="graded by an LLM-as-judge against a reference">LLM-judged</span>
-        {% endif %}
-        <span class="suite-help" tabindex="0" role="button" aria-label="About {{ s.label }}">?<span
-          class="suite-tip" role="tooltip">{{ s.description }}{% if s.example %}<br><em>e.g. {{ s.example }}</em>{% endif %}</span></span>
-      </div>
-      {% endfor %}
-    </fieldset>
-
-    <label>Max tokens (candidate completion budget)
-      <input type="number" name="max_tokens" id="max_tokens" value="2000"
-             min="{{ max_tokens_min }}" max="{{ max_tokens_max }}">
-      <span class="form-hint">completion budget for the candidate. Chat models (GPT 4.1 Mini, gpt-5-chat) work at 500–2000;
-        reasoning models (gpt-5-mini, gpt-5-nano) need 2000–4000.</span>
-    </label>
-
-    <p id="family-warning" class="form-warning js-family-warning" style="display: none;">
-      Judge and candidate are the same model family — the server will reject this.
-    </p>
-
-    <p class="cost-line">Estimated candidate cost: <b id="cost-preview" class="js-cost-preview">$—</b>
-      <span class="form-hint">upper bound: n × (250 prompt + max_tokens completion) at list rates; judge cost not included</span>
-    </p>
-
-    <button type="submit" id="submit-btn" class="btn-primary">▶ Start run</button>
-  </form>
-
-  {% if hf_result %}
-    {% if hf_result.ok %}
-    <div class="intake-result intake-ok">
-      <h2>✅ {{ hf_result.repo_id }} — ready to evaluate</h2>
-      <p>Architecture: {{ hf_result.architectures | join(', ') }}{% if hf_result.num_params %} · {{ '%.1f'|format(hf_result.num_params / 1e9) }}B params{% endif %}</p>
-    </div>
-    {% else %}
-    <div class="intake-result intake-error">
-      <h2>❌ Can't evaluate {{ hf_result.repo_id }}</h2>
-      <p>{{ hf_result.error }}</p>
-    </div>
-    {% endif %}
-  {% endif %}
-
-  <details class="custom-suite">
-    <summary>Or bring your own questions</summary>
-    <p class="form-hint">
-      Test the model on your own questions. Add a question and the ideal answer
-      you'd want back; the judge scores each model's reply against your ideal
-      answer. Up to {{ custom_max_questions }} questions. Custom runs are ad-hoc —
-      scored the same way but kept out of the model-comparison table.
-    </p>
-    <form method="post" action="{{ url_for('eval_run_start_custom') }}" class="launch-form" id="custom-form">
-
+    <section class="form-section">
+      <h2 class="form-section-title">Candidate model</h2>
       <fieldset class="candidate-source">
-        <legend>Candidate model</legend>
         <label class="src-opt"><input type="radio" name="source" value="gateway" checked> Gateway model</label>
-        <select name="candidate" id="candidate_c">
+        <select name="candidate" id="candidate">
           {% for m in candidates %}
           <option value="{{ m }}">{{ m }}</option>
           {% endfor %}
         </select>
 
         <label class="src-opt"><input type="radio" name="source" value="hf"> Hugging Face model</label>
-        <input type="text" name="hf_repo" id="hf_repo_c" list="hf_repo_suggestions"
+        <input type="text" name="hf_repo" id="hf_repo" list="hf_repo_suggestions"
                placeholder="Qwen/Qwen2.5-7B-Instruct" autocomplete="off" spellcheck="false">
-        <span class="form-hint"><b>Public, open-weight models only</b> — gated or private repos aren't supported, and no Hugging Face account is needed. Public models must pass the scanner gate, then are served on the DCC GPU, evaluated on your questions, and torn down.</span>
+        <datalist id="hf_repo_suggestions">
+          {% for repo in suggested_hf_repos %}<option value="{{ repo }}"></option>{% endfor %}
+        </datalist>
+        <span class="form-hint"><b>Public, open-weight models only</b> — gated or private repos (e.g. Meta Llama, Gemma) aren't supported, and no Hugging Face account is needed. Public models must pass the scanner gate, then are served on the DCC GPU, evaluated, and torn down — all from ▶ Start run.</span>
       </fieldset>
+    </section>
 
-      <label>Judge model
-        <select name="judge" id="judge_c">
+    <section class="form-section">
+      <h2 class="form-section-title">Judge model</h2>
+      <div class="form-field">
+        <label for="judge">Judge</label>
+        <select name="judge" id="judge">
           {% for m in judges %}
           <option value="{{ m }}">{{ m }}</option>
           {% endfor %}
         </select>
-        <span class="form-hint">must be a different model family than the candidate</span>
-      </label>
-      <label>Max tokens
-        <input type="number" name="max_tokens" id="max_tokens_c" value="2000"
-               min="{{ max_tokens_min }}" max="{{ max_tokens_max }}">
-      </label>
+        <span class="form-hint">Must be a different model family than the candidate (MT-Bench rule).</span>
+      </div>
+    </section>
 
-      <fieldset class="qbuilder">
-        <legend>Your questions</legend>
+    <section class="form-section">
+      <h2 class="form-section-title">Task suite</h2>
+      <fieldset>
+        {% for s in suites %}
+        <div class="suite-opt">
+          <label class="suite-label">
+            <input type="radio" name="suite" value="{{ s.key }}"
+                   data-n="{{ s.n }}" {% if loop.first %}checked{% endif %}>
+            {{ s.label }}
+          </label>
+          {% if s.scoring == 'execution' %}
+          <span class="suite-badge suite-badge--execution"
+                title="checked by running the answer — no LLM judge">run &amp; check</span>
+          {% else %}
+          <span class="suite-badge suite-badge--judge"
+                title="graded by an LLM-as-judge against a reference">LLM-judged</span>
+          {% endif %}
+          <span class="suite-help" tabindex="0" role="button" aria-label="About {{ s.label }}">?<span
+            class="suite-tip" role="tooltip">{{ s.description }}{% if s.example %}<br><em>e.g. {{ s.example }}</em>{% endif %}</span></span>
+        </div>
+        {% endfor %}
+      </fieldset>
+    </section>
+
+    <section class="form-section">
+      <h2 class="form-section-title">Parameters</h2>
+      <div class="form-field">
+        <label for="max_tokens">Max tokens (candidate completion budget)</label>
+        <input type="number" name="max_tokens" id="max_tokens" value="2000"
+               min="{{ max_tokens_min }}" max="{{ max_tokens_max }}">
+        <span class="form-hint">Chat models (GPT 4.1 Mini, gpt-5-chat) work at 500–2000; reasoning models (gpt-5-mini, gpt-5-nano) need 2000–4000.</span>
+      </div>
+
+      <p id="family-warning" class="form-warning js-family-warning mt-3" style="display: none;">
+        Judge and candidate are the same model family — the server will reject this.
+      </p>
+
+      <p class="cost-line mt-3">Estimated candidate cost: <b id="cost-preview" class="js-cost-preview">$—</b>
+        <span class="form-hint">Upper bound: n × (250 prompt + max_tokens completion) at list rates; judge cost not included.</span>
+      </p>
+    </section>
+
+    <div class="form-actions">
+      <button type="submit" id="submit-btn" class="btn-primary">▶ Start run</button>
+    </div>
+  </form>
+
+  {% if hf_result %}
+    {% if hf_result.ok %}
+    <div class="intake-result intake-ok">
+      <h2 class="subsection-title">✅ {{ hf_result.repo_id }} — ready to evaluate</h2>
+      <p>Architecture: {{ hf_result.architectures | join(', ') }}{% if hf_result.num_params %} · {{ '%.1f'|format(hf_result.num_params / 1e9) }}B params{% endif %}</p>
+    </div>
+    {% else %}
+    <div class="intake-result intake-error">
+      <h2 class="subsection-title">❌ Can't evaluate {{ hf_result.repo_id }}</h2>
+      <p>{{ hf_result.error }}</p>
+    </div>
+    {% endif %}
+  {% endif %}
+
+  <details class="custom-suite card p-5">
+    <summary>Or bring your own questions</summary>
+    <p class="form-hint mt-3">
+      Test the model on your own questions. Add a question and the ideal answer
+      you'd want back; the judge scores each model's reply against your ideal
+      answer. Up to {{ custom_max_questions }} questions. Custom runs are ad-hoc —
+      scored the same way but kept out of the model-comparison table.
+    </p>
+    <form method="post" action="{{ url_for('eval_run_start_custom') }}" class="launch-form mt-4" id="custom-form">
+
+      <section class="form-section">
+        <h2 class="form-section-title">Candidate model</h2>
+        <fieldset class="candidate-source">
+          <label class="src-opt"><input type="radio" name="source" value="gateway" checked> Gateway model</label>
+          <select name="candidate" id="candidate_c">
+            {% for m in candidates %}
+            <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </select>
+
+          <label class="src-opt"><input type="radio" name="source" value="hf"> Hugging Face model</label>
+          <input type="text" name="hf_repo" id="hf_repo_c" list="hf_repo_suggestions"
+                 placeholder="Qwen/Qwen2.5-7B-Instruct" autocomplete="off" spellcheck="false">
+          <span class="form-hint"><b>Public, open-weight models only</b> — gated or private repos aren't supported, and no Hugging Face account is needed. Public models must pass the scanner gate, then are served on the DCC GPU, evaluated on your questions, and torn down.</span>
+        </fieldset>
+      </section>
+
+      <section class="form-section">
+        <h2 class="form-section-title">Judge &amp; parameters</h2>
+        <div class="form-field">
+          <label for="judge_c">Judge model</label>
+          <select name="judge" id="judge_c">
+            {% for m in judges %}
+            <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </select>
+          <span class="form-hint">Must be a different model family than the candidate.</span>
+        </div>
+        <div class="form-field mt-3">
+          <label for="max_tokens_c">Max tokens</label>
+          <input type="number" name="max_tokens" id="max_tokens_c" value="2000"
+                 min="{{ max_tokens_min }}" max="{{ max_tokens_max }}">
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h2 class="form-section-title">Your questions</h2>
         <div id="qb-rows"></div>
         <div class="qb-actions">
           <button type="button" class="qb-add" id="qb-add">+ Add another question</button>
@@ -211,20 +211,22 @@
             placeholder='{"question": "How do I reset my NetID password?", "reference": "Go to oit.duke.edu ..."}
 {"question": "...", "reference": "..."}'></textarea>
         </details>
-      </fieldset>
 
-      <input type="hidden" name="questions" id="questions_hidden">
-      <p class="form-warning" id="qb-error" style="display: none;">Add at least one question with an ideal answer, or paste JSONL under Advanced.</p>
+        <input type="hidden" name="questions" id="questions_hidden">
+        <p class="form-warning" id="qb-error" style="display: none;">Add at least one question with an ideal answer, or paste JSONL under Advanced.</p>
+      </section>
 
       <p class="form-warning js-family-warning" style="display: none;">
         Judge and candidate are the same model family — the server will reject this.
       </p>
 
-      <p class="cost-line">Estimated candidate cost: <b class="js-cost-preview">$—</b>
-        <span class="form-hint">gateway models only; based on the questions you add</span>
+      <p class="cost-line mt-3">Estimated candidate cost: <b class="js-cost-preview">$—</b>
+        <span class="form-hint">Gateway models only; based on the questions you add.</span>
       </p>
 
-      <button type="submit" class="btn-primary">▶ Run custom set</button>
+      <div class="form-actions">
+        <button type="submit" class="btn-primary">▶ Run custom set</button>
+      </div>
     </form>
   </details>
 </div>
@@ -254,8 +256,20 @@
       }
     }
     if (RERUN.suite) {
-      const suite = form.querySelector(`input[name="suite"][value="${RERUN.suite}"]`);
-      if (suite) suite.checked = true;
+      // Don't use querySelector value=… for suite keys like policy_qa_v1.1 —
+      // attribute selectors are fragile; match by .value instead.
+      const suiteInput = [...form.querySelectorAll('input[name="suite"]')]
+        .find((el) => el.value === RERUN.suite);
+      if (suiteInput) {
+        suiteInput.checked = true;
+        form.querySelectorAll('input[name="suite"]').forEach((el) => {
+          if (el !== suiteInput) el.checked = false;
+        });
+      }
+    }
+    if (RERUN.max_tokens != null) {
+      const maxTok = form.querySelector('input[name="max_tokens"]');
+      if (maxTok) maxTok.value = String(RERUN.max_tokens);
     }
   }
 

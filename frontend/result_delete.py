@@ -175,13 +175,25 @@ def eval_delete_context(
     private = visibility == "private"
     in_progress = is_eval_run_in_progress(slug)
     detail = get_run_detail(slug, visibility=visibility, owner_user_id=owner_user_id)
-    if detail is None:
-        return None
-    candidate = detail.get("candidate_model", "—")
-    judge = detail.get("judge_model") or "—"
-    suite = detail.get("suite_version", "—")
     delete_endpoint = "eval_run_delete_private" if private else "eval_run_delete"
     detail_endpoint = "eval_run_detail_private" if private else "eval_run_detail"
+    if detail is None:
+        # Never silently redirect — show a disabled confirm page with the error.
+        return _base_context(
+            pillar_label="Efficacy eval",
+            summary_items=[("Slug", slug)],
+            removal_summary=[f"Eval run {slug}"],
+            paths=delete_eval_run_paths(slug),
+            delete_url=url_for(delete_endpoint, slug=slug),
+            cancel_url=url_for("eval_run"),
+            cancel_label="Back to eval runs",
+            error_message=error_message
+            or f"No eval run found for slug {slug!r}.",
+            delete_disabled=True,
+        )
+    candidate = detail.get("candidate_model", "—")
+    judge = detail.get("judge_model") or "—"
+    suite = detail.get("suite_version") or detail.get("suite") or "—"
     return _base_context(
         pillar_label="Efficacy eval",
         summary_items=[
@@ -190,7 +202,8 @@ def eval_delete_context(
             ("Suite", suite),
         ],
         removal_summary=[
-            f"Eval run for {candidate} (judge: {judge}, suite: {suite})",
+            f"All eval runs for {candidate} on suite {suite} in this catalog view",
+            "(the list shows one row per combo — older duplicates are removed too)",
         ],
         paths=delete_eval_run_paths(slug),
         delete_url=url_for(delete_endpoint, slug=slug),

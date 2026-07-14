@@ -10,6 +10,14 @@ from typing import Any
 
 LOCK_NAME = "run.lock"
 FRONTEND_SOURCE = "frontend_launch"
+# After Flask/web restart the lock PID is often dead (different PID namespace) while
+# the docker compose job keeps writing logs on the host. Treat recent log
+# activity without a completion artifact as still in flight.
+_ORPHAN_LOG_FRESH_SEC = 45 * 60
+_DONE_MARKERS = (
+    "scan_result.json",
+    "merged_safety_result.json",
+)
 
 
 class RunLockError(RuntimeError):
@@ -50,6 +58,66 @@ def pid_alive(pid: int) -> bool:
     return _pid_alive(pid)
 
 
+def _completion_present(lock_file: Path) -> bool:
+    parent = lock_file.parent
+    for name in _DONE_MARKERS:
+        if (parent / name).is_file():
+            return True
+    # Flat locks: ``{stem}.run.lock`` beside ``{stem}.json`` / ``.jsonl``
+    name = lock_file.name
+    if name.endswith(".run.lock"):
+        stem = name[: -len(".run.lock")]
+        for ext in (".json", ".jsonl"):
+            candidate = parent / f"{stem}{ext}"
+            if not candidate.is_file():
+                continue
+            # Benchmarks: incomplete progress still means running
+            progress = parent / f"{stem}.progress.json"
+            if progress.is_file():
+                try:
+                    prog = json.loads(progress.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    prog = {}
+                total = int(prog.get("total") or 0)
+                done = int(prog.get("progress") or 0)
+                if total and done < total and not prog.get("cancelled"):
+                    return False
+                return True
+            # Eval writes a growing .jsonl during the run — presence alone is
+            # not completion. Rely on lock release / stale-log cleanup.
+            if ext == ".jsonl":
+                return False
+            return True
+    return False
+
+
+def _recent_log_activity(lock_file: Path) -> bool:
+    parent = lock_file.parent
+    name = lock_file.name
+    candidates: list[Path] = [
+        parent / "scan_run.log",
+        parent / "run.log",
+    ]
+    if name.endswith(".run.lock"):
+        stem = name[: -len(".run.lock")]
+        candidates.append(parent / f"{stem}.log")
+    now = time.time()
+    for path in candidates:
+        try:
+            if path.is_file() and (now - path.stat().st_mtime) <= _ORPHAN_LOG_FRESH_SEC:
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _frontend_orphan_active(lock_file: Path) -> bool:
+    """True when the launcher PID died but the job still appears to be running."""
+    if _completion_present(lock_file):
+        return False
+    return _recent_log_activity(lock_file)
+
+
 def is_active(path: Path | str) -> bool:
     """True when the lock file exists and the holder appears to be running."""
     from dbutils import fs_safe
@@ -62,7 +130,13 @@ def is_active(path: Path | str) -> bool:
         return False
     pid = int(data.get("pid") or 0)
     if data.get("source") == FRONTEND_SOURCE:
-        return _pid_alive(pid)
+        if _pid_alive(pid):
+            return True
+        # Web container restart: PID gone, docker job may still be writing logs.
+        if _frontend_orphan_active(p):
+            return True
+        p.unlink(missing_ok=True)
+        return False
     if _pid_alive(pid):
         return True
     p.unlink(missing_ok=True)
@@ -82,8 +156,13 @@ def try_acquire(
     if is_active(p):
         return False
     p.unlink(missing_ok=True)
+    try:
+        lock_pid = int(pid) if pid is not None else os.getpid()
+    except (TypeError, ValueError):
+        # Unit tests often pass a Mock Popen without a numeric .pid.
+        lock_pid = os.getpid()
     payload = {
-        "pid": int(pid) if pid is not None else os.getpid(),
+        "pid": lock_pid,
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "command": command,
         "source": source,

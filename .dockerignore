@@ -18,6 +18,8 @@
 !evaluator/**
 !benchmarks/
 !benchmarks/**
+!personality/
+!personality/**
 !safety/
 !safety/**
 !docker/
@@ -29,6 +31,7 @@ scanner/output
 evaluator/results
 evaluator/cache
 benchmarks/results
+personality/results
 safety/garak/output
 safety/garak/output/**
 safety/promptfoo/output

@@ -9,9 +9,6 @@
 {% endif %}
 {% endmacro %}
 
-{# Login-gated "Start …" link — starting a run always requires sign-in.
-   Renders a live link when signed in, a disabled look-alike otherwise so
-   the rest of the page stays read-only without a dead click. #}
 {% macro start_button(url, label, classes='btn-primary') %}
 {% if is_logged_in %}
 <a class="{{ classes }}" href="{{ url }}">{{ label }}</a>
@@ -20,14 +17,19 @@
 {% endif %}
 {% endmacro %}
 
-{# Login-gated "Delete" link — deleting a result always requires sign-in.
-   Renders a live link when signed in, a disabled look-alike otherwise so
-   signed-out visitors can view results but never remove them. #}
 {% macro delete_button(url, label='Delete result', classes='btn-danger') %}
 {% if is_logged_in %}
 <a class="{{ classes }}" href="{{ url }}">{{ label }}</a>
 {% else %}
 <span class="{{ classes }} is-disabled" aria-disabled="true" title="Sign in with your Duke NetID to delete a run">{{ label }}</span>
+{% endif %}
+{% endmacro %}
+
+{% macro rerun_button(url, label='Rerun', classes='btn-secondary btn-sm') %}
+{% if is_logged_in %}
+<a class="{{ classes }}" href="{{ url }}">{{ label }}</a>
+{% else %}
+<span class="{{ classes }} is-disabled" aria-disabled="true" title="Sign in to rerun">{{ label }}</span>
 {% endif %}
 {% endmacro %}
 
@@ -39,18 +41,123 @@
 <span class="badge badge-{{ source }}">{{ source }}</span>
 {%- endmacro %}
 
-{# Identical "private" badge repeated on every pillar's detail page. #}
 {% macro private_badge() -%}
 <span class="badge badge-private" title="Only visible to you">private</span>
 {%- endmacro %}
 
-{# Identical back-to-list link used by the running/complete branches of
-   every pillar's detail page (the "missing" branch has its own shape). #}
 {% macro back_link(url, label) -%}
-<p class="back"><a href="{{ url }}">{{ label }}</a></p>
+<p class="back"><a class="font-semibold text-duke-blue" href="{{ url }}">← {{ label }}</a></p>
 {%- endmacro %}
 
-{# Manual pillar runs when the UI has no data yet — matches docs/cli.md (Docker default). #}
+{% macro staleness_badge(staleness) %}
+{% if staleness and staleness.stale %}
+<span class="staleness-pill"
+      title="{{ staleness.label }}{% if staleness.reasons %} — {{ staleness.reasons | join('; ') }}{% endif %}"
+      aria-label="{{ staleness.label }}">
+  Needs rerun
+</span>
+{% endif %}
+{% endmacro %}
+
+{% macro stat_card(label, value, meta='', tone='', href='') %}
+{% if href %}
+<a href="{{ href }}" class="stat-card stat-card-link">
+{% else %}
+<div class="stat-card">
+{% endif %}
+  <p class="stat-label">{{ label }}</p>
+  <p class="stat-value {{ tone }}">{{ value }}</p>
+  {% if meta %}<p class="mt-1 text-sm text-text-muted">{{ meta }}</p>{% endif %}
+{% if href %}
+</a>
+{% else %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro page_header(title, subtitle='', actions='') %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">{{ title }}</h1>
+    {% if subtitle %}<p class="page-subtitle">{{ subtitle }}</p>{% endif %}
+  </div>
+  {% if actions %}<div class="flex flex-wrap items-center gap-2">{{ actions }}</div>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro section_header(title, subtitle='', actions='') %}
+<div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+  <div>
+    <h2 class="section-title">{{ title }}</h2>
+    {% if subtitle %}<p class="body mt-1">{{ subtitle }}</p>{% endif %}
+  </div>
+  {% if actions %}<div class="flex flex-wrap items-center gap-2">{{ actions }}</div>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro guide_panel(title, body_html, open_default=false) %}
+<details class="guide-panel" data-open-default="{{ 'true' if open_default else 'false' }}">
+  <summary>{{ title }}</summary>
+  <div class="guide-panel-content">{{ body_html }}</div>
+</details>
+{% endmacro %}
+
+{% macro pillar_guide_callout(title, description, reference_url, kicker='Guide', guide_include='') %}
+<aside class="callout" aria-label="{{ title }}">
+  <div>
+    <p class="text-xs font-semibold uppercase tracking-wide text-duke-blue">{{ kicker }}</p>
+    <p class="mt-1 font-semibold text-text">{{ title }}</p>
+    <p class="mt-1 text-sm text-text-muted">{{ description }}</p>
+  </div>
+  <a class="btn-secondary btn-sm" href="{{ reference_url }}">Full reference →</a>
+</aside>
+{% if guide_include %}
+{{ guide_include }}
+{% endif %}
+{% endmacro %}
+
+{% macro empty_state(message, cli_hint='') %}
+<div class="empty-state">
+  <p>{{ message }}</p>
+  {% if cli_hint %}<p class="mt-2 font-mono text-xs">{{ cli_hint }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro island_mount(name, payload) %}
+<div data-island="{{ name }}">
+  <script type="application/json">{{ payload | tojson }}</script>
+</div>
+{% endmacro %}
+
+{% macro pillar_summary_card(summary) %}
+{% if summary and summary.summary %}
+<section class="key card p-4 mb-6 pillar-summary-card">
+  <h2 class="section-title mb-2">Summary</h2>
+  <p class="body">{{ summary.summary }}</p>
+  {% if summary.tradeoffs %}
+  <ul class="mt-2 list-disc pl-5 text-sm text-text-muted">
+    {% for t in summary.tradeoffs %}
+    <li>{{ t }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if summary.source == 'rules_v1' %}
+  <p class="mt-2 text-xs text-text-subtle">Rules-based summary — gateway unavailable.</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endmacro %}
+
+{% macro rerun_callout() %}
+<div class="form-warning" role="status">
+  Pre-filled from a previous run — <strong>starting will delete the prior results</strong> for this configuration.
+</div>
+{% endmacro %}
+
+{% macro launch_back(url, label) %}
+<p class="back-link"><a class="font-semibold text-duke-blue" href="{{ url }}">← {{ label }}</a></p>
+{% endmacro %}
+
 {% macro cli_scan_docker() -%}
 docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner python -m scanner scan &lt;hf_repo&gt;
 {%- endmacro %}
@@ -75,37 +182,6 @@ docker compose --env-file .env -f benchmarks/docker/compose.yml run --rm benchma
 uv run python -m gateway
 {%- endmacro %}
 
-{# Pillar reference/guide callout — mirrors benchmarks list page. #}
-{% macro pillar_guide_callout(title, description, reference_url, kicker='Start here') %}
-<aside class="benchmark-reference-callout" aria-label="{{ title }}">
-  <div class="benchmark-reference-callout-text">
-    <p class="benchmark-reference-callout-kicker">{{ kicker }}</p>
-    <p class="benchmark-reference-callout-title">{{ title }}</p>
-    <p class="benchmark-reference-callout-desc">{{ description }}</p>
-  </div>
-  <a class="btn-reference" href="{{ reference_url }}">Open reference &amp; guide →</a>
-</aside>
-{% endmacro %}
-
-{# Rerun link — prefills the pillar launch form from a completed run. #}
-{% macro rerun_button(url, label='Rerun', classes='btn-secondary btn-sm') %}
-{% if is_logged_in %}
-<a class="{{ classes }}" href="{{ url }}">{{ label }}</a>
-{% else %}
-<span class="{{ classes }} is-disabled" aria-disabled="true" title="Sign in to rerun">{{ label }}</span>
-{% endif %}
-{% endmacro %}
-
-{# Stale-run indicator — orange ! with tooltip; nothing when up to date. #}
-{% macro staleness_badge(staleness) %}
-{% if staleness and staleness.stale %}
-<span class="staleness-warn"
-      title="{{ staleness.label }}{% if staleness.reasons %} — {{ staleness.reasons | join('; ') }}{% endif %}"
-      aria-label="{{ staleness.label }}"
-      role="img">!</span>
-{% endif %}
-{% endmacro %}
-
 {% macro benchmark_item_status(r) %}
   {% if r.answered is defined and not r.answered %}
     <span class="status-skip">SKIP</span>
@@ -118,86 +194,26 @@ uv run python -m gateway
   {% endif %}
 {% endmacro %}
 
-{% macro progress_terminal(poll_url, interval, hint='', show_retry=false, retry_url='', initial_status='running', initial_message='') %}
-<div class="progress-card progress-card--wide">
-  <p class="progress-meta">status: <b id="prog-state">{{ initial_status }}</b></p>
-  <p id="prog-truncated" class="log-terminal-hint" style="display: none;"></p>
-  <p id="prog-alert" class="form-warning" style="display: none;" role="alert"></p>
-  <pre class="log-terminal log-terminal--run" id="prog-log" aria-live="polite">{{ initial_message }}</pre>
-  {% if hint %}
-  <p class="log-terminal-hint">{{ hint }}</p>
-  {% endif %}
-  {% if show_retry %}
-  <p id="prog-retry" class="sub" style="display: none;">
-    <a href="{{ retry_url }}" id="prog-retry-link">Start a new run →</a>
-  </p>
+{% macro progress_terminal(poll_url, interval, hint='', show_retry=false, retry_url='', initial_status='running', initial_message='', cancel_url='', stages=none, progressLabel='', progress_label='') %}
+{{ island_mount('live-run', {
+  'pollUrl': poll_url,
+  'intervalMs': interval,
+  'hint': hint,
+  'showRetry': show_retry,
+  'retryUrl': retry_url,
+  'initialStatus': initial_status,
+  'initialMessage': initial_message,
+  'cancelUrl': cancel_url,
+  'stages': stages or [],
+  'progressLabel': progressLabel or 'Progress'
+}) }}
+{% endmacro %}
+
+{% macro list_compare_tabs(has_comparison=true) %}
+<div class="bench-view-tabs" role="tablist" aria-label="Results view">
+  <button type="button" class="bench-view-tab is-active" data-view="list" role="tab" aria-selected="true">List</button>
+  {% if has_comparison %}
+  <button type="button" class="bench-view-tab" data-view="compare" role="tab" aria-selected="false">Compare</button>
   {% endif %}
 </div>
-<script>
-(function () {
-  const pollUrl = {{ poll_url | tojson }};
-  const intervalMs = {{ interval }};
-  const logEl = document.getElementById("prog-log");
-  const stateEl = document.getElementById("prog-state");
-  const alertEl = document.getElementById("prog-alert");
-  const truncatedEl = document.getElementById("prog-truncated");
-  const retryEl = document.getElementById("prog-retry");
-
-  function updateLog(text) {
-    if (typeof text !== "string" || text === logEl.textContent) return;
-    const atBottom = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 48;
-    const prevTop = logEl.scrollTop;
-    logEl.textContent = text;
-    if (atBottom) {
-      logEl.scrollTop = logEl.scrollHeight;
-    } else {
-      logEl.scrollTop = prevTop;
-    }
-  }
-
-  function showAlert(text) {
-    if (!text || !alertEl) return;
-    alertEl.textContent = text;
-    alertEl.style.display = "block";
-  }
-
-  function applyStatus(s) {
-    if (s.alert) {
-      stateEl.textContent = "running (suite failed)";
-      showAlert(s.alert);
-    } else if (s.warnings && s.warnings.length) {
-      const msg = s.warnings.map(function (w) {
-        return w.toLowerCase().indexOf("partial") >= 0 ? w : w + " did not run.";
-      }).join("; ");
-      showAlert(msg);
-    } else {
-      stateEl.textContent = s.status;
-      if (alertEl) alertEl.style.display = "none";
-    }
-    if (truncatedEl) {
-      if (s.log_truncated) {
-        truncatedEl.textContent = "Log is very large — showing the most recent portion. See the run log file on disk for the full history.";
-        truncatedEl.style.display = "block";
-      } else {
-        truncatedEl.style.display = "none";
-      }
-    }
-    const logText = s.message || s.log;
-    if (logText) updateLog(logText);
-    if (s.status === "complete" || s.status === "partial") {
-      window.location = window.location.pathname;
-    } else if (s.status === "failed") {
-      stateEl.textContent = "failed";
-      if (retryEl) retryEl.style.display = "block";
-    }
-  }
-
-  function poll() {
-    fetch(pollUrl).then(function (r) { return r.json(); }).then(applyStatus).catch(function () {});
-  }
-
-  poll();
-  setInterval(poll, intervalMs);
-})();
-</script>
 {% endmacro %}

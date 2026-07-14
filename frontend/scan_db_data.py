@@ -60,7 +60,8 @@ def _connect():
 _LATEST_SCANS_SQL = """
 SELECT DISTINCT ON (hf_repo)
     id::text, hf_repo, status, overall_risk_score, severity_tier,
-    scanned_files, tool_results, scan_metadata, started_at, completed_at
+    scanned_files, tool_results, scan_metadata, started_at, completed_at,
+    config_fingerprint, config_json
 FROM public.scans s
 WHERE {visibility_filter}
 ORDER BY hf_repo, completed_at DESC NULLS LAST
@@ -142,7 +143,7 @@ def _scan_tuple_to_data(
         scan_metadata,
         _started_at,
         _completed_at,
-    ) = scan_row
+    ) = scan_row[:10]
     meta = dict(scan_metadata or {})
     fickling_severity = meta.get("fickling_severity")
     if not fickling_severity:
@@ -180,7 +181,12 @@ def _summarize_db_scan(scan_row: tuple, findings_json: list[dict] | None = None)
     meta = scan_row[7] or {}
     slug = _slug_for_scan(scan_row[1], meta)
     data = _scan_tuple_to_data(scan_row, findings_json or [])
-    return _summarize_from_data(data, slug)
+    row = _summarize_from_data(data, slug)
+    if len(scan_row) > 11 and scan_row[11]:
+        row["config_json"] = scan_row[11]
+    if len(scan_row) > 10 and scan_row[10]:
+        row["config_fingerprint"] = scan_row[10]
+    return row
 
 
 def _hf_repo_candidates(slug: str) -> list[str]:

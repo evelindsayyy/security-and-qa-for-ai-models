@@ -115,12 +115,41 @@ def _summarize_merged_data(data: dict, slug: str, profile: str = "base") -> dict
     }
 
 
+def _attach_safety_staleness_fields(row: dict, data: dict, *, sidecar: dict | None = None) -> None:
+    from dbutils.staleness_spec import (
+        current_safety_garak_probe_spec,
+        garak_probe_spec_digest,
+    )
+
+    config = (sidecar or {}).get("config_json")
+    if isinstance(config, dict):
+        row["config_json"] = config
+        if sidecar and sidecar.get("config_fingerprint"):
+            row["config_fingerprint"] = sidecar["config_fingerprint"]
+    garak_probes = ""
+    if isinstance(config, dict):
+        garak_probes = (config.get("garak_probes") or "").strip()
+    if garak_probes:
+        row["garak_probe_spec_digest"] = garak_probe_spec_digest(garak_probes)
+    elif isinstance(config, dict) and not config.get("skip_garak"):
+        row["garak_probe_spec_digest"] = garak_probe_spec_digest(
+            current_safety_garak_probe_spec()
+        )
+
+
 def _summarize_merged(path: Path, slug: str, profile: str = "base") -> dict | None:
+    from dbutils.run_meta import read_run_meta_for_pillar
+
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return None
-    return _summarize_merged_data(data, slug, profile)
+    row = _summarize_merged_data(data, slug, profile)
+    if row is None:
+        return None
+    sidecar = read_run_meta_for_pillar(path.parent, pillar="safety")
+    _attach_safety_staleness_fields(row, data, sidecar=sidecar)
+    return row
 
 
 def _parse_findings(findings_raw: list) -> list[dict]:
@@ -353,6 +382,7 @@ def get_safety_data() -> dict:
         safety_db_data.available,
         safety_db_data.get_safety_data_db,
         _get_safety_data_files,
+        pillar="safety",
     )
     models = data.get("models") or []
     from frontend.staleness import attach_staleness

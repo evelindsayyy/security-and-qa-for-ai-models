@@ -29,6 +29,13 @@ def _private_scope() -> tuple[str, str]:
     return "private", current_user_id()
 
 
+def _attach_pillar_summary(detail: dict, *, pillar: str) -> dict:
+    from frontend.pillar_summary import attach_pillar_summary
+
+    attach_pillar_summary(detail, pillar=pillar)
+    return detail
+
+
 def _hub_context() -> dict:
     """build home page counts — never crash if one data dir is missing."""
     scan_count = 0
@@ -129,7 +136,15 @@ def _hub_context() -> dict:
 def register_routes(app):
     @app.route("/")
     def index():
-        return render_template("index.html", **_hub_context())
+        from frontend.overview import get_overview_data
+
+        return render_template("index.html", **get_overview_data())
+
+    @app.route("/jobs")
+    def inflight_jobs():
+        from frontend.launch_registry import list_inflight_jobs
+
+        return render_template("jobs.html", jobs=list_inflight_jobs())
 
     @app.route("/labels")
     def model_labels():
@@ -144,15 +159,11 @@ def register_routes(app):
 
     @app.route("/scans")
     def scans():
-        from frontend.scan_data import get_scans_data
+        from frontend.scan_data import get_scan_guide_data, get_scans_data
 
-        return render_template("scans.html", **get_scans_data())
-
-    @app.route("/scans/reference")
-    def scan_reference():
-        from frontend.scan_data import get_scan_reference_data
-
-        return render_template("scan_reference.html", **get_scan_reference_data())
+        data = get_scans_data()
+        data.update(get_scan_guide_data(data.get("scans")))
+        return render_template("scans.html", **data)
 
     @app.route("/scans/new")
     @require_login()
@@ -253,7 +264,7 @@ def register_routes(app):
                 missing=True,
                 slug=slug,
             )
-        return render_template("scan_detail.html", missing=False, **detail)
+        return render_template("scan_detail.html", missing=False, **_attach_pillar_summary(detail, pillar="scan"))
 
     @app.route("/scans/<slug>/private")
     @require_login()
@@ -285,7 +296,7 @@ def register_routes(app):
                 slug=slug,
                 is_private=True,
             )
-        return render_template("scan_detail.html", missing=False, is_private=True, **detail)
+        return render_template("scan_detail.html", missing=False, is_private=True, **_attach_pillar_summary(detail, pillar="scan"))
 
     @app.route("/scans/<slug>/delete", methods=["GET", "POST"])
     @require_login()
@@ -347,10 +358,11 @@ def register_routes(app):
 
     @app.route("/eval-run")
     def eval_run():
-        # lazy import — don't load evaluator/openai at app startup
-        from frontend.eval_run_data import get_runs_data
+        from frontend.eval_run_data import get_eval_guide_data, get_runs_data
 
-        return render_template("eval_run.html", **get_runs_data())
+        data = get_runs_data()
+        data.update(get_eval_guide_data())
+        return render_template("eval_run.html", **data)
 
     @app.route("/eval-run/new")
     @require_login()
@@ -603,7 +615,7 @@ def register_routes(app):
                 missing=True,
                 slug=slug,
             )
-        return render_template("eval_run_detail.html", missing=False, **detail)
+        return render_template("eval_run_detail.html", missing=False, **_attach_pillar_summary(detail, pillar="eval"))
 
     @app.route("/eval-run/<slug>/private")
     @require_login()
@@ -636,31 +648,25 @@ def register_routes(app):
                 slug=slug,
                 is_private=True,
             )
-        return render_template("eval_run_detail.html", missing=False, is_private=True, **detail)
+        return render_template("eval_run_detail.html", missing=False, is_private=True, **_attach_pillar_summary(detail, pillar="eval"))
 
     @app.route("/eval-run/<slug>/delete", methods=["GET", "POST"])
     @require_login()
     def eval_run_delete(slug: str):
         from flask import redirect, render_template, request, url_for
 
-        from frontend.eval_run_data import delete_eval_run
+        from frontend.eval_run_data import delete_eval_combo_from_slug
         from frontend.result_delete import eval_delete_context
 
         if request.method == "GET":
             ctx = eval_delete_context(slug)
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
         if request.form.get("confirm") != "1":
             ctx = eval_delete_context(slug, error_message="Confirmation required.")
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
-        error = delete_eval_run(slug)
+        error = delete_eval_combo_from_slug(slug)
         if error:
             ctx = eval_delete_context(slug, error_message=error)
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
         return redirect(url_for("eval_run"))
 
@@ -669,49 +675,36 @@ def register_routes(app):
     def eval_run_delete_private(slug: str):
         from flask import redirect, render_template, request, url_for
 
-        from frontend.eval_run_data import delete_eval_run
+        from frontend.eval_run_data import delete_eval_combo_from_slug
         from frontend.result_delete import eval_delete_context
 
         visibility, owner_user_id = _private_scope()
         if request.method == "GET":
             ctx = eval_delete_context(slug, visibility=visibility, owner_user_id=owner_user_id)
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
         if request.form.get("confirm") != "1":
             ctx = eval_delete_context(
                 slug, visibility=visibility, owner_user_id=owner_user_id,
                 error_message="Confirmation required.",
             )
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
-        error = delete_eval_run(slug, visibility=visibility, owner_user_id=owner_user_id)
+        error = delete_eval_combo_from_slug(
+            slug, visibility=visibility, owner_user_id=owner_user_id
+        )
         if error:
             ctx = eval_delete_context(
                 slug, visibility=visibility, owner_user_id=owner_user_id, error_message=error,
             )
-            if ctx is None:
-                return redirect(url_for("eval_run"))
             return render_template("delete_confirm.html", **ctx)
         return redirect(url_for("eval_run"))
 
     @app.route("/benchmarks")
     def benchmarks():
-        from frontend.benchmark_data import get_benchmarks_data
+        from frontend.benchmark_data import get_benchmark_guide_data, get_benchmarks_data
 
-        return render_template("benchmarks.html", **get_benchmarks_data())
-
-    @app.route("/benchmarks/reference")
-    def benchmark_reference():
-        from flask import redirect, url_for
-
-        from frontend.benchmark_data import get_benchmark_reference_data
-
-        data = get_benchmark_reference_data()
-        if not data.get("has_reference"):
-            return redirect(url_for("benchmarks"))
-        return render_template("benchmark_reference.html", **data)
+        data = get_benchmarks_data()
+        data.update(get_benchmark_guide_data())
+        return render_template("benchmarks.html", **data)
 
     @app.route("/benchmarks/new")
     @require_login()
@@ -767,6 +760,19 @@ def register_routes(app):
             model = request.form.get("model", "")
             base_url = None
             api_key = None
+
+        # Same cross-pillar gate as eval: gateway → safety; HF hosted → scan.
+        from frontend import pipeline
+
+        if model_source == "hosted":
+            gate_error = pipeline.require_ready_for_downstream(model, "hf")
+            if gate_error is not None:
+                return gate_error, 400
+        elif model_source == "gateway":
+            gate_error = pipeline.require_ready_for_downstream(model, "gateway")
+            if gate_error is not None:
+                return gate_error, 400
+
         error = validate_launch(
             benchmark_key,
             model,
@@ -870,7 +876,7 @@ def register_routes(app):
                 missing=True,
                 slug=slug,
             )
-        return render_template("benchmark_detail.html", missing=False, **detail)
+        return render_template("benchmark_detail.html", missing=False, **_attach_pillar_summary(detail, pillar="benchmark"))
 
     @app.route("/benchmarks/<slug>/private")
     @require_login()
@@ -902,7 +908,7 @@ def register_routes(app):
                 slug=slug,
                 is_private=True,
             )
-        return render_template("benchmark_detail.html", missing=False, is_private=True, **detail)
+        return render_template("benchmark_detail.html", missing=False, is_private=True, **_attach_pillar_summary(detail, pillar="benchmark"))
 
     @app.route("/benchmarks/<slug>/items")
     def benchmark_detail_items(slug: str):
@@ -1010,23 +1016,177 @@ def register_routes(app):
             return render_template("delete_confirm.html", **ctx)
         return redirect(url_for("benchmarks"))
 
+    @app.route("/personality")
+    def personality():
+        from frontend.personality_data import get_personality_data
+        from frontend.read_context import read_context
+
+        visibility, owner_user_id = read_context()
+        data = get_personality_data(visibility=visibility, owner_user_id=owner_user_id)
+        return render_template("personality.html", **data)
+
+    @app.route("/personality/new")
+    @require_login()
+    def personality_run_new():
+        from frontend.personality_launch import get_launch_options
+
+        return render_template("personality_run_new.html", **get_launch_options())
+
+    @app.route("/personality/start", methods=["POST"])
+    @require_login()
+    def personality_run_start():
+        from flask import redirect, request, url_for
+
+        from frontend.output_dirs import OutputDirError
+        from frontend.personality_launch import start_run, validate_launch
+
+        model = request.form.get("model", "")
+        error = validate_launch(model)
+        if error:
+            return error, 400
+        try:
+            slug, _already, visibility = start_run(model)
+        except OutputDirError as exc:
+            return str(exc), 503
+        endpoint = "personality_detail_private" if visibility == "private" else "personality_detail"
+        return redirect(url_for(endpoint, slug=slug, status="running"))
+
+    @app.route("/personality/<slug>/status")
+    def personality_run_status(slug: str):
+        from flask import jsonify
+
+        from frontend.personality_launch import get_status
+
+        return jsonify(get_status(slug))
+
+    @app.route("/personality/<slug>/cancel", methods=["POST"])
+    @require_login()
+    def personality_cancel(slug: str):
+        from flask import jsonify, request
+
+        from frontend.personality_launch import cancel_run
+        from frontend.read_context import read_context
+
+        visibility, owner_user_id = read_context()
+        error = cancel_run(slug, visibility=visibility, owner_user_id=owner_user_id)
+        if error:
+            return jsonify({"ok": False, "error": error}), 400
+        if request.accept_mimetypes.best == "application/json":
+            return jsonify({"ok": True, "status": "cancelled"})
+        from flask import redirect, url_for
+
+        return redirect(url_for("personality_detail", slug=slug, status="cancelled"))
+
+    @app.route("/personality/<slug>/private/status")
+    @require_login()
+    def personality_run_status_private(slug: str):
+        from flask import jsonify
+
+        from frontend.personality_launch import get_status
+
+        visibility, owner_user_id = _private_scope()
+        return jsonify(get_status(slug, visibility=visibility, owner_user_id=owner_user_id))
+
+    @app.route("/personality/<slug>/private/cancel", methods=["POST"])
+    @require_login()
+    def personality_cancel_private(slug: str):
+        from flask import jsonify, request
+
+        from frontend.personality_launch import cancel_run
+
+        visibility, owner_user_id = _private_scope()
+        error = cancel_run(slug, visibility=visibility, owner_user_id=owner_user_id)
+        if error:
+            return jsonify({"ok": False, "error": error}), 400
+        if request.accept_mimetypes.best == "application/json":
+            return jsonify({"ok": True, "status": "cancelled"})
+        from flask import redirect, url_for
+
+        return redirect(url_for("personality_detail_private", slug=slug, status="cancelled"))
+
+    @app.route("/personality/<slug>")
+    def personality_detail(slug: str):
+        from flask import request
+
+        from frontend.personality_data import get_personality_detail
+
+        detail = get_personality_detail(slug)
+        if detail is None or request.args.get("status") == "running":
+            from frontend.personality_launch import get_status
+
+            status = get_status(slug)
+            if status["status"] in ("running", "failed", "cancelled"):
+                return render_template(
+                    "personality_detail.html",
+                    missing=False,
+                    running=True,
+                    run_status=status,
+                    slug=slug,
+                )
+        if detail is None:
+            return render_template("personality_detail.html", missing=True, slug=slug)
+        return render_template("personality_detail.html", missing=False, **detail)
+
+    @app.route("/personality/<slug>/private")
+    @require_login()
+    def personality_detail_private(slug: str):
+        from flask import request
+
+        from frontend.personality_data import get_personality_detail
+
+        visibility, owner_user_id = _private_scope()
+        detail = get_personality_detail(slug, visibility=visibility, owner_user_id=owner_user_id)
+        if detail is None or request.args.get("status") == "running":
+            from frontend.personality_launch import get_status
+
+            status = get_status(slug, visibility=visibility, owner_user_id=owner_user_id)
+            if status["status"] in ("running", "failed", "cancelled"):
+                return render_template(
+                    "personality_detail.html",
+                    missing=False,
+                    running=True,
+                    run_status=status,
+                    slug=slug,
+                    is_private=True,
+                )
+        if detail is None:
+            return render_template("personality_detail.html", missing=True, slug=slug, is_private=True)
+        return render_template("personality_detail.html", missing=False, is_private=True, **detail)
+
+    @app.route("/personality/<slug>/delete", methods=["POST"])
+    @require_login()
+    def personality_delete(slug: str):
+        from flask import redirect, request, url_for
+
+        from frontend.personality_data import delete_personality_run
+        from frontend.read_context import read_context
+
+        if request.form.get("confirm") != "1":
+            return redirect(url_for("personality_detail", slug=slug))
+        visibility, owner_user_id = read_context()
+        delete_personality_run(slug, visibility=visibility, owner_user_id=owner_user_id)
+        return redirect(url_for("personality"))
+
+    @app.route("/personality/<slug>/private/delete", methods=["POST"])
+    @require_login()
+    def personality_delete_private(slug: str):
+        from flask import redirect, request, url_for
+
+        from frontend.personality_data import delete_personality_run
+
+        if request.form.get("confirm") != "1":
+            return redirect(url_for("personality_detail_private", slug=slug))
+        visibility, owner_user_id = _private_scope()
+        delete_personality_run(slug, visibility=visibility, owner_user_id=owner_user_id)
+        return redirect(url_for("personality"))
+
     @app.route("/safety")
     def safety():
-        from frontend.safety_data import get_safety_data
+        from frontend.safety_data import get_safety_data, get_safety_guide_data
 
-        return render_template("safety.html", **get_safety_data())
-
-    @app.route("/safety/reference")
-    def safety_reference():
-        from frontend.safety_data import get_safety_reference_data
-
-        return render_template("safety_reference.html", **get_safety_reference_data())
-
-    @app.route("/eval-run/reference")
-    def eval_reference():
-        from frontend.eval_run_data import get_eval_reference_data
-
-        return render_template("eval_reference.html", **get_eval_reference_data())
+        data = get_safety_data()
+        data.update(get_safety_guide_data())
+        return render_template("safety.html", **data)
 
     @app.route("/safety/new")
     @require_login()
@@ -1156,7 +1316,7 @@ def register_routes(app):
                 slug=slug,
                 profile=profile,
             )
-        return render_template("safety_detail.html", missing=False, **detail)
+        return render_template("safety_detail.html", missing=False, **_attach_pillar_summary(detail, pillar="safety"))
 
     @app.route("/safety/<slug>/<profile>/private")
     @require_login()
@@ -1191,7 +1351,7 @@ def register_routes(app):
                 profile=profile,
                 is_private=True,
             )
-        return render_template("safety_detail.html", missing=False, is_private=True, **detail)
+        return render_template("safety_detail.html", missing=False, is_private=True, **_attach_pillar_summary(detail, pillar="safety"))
 
     @app.route("/safety/<slug>/<profile>/delete", methods=["GET", "POST"])
     @require_login()
@@ -1307,27 +1467,55 @@ def register_routes(app):
 
         detail = get_model_detail(slug) or {
             "model": rollup["display_name"], "runs": [], "dim_columns": [],
-            "n_runs": 0, "suites": [], "best_overall": None, "total_cost_usd": 0,
+            "n_runs": 0, "suites": [], "avg_overall": None, "best_overall": None, "total_cost_usd": 0,
         }
         recommendation = model_summary.get_recommendation_summary(rollup)
         can_hf_scan = gateway_is_hf_scannable(rollup["display_name"])
-        # The at-a-glance MODEL LABEL card (None when the model has no eval runs).
-        model_card = None
-        try:
-            from frontend.eval_run_data import get_model_card
+        from frontend.model_findings import get_model_findings
+        from frontend import scan_data
+        from frontend.scan_links import get_linked_scan
 
-            model_card = get_model_card(slug)
-        except Exception:  # noqa: BLE001 — card is optional, page never breaks
-            model_card = None
+        pillar_findings = get_model_findings(rollup)
+        from frontend.personality_data import TRAIT_LABELS, TRAIT_ORDER, get_latest_for_model
+        from frontend.read_context import read_context
+
+        visibility, owner_user_id = read_context()
+        personality_row = get_latest_for_model(
+            rollup["display_name"],
+            test_key="bfi",
+            visibility=visibility,
+            owner_user_id=owner_user_id,
+        )
+        personality_summary = None
+        if personality_row:
+            traits = personality_row.get("traits") or {}
+            personality_summary = {
+                "slug": personality_row.get("slug"),
+                "trait_rows": [
+                    {
+                        "label": TRAIT_LABELS[key],
+                        "score": traits.get(key),
+                    }
+                    for key in TRAIT_ORDER
+                ],
+            }
+        linked_scan_slug = get_linked_scan(rollup["display_name"])
+        available_scans = [
+            {"slug": s["slug"], "model_id": s.get("model_id"), "tier": s.get("severity_tier")}
+            for s in scan_data.get_scans_data().get("scans", [])
+        ]
         return render_template(
             "model_detail.html",
             missing=False,
             rollup=rollup,
             recommendation=recommendation,
+            pillar_findings=pillar_findings,
+            personality_summary=personality_summary,
             gateway_profile=gateway_profile,
-            gateway_id=gateway_id,
+            gateway_id=gateway_id or rollup["display_name"],
             can_hf_scan=can_hf_scan,
-            model_card=model_card,
+            linked_scan_slug=linked_scan_slug,
+            available_scans=available_scans,
             **detail,
         )
 
@@ -1359,6 +1547,24 @@ def register_routes(app):
             for r in rollups
             for kind in (r.get("benchmark") or {}).get("kinds", {})
         })
+        chart_models = []
+        for r in rollups:
+            bench = {}
+            for kind, info in (r.get("benchmark") or {}).get("kinds", {}).items():
+                bench[kind] = {
+                    "headline_value": info.get("headline_value"),
+                    "headline_display": info.get("headline_display"),
+                }
+            chart_models.append(
+                {
+                    "slug": r["slug"],
+                    "display_name": r.get("display_name", r["slug"]),
+                    "scan": r.get("scan"),
+                    "safety": r.get("safety"),
+                    "eval": r.get("eval"),
+                    "benchmark": bench,
+                }
+            )
         return render_template(
             "compare.html",
             rollups=rollups,
@@ -1367,7 +1573,39 @@ def register_routes(app):
             requested_slugs=slugs,
             unmatched=unmatched,
             benchmark_kinds=benchmark_kinds,
+            chart_models=chart_models,
         )
+
+    @app.route("/models/<slug>/link-scan", methods=["POST"])
+    @require_login()
+    def model_link_scan(slug: str):
+        from flask import flash, redirect, request, url_for
+
+        from frontend import model_rollup
+        from frontend.scan_links import set_link
+
+        rollup = model_rollup.get_model_rollup(slug)
+        gateway_id = (rollup or {}).get("display_name") or slug
+        scan_slug = (request.form.get("scan_slug") or "").strip()
+        err = set_link(gateway_model_id=gateway_id, scan_slug=scan_slug)
+        if err:
+            flash(err, "error")
+        else:
+            flash(f"Linked scan {scan_slug!r} to this model.", "success")
+        return redirect(url_for("model_detail", slug=slug))
+
+    @app.route("/models/<slug>/unlink-scan", methods=["POST"])
+    @require_login()
+    def model_unlink_scan(slug: str):
+        from flask import redirect, url_for
+
+        from frontend import model_rollup
+        from frontend.scan_links import remove_link
+
+        rollup = model_rollup.get_model_rollup(slug)
+        gateway_id = (rollup or {}).get("display_name") or slug
+        remove_link(gateway_model_id=gateway_id)
+        return redirect(url_for("model_detail", slug=slug))
 
     @app.route("/gateway/refresh", methods=["POST"])
     def gateway_refresh():
