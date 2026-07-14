@@ -1472,6 +1472,7 @@ def register_routes(app):
                 return render_template("model_detail.html", missing=True, slug=slug)
 
         detail = get_model_detail(slug) or {
+            "slug": slug,
             "model": rollup["display_name"], "runs": [], "dim_columns": [],
             "n_runs": 0, "suites": [], "avg_overall": None, "best_overall": None, "total_cost_usd": 0,
         }
@@ -1523,6 +1524,30 @@ def register_routes(app):
             linked_scan_slug=linked_scan_slug,
             available_scans=available_scans,
             **detail,
+        )
+
+    @app.route("/models/<path:slug>/report")
+    def model_report_print(slug):
+        from datetime import datetime, timezone
+
+        from frontend import model_rollup, model_summary
+        from frontend.eval_run_data import get_model_detail
+
+        rollup = model_rollup.get_model_rollup(slug)
+        if rollup is None:
+            return render_template("model_report_print.html", missing=True, slug=slug)
+        detail = get_model_detail(slug) or {"model": rollup["display_name"], "runs": []}
+        recommendation = model_summary.get_recommendation_summary(rollup)
+        generated_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+        return render_template(
+            "model_report_print.html",
+            missing=False,
+            slug=slug,
+            model=rollup["display_name"],
+            rollup=rollup,
+            detail=detail,
+            recommendation=recommendation,
+            generated_utc=generated_utc,
         )
 
     @app.route("/compare")
