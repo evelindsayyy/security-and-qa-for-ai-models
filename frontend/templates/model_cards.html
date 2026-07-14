@@ -1,6 +1,5 @@
 {% extends "base.html" %}
 {% from '_macros.html' import page_header, empty_state with context %}
-{% from '_model_label_card.html' import model_label_styles, model_label_card with context %}
 
 {% block title %}Model report cards — Model Advisor{% endblock %}
 
@@ -13,21 +12,32 @@
 {% block content %}
 {{ page_header(
      'Model report cards',
-     'Every evaluated model as an at-a-glance label — file-scan security, red-team safety, and task efficacy in one card. Click any card for the full breakdown.'
+     'Choose a model to see its full report card — file-scan security, red-team safety, task efficacy, and benchmarks in one page, with a downloadable PDF.'
    ) }}
 
-{{ model_label_styles() }}
-{% if cards %}
-<p class="body mb-4">
-  {{ cards|length }} model{{ "" if cards|length == 1 else "s" }} evaluated ·
+{% if models %}
+<form class="card p-5 mb-6 flex flex-wrap items-end gap-3" method="get" action="{{ url_for('model_labels') }}">
+  <label class="flex-1 min-w-[16rem]">
+    <span class="block text-sm font-semibold text-text mb-1">Model</span>
+    <input class="w-full rounded-lg border border-border px-3 py-2" type="text" name="model"
+           list="report-model-names" placeholder="Type or pick a model…"
+           value="{{ not_found or '' }}" autocomplete="off" autofocus required>
+    <datalist id="report-model-names">
+      {% for m in models %}
+      <option value="{{ m.name }}"></option>
+      {% endfor %}
+    </datalist>
+  </label>
+  <button type="submit" class="btn-primary btn-sm">View report →</button>
+  {% if not_found %}
+  <p class="w-full text-sm text-text-muted">⚠ No evaluated model matches “{{ not_found }}”. Pick one from the list.</p>
+  {% endif %}
+</form>
+<p class="body">
+  {{ models|length }} model{{ "" if models|length == 1 else "s" }} evaluated ·
   <a class="font-semibold text-duke-blue" href="{{ url_for('compare_models') }}">Compare models →</a> ·
   <a class="font-semibold text-duke-blue" href="{{ url_for('models_catalog') }}">Full catalog →</a>
 </p>
-<div class="mlabel-grid">
-  {% for card in cards %}
-  {{ model_label_card(card) }}
-  {% endfor %}
-</div>
 {% else %}
 {{ empty_state('No model report cards yet — a card appears here once a model has at least one eval run.') }}
 {% endif %}

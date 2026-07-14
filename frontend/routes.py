@@ -148,14 +148,33 @@ def register_routes(app):
 
     @app.route("/labels")
     def model_labels():
+        from flask import redirect, request, url_for
         from frontend.eval_run_data import get_all_model_cards
 
-        cards = []
         try:
             cards = get_all_model_cards()
-        except Exception:  # noqa: BLE001 — gallery degrades to empty, never 500s
+        except Exception:  # noqa: BLE001 — launcher degrades to empty, never 500s
             cards = []
-        return render_template("model_cards.html", cards=cards)
+        models = [
+            {"slug": c["detail_slug"], "name": c["model"]}
+            for c in cards
+            if c.get("detail_slug") and c.get("model")
+        ]
+
+        query = (request.args.get("model") or "").strip()
+        if query:
+            match = next(
+                (
+                    m
+                    for m in models
+                    if m["slug"] == query or m["name"].lower() == query.lower()
+                ),
+                None,
+            )
+            if match:
+                return redirect(url_for("model_detail", slug=match["slug"]))
+            return render_template("model_cards.html", models=models, not_found=query)
+        return render_template("model_cards.html", models=models, not_found=None)
 
     @app.route("/scans")
     def scans():
