@@ -39,8 +39,8 @@
         </div>
         <div class="space-y-1">
           <p class="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-text-subtle">Extras</p>
-          <a href="{{ url_for('personality') }}" class="nav-link nav-link-extra{% if request.endpoint and request.endpoint.startswith('personality') %} is-active{% endif %}" title="Big Five personality snapshot — not part of model rollup">
-            Personality (BFI)
+          <a href="{{ url_for('personality') }}" class="nav-link nav-link-extra{% if request.endpoint and request.endpoint.startswith('personality') %} is-active{% endif %}" title="BFI and political compass snapshots — not part of model rollup">
+            Personality
           </a>
           <p class="px-3 text-xs text-text-subtle">Fun self-report quiz · not a quality score</p>
         </div>

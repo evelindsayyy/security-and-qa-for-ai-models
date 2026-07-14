@@ -45,6 +45,24 @@ class TestPersonalityDataDedupe(unittest.TestCase):
         out = _dedupe_twin_artifacts(rows)
         self.assertEqual(len(out), 2)
 
+    def test_keeps_bfi_and_compass_for_same_model(self) -> None:
+        rows = [
+            {
+                "test": "bfi",
+                "slug": "20260713T155439Z_bfi_Llama-3.3",
+                "model": "Llama 3.3",
+                "timestamp_raw": "2026-07-13T15:55:39+00:00",
+            },
+            {
+                "test": "compass",
+                "slug": "20260713T155439Z_compass_Llama-3.3",
+                "model": "Llama 3.3",
+                "timestamp_raw": "2026-07-13T15:55:39+00:00",
+            },
+        ]
+        out = _dedupe_twin_artifacts(rows)
+        self.assertEqual(len(out), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

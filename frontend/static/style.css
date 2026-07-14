@@ -70,3 +70,51 @@
 .personality-runs-table td.num { text-align: right; }
 .personality-runs-table .col-actions form { display: inline; }
 .run-table tr.run-superseded td { color: #5c5a54; }
+.personality-trait-inline { font-size: 0.875rem; }
+.personality-compass-quadrant { font-size: 1.75rem; font-weight: 700; color: #012169; margin: 0.35rem 0 0.75rem; }
+.personality-compass-plot-wrap { display: flex; justify-content: center; margin: 1rem 0 1.5rem; }
+.personality-compass-plot {
+  position: relative;
+  width: min(18rem, 100%);
+  aspect-ratio: 1;
+  border: 1px solid #d4d1ca;
+  border-radius: 0.75rem;
+  background:
+    linear-gradient(to right, rgba(1,33,105,0.06) 50%, rgba(92,123,184,0.08) 50%),
+    linear-gradient(to top, rgba(1,33,105,0.05) 50%, rgba(180,60,60,0.06) 50%);
+}
+.personality-compass-cross-h,
+.personality-compass-cross-v { position: absolute; background: #cfcbbf; }
+.personality-compass-cross-h { left: 0; right: 0; top: 50%; height: 1px; }
+.personality-compass-cross-v { top: 0; bottom: 0; left: 50%; width: 1px; }
+.personality-compass-dot {
+  position: absolute;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin: -0.425rem 0 0 -0.425rem;
+  border-radius: 999px;
+  background: #012169;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #012169;
+}
+.personality-compass-axis-label {
+  position: absolute;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #5c5a54;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.personality-compass-axis-top { top: 0.35rem; left: 50%; transform: translateX(-50%); }
+.personality-compass-axis-bottom { bottom: 0.35rem; left: 50%; transform: translateX(-50%); }
+.personality-compass-axis-left { left: 0.4rem; top: 50%; transform: translateY(-50%); }
+.personality-compass-axis-right { right: 0.4rem; top: 50%; transform: translateY(-50%); }
+.personality-compass-axes { display: flex; flex-direction: column; gap: 1.1rem; max-width: 42rem; }
+.personality-compass-axis-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }
+.personality-compass-axis-track { display: flex; height: 1.1rem; border-radius: 999px; overflow: hidden; background: #e8e6e1; }
+.personality-compass-neg,
+.personality-compass-pos { display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; color: #fff; min-width: 1.75rem; }
+.personality-compass-neg { background: #012169; }
+.personality-compass-pos { background: #5c7bb8; }
+.personality-compass-axis-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem 1rem; margin-top: 0.35rem; font-size: 0.875rem; }
+.personality-compass-axis.is-near-even .personality-compass-axis-track { outline: 1px dashed #b7b3a9; outline-offset: 2px; }

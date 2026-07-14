@@ -76,12 +76,12 @@
 </div>
 
 <section class="overview-extra-card card p-5 mb-8">
-  <h2 class="section-title">Personality (BFI) <span class="text-sm font-normal text-text-subtle">— extra, not in rollup</span></h2>
+  <h2 class="section-title">Personality <span class="text-sm font-normal text-text-subtle">— BFI &amp; compass, not in rollup</span></h2>
   <p class="mt-1 body text-text-muted">
-    Big Five Inventory snapshot for gateway models. Fun curiosity only — separate from the four audit pillars above.
+    Big Five traits and a forced-choice political compass for gateway models. Fun curiosity only — separate from the four audit pillars above.
   </p>
   <p class="pillar-actions mt-3">
-    {{ start_button(url_for('personality_run_new'), 'Start BFI', 'btn-secondary btn-sm') }}
+    {{ start_button(url_for('personality_run_new'), 'Start test', 'btn-secondary btn-sm') }}
     <a class="btn-secondary btn-sm" href="{{ url_for('personality') }}">View results</a>
   </p>
 </section>

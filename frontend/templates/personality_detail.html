@@ -11,7 +11,7 @@
     <p><a href="{{ url_for('personality') }}">← all personality results</a></p>
   {% elif running %}
     {{ back_link(url_for('personality'), '← all personality results') }}
-    <h1 class="page-title">BFI run in progress</h1>
+    <h1 class="page-title">Personality run in progress</h1>
     <p class="sub">
       {% if run_status.model %}{{ run_status.model }}{% endif %}
       · slug <code>{{ slug }}</code>
@@ -19,7 +19,7 @@
     {{ progress_terminal(
          url_for('personality_run_status_private' if is_private else 'personality_run_status', slug=slug),
          5000,
-         hint=(run_status.total or 44)|string + ' items — one API call each.',
+         hint=(run_status.total or 0)|string + ' items — one API call each.',
          initial_status=run_status.status,
          initial_message=run_status.log or run_status.message or '',
          cancel_url=url_for('personality_cancel_private' if is_private else 'personality_cancel', slug=slug) if is_logged_in else '',
@@ -35,7 +35,7 @@
     <h1 class="page-title">{{ test_label }} — {{ model }}{% if is_private %} {{ private_badge() }}{% endif %}</h1>
     <p class="sub">
       slug <code>{{ slug }}</code> · {{ timestamp }}
-      · {{ scored or 0 }}/{{ attempted or 44 }} items scored
+      · {{ scored or 0 }}/{{ attempted or 0 }} items scored
     </p>
 
     {% if is_logged_in %}
@@ -50,6 +50,98 @@
     </p>
     {% endif %}
 
+    {% if test == 'compass' %}
+    <section class="key card p-5 mb-6">
+      <h2 class="subsection-title">Compass reading</h2>
+      <p class="personality-compass-quadrant">{{ quadrant or "—" }}</p>
+      {% if weak_reading %}
+      <p class="form-hint mb-2">
+        <span class="badge badge-pilot">Weak reading</span>
+        {{ near_even_count }} axis{{ "" if near_even_count == 1 else "es" }} near even —
+        treat the quadrant label as a slight lean.
+      </p>
+      {% endif %}
+      <p class="form-hint mb-4">
+        Axes run from −100 to +100. Forced A/B choices — entertainment only, not a political diagnosis.
+      </p>
+      <details class="mb-4">
+        <summary class="text-sm font-semibold text-duke-blue cursor-pointer">What do these axes mean?</summary>
+        <div class="mt-3">
+          {% include '_personality_compass_explainer.html' %}
+        </div>
+      </details>
+
+      <div class="personality-compass-plot-wrap" aria-hidden="true">
+        <div class="personality-compass-plot">
+          <span class="personality-compass-axis-label personality-compass-axis-top">Authoritarian</span>
+          <span class="personality-compass-axis-label personality-compass-axis-bottom">Libertarian</span>
+          <span class="personality-compass-axis-label personality-compass-axis-left">Left</span>
+          <span class="personality-compass-axis-label personality-compass-axis-right">Right</span>
+          <div class="personality-compass-cross-h"></div>
+          <div class="personality-compass-cross-v"></div>
+          <div class="personality-compass-dot" style="left: {{ plot_x }}%; top: {{ plot_y }}%;" title="{{ quadrant }}"></div>
+        </div>
+      </div>
+
+      <div class="personality-compass-axes mt-6">
+        {% for row in axis_rows %}
+        <div class="personality-compass-axis{% if row.clarity == 'near_even' %} is-near-even{% endif %}">
+          <div class="personality-compass-axis-head">
+            <span class="personality-trait-label">{{ row.label }}</span>
+            <span class="badge badge-pilot">{{ row.clarity_label }}</span>
+          </div>
+          <div class="personality-compass-axis-track">
+            {% if row.neg_pct is not none %}
+            <div class="personality-compass-neg" style="width: {{ row.neg_pct }}%">{{ row.neg_label }}</div>
+            <div class="personality-compass-pos" style="width: {{ row.pos_pct }}%">{{ row.pos_label }}</div>
+            {% endif %}
+          </div>
+          <div class="personality-compass-axis-meta">
+            <span class="num">
+              <strong>{{ row.neg_label }}</strong> {{ "%.1f"|format(row.neg_pct) }}%
+              ·
+              <strong>{{ row.pos_label }}</strong> {{ "%.1f"|format(row.pos_pct) }}%
+            </span>
+            <span class="personality-trait-score num">
+              score <strong>{% if row.score is not none %}{{ "%+.1f"|format(row.score) }}{% else %}—{% endif %}</strong>
+            </span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="key card p-5">
+      <h2 class="subsection-title">Item choices</h2>
+      <div class="table-wrap">
+        <table class="run-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Axis</th>
+              <th>A</th>
+              <th>B</th>
+              <th>Choice</th>
+              <th>Response</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+            <tr{% if not item.scored %} class="row-dim"{% endif %}>
+              <td class="num">{{ item.id }}</td>
+              <td>{{ item.axis }}</td>
+              <td class="text-sm{% if item.choice == 'A' %} font-semibold{% endif %}">{{ item.option_a }}</td>
+              <td class="text-sm{% if item.choice == 'B' %} font-semibold{% endif %}">{{ item.option_b }}</td>
+              <td class="num"><strong>{{ item.choice or "—" }}</strong></td>
+              <td><code class="text-xs">{{ item.response or "—" }}</code></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    {% else %}
     <section class="key card p-5 mb-6">
       <h2 class="subsection-title">Big Five profile</h2>
       <p class="form-hint mb-4">Averages on a 1&ndash;5 scale. For entertainment — not a clinical or quality assessment.</p>
@@ -103,6 +195,7 @@
         </table>
       </div>
     </section>
+    {% endif %}
   {% endif %}
 </div>
 {% endblock %}
