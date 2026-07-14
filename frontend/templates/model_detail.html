@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from '_macros.html' import cli_eval_docker, start_button, tier_label with context %}
+{% from '_model_label_card.html' import model_label_styles, model_label_card with context %}
 
 {% block title %}{% if missing %}Model not found{% else %}{{ model }} — model detail{% endif %}{% endblock %}
 
@@ -21,6 +22,11 @@
       {% if best_overall is not none %}· best eval <b>{{ "%.2f"|format(best_overall) }}</b> / 5{% endif %}
       {% if total_cost_usd %}· eval cost ${{ "%.4f"|format(total_cost_usd) }}{% endif %}
     </p>
+
+    {% if model_card %}
+    {{ model_label_styles() }}
+    <div class="mlabel-featured">{{ model_label_card(model_card, linked=False) }}</div>
+    {% endif %}
 
     <section class="key">
       <h2>Recommendation
@@ -122,7 +128,11 @@
       </tbody>
     </table>
     {% else %}
-    <p class="sub empty">No eval runs yet. {{ start_button(url_for('eval_run_new'), 'Start an eval run', classes='') }} or CLI: <code>{{ cli_eval_docker() }}</code></p>
+    <p class="sub empty">No eval runs yet. {{ start_button(url_for('eval_run_new'), 'Start an eval run', classes='') }}</p>
+    <details class="cli-advanced">
+      <summary>Advanced: run from the CLI</summary>
+      <p><code>{{ cli_eval_docker() }}</code></p>
+    </details>
     {% endif %}
   {% endif %}
 </div>

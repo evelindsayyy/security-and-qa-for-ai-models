@@ -1,0 +1,78 @@
+{# MODEL LABEL report card — the AI Model Advisor at-a-glance label.
+   Import: {% from '_model_label_card.html' import model_label_styles, model_label_card %}
+   Call model_label_styles() ONCE per page, then model_label_card(card) per card.
+   card shape: see frontend.eval_run_data.get_model_card(). #}
+
+{% macro model_label_styles() %}
+<style>
+  .mlabel { border:1px solid #dfe3ee; border-radius:14px; background:#fff;
+            box-shadow:0 6px 20px rgba(27,42,94,.08); overflow:hidden;
+            display:flex; flex-direction:column; }
+  a.mlabel { text-decoration:none; transition:box-shadow .15s, transform .15s; }
+  a.mlabel:hover { box-shadow:0 10px 26px rgba(27,42,94,.16); transform:translateY(-2px); }
+  .mlabel-head { background:#1b2a5e; color:#fff; padding:1rem 1.25rem; display:flex;
+                 align-items:center; justify-content:space-between; }
+  .mlabel-head h3 { margin:0; font-size:1.35rem; font-weight:800; letter-spacing:.02em; }
+  .mlabel-head .mid { color:rgba(255,255,255,.72); font-size:.95rem; margin-top:.15rem;
+                      word-break:break-word; }
+  .mlabel-body { padding:1.1rem 1.25rem .4rem; flex:1; }
+  .mlabel-sec { color:#8890a5; font-size:.78rem; font-weight:700; letter-spacing:.06em;
+                border-bottom:2px solid #e7eaf2; padding-bottom:.35rem; margin:.9rem 0 .2rem; }
+  .mlabel-sec:first-child { margin-top:0; }
+  .mlabel-row { display:flex; align-items:center; justify-content:space-between;
+                padding:.6rem 0; border-bottom:1px solid #f0f2f7; gap:1rem; }
+  .mlabel-row:last-child { border-bottom:none; }
+  .mlabel-lab { color:#2a2f3a; font-size:1.05rem; }
+  .pill { border-radius:999px; padding:.32rem .8rem; font-size:.9rem; font-weight:700;
+          white-space:nowrap; }
+  .pill-ok  { background:#e6f4ea; color:#1e7a43; }
+  .pill-warn{ background:#fbe6cf; color:#9a6b12; }
+  .pill-bad { background:#f6dcda; color:#b23b2e; }
+  .pill-na  { background:#eceef2; color:#6b767c; }
+  .mlabel-foot { background:#eef2fb; padding:.85rem 1.25rem; display:flex; align-items:center;
+                 justify-content:space-between; gap:1rem; }
+  .mlabel-foot-lab { color:#1b2a5e; font-weight:800; letter-spacing:.03em; font-size:.95rem; }
+  .mlabel-foot-val { color:#556; font-size:1.05rem; text-align:right; }
+  /* Single featured card (home page). */
+  .mlabel-featured { max-width:460px; margin:.4rem 0 .5rem; }
+  /* Gallery grid (/labels). */
+  .mlabel-grid { display:grid; gap:1.2rem; margin:.6rem 0 1.5rem;
+                 grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); }
+  .mlabel-caption { color:#6b767c; font-size:.9rem; margin:.1rem 0 1.6rem; }
+</style>
+{% endmacro %}
+
+{% macro model_label_card(card, linked=True) %}
+{% if linked %}
+<a class="mlabel" href="{{ url_for('model_detail', slug=card.detail_slug) }}">
+{% else %}
+<div class="mlabel">
+{% endif %}
+  <div class="mlabel-head">
+    <div>
+      <h3>MODEL LABEL</h3>
+      <div class="mid">{{ card.model }}</div>
+    </div>
+  </div>
+  <div class="mlabel-body">
+    <div class="mlabel-sec">SECURITY</div>
+    {% for row in card.security %}
+    <div class="mlabel-row">
+      <span class="mlabel-lab">{{ row.label }}</span>
+      <span class="pill pill-{{ row.cls }}">{{ row.value }}</span>
+    </div>
+    {% endfor %}
+    <div class="mlabel-sec">EFFICACY</div>
+    {% for row in card.efficacy %}
+    <div class="mlabel-row">
+      <span class="mlabel-lab">{{ row.label }}</span>
+      <span class="pill pill-{{ row.cls }}">{{ row.value }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="mlabel-foot">
+    <span class="mlabel-foot-lab">RECOMMENDED USE</span>
+    <span class="mlabel-foot-val">{{ card.recommended_use }}</span>
+  </div>
+{% if linked %}</a>{% else %}</div>{% endif %}
+{% endmacro %}

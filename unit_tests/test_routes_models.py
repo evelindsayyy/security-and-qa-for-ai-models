@@ -93,5 +93,37 @@ class ModelsCatalogRiskColumnTest(unittest.TestCase):
         self.assertIn('<span class="dim">—</span>', html)
 
 
+class ModelLabelsGalleryTest(unittest.TestCase):
+    _CARD = {
+        "slug": "GPT-4.1-Mini", "detail_slug": "gpt-4.1-mini", "model": "GPT 4.1 Mini",
+        "security": [{"label": "File scan", "value": "Low risk", "cls": "ok"}],
+        "efficacy": [{"label": "IT support tasks", "value": "4.20 / 5", "cls": "ok"}],
+        "recommended_use": "IT support",
+    }
+
+    def test_renders_card_grid_linking_to_detail(self) -> None:
+        with mock.patch("frontend.eval_run_data.get_all_model_cards",
+                        return_value=[self._CARD]):
+            resp = _client().get("/labels")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode()
+        self.assertIn("mlabel-grid", html)
+        self.assertIn('href="/models/gpt-4.1-mini"', html)  # gateway-form link
+        self.assertIn("GPT 4.1 Mini", html)
+
+    def test_empty_state_when_no_cards(self) -> None:
+        with mock.patch("frontend.eval_run_data.get_all_model_cards", return_value=[]):
+            resp = _client().get("/labels")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("No model report cards yet", resp.data.decode())
+
+    def test_never_500s_when_data_layer_raises(self) -> None:
+        with mock.patch("frontend.eval_run_data.get_all_model_cards",
+                        side_effect=RuntimeError("db down")):
+            resp = _client().get("/labels")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("No model report cards yet", resp.data.decode())
+
+
 if __name__ == "__main__":
     unittest.main()

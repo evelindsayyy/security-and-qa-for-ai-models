@@ -19,7 +19,11 @@ _DEFAULT_MODEL = "GPT 4.1 Mini"
 
 
 def _cache_path(slug: str, *, kind: str) -> Path:
-    return _CACHE_DIR / f"{slug}.{kind}.json"
+    # Flatten the slug into a safe flat filename — an HF "org/name" identity
+    # contains a "/" that would otherwise create a subdir or escape the cache
+    # dir. Any rare collision self-heals via the inputs_hash guard.
+    safe = "".join(c if c.isalnum() or c in "-_." else "-" for c in slug)
+    return _CACHE_DIR / f"{safe}.{kind}.json"
 
 
 def _read_cache(slug: str, *, kind: str, inputs_hash: str) -> dict | None:

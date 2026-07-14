@@ -131,6 +131,17 @@ def register_routes(app):
     def index():
         return render_template("index.html", **_hub_context())
 
+    @app.route("/labels")
+    def model_labels():
+        from frontend.eval_run_data import get_all_model_cards
+
+        cards = []
+        try:
+            cards = get_all_model_cards()
+        except Exception:  # noqa: BLE001 — gallery degrades to empty, never 500s
+            cards = []
+        return render_template("model_cards.html", cards=cards)
+
     @app.route("/scans")
     def scans():
         from frontend.scan_data import get_scans_data
@@ -1274,7 +1285,7 @@ def register_routes(app):
             rollup_by_gateway_id=rollup_by_gateway_id,
         )
 
-    @app.route("/models/<slug>")
+    @app.route("/models/<path:slug>")
     def model_detail(slug: str):
         from frontend import model_rollup, model_summary
         from frontend.eval_run_data import get_model_detail
@@ -1300,6 +1311,14 @@ def register_routes(app):
         }
         recommendation = model_summary.get_recommendation_summary(rollup)
         can_hf_scan = gateway_is_hf_scannable(rollup["display_name"])
+        # The at-a-glance MODEL LABEL card (None when the model has no eval runs).
+        model_card = None
+        try:
+            from frontend.eval_run_data import get_model_card
+
+            model_card = get_model_card(slug)
+        except Exception:  # noqa: BLE001 — card is optional, page never breaks
+            model_card = None
         return render_template(
             "model_detail.html",
             missing=False,
@@ -1308,6 +1327,7 @@ def register_routes(app):
             gateway_profile=gateway_profile,
             gateway_id=gateway_id,
             can_hf_scan=can_hf_scan,
+            model_card=model_card,
             **detail,
         )
 

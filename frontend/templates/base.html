@@ -9,12 +9,14 @@
   <header>
     <nav>
       <a href="{{ url_for('index') }}">Home</a>
+      <a href="{{ url_for('model_labels') }}">Report cards</a>
       <a href="{{ url_for('models_catalog') }}">Model catalog</a>
-      <a href="{{ url_for('pipeline_overview') }}">Pipeline</a>
+      <a href="{{ url_for('compare_models') }}">Compare</a>
       <a href="{{ url_for('scans') }}">Scans</a>
       <a href="{{ url_for('safety') }}">Safety</a>
-      <a href="{{ url_for('eval_run') }}">Eval</a>
+      <a href="{{ url_for('eval_run') }}">Efficacy</a>
       <a href="{{ url_for('benchmarks') }}">Benchmarks</a>
+      <a href="{{ url_for('pipeline_overview') }}">Pipeline</a>
     </nav>
     <div class="header-auth">
       {% if is_logged_in and current_user %}

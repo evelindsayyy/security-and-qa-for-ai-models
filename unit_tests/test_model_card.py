@@ -90,6 +90,46 @@ class GetModelCardTest(unittest.TestCase):
         with mock.patch.object(erd, "get_model_detail", return_value=None):
             self.assertIsNone(erd.get_model_card("nope"))
 
+    def test_detail_slug_is_gateway_form_for_links(self) -> None:
+        # The card's link slug must match what /models/<slug> resolves (the
+        # gateway-normalized, lowercase form) — not the case-preserving
+        # model_slug, which would 404 on the detail page.
+        detail = {"model": "GPT 4.1 Mini",
+                  "runs": [{"suite": "it_support_v1", "overall": 4.2}]}
+        with mock.patch.object(erd, "get_model_detail", return_value=detail), \
+             mock.patch.object(erd, "_model_cost_effectiveness", return_value=None), \
+             mock.patch.object(erd, "_lookup_scan_tier", return_value=None), \
+             mock.patch.object(erd, "_lookup_safety_tier", return_value=None):
+            card = erd.get_model_card("GPT-4.1-Mini")
+        self.assertEqual(card["slug"], "GPT-4.1-Mini")       # eval-identity form
+        self.assertEqual(card["detail_slug"], "gpt-4.1-mini")  # link form
+
+
+class GetAllModelCardsTest(unittest.TestCase):
+    def test_dedups_and_orders_most_recent_first(self) -> None:
+        data = {"runs": [
+            {"candidate_model": "GPT 4.1 Mini", "timestamp": "20260101T000000Z"},
+            {"candidate_model": "GPT 4.1 Mini", "timestamp": "20260701T000000Z"},
+            {"candidate_model": "Qwen/Qwen2.5-7B-Instruct", "timestamp": "20260705T000000Z"},
+        ]}
+        with mock.patch.object(erd, "get_runs_data", return_value=data), \
+             mock.patch.object(erd, "get_model_card", side_effect=lambda s: {"slug": s}):
+            cards = erd.get_all_model_cards()
+        self.assertEqual(
+            [c["slug"] for c in cards],
+            [erd.model_slug("Qwen/Qwen2.5-7B-Instruct"), erd.model_slug("GPT 4.1 Mini")],
+        )
+
+    def test_filters_out_none_cards(self) -> None:
+        data = {"runs": [{"candidate_model": "M", "timestamp": "t"}]}
+        with mock.patch.object(erd, "get_runs_data", return_value=data), \
+             mock.patch.object(erd, "get_model_card", return_value=None):
+            self.assertEqual(erd.get_all_model_cards(), [])
+
+    def test_empty_when_no_runs(self) -> None:
+        with mock.patch.object(erd, "get_runs_data", return_value={"runs": []}):
+            self.assertEqual(erd.get_all_model_cards(), [])
+
 
 class FeaturedModelTest(unittest.TestCase):
     def test_picks_most_recent(self) -> None:

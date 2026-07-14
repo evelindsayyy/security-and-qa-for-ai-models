@@ -427,15 +427,42 @@ def model_slug(name: str) -> str:
     return "".join(c if c.isalnum() or c in "-_." else "-" for c in name)
 
 
+def _is_safe_model_slug(slug: str) -> bool:
+    """Traversal-safe validator that also permits an HF ``org/name`` slash.
+
+    ``is_safe_slug`` (filesystem guard) rejects slashes, but model identity for
+    self-hosted HF models is genuinely ``org/name`` (e.g. ``qwen/qwen2.5-7b``).
+    ``get_model_detail`` only string-compares the slug and does dict lookups —
+    no filesystem access — so a single-level slash is safe here as long as we
+    still reject path traversal and absolute/backslash paths.
+    """
+    return (
+        bool(slug)
+        and ".." not in slug
+        and not slug.startswith("/")
+        and "\\" not in slug
+        and all(c.isalnum() or c in "-_./" for c in slug)
+    )
+
+
 def get_model_detail(slug: str) -> dict | None:
     """Per-model report card: one model's eval runs across every suite.
 
     Reuses the dispatched ``get_runs_data()`` (DB when available, files
     otherwise), so this works on both paths. Returns None if no run matches.
     """
-    if not is_safe_slug(slug):
+    if not _is_safe_model_slug(slug):
         return None
-    runs = [r for r in get_runs_data()["runs"] if model_slug(r["candidate_model"]) == slug]
+    # Resolve either slug convention: the eval-identity form (model_slug,
+    # case-preserving) used internally, or the gateway-normalized (lowercase)
+    # form the /models catalog links with. Without this, /models/<gateway-slug>
+    # finds no eval runs for any mixed-case model (e.g. "GPT 4.1 Mini").
+    from frontend.model_identity import gateway_slug
+
+    runs = [
+        r for r in get_runs_data()["runs"]
+        if slug in (model_slug(r["candidate_model"]), gateway_slug(r["candidate_model"]))
+    ]
     if not runs:
         return None
     runs.sort(key=lambda r: (r["suite"], r["judge_model"]))
@@ -550,8 +577,15 @@ def get_model_card(slug: str) -> dict | None:
     qa = _suite_overall("policy_qa_v1.1")
     cost = _score_badge(_model_cost_effectiveness(detail))
 
+    # ``slug`` is the eval-identity form (model_slug, case-preserving) used to
+    # look this model up in the runs. The /models/<slug> detail page keys on the
+    # gateway-normalized (lowercase) form, so links must use ``detail_slug`` — a
+    # plain model_slug like "GPT-4.1-Mini" would 404 there.
+    from frontend.model_identity import gateway_slug
+
     return {
         "slug": slug,
+        "detail_slug": gateway_slug(detail["model"]),
         "model": detail["model"],
         "security": [
             {"label": "File scan", **_tier_badge(_lookup_scan_tier(slug))},
@@ -564,6 +598,25 @@ def get_model_card(slug: str) -> dict | None:
         ],
         "recommended_use": _recommend(it, qa, cost["cls"]),
     }
+
+
+def get_all_model_cards() -> list[dict]:
+    """Report cards for every evaluated model, most-recently-evaluated first.
+
+    One card per distinct candidate model that has at least one eval run
+    (``get_model_card`` returns None otherwise, so it can't appear). Feeds the
+    ``/labels`` gallery. Each card is independently N/A-safe."""
+    runs = get_runs_data().get("runs", [])
+    # Distinct model slugs, ordered by most recent eval first.
+    ordered_slugs: list[str] = []
+    seen: set[str] = set()
+    for r in sorted(runs, key=lambda r: r.get("timestamp", ""), reverse=True):
+        slug = model_slug(r["candidate_model"])
+        if slug not in seen:
+            seen.add(slug)
+            ordered_slugs.append(slug)
+    cards = [get_model_card(slug) for slug in ordered_slugs]
+    return [c for c in cards if c is not None]
 
 
 def featured_model_slug() -> str | None:
