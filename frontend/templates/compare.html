@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% from '_macros.html' import tier_label, page_header, island_mount with context %}
+
+{% block title %}Compare models{% endblock %}
+
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span><a href="{{ url_for('models_catalog') }}">Model catalog</a></span>
+<span class="text-text-subtle">›</span>
+<span class="font-medium text-text">Compare</span>
+{% endblock %}
+
+{% block content %}
+<div class="eval-comparison">
+  {{ page_header('Compare models', 'Head-to-head view over the cross-pillar rollup (scan, safety, eval, benchmarks).') }}
+
+  <form method="get" action="{{ url_for('compare_models') }}" class="launch-form card p-4 mb-6">
+    <label>Model slugs (comma-separated)
+      <input type="text" name="models" value="{{ requested_slugs|join(',') }}" placeholder="gpt-4.1-mini,llama-3.3">
+    </label>
+    <p class="form-hint mt-2">Slugs match each model's <code>/models/&lt;slug&gt;</code> URL.</p>
+    <button type="submit" class="btn-primary mt-3">Compare</button>
+  </form>
+
+  {% if requested_slugs and not rollups %}
+  <p class="empty-state">None of the requested slugs matched a known model.</p>
+  {% elif rollups %}
+  {% if compare_summary and rollups|length >= 2 %}
+  <section class="card p-5 mb-6">
+    <h2 class="text-lg font-semibold">Comparison summary
+      <span class="dim text-sm font-normal">({% if compare_summary.source == 'ai' %}AI{% else %}rules v1{% endif %})</span>
+    </h2>
+    <p class="mt-2">{{ compare_summary.summary }}</p>
+    {% if compare_summary.tradeoffs %}
+    <ul class="mt-2 list-disc pl-5 text-sm">{% for t in compare_summary.tradeoffs %}<li>{{ t }}</li>{% endfor %}</ul>
+    {% endif %}
+  </section>
+  {% endif %}
+  {% if unmatched %}
+  <p class="sub dim mb-4">Not found: {{ unmatched|join(', ') }}</p>
+  {% endif %}
+
+  <div class="table-wrap mb-6">
+  <table class="run-table">
+    <thead>
+      <tr>
+        <th>Metric</th>
+        {% for r in rollups %}
+        <th><a href="{{ url_for('model_detail', slug=r.slug) }}">{{ r.display_name }}</a></th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="dim">Scan tier</td>{% for r in rollups %}<td>{% if r.scan %}{{ tier_label(r.scan.tier) }}{% else %}<span class="dim">—</span>{% endif %}</td>{% endfor %}</tr>
+      <tr><td class="dim">Safety tier</td>{% for r in rollups %}<td>{% if r.safety %}{{ tier_label(r.safety.tier) }}{% else %}<span class="dim">—</span>{% endif %}</td>{% endfor %}</tr>
+      <tr><td class="dim">Safety pass rate</td>{% for r in rollups %}<td class="num">{% if r.safety %}{{ "%.0f%%"|format(r.safety.pass_rate * 100) }}{% else %}<span class="dim">—</span>{% endif %}</td>{% endfor %}</tr>
+      <tr><td class="dim">Avg eval</td>{% for r in rollups %}<td class="num">{% if r.eval and (r.eval.avg_overall is defined and r.eval.avg_overall is not none or r.eval.best_overall is not none) %}{{ "%.2f"|format(r.eval.avg_overall if r.eval.avg_overall is defined and r.eval.avg_overall is not none else r.eval.best_overall) }} / 5{% else %}<span class="dim">—</span>{% endif %}</td>{% endfor %}</tr>
+      <tr><td class="dim">Eval cost</td>{% for r in rollups %}<td class="num">{% if r.eval %}${{ "%.4f"|format(r.eval.total_cost_usd) }}{% else %}<span class="dim">—</span>{% endif %}</td>{% endfor %}</tr>
+    </tbody>
+  </table>
+  </div>
+
+  {{ island_mount('compare-charts', {'models': chart_models}) }}
+
+  <h2 class="mt-8 text-lg font-semibold">Recommendations</h2>
+  {% for r in rollups %}
+  <section class="card p-4 mt-4">
+    <h3 class="font-semibold">{{ r.display_name }}</h3>
+    <p class="mt-2 text-sm">{{ recommendations[r.slug].summary }}</p>
+    {% if recommendations[r.slug].tradeoffs %}
+    <ul class="mt-2 list-disc pl-5 text-sm">
+      {% for t in recommendations[r.slug].tradeoffs %}<li>{{ t }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+  {% endfor %}
+  {% endif %}
+</div>
+{% endblock %}

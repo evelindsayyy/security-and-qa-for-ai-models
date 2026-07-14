@@ -1,163 +1,48 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_benchmark_docker, benchmark_item_status, start_button, delete_button with context %}
+{% from '_macros.html' import expandable, benchmark_item_status, start_button, delete_button, private_badge, back_link, progress_terminal, pillar_summary_card with context %}
 
 {% block title %}{% if missing %}Benchmark not found{% else %}{{ kind_label }} — {{ model }}{% endif %}{% endblock %}
 
 {% block content %}
 <div class="scan-detail">
   {% if missing %}
-    <h1>Benchmark not found</h1>
-    <p class="sub empty">no file matching slug <code>{{ slug }}</code> in benchmark results.</p>
-    <p class="form-hint">{{ start_button(url_for('benchmark_run_new'), 'Start a benchmark', classes='') }} or CLI: <code>{{ cli_benchmark_docker() }}</code></p>
-    <p><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
+    <h1 class="page-title">Benchmark not found</h1>
+    <p class="sub empty">No benchmark result found for <code>{{ slug }}</code>.</p>
+    <p class="form-hint">{{ start_button(url_for('benchmark_run_new'), 'Start a benchmark', classes='') }}</p>
+    <p><a class="font-semibold text-duke-blue" href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
   {% elif running %}
-    <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
-    <h1>Benchmark run in progress</h1>
+    {{ back_link(url_for('benchmarks'), 'all benchmarks') }}
+    <h1 class="page-title">Benchmark run in progress</h1>
     <p class="sub">
       {% if run_status.benchmark_label %}<strong>{{ run_status.benchmark_label }}</strong>{% endif %}
       {% if run_status.model %} · {{ run_status.model }}{% endif %}
       · slug <code>{{ slug }}</code>
-      {% if run_status.status == 'running' %}· updates every 5 seconds{% endif %}
     </p>
-    {% if is_logged_in and run_status.status == 'running' %}
-    <p class="detail-actions" id="bench-stop-wrap">
-      <button type="button" class="btn-danger" id="bench-stop-run">Stop run</button>
+    {{ progress_terminal(
+         url_for('benchmark_run_status_private' if is_private else 'benchmark_run_status', slug=slug),
+         5000,
+         hint='Run continues in the background if you switch tabs.',
+         initial_status=run_status.status,
+         initial_message=run_status.log or run_status.message or '',
+         cancel_url=url_for('benchmark_cancel_private' if is_private else 'benchmark_cancel', slug=slug) if is_logged_in else '',
+         progress_label=run_status.unit or 'Items'
+       ) }}
+    {% if run_status.status in ('failed', 'cancelled') %}
+    <p class="detail-delete-form">
+      {{ delete_button(url_for('benchmark_delete_private' if is_private else 'benchmark_delete', slug=slug), 'Delete run') }}
     </p>
     {% endif %}
-    <div class="progress-card progress-card--wide">
-      <div class="progress-track">
-        <div id="prog-bar" class="progress-fill" style="width: {{ (100 * run_status.progress / run_status.total) if run_status.total else 0 }}%;"></div>
-      </div>
-      <p class="progress-meta">
-        <b id="prog-text">{% if run_status.total %}{{ run_status.progress }}/{{ run_status.total }}{% else %}{{ run_status.progress }}{% endif %}</b>
-        <span id="prog-unit">{{ run_status.unit or 'items' }}</span> ·
-        <span id="prog-state" class="progress-state">{{ run_status.status }}</span>
-      </p>
-      <p class="progress-meta dim" id="prog-message"{% if not run_status.message or run_status.message == (run_status.log or '') %} style="display:none"{% endif %}>{{ run_status.message }}</p>
-      <p id="prog-truncated" class="log-terminal-hint" style="display: none;"></p>
-      <pre class="log-terminal log-terminal--run" id="prog-log" aria-live="polite">{{ run_status.log or run_status.message or '' }}</pre>
-      <p class="log-terminal-hint" id="prog-bg-hint"{% if run_status.status != 'running' %} hidden{% endif %}>Run continues in the background if you switch tabs.</p>
-      <p class="progress-fail" id="fail-hint" style="display: {{ 'block' if run_status.status == 'failed' else 'none' }};">
-        Run failed — see log above or <code>benchmarks/results/{{ slug }}.log</code>.
-      </p>
-      <p class="progress-cancel" id="cancel-hint" style="display: {{ 'block' if run_status.status == 'cancelled' else 'none' }};">
-        Run stopped before completion. Partial output may be on disk — delete this run or start a new one.
-      </p>
-      {% if run_status.status in ('failed', 'cancelled') %}
-      <p class="detail-delete-form">
-        {{ delete_button(url_for('benchmark_delete_private' if is_private else 'benchmark_delete', slug=slug), 'Delete run') }}
-      </p>
-      {% endif %}
-    </div>
-    <script>
-      (function () {
-        const logEl = document.getElementById("prog-log");
-        const truncatedEl = document.getElementById("prog-truncated");
-        const statusUrl = {{ url_for('benchmark_run_status_private' if is_private else 'benchmark_run_status', slug=slug) | tojson }};
-        const cancelUrl = {{ url_for('benchmark_cancel_private' if is_private else 'benchmark_cancel', slug=slug) | tojson }};
-        function updateLog(text) {
-          if (typeof text !== "string" || text === logEl.textContent) return;
-          const atBottom = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 48;
-          const prevTop = logEl.scrollTop;
-          logEl.textContent = text;
-          logEl.scrollTop = atBottom ? logEl.scrollHeight : prevTop;
-        }
-        function onTerminalStatus(s) {
-          if (s.status === "complete") {
-            clearInterval(poll);
-            location.href = location.pathname;
-            return;
-          }
-          if (s.status === "failed") {
-            clearInterval(poll);
-            document.getElementById("fail-hint").style.display = "block";
-            const wrap = document.getElementById("bench-stop-wrap");
-            if (wrap) wrap.hidden = true;
-            return;
-          }
-          if (s.status === "cancelled") {
-            clearInterval(poll);
-            document.getElementById("cancel-hint").style.display = "block";
-            const wrap = document.getElementById("bench-stop-wrap");
-            if (wrap) wrap.hidden = true;
-            const bg = document.getElementById("prog-bg-hint");
-            if (bg) bg.hidden = true;
-          }
-        }
-        const poll = setInterval(async () => {
-          const r = await fetch(statusUrl);
-          if (!r.ok) return;
-          const s = await r.json();
-          if (s.total) {
-            document.getElementById("prog-bar").style.width = (100 * s.progress / s.total) + "%";
-            document.getElementById("prog-text").textContent = s.progress + "/" + s.total;
-          } else {
-            document.getElementById("prog-bar").style.width = "0%";
-            document.getElementById("prog-text").textContent = String(s.progress || 0);
-          }
-          document.getElementById("prog-unit").textContent = s.unit || "items";
-          document.getElementById("prog-state").textContent = s.status;
-          const msgEl = document.getElementById("prog-message");
-          if (s.message && s.message !== (s.log || "")) {
-            msgEl.textContent = s.message;
-            msgEl.style.display = "";
-          } else {
-            msgEl.style.display = "none";
-          }
-          if (truncatedEl) {
-            if (s.log_truncated) {
-              truncatedEl.textContent = "Log is very large — showing the most recent portion. See the run log file on disk for the full history.";
-              truncatedEl.style.display = "block";
-            } else {
-              truncatedEl.style.display = "none";
-            }
-          }
-          const logText = s.log || s.message;
-          if (logText) updateLog(logText);
-          onTerminalStatus(s);
-        }, 5000);
-
-        const stopBtn = document.getElementById("bench-stop-run");
-        if (stopBtn) {
-          stopBtn.addEventListener("click", async () => {
-            if (!confirm("Stop this benchmark run? Progress so far may be saved if the runner wrote partial output.")) return;
-            stopBtn.disabled = true;
-            try {
-              const r = await fetch(cancelUrl, {
-                method: "POST",
-                headers: { Accept: "application/json" },
-              });
-              const body = await r.json().catch(() => ({}));
-              if (!r.ok) {
-                alert(body.error || "Could not stop run");
-                stopBtn.disabled = false;
-                return;
-              }
-              const statusR = await fetch(statusUrl);
-              if (statusR.ok) {
-                const s = await statusR.json();
-                document.getElementById("prog-state").textContent = s.status;
-                if (s.log) updateLog(s.log);
-                onTerminalStatus(s);
-              } else {
-                onTerminalStatus({ status: "cancelled" });
-              }
-            } catch (err) {
-              alert("Could not stop run");
-              stopBtn.disabled = false;
-            }
-          });
-        }
-      })();
-    </script>
   {% else %}
-    <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
-    <h1>{{ kind_label }} — {{ model }}{% if is_reference %} <span class="badge badge-pilot">Reference</span>{% endif %}{% if is_private %} <span class="badge badge-private" title="Only visible to you">private</span>{% endif %}</h1>
-    <p class="sub">
-      slug <code>{{ slug }}</code> ·
-      file <code>{{ filename }}</code> ·
-      {{ timestamp }}
-    </p>
+    {{ back_link(url_for('benchmarks'), 'all benchmarks') }}
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">{{ kind_label }} — <span class="model">{{ model }}</span>{% if is_reference %} <span class="badge badge-pilot">Reference</span>{% endif %}{% if is_private %} {{ private_badge() }}{% endif %}</h1>
+        <p class="page-subtitle">
+          completed {{ timestamp[:10] if timestamp and timestamp != "—" else "—" }} ·
+          slug <code>{{ slug }}</code> · file <code>{{ filename }}</code>
+        </p>
+      </div>
+    </div>
 
     {% if not is_reference %}
     {% if is_logged_in %}
@@ -217,6 +102,8 @@
         {% endif %}
       </div>
     </div>
+
+    {{ pillar_summary_card(pillar_summary) }}
 
     {% include '_benchmark_coverage.html' %}
 

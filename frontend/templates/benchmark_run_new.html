@@ -1,125 +1,153 @@
 {% extends "base.html" %}
+{% from '_macros.html' import launch_back, rerun_callout with context %}
 
 {% block title %}Start a benchmark run{% endblock %}
 
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span><a href="{{ url_for('benchmarks') }}">Benchmarks</a></span>
+<span class="text-text-subtle">›</span>
+<span class="font-medium text-text">Start run</span>
+{% endblock %}
+
 {% block content %}
-<div class="eval-comparison benchmark-launch-page">
-  <p class="back"><a href="{{ url_for('benchmarks') }}">← all benchmark results</a></p>
-  <h1>Start a benchmark run</h1>
-  {% if rerun %}
-  <p class="sub benchmark-rerun-hint">Pre-filled from a previous run — adjust settings if needed, then start.</p>
+<div class="launch-page launch-page-wide">
+  {{ launch_back(url_for('benchmarks'), 'all benchmarks') }}
+
+  <header>
+    <h1 class="page-title">Start a benchmark run</h1>
+    <p class="page-subtitle">
+      Choose a <strong>benchmark</strong>, then pick how the model is reached:
+      Duke <strong>gateway</strong>, Hugging Face <strong>hosted</strong> inference,
+      or a <strong>self-hosted OpenAI-compatible API</strong>.
+      Launches <code>benchmarks/run_benchmark.py</code> via Docker Compose (default).
+      See
+      <a href="https://gitlab.oit.duke.edu/codeplus/security-and-qa-for-ai-models/-/blob/main/benchmarks/README.md#model-input-cheat-sheet" target="_blank" rel="noopener" class="font-semibold">benchmarks/README</a>
+      for model setup details.
+    </p>
+  </header>
+
+  {% if rerun %}{{ rerun_callout() }}{% endif %}
+  {% if not docker_available %}
+  <p class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</p>
   {% endif %}
-  <p class="sub">
-    Choose a <strong>benchmark</strong>, then pick how the model is reached:
-    Duke <strong>gateway</strong>, Hugging Face <strong>hosted</strong> inference,
-    or a <strong>self-hosted OpenAI-compatible API</strong> (your server, vLLM, Ollama, …).
-    Launches <code>benchmarks/run_benchmark.py</code> via Docker Compose (default).
-    See
-    <a href="https://gitlab.oit.duke.edu/codeplus/security-and-qa-for-ai-models/-/blob/main/benchmarks/README.md#model-input-cheat-sheet" target="_blank" rel="noopener">benchmarks/README</a>
-    for model setup details and <code>docs/cli.md</code> for manual compose commands.
-    {% if not docker_available %}
-    <span class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>
-    {% endif %}
-  </p>
 
-  <div class="benchmark-launch-grid">
-    <form method="post" action="{{ url_for('benchmark_run_start') }}" class="launch-form">
-      <label>Benchmark
-        <select name="benchmark" id="benchmark">
-          {% for b in benchmarks %}
-          <option value="{{ b.key }}">{{ b.label }}</option>
-          {% endfor %}
-        </select>
-      </label>
-
-      <div id="benchmark-desc" class="benchmark-launch-desc" aria-live="polite" hidden>
-        <p class="benchmark-launch-desc__about" id="benchmark-desc-about"></p>
-        <p class="form-hint" id="benchmark-desc-meta"></p>
-      </div>
-
-      <fieldset class="model-source">
-        <legend>Model source</legend>
-        <label class="radio">
-          <input type="radio" name="model_source" value="gateway" checked
-                 onchange="toggleModelSource()">
-          Gateway model
-        </label>
-        <label class="radio">
-          <input type="radio" name="model_source" value="hosted"
-                 onchange="toggleModelSource()">
-          Hosted (Hugging Face Inference API)
-        </label>
-        <label class="radio">
-          <input type="radio" name="model_source" value="custom"
-                 onchange="toggleModelSource()">
-          Custom (self-hosted API)
-        </label>
-      </fieldset>
-
-      <div id="gateway-fields">
-        <label>Model
-          <select name="model" id="model">
-            {% for m in models %}
-            <option value="{{ m }}" {% if m == 'GPT 4.1 Mini' %}selected{% endif %}>{{ m }}</option>
+  <div class="launch-layout-split">
+    <form method="post" action="{{ url_for('benchmark_run_start') }}" class="launch-form card p-5">
+      <section class="form-section">
+        <h2 class="form-section-title">Benchmark</h2>
+        <div class="form-field">
+          <label for="benchmark">Suite</label>
+          <select name="benchmark" id="benchmark">
+            {% for b in benchmarks %}
+            <option value="{{ b.key }}">{{ b.label }}</option>
             {% endfor %}
           </select>
-          <span class="form-hint">exact gateway id — see <a href="{{ url_for('models_catalog') }}">model catalog</a></span>
-        </label>
-      </div>
+        </div>
 
-      <div id="hosted-fields" style="display: none;">
-        <label>Hugging Face model
+        <div id="benchmark-desc" class="benchmark-launch-desc mt-3" aria-live="polite" hidden>
+          <p class="benchmark-launch-desc__about" id="benchmark-desc-about"></p>
+          <p class="form-hint" id="benchmark-desc-meta"></p>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h2 class="form-section-title">Model source</h2>
+        <fieldset class="model-source">
+          <label class="radio">
+            <input type="radio" name="model_source" value="gateway" checked
+                   onchange="toggleModelSource()">
+            Gateway model
+          </label>
+          <label class="radio">
+            <input type="radio" name="model_source" value="hosted"
+                   onchange="toggleModelSource()">
+            Hosted (Hugging Face Inference API)
+          </label>
+          <label class="radio">
+            <input type="radio" name="model_source" value="custom"
+                   onchange="toggleModelSource()">
+            Custom (self-hosted API)
+          </label>
+        </fieldset>
+      </section>
+
+      <section class="form-section" id="gateway-fields">
+        <div class="form-field">
+          <label for="model">Model</label>
+          <select name="model" id="model">
+            {% for m in models %}
+            <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </select>
+          <span class="form-hint">Exact gateway id — see <a href="{{ url_for('models_catalog') }}" class="font-semibold">model catalog</a>.</span>
+        </div>
+      </section>
+
+      <section class="form-section" id="hosted-fields" style="display: none;">
+        <div class="form-field">
+          <label for="hosted_model">Hugging Face model</label>
           <input type="text" name="hosted_model" id="hosted_model"
                  placeholder="meta-llama/Llama-3.1-8B-Instruct" autocomplete="off">
-          <span class="form-hint">HF repo id from the model page — e.g. <code>org/model</code> or <code>org/model:provider</code></span>
-        </label>
-
-        <label>Hugging Face token
+          <span class="form-hint">HF repo id — e.g. <code>org/model</code> or <code>org/model:provider</code>.</span>
+        </div>
+        <div class="form-field mt-3">
+          <label for="hosted_token">Hugging Face token</label>
           <input type="password" name="hf_token" id="hosted_token"
                  placeholder="hf_..." autocomplete="off">
-          <span class="form-hint">fine-grained token with <strong>Inference Providers</strong> — <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">create one</a></span>
-        </label>
-      </div>
+          <span class="form-hint">Fine-grained token with <strong>Inference Providers</strong> — <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener" class="font-semibold">create one</a>.</span>
+        </div>
+      </section>
 
-      <div id="custom-fields" style="display: none;">
-        <label>Model id
+      <section class="form-section" id="custom-fields" style="display: none;">
+        <div class="form-field">
+          <label for="custom_model">Model id</label>
           <input type="text" name="custom_model" id="custom_model"
                  placeholder="my-model or Qwen/Qwen3-0.6B" autocomplete="off">
-          <span class="form-hint">exact <code>model</code> string your API expects in chat completions — HF repo id, fine-tune name, etc.</span>
-        </label>
-
-        <label>Base URL
+          <span class="form-hint">Exact <code>model</code> string your API expects in chat completions.</span>
+        </div>
+        <div class="form-field mt-3">
+          <label for="base_url">Base URL</label>
           <input type="text" name="base_url" id="base_url"
                  placeholder="http://localhost:8000/v1" autocomplete="off">
-          <span class="form-hint">OpenAI-compatible root — must expose <code>/v1/chat/completions</code> (e.g. vLLM, Ollama, LiteLLM proxy, your own server)</span>
-        </label>
-
-        <label>API key <span class="form-hint">(optional)</span>
+          <span class="form-hint">OpenAI-compatible root — must expose <code>/v1/chat/completions</code>.</span>
+        </div>
+        <div class="form-field mt-3">
+          <label for="api_key">API key <span class="dim font-normal">(optional)</span></label>
           <input type="text" name="api_key" id="api_key"
                  placeholder="local-vllm" autocomplete="off">
-          <span class="form-hint">leave blank or use any placeholder if your server does not require auth</span>
-        </label>
+          <span class="form-hint">Leave blank or use any placeholder if your server does not require auth.</span>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <details class="advanced-options">
+          <summary>Advanced options</summary>
+          <div class="mt-3 space-y-3">
+            <div class="form-field" id="sample-label" title="{{ coverage_n_tooltip }}">
+              <label for="sample">Sample size</label>
+              <input type="number" name="sample" id="sample" min="1" placeholder="default">
+              <span class="form-hint" id="sample-hint"></span>
+            </div>
+            <div class="form-field" id="seed-label" style="display: none;">
+              <label for="seed">Random seed</label>
+              <input type="number" name="seed" id="seed" min="0" placeholder="default">
+              <span class="form-hint">For shuffled benchmarks (MMLU, IFEval, MBPP, QuALITY).</span>
+            </div>
+            <p class="form-hint" id="hosted-sample-note" style="display: none;">
+              Hosted runs are capped at {{ hosted_sample_max }} items to limit API cost.
+            </p>
+          </div>
+        </details>
+      </section>
+
+      <div class="form-actions">
+        <button type="submit" class="btn-primary">▶ Start run</button>
       </div>
-
-      <details class="advanced-options">
-        <summary>Advanced options</summary>
-        <label id="sample-label" title="{{ coverage_n_tooltip }}">Sample size
-          <input type="number" name="sample" id="sample" min="1" placeholder="default">
-          <span class="form-hint" id="sample-hint"></span>
-        </label>
-        <label id="seed-label" style="display: none;">Random seed
-          <input type="number" name="seed" id="seed" min="0" placeholder="default">
-          <span class="form-hint">for shuffled benchmarks (MMLU, IFEval, MBPP, QuALITY)</span>
-        </label>
-        <p class="form-hint" id="hosted-sample-note" style="display: none;">
-          Hosted runs are capped at {{ hosted_sample_max }} items to limit API cost.
-        </p>
-      </details>
-
-      <button type="submit" class="btn-primary">▶ Start run</button>
     </form>
 
-    <aside id="model-setup-guide" class="model-setup-guide" aria-live="polite">
+    <aside id="model-setup-guide" class="model-setup-guide card p-5" aria-live="polite">
       <h2 class="model-setup-guide__title">How to fill in the model</h2>
 
       <div id="guide-gateway" class="model-setup-panel">

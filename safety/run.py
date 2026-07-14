@@ -16,6 +16,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -112,7 +113,7 @@ def _prepare_promptfoo_host_dir() -> None:
         os.environ["PROMPTFOO_HOST_DIR"] = f"{host_repo}/safety/promptfoo"
 
 
-def _promptfoo_compose_env(base: dict[str, str]) -> dict[str, str]:
+def _promptfoo_compose_env(base: dict[str, str], *, slug: str, profile: str) -> dict[str, str]:
     """Env passed explicitly to nested Promptfoo compose (host bind mounts)."""
     env = dict(base)
     host_repo = os.environ.get("HOST_REPO", "").strip()
@@ -123,6 +124,9 @@ def _promptfoo_compose_env(base: dict[str, str]) -> dict[str, str]:
         env["PROMPTFOO_HOST_DIR"] = os.environ["PROMPTFOO_HOST_DIR"].strip()
     env.setdefault("UID", str(os.getuid()))
     env.setdefault("GID", str(os.getgid()))
+    env["PROMPTFOO_CONFIG_DIR"] = (
+        f"/app/safety/promptfoo/output/{slug}/{profile}/.promptfoo"
+    )
     return env
 
 
@@ -186,6 +190,54 @@ def _resolve_attacker_target(repo_id: str, endpoint: str) -> str | None:
         )
         return None
     return endpoint
+
+
+def _promptfoo_sqlite_contention(stderr: str) -> bool:
+    needles = (
+        'Failed query: update "evals"',
+        "SQLITE_BUSY",
+        "SQLITE_LOCKED",
+        "database is locked",
+    )
+    lowered = stderr.lower()
+    return any(n.lower() in lowered for n in needles)
+
+
+def _compose_run_promptfoo(
+    inner_cmd: list[str],
+    *,
+    extra_env: dict[str, str],
+    label: str,
+    retries: int = 2,
+) -> None:
+    """Run promptfoo via compose with bounded retry on SQLite contention."""
+    last_exc: subprocess.CalledProcessError | None = None
+    for attempt in range(max(1, retries)):
+        try:
+            compose_run(
+                PROMPTFOO_COMPOSE,
+                "promptfoo",
+                inner_cmd,
+                extra_env=extra_env,
+                check=True,
+            )
+            return
+        except subprocess.CalledProcessError as exc:
+            last_exc = exc
+            detail = (exc.stderr or exc.stdout or "").strip()
+            if attempt + 1 < retries and _promptfoo_sqlite_contention(detail):
+                delay = 1.5 * (attempt + 1)
+                print(
+                    f"WARN: {label} hit promptfoo SQLite contention; "
+                    f"retrying in {delay:.1f}s ({attempt + 2}/{retries})",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                time.sleep(delay)
+                continue
+            raise
+    if last_exc is not None:
+        raise last_exc
 
 
 def _ensure_output_dirs(slug: str, profile: str) -> None:
@@ -330,7 +382,7 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
         **({"GATEWAY_BASE_URL": cfg.base_url} if cfg.base_url else {}),
         **({"REDTEAM_ATTACKER_MODEL": cfg.attacker_repo} if cfg.attacker_repo else {}),
         **({"REDTEAM_ATTACKER_BASE_URL": cfg.attacker_base_url} if cfg.attacker_base_url else {}),
-    })
+    }, slug=slug, profile=cfg.redteam_profile)
     if cfg.base_url and not os.environ.get("OPENAI_API_KEY"):
         # promptfoo's OpenAI provider hard-requires this env var to be
         # non-empty even though a vLLM server started without --api-key
@@ -345,15 +397,13 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
             print("--- Promptfoo policy ---", flush=True)
             eval_json = pf_output / "eval.json"
             try:
-                compose_run(
-                    PROMPTFOO_COMPOSE,
-                    "promptfoo",
+                _compose_run_promptfoo(
                     [
                         "promptfoo", "eval", "-c", "promptfooconfig.yaml",
                         "-o", f"output/{slug}/{cfg.redteam_profile}/eval.json",
                     ],
                     extra_env=pf_env,
-                    check=True,
+                    label="policy eval",
                 )
             except subprocess.CalledProcessError as exc:
                 if not eval_json.is_file():
@@ -386,9 +436,7 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
                 f"output/{slug}/{cfg.redteam_profile}/redteam_promptfooconfig.yaml"
             )
             try:
-                compose_run(
-                    PROMPTFOO_COMPOSE,
-                    "promptfoo",
+                _compose_run_promptfoo(
                     [
                         "promptfoo", "redteam", "run",
                         "-c", config_in_container,
@@ -398,7 +446,7 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
                         "--force",
                     ],
                     extra_env=pf_env,
-                    check=True,
+                    label="red-team eval",
                 )
             except subprocess.CalledProcessError as exc:
                 if not redteam_json.is_file():
@@ -423,15 +471,13 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
                 print(f"  running {yaml_rel} ...", flush=True)
                 manual_eval = pf_output / f"manual_{stem}_eval.json"
                 try:
-                    compose_run(
-                        PROMPTFOO_COMPOSE,
-                        "promptfoo",
+                    _compose_run_promptfoo(
                         [
                             "promptfoo", "eval", "-c", yaml_rel,
                             "-o", f"output/{slug}/{cfg.redteam_profile}/manual_{stem}_eval.json",
                         ],
                         extra_env=pf_env,
-                        check=True,
+                        label=f"manual eval {stem}",
                     )
                 except subprocess.CalledProcessError:
                     pass

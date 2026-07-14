@@ -1,5 +1,5 @@
 """
-Tests for the per-model nutrition-label page (frontend/eval_run_data
+Tests for the per-model report-card page (frontend/eval_run_data
 get_model_detail + model_slug) and the custom-suite exclusion from the
 comparison table. No database, no API calls — get_runs_data is stubbed.
 
@@ -56,12 +56,31 @@ class GetModelDetailTest(unittest.TestCase):
         self.assertEqual(detail["model"], "gpt-5-chat")
         self.assertEqual(detail["n_runs"], 2)
         self.assertEqual(detail["suites"], ["it_support_v1", "policy_qa_v1.1"])
-        self.assertEqual(detail["best_overall"], 4.9)
+        self.assertEqual(detail["avg_overall"], 4.6)  # mean of 4.9 and 4.3
+        self.assertEqual(detail["best_overall"], 4.6)  # alias
+
+    def test_catalog_gateway_slug_matches(self) -> None:
+        runs = [_run(model="GPT 4.1 Mini", overall=4.2)]
+        with self._stub(runs):
+            detail = erd.get_model_detail("gpt-4.1-mini")
+        self.assertIsNotNone(detail)
+        self.assertEqual(detail["model"], "GPT 4.1 Mini")
+        self.assertEqual(detail["avg_overall"], 4.2)
 
     def test_slug_with_spaces_matches(self) -> None:
         runs = [_run(model="GPT 4.1 Mini", overall=4.2)]
         with self._stub(runs):
             detail = erd.get_model_detail("GPT-4.1-Mini")
+        self.assertIsNotNone(detail)
+        self.assertEqual(detail["model"], "GPT 4.1 Mini")
+
+    def test_resolves_gateway_normalized_slug_form(self) -> None:
+        # The /models catalog links with the gateway-normalized (lowercase)
+        # slug; get_model_detail must resolve that form too, or the detail
+        # page's eval table is empty for every mixed-case model.
+        runs = [_run(model="GPT 4.1 Mini", overall=4.2)]
+        with self._stub(runs):
+            detail = erd.get_model_detail("gpt-4.1-mini")
         self.assertIsNotNone(detail)
         self.assertEqual(detail["model"], "GPT 4.1 Mini")
 
@@ -83,6 +102,40 @@ class CustomExclusionTest(unittest.TestCase):
         suites = {r["suite"] for r in out["runs"]}
         self.assertIn("it_support_v1", suites)
         self.assertNotIn("custom_20260615T000000Z", suites)
+
+
+class RetiredJudgeTest(unittest.TestCase):
+    def test_predicate_matches_llama_3_3_variants(self) -> None:
+        for j in ("Llama 3.3", "Llama-3.3", "llama-3.3-70b", "openai/Llama 3.3"):
+            self.assertTrue(erd._is_retired_judge(j), j)
+        for j in ("Llama 4 Maverick", "GPT 4.1 Mini", "gpt-oss-120b", None, ""):
+            self.assertFalse(erd._is_retired_judge(j), j)
+
+    def test_failed_run_predicate(self) -> None:
+        self.assertTrue(erd._is_failed_run({"n": 12, "cand_fail": 12}))   # all errored
+        self.assertTrue(erd._is_failed_run({"n": 6, "cand_fail": 6}))
+        self.assertFalse(erd._is_failed_run({"n": 12, "cand_fail": 0}))   # all succeeded
+        self.assertFalse(erd._is_failed_run({"n": 12, "cand_fail": 5}))   # partial → keep
+        self.assertFalse(erd._is_failed_run({"n": 6, "cand_fail": 0}))    # execution suite
+        self.assertFalse(erd._is_failed_run({"n": 0, "cand_fail": 0}))    # no rows
+
+    def test_get_runs_data_hides_retired_and_failed(self) -> None:
+        source = {"runs": [
+            {"judge_model": "Llama 3.3", "suite": "it_support_v1", "n": 12, "cand_fail": 0},
+            {"judge_model": "Llama 4 Maverick", "suite": "it_support_v1", "n": 12, "cand_fail": 12},
+            {"judge_model": "Llama 4 Maverick", "suite": "it_support_v1", "n": 12, "cand_fail": 0},
+        ]}
+        with mock.patch("frontend.db_fallback.get_data_with_db_fallback",
+                        return_value={"runs": list(source["runs"])}), \
+             mock.patch.object(erd, "attach_cost_perf", side_effect=lambda d: d), \
+             mock.patch.object(erd, "_build_eval_comparison_section", return_value={}), \
+             mock.patch("frontend.staleness.attach_staleness", lambda runs, pillar: None), \
+             mock.patch("frontend.eval_launch.suite_display_name", side_effect=lambda s: s):
+            out = erd.get_runs_data()
+        # retired judge dropped AND the all-failed Maverick run dropped; only the
+        # one real Maverick run remains.
+        self.assertEqual(len(out["runs"]), 1)
+        self.assertEqual(out["runs"][0]["cand_fail"], 0)
 
 
 if __name__ == "__main__":

@@ -19,7 +19,6 @@ from frontend.benchmark_data import (
     _attach_per_subject,
     _format_ts,
     _paginate_detail_items,
-    _summarize_file,
 )
 
 load_repo_env()
@@ -72,7 +71,7 @@ def _connect():
 _LIST_SQL = """
 SELECT output_slug, source_filename, gateway_model_id, benchmark_key,
        headline_metric, headline_value, n_items, metrics, items, run_params,
-       completed_at
+       completed_at, config_json
 FROM public.benchmark_runs b
 WHERE {visibility_filter}
 ORDER BY completed_at DESC NULLS LAST, output_slug
@@ -81,7 +80,7 @@ ORDER BY completed_at DESC NULLS LAST, output_slug
 _DETAIL_SQL = """
 SELECT output_slug, source_filename, gateway_model_id, benchmark_key,
        headline_metric, headline_value, n_items, metrics, items, run_params,
-       completed_at
+       completed_at, config_json
 FROM public.benchmark_runs b
 WHERE output_slug = %(slug)s AND ({visibility_filter})
 LIMIT 1
@@ -156,11 +155,12 @@ def _summarize_db_run(row: tuple) -> dict:
         _items,
         _run_params,
         completed_at,
+        config_json,
     ) = row
     metrics = metrics or {}
     kind = benchmark_key
     ts_raw = _ts_raw(completed_at)
-    return {
+    summary = {
         "slug": output_slug,
         "filename": source_filename,
         "kind": kind,
@@ -174,6 +174,9 @@ def _summarize_db_run(row: tuple) -> dict:
         "n": n_items,
         "extras": _extras_from_metrics(kind, metrics),
     }
+    if isinstance(config_json, dict) and config_json.get("benchmark_spec_digest"):
+        summary["benchmark_spec_digest"] = config_json["benchmark_spec_digest"]
+    return summary
 
 
 def _build_detail_db(row: tuple) -> dict:
@@ -220,34 +223,18 @@ def _visibility_params(
 
 
 def get_benchmarks_data_db() -> dict:
-    """DB-preferred merge of every known benchmark run (DB rows + not-yet-loaded files)."""
-    from dbutils.run_meta import read_run_meta
-    from dbutils.visibility import artifact_visible
-    from frontend.read_context import read_context
+    """Every known benchmark run, straight from Postgres.
 
+    Postgres is the single source of truth when a DSN is reachable — we do NOT
+    merge in on-disk artifacts here. Disk is only consulted when no DSN is
+    configured (see benchmark_data.get_benchmarks_data)."""
     vis_clause, vis_params = _visibility_params()
-    view_mode, user_id = read_context()
 
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(_LIST_SQL.format(visibility_filter=vis_clause), vis_params)
             run_rows = cur.fetchall()
-    db_rows = [_summarize_db_run(row) for row in run_rows]
-
-    seen_slugs = {r["slug"] for r in db_rows}
-    file_rows: list[dict] = []
-    if PRIMARY_DIR.is_dir():
-        for path in sorted(list(PRIMARY_DIR.glob("*.json")) + list(PRIMARY_DIR.glob("*.jsonl"))):
-            if path.stem in seen_slugs:
-                continue
-            meta = read_run_meta(PRIMARY_DIR / path.stem)
-            if not artifact_visible(meta, view_mode=view_mode, user_id=user_id):
-                continue
-            row = _summarize_file(path)
-            if row is not None:
-                file_rows.append(row)
-
-    rows = db_rows + file_rows
+    rows = [_summarize_db_run(row) for row in run_rows]
     rows.sort(key=lambda r: r["timestamp_raw"], reverse=True)
     kinds = sorted({r["kind_label"] for r in rows})
     models = sorted({r["model"] for r in rows if r["model"] and not r["model"].startswith("—")})
@@ -292,5 +279,30 @@ def delete_run(
                 {"slug": slug, **vis_params},
             )
             deleted = cur.rowcount > 0
+        conn.commit()
+    return deleted
+
+
+def delete_runs_for_combo(
+    benchmark_key: str,
+    model: str,
+    *,
+    visibility: str | None = None,
+    owner_user_id: str | None = None,
+) -> int:
+    """Delete every benchmark run for one (benchmark, model) in the given scope."""
+    vis_clause, vis_params = _visibility_params(visibility=visibility, owner_user_id=owner_user_id)
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                DELETE FROM public.benchmark_runs AS b
+                WHERE b.benchmark_key = %(benchmark_key)s
+                  AND b.gateway_model_id = %(model)s
+                  AND ({vis_clause})
+                """,
+                {"benchmark_key": benchmark_key, "model": model, **vis_params},
+            )
+            deleted = cur.rowcount
         conn.commit()
     return deleted

@@ -1,87 +1,47 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button with context %}
+{% from '_macros.html' import expandable, start_button, delete_button, private_badge, back_link, rerun_button, progress_terminal, pillar_summary_card with context %}
 
 {% block title %}{% if missing %}Run not found{% else %}{{ candidate_model }} — run{% endif %}{% endblock %}
 
 {% block content %}
 <div class="scan-detail">
   {% if missing %}
-    <h1>Run not found</h1>
+    <h1 class="page-title">Run not found</h1>
     <p class="sub empty">no results JSONL for slug <code>{{ slug }}</code>.</p>
-    <p class="form-hint">{{ start_button(url_for('eval_run_new'), 'Start an eval run', classes='') }} or CLI: <code>{{ cli_eval_docker() }}</code></p>
-    <p><a href="{{ url_for('eval_run') }}">← all runs</a></p>
+    <p class="form-hint">{{ start_button(url_for('eval_run_new'), 'Start an eval run', classes='') }}</p>
+    <p><a class="font-semibold text-duke-blue" href="{{ url_for('eval_run') }}">← all eval runs</a></p>
   {% elif running %}
-    <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
-    <h1>Run in progress</h1>
-    <p class="sub">slug <code>{{ slug }}</code> · live log updates every 5 seconds</p>
-    <div class="progress-card progress-card--wide">
-      <div class="progress-track">
-        <div id="prog-bar" class="progress-fill" style="width: {{ (100 * run_status.progress / run_status.total) if run_status.total else 0 }}%;"></div>
-      </div>
-      <p class="progress-meta">
-        <b id="prog-text">{{ run_status.progress }}/{{ run_status.total }}</b> questions ·
-        <span id="prog-state" class="progress-state">{{ run_status.status }}</span>
-      </p>
-      <p id="prog-truncated" class="log-terminal-hint" style="display: none;"></p>
-      <pre class="log-terminal log-terminal--run" id="prog-log" aria-live="polite">{{ run_status.message }}</pre>
-      <p class="log-terminal-hint">Run continues in the background if you switch tabs.</p>
-      <p class="progress-fail" id="fail-hint" style="display: {{ 'block' if run_status.status == 'failed' else 'none' }};">
-        Run failed — see log above or <code>evaluator/results/{{ slug }}.log</code>.
-      </p>
-      {% if run_status.status == 'failed' %}
-      <p class="detail-delete-form">
-        {{ delete_button(url_for('eval_run_delete_private' if is_private else 'eval_run_delete', slug=slug), 'Delete failed run') }}
-      </p>
-      {% endif %}
-    </div>
-    <script>
-      (function () {
-        const logEl = document.getElementById("prog-log");
-        const truncatedEl = document.getElementById("prog-truncated");
-        function updateLog(text) {
-          if (typeof text !== "string" || text === logEl.textContent) return;
-          const atBottom = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 48;
-          const prevTop = logEl.scrollTop;
-          logEl.textContent = text;
-          logEl.scrollTop = atBottom ? logEl.scrollHeight : prevTop;
-        }
-        const poll = setInterval(async () => {
-          const r = await fetch("{{ url_for('eval_run_status_private' if is_private else 'eval_run_status', slug=slug) }}");
-          if (!r.ok) return;
-          const s = await r.json();
-          if (s.total) {
-            document.getElementById("prog-bar").style.width = (100 * s.progress / s.total) + "%";
-          }
-          document.getElementById("prog-text").textContent = s.progress + "/" + s.total;
-          document.getElementById("prog-state").textContent = s.status;
-          if (truncatedEl) {
-            if (s.log_truncated) {
-              truncatedEl.textContent = "Log is very large — showing the most recent portion. See the run log file on disk for the full history.";
-              truncatedEl.style.display = "block";
-            } else {
-              truncatedEl.style.display = "none";
-            }
-          }
-          const logText = s.message || s.log;
-          if (logText) updateLog(logText);
-          if (s.status === "complete") { clearInterval(poll); location.href = location.pathname; }
-          if (s.status === "failed") {
-            clearInterval(poll);
-            document.getElementById("fail-hint").style.display = "block";
-          }
-        }, 5000);
-      })();
-    </script>
-  {% else %}
-    <p class="back"><a href="{{ url_for('eval_run') }}">← all runs</a></p>
-    <h1>{{ candidate_model }}{% if is_private %} <span class="badge badge-private" title="Only visible to you">private</span>{% endif %}</h1>
-    <p class="sub">
-      slug <code>{{ slug }}</code> ·
-      run <code>{{ run_id }}</code> ·
-      {{ timestamp }}
+    {{ back_link(url_for('eval_run'), 'all eval runs') }}
+    <h1 class="page-title">Run in progress</h1>
+    <p class="sub">slug <code>{{ slug }}</code> · live updates every 5 seconds</p>
+    {{ progress_terminal(
+         url_for('eval_run_status_private' if is_private else 'eval_run_status', slug=slug),
+         5000,
+         hint='Run continues in the background if you switch tabs.',
+         initial_status=run_status.status,
+         initial_message=run_status.message,
+         progress_label='Questions'
+       ) }}
+    {% if run_status.status == 'failed' %}
+    <p class="detail-delete-form">
+      {{ delete_button(url_for('eval_run_delete_private' if is_private else 'eval_run_delete', slug=slug), 'Delete failed run') }}
     </p>
+    {% endif %}
+  {% else %}
+    {{ back_link(url_for('eval_run'), 'all eval runs') }}
+    <div class="page-header">
+      <div>
+        <h1 class="page-title"><span class="model">{{ candidate_model }}</span>{% if is_private %} {{ private_badge() }}{% endif %}</h1>
+        <p class="page-subtitle">
+          completed {{ timestamp[:10] if timestamp and timestamp != "—" else "—" }} ·
+          judge {{ judge_model }} · suite {{ suite_version }} ·
+          slug <code>{{ slug }}</code> · run <code>{{ run_id }}</code>
+        </p>
+      </div>
+    </div>
 
     <p class="detail-delete-form">
+      {{ rerun_button(url_for('eval_run_new', from=slug), '↻ Run again') }}
       {{ delete_button(url_for('eval_run_delete_private' if is_private else 'eval_run_delete', slug=slug)) }}
     </p>
 
@@ -93,10 +53,15 @@
       {% endif %}
       <span class="dim">mean latency {{ mean_latency_ms }} ms · p95 {{ p95_latency_ms }} ms</span>
       <span class="dim">total cost ${{ "%.4f"|format(total_cost_usd) }}</span>
+      {% if execution %}
+      <span class="summary-score" title="functional pass-rate — the execution oracle, not the judge">exec <b>{{ "%.0f%%"|format(execution.pass_rate * 100) }}</b> ({{ execution.passed }}/{{ execution.n }})</span>
+      {% endif %}
       <span class="dim">{{ ok }}/{{ n }} OK · {{ cand_fail }} cand_fail · {{ judge_fail }} judge_fail</span>
     </div>
 
-    <h2>Per question ({{ n }})</h2>
+    {{ pillar_summary_card(pillar_summary) }}
+
+    <h2 class="section-title">Per question ({{ n }})</h2>
     <table class="run-table">
       <thead>
         <tr>
@@ -106,6 +71,7 @@
           <th class="num">{{ dim|replace("_", " ") }}</th>
           {% endfor %}
           <th class="num">Overall</th>
+          <th class="num" title="functional pass/fail from the execution oracle">Exec</th>
           <th class="num">Latency</th>
           <th class="num">Cost</th>
           <th class="col-nowrap">Status</th>
@@ -120,6 +86,7 @@
           <td class="num">{{ "%.1f"|format(q.dim_scores[dim]) if q.dim_scores.get(dim) is not none else "—" }}</td>
           {% endfor %}
           <td class="num overall">{{ "%.2f"|format(q.overall) if q.overall is not none else "—" }}</td>
+          <td class="num">{% if q.exec_passed is not none %}{% if q.exec_passed %}<span class="status-ok">pass</span>{% else %}<span class="badge badge-warn" title="{{ q.exec_error }}">fail</span>{% endif %}{% else %}<span class="dim">—</span>{% endif %}</td>
           <td class="num">{{ q.latency_ms }} ms</td>
           <td class="num">${{ "%.5f"|format(q.cost_usd) }}</td>
           <td class="col-nowrap">
@@ -136,10 +103,46 @@
       </tbody>
     </table>
 
-    <h2>Judge rationales</h2>
-    <p class="dim">one sentence per dimension per question; click to expand.</p>
+    {% if robustness %}
+    <h2>Robustness</h2>
+    <p class="dim">Score under input perturbations vs. the original (pass threshold {{ robustness.pass_threshold }}).
+      Negative score drop = degraded; pass-rate drop = fraction that fell below threshold.</p>
+    <table class="run-table">
+      <thead>
+        <tr>
+          <th>Perturbation</th><th class="num">n</th>
+          <th class="num">mean (orig → pert)</th>
+          <th class="num">score drop</th><th class="num">pass-rate drop</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pt, m in robustness.by_perturbation.items() %}{% if m.n %}
+        <tr>
+          <td>{{ pt }}</td>
+          <td class="num">{{ m.n }}</td>
+          <td class="num">{{ "%.2f"|format(m.mean_original) }} → {{ "%.2f"|format(m.mean_perturbed) }}</td>
+          <td class="num">{{ "%+.2f"|format(m.score_drop) }}</td>
+          <td class="num">{{ "%.0f%%"|format(m.pass_rate_drop * 100) }}</td>
+        </tr>
+        {% endif %}{% endfor %}
+        {% if robustness.overall.n %}
+        <tr class="row-best">
+          <td><b>overall</b></td>
+          <td class="num">{{ robustness.overall.n }}</td>
+          <td class="num">{{ "%.2f"|format(robustness.overall.mean_original) }} → {{ "%.2f"|format(robustness.overall.mean_perturbed) }}</td>
+          <td class="num">{{ "%+.2f"|format(robustness.overall.score_drop) }}</td>
+          <td class="num">{{ "%.0f%%"|format(robustness.overall.pass_rate_drop * 100) }}</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    <h2 class="section-title mt-10">Judge rationales</h2>
+    <p class="body mt-1 mb-4">One sentence per dimension per question; click to expand.</p>
+    <div class="space-y-3">
     {% for q in questions %}
-      <details>
+      <details class="tool-panel">
         <summary>
           <code>{{ q.question_id }}</code>
           {% if q.overall is not none %}
@@ -169,9 +172,10 @@
         {% endif %}
       </details>
     {% endfor %}
+    </div>
 
-    <h2>Adaptation</h2>
-    <pre class="json-block">{
+    <h2 class="section-title mt-10">Adaptation</h2>
+    <pre class="json-block mt-3">{
   "candidate_model": {{ candidate_model|tojson }},
   "candidate_model_version": {{ candidate_model_version|tojson }},
   "judge_model": {{ judge_model|tojson }},

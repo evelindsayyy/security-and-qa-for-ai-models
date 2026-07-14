@@ -74,15 +74,12 @@ FROM public.eval_results LIMIT 5;
 DROP TABLE IF EXISTS public.eval_results, public.eval_runs, public.task_suites CASCADE;
 ```
 
-## Week-5 notes (for whoever builds the API)
+## API integration notes
 
-- Stay on raw SQL until the API lands; then write SQLAlchemy models mirroring
-  these tables, create an Alembic baseline revision matching
-  `efficacy_schema.sql`, and `alembic stamp head` against the live DB —
-  adopting existing tables, not recreating them.
+- Stay on raw SQL + psycopg loaders; no SQLAlchemy/Alembic baseline yet.
 - The shared `models` table (cross-pillar join anchor from `docs/data-model.md`)
   is deliberately NOT created here; `eval_runs.gateway_model_id` is the string
   key until the team owns that table.
 - The dashboard's DB read path (`frontend/eval_db_data.py`) keys on
   `eval_runs.source_file` == `<slug>.jsonl` and falls back to files whenever
-  the DB is unreachable — delete it when the API replaces it.
+  the DB is unreachable — this is the live read path behind `frontend/db_fallback.py`.

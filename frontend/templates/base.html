@@ -2,93 +2,108 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}AI Model Security & QA{% endblock %}</title>
+  {% for css_href in vite_css_entries %}
+  <link rel="stylesheet" href="{{ url_for('static', filename=css_href) }}">
+  {% endfor %}
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
-  <header>
-    <nav>
-      <a href="{{ url_for('index') }}">Home</a>
-      <a href="{{ url_for('models_catalog') }}">Model catalog</a>
-      <a href="{{ url_for('scans') }}">Scans</a>
-      <a href="{{ url_for('safety') }}">Safety</a>
-      <a href="{{ url_for('eval_run') }}">Eval</a>
-      <a href="{{ url_for('benchmarks') }}">Benchmarks</a>
-    </nav>
-    <div class="header-auth">
+<body
+  class="{% if view_mode == 'private' %}scope-private{% endif %}"
+  data-compare-url="{{ url_for('compare_models') }}"
+>
+  <div class="app-shell">
+    <aside class="app-sidebar" aria-label="Main navigation">
+      <div class="flex items-center gap-2 border-b border-border px-4 py-4">
+        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-duke-blue text-sm font-bold text-white">M</div>
+        <div>
+          <p class="text-sm font-bold text-text">Model Advisor</p>
+          <p class="text-xs text-text-subtle">Security &amp; QA</p>
+        </div>
+      </div>
+
+      <nav class="flex-1 space-y-4 px-3 py-4">
+        <div class="space-y-1">
+          <a href="{{ url_for('index') }}" class="nav-link{% if request.endpoint == 'index' %} is-active{% endif %}">Overview</a>
+          <a href="{{ url_for('models_catalog') }}" class="nav-link{% if request.endpoint in ('models_catalog', 'model_detail') %} is-active{% endif %}">Model catalog</a>
+          <a href="{{ url_for('model_labels') }}" class="nav-link{% if request.endpoint == 'model_labels' %} is-active{% endif %}">Report cards</a>
+          <a href="{{ url_for('compare_models') }}" class="nav-link{% if request.endpoint == 'compare_models' %} is-active{% endif %}">Compare</a>
+          <a href="{{ url_for('pipeline_overview') }}" class="nav-link{% if request.endpoint == 'pipeline_overview' %} is-active{% endif %}">Pipeline</a>
+        </div>
+        <div class="space-y-1">
+          <p class="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-text-subtle">Pillars</p>
+          <a href="{{ url_for('scans') }}" class="nav-link{% if request.endpoint and request.endpoint.startswith('scan') %} is-active{% endif %}">Scans</a>
+          <a href="{{ url_for('safety') }}" class="nav-link{% if request.endpoint and request.endpoint.startswith('safety') %} is-active{% endif %}">Safety</a>
+          <a href="{{ url_for('eval_run') }}" class="nav-link{% if request.endpoint and request.endpoint.startswith('eval') %} is-active{% endif %}">Eval</a>
+          <a href="{{ url_for('benchmarks') }}" class="nav-link{% if request.endpoint and request.endpoint.startswith('benchmark') %} is-active{% endif %}">Benchmarks</a>
+        </div>
+        <div class="space-y-1">
+          <p class="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-text-subtle">Extras</p>
+          <a href="{{ url_for('personality') }}" class="nav-link nav-link-extra{% if request.endpoint and request.endpoint.startswith('personality') %} is-active{% endif %}" title="BFI and political compass snapshots — not part of model rollup">
+            Personality
+          </a>
+          <p class="px-3 text-xs text-text-subtle">Fun self-report quiz · not a quality score</p>
+        </div>
+      </nav>
+
       {% if is_logged_in and current_user %}
-        <span class="auth-user">Signed in as {{ current_user.netid }}</span>
-        <form method="post" action="{{ url_for('auth.logout') }}" class="logout-form">
-          <button type="submit">Logout</button>
-        </form>
-        <form class="view-mode-form" method="post" action="{{ url_for('auth.view_mode') }}">
-          <span class="view-mode-label">View:</span>
-          <button type="submit" name="mode" value="public" class="view-mode-btn{% if view_mode == 'public' %} is-active{% endif %}">Public</button>
-          <button type="submit" name="mode" value="private" class="view-mode-btn{% if view_mode == 'private' %} is-active{% endif %}">Private</button>
-        </form>
-      {% elif auth_enabled or dev_login_available %}
-        <button type="button" id="auth-login-btn" class="auth-login-btn">Sign in with Duke NetID</button>
+      <div class="border-t border-border px-4 py-4 text-sm">
+        <p class="font-semibold text-text">{{ current_user.netid }}</p>
+        <p class="text-xs text-text-subtle">Duke NetID</p>
+      </div>
       {% endif %}
+    </aside>
+
+    <div class="app-main">
+      <header class="app-topbar">
+        <button type="button" class="btn-secondary btn-sm lg:hidden" data-sidebar-toggle aria-label="Toggle navigation">☰</button>
+
+        <nav class="breadcrumb-nav flex min-w-0 flex-1 items-center gap-1 text-sm" aria-label="Breadcrumb">
+          {% block breadcrumbs %}
+          <span class="breadcrumb-current">Overview</span>
+          {% endblock %}
+        </nav>
+
+        <div class="flex flex-wrap items-center gap-2">
+          {% if view_mode == 'private' and is_logged_in %}
+          <span class="scope-chip-private" title="Showing only your private runs">Private{% if current_user %} — {{ current_user.netid }}{% endif %}</span>
+          {% endif %}
+
+          {% if is_logged_in and current_user %}
+            <form method="post" action="{{ url_for('auth.view_mode') }}" class="inline-flex rounded-lg border border-border bg-surface-muted p-0.5">
+              <button type="submit" name="mode" value="public" class="rounded-md px-2.5 py-1 text-xs font-medium{% if view_mode == 'public' %} bg-surface-raised font-semibold text-duke-blue shadow-card{% endif %}">Public</button>
+              <button type="submit" name="mode" value="private" class="rounded-md px-2.5 py-1 text-xs font-medium{% if view_mode == 'private' %} bg-surface-raised font-semibold text-private-accent shadow-card{% endif %}">Private</button>
+            </form>
+            <form method="post" action="{{ url_for('auth.logout') }}" class="inline">
+              <button type="submit" class="btn-secondary btn-sm">Logout</button>
+            </form>
+          {% elif auth_enabled or dev_login_available %}
+            <div class="auth-login-wrap">
+              <button type="button" id="auth-login-btn" class="btn-primary btn-sm">Sign in with Duke NetID</button>
+            </div>
+          {% endif %}
+        </div>
+      </header>
+
+      {% if view_mode == 'private' and is_logged_in and not is_allowlisted %}
+      <div class="auth-banner auth-banner-warn">Your NetID is not on the allowlist for private mode.</div>
+      {% endif %}
+
+      <main class="app-content">
+        {% block content %}{% endblock %}
+      </main>
     </div>
-  </header>
+  </div>
 
-  {% if view_mode == 'private' and is_logged_in and not is_allowlisted %}
-  <div class="auth-banner auth-banner-warn">Your NetID is not on the allowlist for private mode.</div>
-  {% endif %}
+  <div class="fixed inset-0 z-20 bg-black/30 lg:hidden hidden" id="sidebar-backdrop" data-sidebar-toggle></div>
 
-  <main>
-    {% block content %}{% endblock %}
-  </main>
+  <script src="{{ url_for('static', filename=vite_entry) }}" type="module"></script>
+  <script src="{{ url_for('static', filename='localtime.js') }}"></script>
   <script>
   (function () {
-    function go(row) {
-      var href = row.getAttribute("data-href");
-      if (href) window.location.href = href;
-    }
-    document.addEventListener("click", function (e) {
-      var row = e.target.closest("tr.row-link");
-      if (!row || e.target.closest("a, button, form, input, select, textarea, label, .expandable-toggle")) return;
-      go(row);
-    });
-    document.addEventListener("keydown", function (e) {
-      if (e.key !== "Enter" && e.key !== " ") return;
-      var row = e.target.closest("tr.row-link");
-      if (!row) return;
-      e.preventDefault();
-      go(row);
-    });
-
-    function initExpandables(root) {
-      (root || document).querySelectorAll(".expandable").forEach(function (el) {
-        if (el.dataset.expandableInit) return;
-        el.dataset.expandableInit = "1";
-        var body = el.querySelector(".expandable-body");
-        var btn = el.querySelector(".expandable-toggle");
-        if (!body || !btn) return;
-        function checkOverflow() {
-          if (el.classList.contains("is-expanded")) return;
-          var overflowed = body.scrollHeight > body.clientHeight + 2;
-          el.classList.toggle("is-overflow", overflowed);
-          btn.hidden = !overflowed;
-        }
-        checkOverflow();
-        btn.addEventListener("click", function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          var expanded = el.classList.toggle("is-expanded");
-          btn.setAttribute("aria-expanded", expanded ? "true" : "false");
-          btn.textContent = expanded ? "See less" : "See more";
-          if (!expanded) checkOverflow();
-        });
-      });
-    }
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", function () { initExpandables(); });
-    } else {
-      initExpandables();
-    }
-
     var loginBtn = document.getElementById("auth-login-btn");
+
     if (loginBtn) {
       loginBtn.addEventListener("click", function () {
         {% if auth_enabled %}
@@ -113,7 +128,16 @@
         if (ev.data && ev.data.type === "auth-complete") window.location.reload();
       });
     }
+
+    document.querySelectorAll("[data-sidebar-toggle]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        document.body.classList.toggle("sidebar-open");
+        var backdrop = document.getElementById("sidebar-backdrop");
+        if (backdrop) backdrop.classList.toggle("hidden");
+      });
+    });
   })();
   </script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Run on the application VM (invoked by GitLab deploy-manual over SSH).
+# Run on the application VM (invoked by GitLab deploy job over SSH).
 #
-# Expects env: DEPLOY_PATH, WEB_IMAGE, CI_REGISTRY, CI_JOB_TOKEN
 # Expects env: DEPLOY_PATH, WEB_IMAGE, CI_REGISTRY, CI_JOB_TOKEN
 # Optional: GIT_REF (default main), BUILD_PILLARS=1 to rebuild pillar images after pull
 # Optional: CI_SERVER_HOST, CI_PROJECT_PATH, CI_SERVER_PROTOCOL — HTTPS git sync via CI_JOB_TOKEN
@@ -49,8 +48,20 @@ _sync_repo() {
 
 _sync_repo "$GIT_REF"
 
+# The VM never builds frontend assets on the host; production serves the Vite
+# bundle baked into the CI-built image (/opt/frontend-dist). frontend/static/dist
+# is gitignored and must not exist here, or a stale leftover (e.g. from an older
+# deploy) would shadow the fresh image bake and the UI would render with outdated
+# styles. Remove it so vite_assets.py falls through to the image bake.
+rm -rf "${DEPLOY_PATH}/frontend/static/dist"
+
 # shellcheck source=docker/host-env.sh
 source docker/host-env.sh
+
+# Per-UID Docker CLI homes under .docker-home; group-writable so deploy user and
+# interactive VM users (different UIDs) can each mkdir their own subdir.
+mkdir -p "${DEPLOY_PATH}/.docker-home"
+chmod 2775 "${DEPLOY_PATH}/.docker-home" 2>/dev/null || chmod 775 "${DEPLOY_PATH}/.docker-home" 2>/dev/null || true
 
 printf '%s' "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin "$CI_REGISTRY"
 
@@ -58,23 +69,7 @@ if [ "${BUILD_PILLARS:-0}" = "1" ]; then
   ./docker/build-pillars.sh
 fi
 
-COMPOSE_FILES=(-f docker/compose.yml -f docker/compose.deploy.yml)
-if grep -qE '^CADDY_DOMAIN=.+' .env 2>/dev/null; then
-  COMPOSE_FILES+=(-f docker/compose.caddy.yml)
-fi
-
-SERVICES=(web)
-if grep -qE '^CADDY_DOMAIN=.+' .env 2>/dev/null; then
-  SERVICES+=(caddy)
-fi
-
-docker compose --project-name qa-ai-models --env-file .env \
-  "${COMPOSE_FILES[@]}" pull web
-
-# Recreate containers so Flask reloads bind-mounted code and refreshes
-# HOST_UID / DOCKER_GID from host-env.sh (git pull alone does not restart the process).
-docker compose --project-name qa-ai-models --env-file .env \
-  "${COMPOSE_FILES[@]}" \
-  up -d --force-recreate --no-build --pull missing --no-deps "${SERVICES[@]}"
+export WEB_IMAGE
+./docker/run.sh restart-deploy
 
 echo "Deployed ${WEB_IMAGE} at ${DEPLOY_PATH} ($(git rev-parse --short HEAD))"

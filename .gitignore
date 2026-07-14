@@ -1,3 +1,7 @@
+# Frontend build artifacts
+frontend/assets/node_modules/
+frontend/static/dist/
+
 # Ignore the python & local virtual environment
 venv/
 .venv/
@@ -8,6 +12,9 @@ venv/
 # Ignore system files
 .DS_Store
 __pycache__/
+
+# Claude Code local config / scratch
+.claude/
 
 # scanner runtime data (VM bind mount) — not in git except README
 scanner/models/*
@@ -26,8 +33,9 @@ testing/**/output/*
 # removed spike tree (OSV/pip-audit experiments lived elsewhere; no re-add)
 testing/security_scanning_tests/
 .gitlab/gitlab-transfer.md
-context.md
 PROJECT_GUIDE.md
+frontend/.summary-cache/
+frontend/.scan-links.json
 
 # eval spikes — regenerate locally
 testing/eval/output/*
@@ -43,6 +51,7 @@ jack/
 instance/
 logs/
 scripts/dcc/.vllm-session.env
+scripts/dcc/.jobs/
 
 # Ignore tqa test results
 test_results/
@@ -56,6 +65,7 @@ evaluator/results/
 # User-generated ad-hoc "bring your own" suites (not locked/comparable)
 evaluator/tasks/custom/
 benchmarks/results/
+personality/results/
 
 # AI-only briefings — personal notes for Claude, not project documentation
 evaluator/CLAUDE.md
@@ -80,3 +90,9 @@ safety/garak/tmp*.yaml
 safety/garak/.runtime/
 safety/output/*
 !safety/output/README.md
+
+# Validation-study rater exports contain PII (IP, geolocation) — never commit
+docs/validation-study/responses_csv/*
+!docs/validation-study/responses_csv/README.md
+# Track-3 DPO preference export — local only until mentor sign-off
+docs/validation-study/dpo_pairs.jsonl

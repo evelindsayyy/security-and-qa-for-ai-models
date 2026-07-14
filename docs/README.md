@@ -1,33 +1,39 @@
 # Documentation
 
-Project guides & info. **GitLab:** [`.gitlab/README.md`](../.gitlab/README.md). 
+Project guides. **GitLab CI/CD:** [`.gitlab/README.md`](../.gitlab/README.md).
+
+## Core
+
+| Document | Role |
+|----------|------|
+| [`cli.md`](cli.md) | **All CLI commands** — UI (`run.sh` / `main.py`), SSH, pillars, ingest, tests |
+| [`architecture.md`](architecture.md) | System design, data flow, deployment |
+| [`docker.md`](docker.md) | Docker layers, assets, CI, Caddy HTTPS |
+| [`../docker/README.md`](../docker/README.md) | Compose scripts, production setup, troubleshooting |
+| [`data-model.md`](data-model.md) | Postgres schema and ingest mapping |
+| [`gateway-models.md`](gateway-models.md) | Gateway catalog and scan tiers |
+
+## Tracks and tools
 
 | Document | Role |
 |----------|------|
 | [`team-tracks.md`](team-tracks.md) | Tracks, phases, deployment context |
-| [`track-a-framework.md`](track-a-framework.md) | Scanning + safety → security pillar |
-| [`track-b-framework.md`](track-b-framework.md) | Efficacy pillar (Track B) |
-| [`gateway-models.md`](gateway-models.md) | Gateway catalog; HF scan list; test tiers |
-| [`architecture.md`](architecture.md) | System design, `api/`, `frontend/`, deployment |
-| [`cli.md`](cli.md) | All CLI commands (UI, pillar jobs, tests, ingest) |
-| [`docker.md`](docker.md) | Docker model — layers, sibling launches, CI |
-| [`../frontend/README.md`](../frontend/README.md) | Nutrition label UI |
-| [`data-model.md`](data-model.md) | Postgres schema — tables, columns, JSON → DB mapping |
-| [`../auth/README.md`](../auth/README.md) | Auth module — routes, env, behavior |
-| [`../db/README.md`](../db/README.md) | Auth DDL and migration script |
-| [`../dbutils/README.md`](../dbutils/README.md) | Shared Postgres ingest helpers |
+| [`track-a-framework.md`](track-a-framework.md) | Scanning + safety |
+| [`track-b-framework.md`](track-b-framework.md) | Evaluator + benchmarks |
 | [`tool-stack.md`](tool-stack.md) | Tools and rationale |
-| [`../scripts/README.md`](../scripts/README.md) | Non-gateway inference helpers (DCC/vLLM, Azure Foundry) |
 
-**Pillar READMEs**
+## Packages
 
-| Path | Track |
-|------|-------|
-| [`scanner/README.md`](../scanner/README.md) | A — HF scanning |
-| [`safety/README.md`](../safety/README.md) | A — inference safety |
-| [`evaluator/README.md`](../evaluator/README.md) | B — Duke efficacy (`runner.py`) |
-| [`benchmarks/README.md`](../benchmarks/README.md) | B — public benchmarks |
-| [`gateway/README.md`](../gateway/README.md) | Shared — live catalog + `ANNOTATIONS` |
-| [`frontend/README.md`](../frontend/README.md) | Nutrition-label UI |
-| [`testing/README.md`](../testing/README.md) | Manual spikes |
-| [`unit_tests/README.md`](../unit_tests/README.md) | Automated tests |
+| Path | Role |
+|------|------|
+| [`../frontend/README.md`](../frontend/README.md) | UI, islands, API curl examples |
+| [`../auth/README.md`](../auth/README.md) | Duke OIDC login |
+| [`../api/README.md`](../api/README.md) | REST under `/api` |
+| [`../dbutils/README.md`](../dbutils/README.md) | Ingest helpers |
+| [`../scripts/README.md`](../scripts/README.md) | DCC vLLM, Azure helpers |
+
+**Pillar READMEs:** [`scanner/`](../scanner/README.md) · [`safety/`](../safety/README.md) ·
+[`evaluator/`](../evaluator/README.md) · [`benchmarks/`](../benchmarks/README.md) ·
+[`personality/`](../personality/README.md) · [`gateway/`](../gateway/README.md)
+
+**Tests:** [`testing/README.md`](../testing/README.md) · [`unit_tests/README.md`](../unit_tests/README.md)

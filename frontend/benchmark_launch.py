@@ -22,7 +22,9 @@ from urllib.parse import urlparse
 
 from dbutils import run_lock
 from frontend import docker_launch
+from frontend.launch_registry import check_inflight_combo
 from frontend.log_status import run_log_payload
+from frontend.output_dirs import OutputDirError
 from frontend.path_safety import is_safe_slug
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -273,6 +275,22 @@ def _run_lock_path(stem: str) -> Path:
     return RESULTS_DIR / f"{stem}.run.lock"
 
 
+def inflight_benchmark_slugs() -> set[str]:
+    """Stems with an active run.lock or in-memory subprocess."""
+    from dbutils import fs_safe
+
+    slugs: set[str] = set()
+    if fs_safe.is_dir(RESULTS_DIR):
+        for path in fs_safe.glob(RESULTS_DIR, "*.run.lock"):
+            if run_lock.is_active(path):
+                slugs.add(path.name[: -len(".run.lock")])
+    with _LOCK:
+        for slug, proc in _RUNNING.items():
+            if proc.poll() is None:
+                slugs.add(slug)
+    return slugs
+
+
 def _run_options_path(stem: str) -> Path:
     return RESULTS_DIR / f"{stem}.run_options.json"
 
@@ -361,10 +379,20 @@ def start_run(
         *inflight_scope_key(plan.visibility, plan.owner_user_id),
     )
     with _LOCK:
-        existing = _INFLIGHT.get(combo)
-        if existing and _RUNNING.get(existing) is not None \
-                and _RUNNING[existing].poll() is None:
+        existing = check_inflight_combo(_RUNNING, _INFLIGHT, combo)
+        if existing:
             return existing, True, plan.visibility
+
+        from frontend.purge_rerun import purge_benchmark_for_launch
+
+        err = purge_benchmark_for_launch(
+            benchmark_key,
+            model,
+            visibility=plan.visibility,
+            owner_user_id=plan.owner_user_id,
+        )
+        if err:
+            raise OutputDirError(err)
 
         if docker_launch.use_docker():
             docker_launch.ensure_stack("benchmarks")
@@ -372,7 +400,22 @@ def start_run(
         stem = predict_stem(benchmark_key, model)
         lock_file = _run_lock_path(stem)
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-        persist_run_meta_dir(RESULTS_DIR / stem, plan)
+        from dbutils.staleness_spec import current_benchmark_spec_digest
+        from frontend.run_launch import LaunchPlan
+
+        launch_config = dict(plan.config)
+        spec_digest = current_benchmark_spec_digest(benchmark_key)
+        if spec_digest:
+            launch_config["benchmark_spec_digest"] = spec_digest
+        persist_plan = LaunchPlan(
+            config=launch_config,
+            config_fingerprint=plan.config_fingerprint,
+            visibility=plan.visibility,
+            owner_user_id=plan.owner_user_id,
+            owner_netid=plan.owner_netid,
+            reused=plan.reused,
+        )
+        persist_run_meta_dir(RESULTS_DIR / stem, persist_plan)
         log_path = RESULTS_DIR / f"{stem}.log"
         progress_path = RESULTS_DIR / f"{stem}.progress.json"
 

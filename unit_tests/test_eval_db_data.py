@@ -120,15 +120,15 @@ class AvailabilityTest(unittest.TestCase):
             data = eval_run_data.get_runs_data()
         self.assertIn("has_runs", data)  # file-path contract served
 
-    def test_detail_dispatcher_falls_back_when_slug_not_in_db(self) -> None:
-        sentinel = {"slug": "from-files"}
+    def test_detail_falls_back_to_files_when_slug_not_in_db(self) -> None:
+        # Postgres reachable but row missing (smoke/stub on disk only) → files.
         with mock.patch.object(eval_db_data, "available", return_value=True), \
              mock.patch.object(eval_db_data, "get_run_detail_db",
                                return_value=None), \
              mock.patch.object(eval_run_data, "_get_run_detail_files",
-                               return_value=sentinel):
+                               return_value={"slug": "from-files"}):
             detail = eval_run_data.get_run_detail("some-slug")
-        self.assertIs(detail, sentinel)
+        self.assertEqual(detail, {"slug": "from-files"})
 
     def test_dispatcher_survives_db_exceptions(self) -> None:
         with mock.patch.object(eval_db_data, "available",

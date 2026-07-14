@@ -352,6 +352,14 @@ def _format_ts(raw: str) -> str:
     return raw[:19] if len(raw) > 19 else raw or "—"
 
 
+def _iso_ts(raw: str) -> str:
+    """Machine-readable UTC ISO for client-side local-time rendering."""
+    parsed = _parse_timestamp(raw)
+    if parsed is not None:
+        return parsed.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return ""
+
+
 def _detect_kind(path: Path) -> str | None:
     try:
         if path.suffix == ".jsonl":
@@ -403,6 +411,7 @@ def _summarize_truthfulqa(path: Path, data: dict) -> dict:
         "model": data.get("model") or "—",
         "timestamp_raw": data.get("timestamp") or "",
         "timestamp": _format_ts(data.get("timestamp") or ""),
+        "timestamp_iso": _iso_ts(data.get("timestamp") or ""),
         "headline_metric": "accuracy",
         "headline_value": metrics.get("accuracy"),
         "headline_display": f"{metrics.get('accuracy', 0):.1%}" if metrics.get("accuracy") is not None else "—",
@@ -426,6 +435,7 @@ def _summarize_mmlu(path: Path, data: dict) -> dict:
         "model": data.get("model") or "—",
         "timestamp_raw": data.get("timestamp") or "",
         "timestamp": _format_ts(data.get("timestamp") or ""),
+        "timestamp_iso": _iso_ts(data.get("timestamp") or ""),
         "headline_metric": "accuracy",
         "headline_value": acc,
         "headline_display": f"{acc:.1%}" if acc is not None else "—",
@@ -448,6 +458,7 @@ def _summarize_tomi(path: Path, data: dict) -> dict:
         "model": data.get("model") or "—",
         "timestamp_raw": data.get("timestamp") or "",
         "timestamp": _format_ts(data.get("timestamp") or ""),
+        "timestamp_iso": _iso_ts(data.get("timestamp") or ""),
         "headline_metric": "accuracy",
         "headline_value": acc,
         "headline_display": f"{acc:.1%}" if acc is not None else "—",
@@ -467,6 +478,7 @@ def _summarize_consistency(path: Path, data: dict) -> dict:
         "model": data.get("model") or "—",
         "timestamp_raw": data.get("timestamp") or "",
         "timestamp": _format_ts(data.get("timestamp") or ""),
+        "timestamp_iso": _iso_ts(data.get("timestamp") or ""),
         "headline_metric": "mean F1",
         "headline_value": mean_f1,
         "headline_display": f"{mean_f1:.3f}" if mean_f1 is not None else "—",
@@ -527,6 +539,7 @@ def _summarize_ifeval(path: Path) -> dict:
         "model": model,
         "timestamp_raw": ts_raw,
         "timestamp": _format_ts(ts_raw),
+        "timestamp_iso": _iso_ts(ts_raw),
         "headline_metric": "pass rate",
         "headline_value": rate,
         "headline_display": f"{rate:.1%}" if rate is not None else "—",
@@ -545,6 +558,7 @@ def _summarize_mbpp(path: Path, data: dict) -> dict:
         "model": data.get("model") or "—",
         "timestamp_raw": data.get("timestamp") or "",
         "timestamp": _format_ts(data.get("timestamp") or ""),
+        "timestamp_iso": _iso_ts(data.get("timestamp") or ""),
         "headline_metric": "accuracy",
         "headline_value": acc,
         "headline_display": f"{acc:.1%}" if acc is not None else "—",
@@ -628,11 +642,15 @@ def is_reference_slug(slug: str) -> bool:
 
 
 def _load_reference_summaries() -> list[dict]:
+    from dbutils import fs_safe
+
     ref = _reference_dir()
     if ref is None:
         return []
     rows: list[dict] = []
-    for path in sorted(list(ref.glob("*.json")) + list(ref.glob("*.jsonl"))):
+    for path in sorted(
+        list(fs_safe.glob(ref, "*.json")) + list(fs_safe.glob(ref, "*.jsonl"))
+    ):
         row = _summarize_file(path)
         if row is None:
             continue
@@ -851,6 +869,7 @@ def _summarize_quality(path: Path, data: dict) -> dict:
         "model": data.get("model") or "—",
         "timestamp_raw": data.get("timestamp") or "",
         "timestamp": _format_ts(data.get("timestamp") or ""),
+        "timestamp_iso": _iso_ts(data.get("timestamp") or ""),
         "headline_metric": "accuracy",
         "headline_value": acc,
         "headline_display": f"{acc:.1%}" if acc is not None else "—",
@@ -863,35 +882,50 @@ def _summarize_quality(path: Path, data: dict) -> dict:
     }
 
 
+def _attach_benchmark_staleness_fields(row: dict, *, artifact_dir: Path) -> None:
+    from dbutils.run_meta import read_run_meta_for_pillar
+
+    meta = read_run_meta_for_pillar(artifact_dir, pillar="benchmark")
+    config = meta.get("config_json") if isinstance(meta.get("config_json"), dict) else {}
+    if config.get("benchmark_spec_digest"):
+        row["benchmark_spec_digest"] = config["benchmark_spec_digest"]
+
+
 def _summarize_file(path: Path) -> dict | None:
     if path.suffix == ".log":
         return None
     kind = _detect_kind(path)
     if kind is None:
         return None
+    row: dict | None
     if kind == "ifeval":
-        return _summarize_ifeval(path)
-    try:
-        with path.open("r", encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception:
-        return None
-    if kind == "truthfulqa":
-        metrics = data.get("metrics") or data.get("summary") or {}
-        if not metrics.get("total_evaluated") and not data.get("responses"):
+        row = _summarize_ifeval(path)
+    else:
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
             return None
-        return _summarize_truthfulqa(path, data)
-    if kind == "consistency":
-        return _summarize_consistency(path, data)
-    if kind == "mmlu":
-        return _summarize_mmlu(path, data)
-    if kind == "tomi":
-        return _summarize_tomi(path, data)
-    if kind == "mbpp":
-        return _summarize_mbpp(path, data)
-    if kind == "quality":
-        return _summarize_quality(path, data)
-    return None
+        if kind == "truthfulqa":
+            metrics = data.get("metrics") or data.get("summary") or {}
+            if not metrics.get("total_evaluated") and not data.get("responses"):
+                return None
+            row = _summarize_truthfulqa(path, data)
+        elif kind == "consistency":
+            row = _summarize_consistency(path, data)
+        elif kind == "mmlu":
+            row = _summarize_mmlu(path, data)
+        elif kind == "tomi":
+            row = _summarize_tomi(path, data)
+        elif kind == "mbpp":
+            row = _summarize_mbpp(path, data)
+        elif kind == "quality":
+            row = _summarize_quality(path, data)
+        else:
+            row = None
+    if row:
+        _attach_benchmark_staleness_fields(row, artifact_dir=PRIMARY_DIR / row["slug"])
+    return row
 
 
 def _run_stats_chips(rs: dict) -> list[dict[str, str]]:
@@ -1335,6 +1369,7 @@ def get_benchmark_latest_for_hub(all_runs: list[dict] | None = None) -> dict | N
 
 def _get_benchmarks_data_files() -> dict:
     from frontend.read_context import artifact_path_visible
+    from dbutils import fs_safe
 
     dirs = _candidate_dirs()
     if not dirs:
@@ -1348,7 +1383,7 @@ def _get_benchmarks_data_files() -> dict:
     rows: list[dict] = []
     seen: set[str] = set()
     for d in dirs:
-        for path in sorted(list(d.glob("*.json")) + list(d.glob("*.jsonl"))):
+        for path in sorted(list(fs_safe.glob(d, "*.json")) + list(fs_safe.glob(d, "*.jsonl"))):
             if path.stem in seen:
                 continue
             if not artifact_path_visible(d / path.stem, pillar="benchmark"):
@@ -1472,6 +1507,7 @@ def delete_benchmark(
     """
     from dbutils.run_meta import read_run_meta_for_pillar
     from dbutils.visibility import artifact_visible
+    from frontend.delete_db import db_delete_error
 
     if not is_safe_slug(slug):
         return f"invalid slug: {slug!r}"
@@ -1479,9 +1515,23 @@ def delete_benchmark(
     if is_reference_slug(slug):
         return "reference benchmark runs cannot be deleted"
 
-    meta = read_run_meta_for_pillar(PRIMARY_DIR / slug, pillar="benchmark")
-    if not artifact_visible(meta, view_mode=visibility, user_id=owner_user_id):
-        return f"no benchmark result found for slug {slug!r}"
+    exists = False
+    try:
+        from frontend import benchmark_db_data
+
+        if benchmark_db_data.available():
+            exists = (
+                benchmark_db_data.get_benchmark_detail_db(
+                    slug, visibility=visibility, owner_user_id=owner_user_id
+                )
+                is not None
+            )
+    except Exception:
+        pass
+    if not exists:
+        meta = read_run_meta_for_pillar(PRIMARY_DIR / slug, pillar="benchmark")
+        if not artifact_visible(meta, view_mode=visibility, user_id=owner_user_id):
+            return f"no benchmark result found for slug {slug!r}"
 
     from frontend.benchmark_launch import is_run_in_progress
 
@@ -1497,15 +1547,40 @@ def delete_benchmark(
             return f"could not delete {path.name}: {exc}"
 
     removed_db = False
+    db_available = False
+    db_row_existed = False
+    db_exc: BaseException | None = None
     try:
         from frontend import benchmark_db_data
 
-        if benchmark_db_data.available():
-            removed_db = benchmark_db_data.delete_run(
-                slug, visibility=visibility, owner_user_id=owner_user_id
-            )
-    except Exception:
-        pass
+        db_available = benchmark_db_data.available()
+        if db_available:
+            try:
+                db_row_existed = (
+                    benchmark_db_data.get_benchmark_detail_db(
+                        slug, visibility=visibility, owner_user_id=owner_user_id
+                    )
+                    is not None
+                )
+            except Exception:
+                pass
+            try:
+                removed_db = benchmark_db_data.delete_run(
+                    slug, visibility=visibility, owner_user_id=owner_user_id
+                )
+            except Exception as exc:
+                db_exc = exc
+    except Exception as exc:
+        db_exc = exc
+
+    err = db_delete_error(
+        db_available=db_available,
+        db_row_existed=db_row_existed,
+        removed_db=removed_db,
+        db_exc=db_exc,
+    )
+    if err:
+        return err
 
     if removed_files == 0 and not removed_db:
         return f"no benchmark result found for slug {slug!r}"
@@ -1522,15 +1597,15 @@ def get_benchmark_reference_data() -> dict:
 
 
 def get_benchmarks_data() -> dict:
-    try:
-        from frontend import benchmark_db_data
+    from frontend import benchmark_db_data
+    from frontend.db_fallback import get_data_with_db_fallback
 
-        if benchmark_db_data.available():
-            data = benchmark_db_data.get_benchmarks_data_db()
-        else:
-            data = _get_benchmarks_data_files()
-    except Exception:
-        data = _get_benchmarks_data_files()
+    data = get_data_with_db_fallback(
+        benchmark_db_data.available,
+        benchmark_db_data.get_benchmarks_data_db,
+        _get_benchmarks_data_files,
+        pillar="benchmark",
+    )
     ref = _build_reference_section()
     data["has_reference"] = ref.get("has_reference", False)
     data["coverage_skip_explanation"] = COVERAGE_SKIP_EXPLANATION
@@ -1544,7 +1619,11 @@ def get_benchmarks_data() -> dict:
         )
         row["timestamp"] = _format_ts(row["timestamp_raw"])
     data.update(_postprocess_benchmark_runs(raw_runs))
-    for row in data.get("all_runs", []):
+    all_runs = data.get("all_runs") or []
+    from frontend.staleness import attach_staleness
+
+    attach_staleness(all_runs, "benchmark")
+    for row in all_runs:
         row["score_class"] = _score_class(row.get("kind"), row.get("headline_value"))
         row["coverage"] = _coverage_info(row)
     data.update(_build_comparison_section(data.get("runs", [])))
@@ -1571,9 +1650,15 @@ def get_benchmark_detail(
                 detail = benchmark_db_data.get_benchmark_detail_db(
                     slug, visibility=visibility, owner_user_id=owner_user_id
                 )
+                if detail is None:
+                    detail = _get_benchmark_detail_files(
+                        slug, visibility=visibility, owner_user_id=owner_user_id
+                    )
+            else:
+                detail = _get_benchmark_detail_files(
+                    slug, visibility=visibility, owner_user_id=owner_user_id
+                )
         except Exception:
-            pass
-        if detail is None:
             detail = _get_benchmark_detail_files(
                 slug, visibility=visibility, owner_user_id=owner_user_id
             )

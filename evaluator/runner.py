@@ -53,7 +53,8 @@ if str(_REPO_ROOT) not in sys.path:
 
 
 # ---------------------------------------------------------------------------
-# Pricing table (Duke Gateway — snapshot 2026-06-03)
+# Pricing table (Duke Gateway — core snapshot 2026-06-03; additions dated inline
+# from OIT rate sheet kb0038832)
 # ---------------------------------------------------------------------------
 # Per 1M tokens, (input_rate_usd, output_rate_usd). Keys are the exact
 # Gateway model identifier strings (case- and space-sensitive). Models not
@@ -76,7 +77,16 @@ _COST_PER_M_TOKENS: dict[str, tuple[float, float]] = {
     "gpt-5.2-chat":   (1.75, 14.00),
     "gpt-5.3-chat":   (1.75, 14.00),
     "gpt-5.4":        (2.50, 15.00),
-    "gpt-5.5":        (2.50, 15.00),
+    # Corrected 2026-07-09 from an unverified 2.50/15.00 placeholder (a copy of
+    # 5.4) to the Gateway's live billing rate (GET /model_group/info). gpt-5.5
+    # is not on the public KB page, so the Gateway is the authoritative source.
+    "gpt-5.5":        (5.00, 30.00),
+    # GPT-5.6 family (OpenAI July 2026; Gateway ids may use sol/terra/luna suffixes)
+    "gpt-5.6":            (5.00, 30.00),
+    "gpt-5.6-sol":        (5.00, 30.00),
+    "gpt-5.6-terra":      (2.50, 15.00),
+    "gpt-5.6-luna":       (1.00,  6.00),
+    "gpt-5.6-chat":       (5.00, 30.00),
     # GPT-4.1 family — note: Gateway allowlist returns these with spaces and
     # capitals (e.g. "GPT 4.1 Mini"), not the rate-sheet's hyphenated form.
     # Keys must match the model id the user passes via --candidate-model.
@@ -89,6 +99,32 @@ _COST_PER_M_TOKENS: dict[str, tuple[float, float]] = {
     "Llama 3.3":          (0.71, 0.71),
     "Llama 4 Maverick":   (0.35, 1.41),
     "Llama 4 Scout":      (0.20, 0.78),
+    # --- Added from Duke OIT rate sheet kb0038832 (fetched 2026-07-09) -------
+    # Premium GPT-5.4 tier.
+    "gpt-5.4-pro":        (30.00, 180.00),
+    # Codex / agentic-coding tiers. Display-only here — codex models are never
+    # eval candidates; the catalog reuses this table as its single price source.
+    "gpt-5.1-codex":      (1.25, 10.00),
+    "gpt-5.1-codex-max":  (1.25, 10.00),
+    "gpt-5.1-codex-mini": (0.25,  2.00),
+    "gpt-5.2-codex":      (1.75, 14.00),
+    "gpt-5.3-codex":      (1.75, 14.00),
+    # Reasoning / deep-research (o-series). The live Gateway id is "o4 Mini"
+    # (space + capital M); OIT lists the same model as "o4-mini".
+    "o4 Mini":                (1.10,  4.40),
+    "o4-mini-deep-research":  (2.00,  8.00),
+    "o3-deep-research":       (10.00, 40.00),
+    # Transcription — Duke bills these two per 1M tokens (whisper-1 is per
+    # audio-minute, so it stays unpriced and shows a unit note on /models).
+    "gpt-4o-transcribe":          (2.50, 10.00),
+    "gpt-4o-transcribe-diarize":  (2.50, 10.00),
+    # --- From the Gateway's own billing config (GET /model_group/info) -------
+    # Not on the public KB page yet, but the Gateway prices them live (LiteLLM
+    # input/output_cost_per_token). Authoritative — it's what Duke bills against.
+    "gpt-5.4-mini":       (0.75,  4.50),
+    "gpt-5.4-nano":       (0.20,  1.25),
+    "gpt-5-codex":        (1.25, 10.00),
+    "Mistral-Large-3":    (0.50,  1.50),
 }
 
 

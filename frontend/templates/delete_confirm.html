@@ -1,57 +1,60 @@
 {% extends "base.html" %}
+{% from '_macros.html' import back_link with context %}
 
 {% block title %}Delete result — {{ pillar_label }}{% endblock %}
 
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span class="font-medium text-text">Delete</span>
+{% endblock %}
+
 {% block content %}
-<div class="eval-comparison">
-  <p class="back"><a href="{{ cancel_url }}">← {{ cancel_label }}</a></p>
-  <h1>Delete this result?</h1>
+<div class="eval-comparison max-w-2xl">
+  {{ back_link(cancel_url, cancel_label) }}
+  <div class="card p-6">
+    <h1 class="page-title">Delete this result?</h1>
 
-  {% if error_message %}
-  <p class="form-warning">{{ error_message }}</p>
-  {% else %}
-  <p class="form-warning">
-    This permanently deletes this result. This cannot be undone.
-  </p>
-  {% endif %}
+    {% if error_message %}
+    <p class="form-warning mt-4">{{ error_message }}</p>
+    {% else %}
+    <p class="form-warning mt-4">
+      This permanently deletes this result. This cannot be undone.
+    </p>
+    {% endif %}
 
-  {% if summary_items %}
-  <dl class="legend-grid">
-    {% for label, value in summary_items %}
-    <dt>{{ label }}</dt>
-    <dd>{{ value }}</dd>
-    {% endfor %}
-  </dl>
-  {% endif %}
-
-  {% if removal_summary %}
-  <div class="delete-removal-box">
-    <h2 class="delete-removal-heading">What will be removed</h2>
-    <ul class="delete-removal-list">
-      {% for item in removal_summary %}
-      <li>{{ item }}</li>
+    {% if summary_items %}
+    <dl class="legend-grid mt-4">
+      {% for label, value in summary_items %}
+      <dt>{{ label }}</dt>
+      <dd>{{ value }}</dd>
       {% endfor %}
-    </ul>
+    </dl>
+    {% endif %}
+
+    {% if removal_summary %}
+    <div class="mt-4 rounded-lg border border-border bg-surface-muted p-4">
+      <h2 class="text-sm font-semibold">What will be removed</h2>
+      <ul class="mt-2 list-disc pl-5 text-sm">
+        {% for item in removal_summary %}<li>{{ item }}</li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {% if paths %}
+    <details class="tool-panel mt-4">
+      <summary>Output files on disk (if present)</summary>
+      <ul class="mt-2 list-disc pl-5 text-sm font-mono">
+        {% for p in paths %}<li>{{ p }}</li>{% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+
+    <form method="post" action="{{ delete_url }}" class="detail-delete-form mt-6">
+      <input type="hidden" name="confirm" value="1">
+      <button type="submit" class="btn-danger" {% if delete_disabled %}disabled{% endif %}>Delete permanently</button>
+      <a class="btn-secondary" href="{{ cancel_url }}">Cancel</a>
+    </form>
   </div>
-  {% endif %}
-
-  {% if paths %}
-  <details class="tool-panel">
-    <summary>Output files on disk (if present)</summary>
-    <ul class="file-list">
-      {% for p in paths %}
-      <li><code>{{ p }}</code></li>
-      {% endfor %}
-    </ul>
-  </details>
-  {% endif %}
-
-  <form method="post" action="{{ delete_url }}" class="detail-delete-form">
-    <input type="hidden" name="confirm" value="1">
-    <button type="submit" class="btn-danger" {% if delete_disabled %}disabled{% endif %}>
-      Delete permanently
-    </button>
-    <a class="btn-secondary" href="{{ cancel_url }}">Cancel</a>
-  </form>
 </div>
 {% endblock %}

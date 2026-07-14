@@ -4,7 +4,7 @@ System components and how a run flows end to end. Schema and field examples: [`d
 
 ## Pillars
 
-Two nutrition-label pillars, two tracks:
+Two AI Model Advisor pillars, two tracks:
 
 | Pillar | Components | Track |
 |--------|------------|-------|
@@ -12,13 +12,16 @@ Two nutrition-label pillars, two tracks:
 | **Efficacy** | `evaluator/` (Duke judge suites) + `benchmarks/` (public benchmarks) | B |
 
 Every run produces structured JSON; optional ingest loads it into Postgres. The
-`frontend/` UI renders the nutrition label; `api/` exposes JSON REST for all four
+`frontend/` UI renders the report cards; `api/` exposes JSON REST for all four
 pillars (list, detail, status, POST jobs) — see [`api/README.md`](../api/README.md).
+The UI is **server-rendered Jinja** with **Vite-built Preact islands**
+(findings tables, comparison heatmap, live run progress, compare charts) under
+`frontend/assets/` → `frontend/static/dist/`.
 Teams and schedule: [`team-tracks.md`](team-tracks.md).
 
 ## How a run flows
 
-Jobs start from the nutrition-label UI or CLI. The UI returns immediately with a
+Jobs start from the AI Model Advisor UI or CLI. The UI returns immediately with a
 job id; a background launcher (`frontend/*_launch.py`) runs the pillar in Docker on
 the **application VM**. Results land as JSON under each pillar's output dir;
 optional ingest upserts into Postgres. The UI reads via `frontend/*_data.py`
@@ -85,7 +88,7 @@ on the roadmap. Steps 5–7 persist and serve results.
 
 | Step | What | Detail |
 |------|------|--------|
-| **1** | Analyst uses browser | Start a job or open a nutrition-label page |
+| **1** | Analyst uses browser | Start a job or open a report-card page |
 | **2** | `frontend/` + `api/` | `POST /scans/start`, `/safety/start`, `/eval-run/start`, `/benchmarks/start` (or `/api/…`) — returns immediately |
 | **3** | `frontend/*_launch.py` | Non-blocking `subprocess` → `docker compose run` on the VM Docker socket |
 | **4** | Pillar containers | `scanner/`, `safety/`, `evaluator/`, `benchmarks/` — see tables below |
@@ -138,17 +141,16 @@ planned).
 
 Long scans and evals take minutes to hours. Start routes return immediately; the pillar runs in the background while the UI polls status.
 
-**MVP concurrency limits:**
+**MVP concurrency limits (shared VM, no auth):**
 
 | Concern | Behavior |
 |---------|----------|
 | Same job params twice | Deduped via in-memory `_INFLIGHT` in each `*_launch.py` |
-| Same config in Postgres | Reused via `config_fingerprint` (no re-run when match exists) |
 | Different jobs at once | Allowed — separate subprocesses and output paths |
 | Same scan slug or safety `(slug, profile)` | Blocked by `run.lock` under the output dir (UI + CLI); second start returns existing job or exit **2** |
 | Benchmark re-click same combo | Deduped in-memory; lock file is `benchmarks/results/<stem>.run.lock` |
 | Multiple Flask workers | **Not supported** — `_RUNNING` is per-process |
-| Auth | Duke OIDC optional (`AUTH_ENABLED`); public read open; starting any run requires an allowlisted NetID; private mode + custom runs add the private-view check on top — [`../auth/README.md`](../auth/README.md) |
+| Auth | **None** — anyone who can reach the URL can start jobs |
 
 While a job runs, status routes return a log tail (`message` or `log` field) for progress pages.
 
@@ -189,9 +191,9 @@ chat call is identical.
 | Safety | A | `/safety` | Duke Gateway | Planned | `safety_runs`, `safety_findings` |
 | Eval | B | `/eval-run` | Duke Gateway | CLI today; UI future | `eval_runs`, `eval_results` |
 | Benchmark | B | `/benchmarks` | Duke Gateway | Planned | `benchmark_runs` |
+| Personality | Extra | `/personality` | Duke Gateway | — | `personality_runs` |
 
-All four pillars have optional Postgres ingest. When a DSN is set and reachable, the UI reads Postgres for every pillar (merged
-with artifacts not yet loaded); otherwise it reads artifacts directly.
+Audit pillars (scan, safety, eval, benchmarks) plus personality have optional Postgres ingest. When a DSN is set and reachable, the UI reads Postgres for wired pillars (disk only when no DSN). Personality is informational only and is **not** included in model rollup.
 
 ## Why JSON → Postgres
 
@@ -205,25 +207,27 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 - **`benchmarks/`** (B) — public benchmarks (IFEval, TruthfulQA, MMLU, ToMi, consistency); ingest + UI read via [`benchmarks/db/`](../benchmarks/db/README.md) and `frontend/benchmark_db_data.py`.
 - **`api/`** — Flask REST under `/api`; see [`api/README.md`](../api/README.md).
 - **`auth/`** — Duke OIDC login, sessions, allowlist; see [`auth/README.md`](../auth/README.md).
-- **`frontend/`** — nutrition-label UI; `frontend/*_data.py` + launch helpers. See [`frontend/README.md`](../frontend/README.md).
+- **`frontend/`** — nutrition-label UI (Jinja shells + Preact islands); `frontend/*_data.py` + launch helpers; cross-pillar rollup (`model_rollup.py`, `model_summary.py`, `recommendation_rules.py`); pillar List/Compare matrices, reference guides, and the cross-pillar `/pipeline` gating view (`frontend/pipeline.py`). See [`frontend/README.md`](../frontend/README.md).
 
 ## Deployment and hosts
 
 | Host | Role |
 |------|------|
-| **Application VM** (`vcm@model-advisor.colab.duke.edu`) | Production: `./docker/run.sh up` → Flask UI + `api/`; all pillar jobs via host Docker socket; `.env` holds secrets |
-| **DCC** | SLURM + vLLM for open-weight chat (eval CLI today; safety + benchmarks planned); see [`scripts/dcc/`](../scripts/dcc/README.md) |
-| **Duke AI Gateway** | Default chat backend for safety, eval, benchmarks (HTTPS, no local GPU) |
-| **OIT Postgres** | Shared team DB (`qa_ai_models`); external to the VM |
-| **DGX** (e.g. gx10) | Optional dev workstation — not required for production |
+| **Application VM** (`model-advisor.colab.duke.edu`) | Production: Flask UI + `api/`; Caddy HTTPS when `CADDY_DOMAIN` set; all pillar jobs via host Docker socket |
+| **DCC** | SLURM + vLLM for open-weight chat (eval CLI today) |
+| **Duke AI Gateway** | Default chat backend for safety, eval, benchmarks |
+| **OIT Postgres** | Shared team DB (`qa_ai_models`) |
+| **DGX** | Optional dev workstation |
 
-**VM layout:** git clone + `.env` + `./docker/build-pillars.sh` + `./docker/run.sh up -d --build`. The web container bind-mounts the repo and Docker socket; pillar jobs write JSON on the VM disk. Postgres is external.
+**VM layout:** git clone + `.env` (include `CADDY_DOMAIN` + `TRUST_PROXY` for public HTTPS) +
+`./docker/build-pillars.sh` + `python3 main.py up -d --build`. Web container bind-mounts
+the repo and Docker socket; Postgres is external.
 
-**CI (GitLab):** lint → unit tests → on `main`, Buildah builds `docker/Dockerfile` and pushes to the GitLab container registry. **`deploy`** job SSHs to the application VM (manual Play on `main`, or `DEPLOY_AUTO=true`). See [`.gitlab/README.md`](../.gitlab/README.md).
+**CI (GitLab):** lint → tests → frontend-build → Buildah image on `main` → **deploy**
+(manual Play, or `DEPLOY_AUTO=true`). See [`.gitlab/README.md`](../.gitlab/README.md).
 
 ## Open questions
 
-- Frontend stack — Flask now; possibly Next.js + Tailwind later.
-- Auth — Duke OIDC (Shibboleth login screen) via [`auth/`](../auth/) and [`auth/README.md`](../auth/README.md). Public view requires no login; private mode uses netID allowlist.
+- Frontend stack — Flask + Vite islands now; evaluate Next.js if scope grows.
 - LiteLLM guardrail hooks — integration path TBD.
 - Benchmark catalog — which pilots become standing suites.

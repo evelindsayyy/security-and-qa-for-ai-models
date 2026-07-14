@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 
 from dbutils import run_lock
 from frontend import docker_launch, run_paths
+from frontend.launch_registry import check_inflight_combo
 from frontend.log_status import run_log_payload, status_message
 from frontend.output_dirs import OutputDirError, ensure_writable_dir, prepare_output_dir
 from frontend.path_safety import is_safe_slug
@@ -107,24 +108,26 @@ def _write_scan_meta(slug: str, hf_repo: str, *, options: dict) -> None:
 def _existing_scan_slugs(*, visibility: str = "public", owner_user_id: str | None = None) -> set[str]:
     """Slugs with a completed result **in the given scope only** — the
     public catalog, or this one owner's private record. Never both."""
+    from dbutils import fs_safe
+
     if visibility == "private":
-        if not owner_user_id or not SCAN_OUTPUT.is_dir():
+        if not owner_user_id or not fs_safe.is_dir(SCAN_OUTPUT):
             return set()
         private_root = SCAN_OUTPUT / run_paths.PRIVATE_SEGMENT / owner_user_id
-        if not private_root.is_dir():
+        if not fs_safe.is_dir(private_root):
             return set()
         return {
             p.name
-            for p in private_root.iterdir()
-            if p.is_dir() and (p / "scan_result.json").is_file()
+            for p in fs_safe.iterdir(private_root)
+            if fs_safe.is_dir(p) and fs_safe.is_file(p / "scan_result.json")
         }
-    if not SCAN_OUTPUT.is_dir():
+    if not fs_safe.is_dir(SCAN_OUTPUT):
         return set()
     slugs: set[str] = set()
-    for p in SCAN_OUTPUT.iterdir():
-        if not p.is_dir() or p.name == run_paths.PRIVATE_SEGMENT:
+    for p in fs_safe.iterdir(SCAN_OUTPUT):
+        if not fs_safe.is_dir(p) or p.name == run_paths.PRIVATE_SEGMENT:
             continue
-        if (p / "scan_result.json").is_file() or (p / "scan_run.log").is_file():
+        if fs_safe.is_file(p / "scan_result.json") or fs_safe.is_file(p / "scan_run.log"):
             slugs.add(p.name)
     return slugs
 
@@ -136,10 +139,12 @@ def inflight_scan_slugs() -> set[str]:
     scan of a given model can physically run at a time, public or private —
     so this check is intentionally scope-agnostic.
     """
+    from dbutils import fs_safe
+
     slugs: set[str] = set()
-    if SCAN_OUTPUT.is_dir():
-        for p in SCAN_OUTPUT.iterdir():
-            if not p.is_dir() or p.name == run_paths.PRIVATE_SEGMENT:
+    if fs_safe.is_dir(SCAN_OUTPUT):
+        for p in fs_safe.iterdir(SCAN_OUTPUT):
+            if not fs_safe.is_dir(p) or p.name == run_paths.PRIVATE_SEGMENT:
                 continue
             if run_lock.is_active(run_lock.lock_path(p)):
                 slugs.add(p.name)
@@ -185,6 +190,15 @@ def validate_launch(
     slug = safe_dir_name(hf_repo)
     if is_scan_inflight(hf_repo):
         return f"a scan for {hf_repo!r} is already running — wait for it to finish or open the progress page"
+    from frontend.purge_rerun import purge_scan_for_launch
+    from frontend.read_context import read_context
+
+    visibility, owner_user_id = read_context()
+    err = purge_scan_for_launch(
+        slug, visibility=visibility, owner_user_id=owner_user_id
+    )
+    if err:
+        return err
     return prepare_output_dir(_output_dir_for_slug(slug))
 
 
@@ -237,7 +251,7 @@ def start_run(
 ) -> tuple[str, bool, str]:
     """Returns (slug, already_running, visibility) — callers need visibility
     to redirect to the correctly-scoped URL, even while still in progress."""
-    from frontend.run_launch import build_launch_plan, persist_run_meta_scan, reused_slug
+    from frontend.run_launch import build_launch_plan, persist_run_meta_scan
 
     hf_repo = _normalize_hf_repo(hf_repo)
     plan = build_launch_plan(
@@ -249,9 +263,9 @@ def start_run(
         skip_deps=skip_deps,
         skip_secrets=skip_secrets,
     )
-    if plan.reused:
-        slug = reused_slug(plan) or safe_dir_name(hf_repo)
-        return slug, True, plan.visibility
+    # Unlike benchmark launches, always start a fresh subprocess when the user
+    # clicks Start — Postgres reuse dedupe is for catalog links only; blocking
+    # reruns here sent users back to an old result with status=reused.
 
     slug = safe_dir_name(hf_repo)
     combo = (
@@ -268,8 +282,8 @@ def start_run(
         if is_scan_inflight(hf_repo):
             return slug, True, plan.visibility
 
-        existing = _INFLIGHT.get(combo)
-        if existing and _RUNNING.get(existing) is not None and _RUNNING[existing].poll() is None:
+        existing = check_inflight_combo(_RUNNING, _INFLIGHT, combo)
+        if existing:
             return existing, True, plan.visibility
 
         _clear_registry_for_slug(slug)

@@ -15,6 +15,7 @@ uv sync --group dev
 cp .env.example .env   # DUKE_GATEWAY_KEY required; POSTGRES_DSN when DB is configured
 ./docker/build-pillars.sh
 python3 main.py         # same as ./docker/run.sh up --build
+# Or: uv run python main.py
 ```
 
 Open `http://127.0.0.1:5000`. See [`../README.md`](../README.md#quick-start) for the full step list.
@@ -28,6 +29,30 @@ uv sync --group dev
 cp .env.example .env
 uv run flask --app frontend:create_app run --debug --port 5001
 ```
+
+For live CSS/TS during host Flask dev, run the Vite watcher in a second terminal:
+
+```bash
+cd frontend/assets && npm ci && npm run dev
+```
+
+### Frontend assets
+
+Vite + Preact + Tailwind under `frontend/assets/`. Output: `frontend/static/dist/` (gitignored).
+
+```bash
+cd frontend/assets
+npm ci
+npm run build       # production → ../static/dist/
+npm run dev         # watch (pair with host Flask)
+npm run test        # Vitest
+# Or: ./scripts/build-frontend.sh
+```
+
+**Resolution:** `docker/run.sh` builds on the host before start (dev). The web
+image bakes assets at `/opt/frontend-dist` (CI `frontend-build` + `build-web-image`).
+`frontend/vite_assets.py` serves working-tree first, image bake as fallback. The
+Dockerfile copies `frontend/templates/` so Tailwind scans template classes.
 
 ### Optional — Postgres (one-time)
 
@@ -54,7 +79,7 @@ AUTH_ENABLED=1
 SECRET_KEY=<random hex>
 DUKE_OIDC_CLIENT_ID=...
 DUKE_OIDC_CLIENT_SECRET=...
-DUKE_OIDC_REDIRECT_URI=https://model-advisor.colab.duke.edu/login
+# Leave DUKE_OIDC_REDIRECT_URI blank — inferred from CADDY_DOMAIN or request host
 AUTH_ALLOWED_NETIDS=netid1,netid2
 
 # Local dev without Duke login:
@@ -77,29 +102,59 @@ uv sync --group dev --group safety       # garak on host
 uv sync --group dev --group benchmarks   # benchmark runners on host
 ```
 
-For the Docker model, see [`docker.md`](docker.md).
+For the Docker model, see [`docker.md`](docker.md) and [Web UI](#web-ui-containerized) below.
 
-## Web UI
+## Web UI (containerized)
+
+Entry points (equivalent): **`./docker/run.sh`**, **`python3 main.py`**, **`uv run python main.py`**.
+
+All use Compose project **`qa-ai-models`**, load `.env`, auto-detect host UID/GID and repo path, and build frontend assets before start. See [`docker/README.md`](../docker/README.md).
+
+| Action | Command |
+|--------|---------|
+| Start (foreground) | `… up --build` — bare `main.py` defaults to this |
+| Start (background) | `… up -d --build` |
+| After code changes | `… restart` |
+| Stop | `… down` |
+| Logs | `… logs -f web` |
+
+`restart` runs `down`, then `up -d --build --force-recreate --remove-orphans`.
+
+**One-time:** `./docker/build-pillars.sh`. **`APP_PORT`** in `.env` (default `5000`). With **`CADDY_DOMAIN`** set, `run.sh` adds `compose.caddy.yml` for HTTPS.
+
+### Host Flask (UI only)
 
 ```bash
-# Default — containerized (auto-detects user, Docker group, repo path)
-python3 main.py                   # foreground (up --build)
-python3 main.py up -d --build     # background
-python3 main.py down              # stop
-python3 main.py logs -f web       # logs
-# Equivalent: ./docker/run.sh …
-
-# Development — host Flask only (port 5001 avoids clash with container on 5000)
-python3 main.py --host
-# Or: uv run flask --app frontend:create_app run --debug --port 5001
+uv run python main.py --host
+APP_PORT=5001 uv run python main.py --host   # alternate port
+cd frontend/assets && npm run dev            # live assets (second terminal)
 ```
 
-Set `APP_PORT` in `.env` to change the container port. One-time pillar builds: `./docker/build-pillars.sh`.
+Pillar jobs still use Docker unless `FRONTEND_LAUNCH_MODE=host`.
 
-**Browsing via an IDE-forwarded port** (VS Code Remote, JetBrains Gateway, `ssh -L`,
-…) needs no config — Duke NetID login works on whatever local port the IDE
-forwards to `APP_PORT`, even if it changes between sessions. See
-[`auth/README.md`](../auth/README.md#oidc-callback-ports-local-dev--ide-port-forwarding).
+## Remote access
+
+| Host | SSH |
+|------|-----|
+| Application VM | `ssh <netid>@model-advisor.colab.duke.edu` |
+| DGX (optional dev) | `ssh <netid>@<dgx-host>` |
+| DCC (vLLM) | [`scripts/dcc/README.md`](../scripts/dcc/README.md) |
+
+After login:
+
+```bash
+cd security-and-qa-for-ai-models
+git pull && ./docker/run.sh restart
+curl -s http://127.0.0.1:5000/api/health | python3 -m json.tool
+```
+
+**Port forward** when the UI is on localhost only:
+
+```bash
+ssh -L 5000:localhost:5000 <netid>@<host>
+```
+
+Open `http://localhost:5000`. OIDC redirect URIs: [`auth/README.md`](../auth/README.md).
 
 ## JSON API
 
@@ -164,11 +219,16 @@ env UID=$(id -u) GID=$(id -g) \
 env UID=$(id -u) GID=$(id -g) \
   docker compose --env-file .env -f benchmarks/docker/compose.yml run --rm benchmarks \
   python run_benchmark.py --benchmark truthfulqa --model "GPT 4.1 Mini"
+
+# Personality (Big Five Inventory) -> personality/results/
+env UID=$(id -u) GID=$(id -g) \
+  docker compose --env-file .env -f personality/docker/compose.yml run --rm personality \
+  python run_personality.py --model "GPT 4.1 Mini"
 ```
 
 Per-pillar flags and host-only paths: [`scanner/`](../scanner/README.md) ·
 [`safety/`](../safety/README.md) · [`evaluator/`](../evaluator/README.md) ·
-[`benchmarks/`](../benchmarks/README.md).
+[`benchmarks/`](../benchmarks/README.md) · [`personality/`](../personality/README.md).
 
 ### Concurrent runs and locks
 
@@ -177,7 +237,7 @@ Per-pillar flags and host-only paths: [`scanner/`](../scanner/README.md) ·
 | Scan | `scanner/output/<slug>/run.lock` | exit **2** |
 | Safety | `safety/output/<slug>/<profile>/run.lock` | exit **2** |
 | Benchmark | `benchmarks/results/<stem>.run.lock` | UI only (no CLI lock yet) |
-
+| Personality | `personality/results/<stem>.lock` | UI only |
 Scan and safety start forms show a warning when that model/repo is already in progress.
 
 **Stale locks:** removed when the holder PID is dead. Safety UI also treats orphaned locks as `failed` when the log shows `Complete:` or errors without a live process. Delete `run.lock` manually after `kill -9` if needed.
@@ -197,6 +257,7 @@ uv run python -m gateway --json   # machine-readable
 
 ```bash
 uv sync --frozen --group dev
+cd frontend/assets && npm ci && npm run build && npm run test
 uv run ruff check .
 uv run python -m unittest discover -s unit_tests -v
 ```
@@ -228,12 +289,14 @@ curl -s localhost:5000/api/health | python3 -m json.tool
 uv run python -m api.ingest
 uv run python -m api.ingest --apply
 uv run python -m api.ingest bootstrap --apply   # all pillars + summary line
+uv run python -m api.ingest --personality --apply
 ```
 
 Schema and per-pillar loaders: [`scanner/db/README.md`](../scanner/db/README.md),
 [`safety/db/README.md`](../safety/db/README.md),
 [`evaluator/db/README.md`](../evaluator/db/README.md),
-[`benchmarks/db/README.md`](../benchmarks/db/README.md).
+[`benchmarks/db/README.md`](../benchmarks/db/README.md),
+[`personality/db/`](../personality/db/) (`personality_schema.sql`, `load_personality.py`).
 
 ## DCC vLLM (open-weight inference)
 
@@ -252,24 +315,25 @@ Thin wrappers: `./scripts/dcc/start_vllm.sh`, etc. See [`scripts/dcc/README.md`]
 
 ## Application VM setup
 
-Production runs on the **application VM** (`model-advisor.colab.duke.edu`). All UI
-jobs and pillar Docker containers run on this host. A DGX or laptop can be used for
-optional CLI dev when Postgres is reachable from your network.
+Production runs on **model-advisor.colab.duke.edu**. UI, pillar jobs, and ingest
+run on this host.
 
 ```bash
 git clone <repo-url> && cd security-and-qa-for-ai-models
 cp .env.example .env
-# Edit .env: DUKE_GATEWAY_KEY, HF_TOKEN (if needed), POSTGRES_DSN + EFFICACY_DB_DSN
+# Edit .env: gateway key, Postgres DSNs, and production HTTPS:
+#   CADDY_DOMAIN=model-advisor.colab.duke.edu
+#   TRUST_PROXY=1
 
 uv sync --group dev
 ./docker/build-pillars.sh
 ./scripts/apply-schemas.sh --bootstrap
-uv run python db/migrate_auth_columns.py --apply   # auth fingerprints (one-time)
+uv run python db/migrate_auth_columns.py --apply   # one-time
 
-python3 main.py up -d --build
+uv run python main.py up -d --build
 curl -s http://127.0.0.1:5000/api/health | python3 -m json.tool
+curl -s https://model-advisor.colab.duke.edu/api/health | python3 -m json.tool
 ```
 
-After deploy: `GET /api/health` → `db_available: true`, then POST a job and poll `status_url`. Enable OIDC when ready; see [`../auth/README.md`](../auth/README.md).
-
-Ongoing: `git pull && ./docker/run.sh up -d --build`; `uv run python -m api.ingest --apply` to bulk re-ingest artifacts from VM disk.
+**Ongoing updates:** GitLab CI deploy (preferred) or `git pull && ./docker/run.sh restart`.
+Enable OIDC when ready: [`auth/README.md`](../auth/README.md).

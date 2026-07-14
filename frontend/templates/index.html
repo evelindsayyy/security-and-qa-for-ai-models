@@ -1,102 +1,106 @@
 {% extends "base.html" %}
-{% from '_macros.html' import start_button with context %}
+{% from '_macros.html' import start_button, stat_card, page_header, localtime with context %}
 
-{% block title %}Home — AI Model Security & QA{% endblock %}
+{% block title %}Overview — Model Advisor{% endblock %}
+
+{% block breadcrumbs %}
+<span class="breadcrumb-current">Overview</span>
+{% endblock %}
 
 {% block content %}
-<div class="hub">
-  <h1>AI Model Security & QA</h1>
-  <p class="sub">
-    Progress viewer for scanning, efficacy, and safety pillars.
-  </p>
+{{ page_header(
+     'Audit overview',
+     'Cross-pillar snapshot of scans, safety, evaluation, and benchmarks in the current view mode.'
+   ) }}
 
-  <h2 class="hub-section">Nutrition label</h2>
+<div class="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+  {{ stat_card('Models with results', rollup_count, 'In model catalog rollup — click to open catalog', '', url_for('models_catalog')) }}
+  {{ stat_card('Stale runs', stale_count, 'Need rerun per current spec — click for pillar with most', 'text-stale' if stale_count else '', stale_href) }}
+  {{ stat_card('Critical findings', critical_count, 'Scan + safety critical tiers — click for pillar with most', 'text-red-700' if critical_count else '', critical_href) }}
+  {{ stat_card('In-flight jobs', inflight_count, 'Background pillar runs — click for list', 'text-duke-blue' if inflight_count else '', url_for('inflight_jobs')) }}
+</div>
 
-  <section class="pillars">
-    <div class="pillar-card">
-      <h2>Scanning</h2>
-      <p class="pillar-meta">HF artifact security</p>
-      {% if scan_has %}
-        <p class="pillar-stat"><b>{{ scan_count }}</b> model{{ "s" if scan_count != 1 else "" }} scanned</p>
-        <p class="pillar-stat">highest risk: <span class="tier tier-{{ scan_worst_tier }}">{{ scan_worst_tier }}</span> ({{ scan_worst_score }})</p>
-        <p class="pillar-actions">{{ start_button(url_for('scan_run_new'), '▶ Start scan') }}<a href="{{ url_for('scans') }}">View scans →</a></p>
-      {% else %}
-        <p class="empty">{% if is_logged_in %}No scans yet — click Start scan below.{% else %}No scans yet. Sign in to start a scan.{% endif %}</p>
-        <p class="pillar-actions">{{ start_button(url_for('scan_run_new'), '▶ Start scan') }}<a href="{{ url_for('scans') }}">Scans page →</a></p>
-      {% endif %}
-    </div>
-
-    <div class="pillar-card">
-      <h2>Efficacy</h2>
-      <p class="pillar-meta">Gateway task evaluation</p>
-      {% if eval_has %}
-        <p class="pillar-stat"><b>{{ eval_count }}</b> run{{ "s" if eval_count != 1 else "" }} recorded</p>
-        {% if eval_best_overall is not none %}
-          <p class="pillar-stat">best overall (mean): <b>{{ "%.2f"|format(eval_best_overall) }}</b></p>
-        {% endif %}
-        <p class="pillar-actions">{{ start_button(url_for('eval_run_new'), '▶ Start eval') }}<a href="{{ url_for('eval_run') }}">View eval runs →</a></p>
-      {% else %}
-        <p class="empty">{% if is_logged_in %}No eval runs yet — click Start eval below.{% else %}No eval runs yet. Sign in to start an eval.{% endif %}</p>
-        <p class="pillar-actions">{{ start_button(url_for('eval_run_new'), '▶ Start eval') }}<a href="{{ url_for('eval_run') }}">Eval runs page →</a></p>
-      {% endif %}
-    </div>
-
-    <div class="pillar-card">
-      <h2>Safety</h2>
-      <p class="pillar-meta">Promptfoo · Garak · Duke probes</p>
-      {% if safety_has %}
-        <p class="pillar-stat"><b>{{ safety_count }}</b> model{{ "s" if safety_count != 1 else "" }} tested</p>
-        <p class="pillar-stat">highest risk: <span class="tier tier-{{ safety_worst_tier }}">{{ safety_worst_tier }}</span>
-          {% if safety_worst_pass_rate is not none %}({{ "%.0f"|format(safety_worst_pass_rate * 100) }}% pass){% endif %}
-        </p>
-        <p class="pillar-actions">{{ start_button(url_for('safety_run_new'), '▶ Start safety') }}<a href="{{ url_for('safety') }}">View safety results →</a></p>
-      {% else %}
-        <p class="empty">{% if is_logged_in %}No safety results yet — click Start safety below.{% else %}No safety results yet. Sign in to start a run.{% endif %}</p>
-        <p class="pillar-actions">{{ start_button(url_for('safety_run_new'), '▶ Start safety') }}<a href="{{ url_for('safety') }}">Safety page →</a></p>
-      {% endif %}
-    </div>
-
-    <div class="pillar-card">
-      <h2>Benchmarks</h2>
-      <p class="pillar-meta">TruthfulQA · IFEval · Consistency · MMLU · ToMi · MBPP · QuALITY</p>
-      {% if benchmark_has %}
-        <p class="pillar-stat"><b>{{ benchmark_count }}</b> run{{ "s" if benchmark_count != 1 else "" }} recorded</p>
-        {% if benchmark_latest %}
-        <p class="pillar-stat">latest:
-          <a href="{{ url_for('benchmark_detail', slug=benchmark_latest.slug) }}">
-            <b>{{ benchmark_latest.kind_label }} {{ benchmark_latest.headline_display }}</b>
-          </a>
-          ({{ benchmark_latest.model }})
-        </p>
-        {% endif %}
-      {% else %}
-        <p class="empty">{% if is_logged_in %}No benchmark results yet — click Start benchmark below.{% else %}No benchmark results yet. Sign in to start a run.{% endif %}</p>
-      {% endif %}
-      <p class="pillar-actions">
-        {{ start_button(url_for('benchmark_run_new'), '▶ Start benchmark') }}
-        <a href="{{ url_for('benchmarks') }}">View benchmarks →</a>
-        {% if benchmark_has_reference %}
-        <a class="pillar-reference-link" href="{{ url_for('benchmark_reference') }}">Reference &amp; guide →</a>
-        {% endif %}
-      </p>
+<div class="overview-main-row mb-8 grid gap-6 lg:grid-cols-3 lg:items-stretch">
+  <section class="overview-pillar-card card flex flex-col p-5 lg:col-span-2">
+    <h2 class="section-title">Pillar shortcuts</h2>
+    <div class="mt-4 grid gap-4 sm:grid-cols-2">
+      <div class="rounded-lg border border-border p-4">
+        <h3 class="subsection-title">Scans</h3>
+        <p class="mt-1 body">HF artifact security</p>
+        <p class="mt-2 text-sm">{% if scan_has %}<b>{{ scan_count }}</b> models · worst {{ scan_worst_tier }}{% else %}No scans yet{% endif %}</p>
+        <p class="pillar-actions mt-3">{{ start_button(url_for('scan_run_new'), 'Start scan', 'btn-primary btn-sm') }}<a class="btn-secondary btn-sm" href="{{ url_for('scans') }}">View</a></p>
+      </div>
+      <div class="rounded-lg border border-border p-4">
+        <h3 class="subsection-title">Safety</h3>
+        <p class="mt-1 body">Garak · Promptfoo · Duke probes</p>
+        <p class="mt-2 text-sm">{% if safety_has %}<b>{{ safety_count }}</b> runs · worst {{ safety_worst_tier }}{% else %}No safety runs yet{% endif %}</p>
+        <p class="pillar-actions mt-3">{{ start_button(url_for('safety_run_new'), 'Start safety', 'btn-primary btn-sm') }}<a class="btn-secondary btn-sm" href="{{ url_for('safety') }}">View</a></p>
+      </div>
+      <div class="rounded-lg border border-border p-4">
+        <h3 class="subsection-title">Eval</h3>
+        <p class="mt-1 body">LLM-as-judge task suites</p>
+        <p class="mt-2 text-sm">{% if eval_has %}<b>{{ eval_count }}</b> runs{% if eval_best_overall is not none %} · avg {{ '%.2f'|format(eval_best_overall) }}{% endif %}{% else %}No eval runs yet{% endif %}</p>
+        <p class="pillar-actions mt-3">{{ start_button(url_for('eval_run_new'), 'Start eval', 'btn-primary btn-sm') }}<a class="btn-secondary btn-sm" href="{{ url_for('eval_run') }}">View</a></p>
+      </div>
+      <div class="rounded-lg border border-border p-4">
+        <h3 class="subsection-title">Benchmarks</h3>
+        <p class="mt-1 body">MMLU · MBPP · TruthfulQA · more</p>
+        <p class="mt-2 text-sm">{% if benchmark_has %}<b>{{ benchmark_count }}</b> latest runs{% else %}No benchmarks yet{% endif %}</p>
+        <p class="pillar-actions mt-3">{{ start_button(url_for('benchmark_run_new'), 'Start benchmark', 'btn-primary btn-sm') }}<a class="btn-secondary btn-sm" href="{{ url_for('benchmarks') }}">View</a></p>
+      </div>
     </div>
   </section>
 
-  <section class="gateway-strip">
-    <span>
-      {% if gateway_count %}
-        <b>{{ gateway_count }}</b> live gateway model{{ "" if gateway_count == 1 else "s" }}
-        — safety &amp; eval dropdowns read this catalog.
-      {% else %}
-        Gateway catalog unavailable
-        {% if gateway_error %}<span class="dim">({{ gateway_error }})</span>{% endif %}
-      {% endif %}
-      <a href="{{ url_for('models_catalog') }}">View catalog →</a>
-    </span>
-    <form method="post" action="{{ url_for('gateway_refresh') }}" class="refresh-form">
-      <input type="hidden" name="next" value="{{ url_for('index') }}">
-      <button type="submit" class="btn-secondary" title="Re-fetch GET /v1/models now">&#8635; Refresh models</button>
-    </form>
+  <section class="overview-activity-card card flex flex-col p-5">
+    <h2 class="section-title">Recent activity</h2>
+    {% if activity %}
+    <ul class="activity-feed mt-4 flex-1 overflow-y-auto">
+      {% for ev in activity %}
+      <li>
+        {% if ev.url %}
+        <a href="{{ ev.url }}" class="activity-link">
+          <p class="text-sm font-semibold text-text">{{ ev.label }}</p>
+          <p class="text-xs text-text-subtle">{{ localtime(ev.iso, ev.ts) }}{% if ev.meta %} · {{ ev.meta }}{% endif %}</p>
+        </a>
+        {% else %}
+        <p class="text-sm font-semibold text-text">{{ ev.label }}</p>
+        <p class="text-xs text-text-subtle">{{ ev.ts }}{% if ev.meta %} · {{ ev.meta }}{% endif %}</p>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="mt-4 body flex-1">No recent runs in this view.</p>
+    {% endif %}
   </section>
 </div>
+
+<section class="overview-extra-card card p-5 mb-8">
+  <h2 class="section-title">Personality <span class="text-sm font-normal text-text-subtle">— BFI &amp; compass, not in rollup</span></h2>
+  <p class="mt-1 body text-text-muted">
+    Big Five traits and a forced-choice political compass for gateway models. Fun curiosity only — separate from the four audit pillars above.
+  </p>
+  <p class="pillar-actions mt-3">
+    {{ start_button(url_for('personality_run_new'), 'Start test', 'btn-secondary btn-sm') }}
+    <a class="btn-secondary btn-sm" href="{{ url_for('personality') }}">View results</a>
+  </p>
+</section>
+
+<section class="gateway-strip card p-4">
+  <span>
+    {% if gateway_count %}
+      <b>{{ gateway_count }}</b> live gateway model{{ "" if gateway_count == 1 else "s" }}
+      — safety &amp; eval dropdowns read this catalog.
+    {% else %}
+      Gateway catalog unavailable
+      {% if gateway_error %}<span class="dim">({{ gateway_error }})</span>{% endif %}
+    {% endif %}
+    <a href="{{ url_for('models_catalog') }}">Model catalog →</a>
+    <a href="{{ url_for('compare_models') }}">Compare →</a>
+  </span>
+  <form method="post" action="{{ url_for('gateway_refresh') }}" class="refresh-form">
+    <input type="hidden" name="next" value="{{ url_for('index') }}">
+    <button type="submit" class="btn-secondary btn-sm" title="Re-fetch GET /v1/models now">↻ Refresh models</button>
+  </form>
+</section>
 {% endblock %}

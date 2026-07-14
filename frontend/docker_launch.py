@@ -1,5 +1,5 @@
 """
-Shared Docker Compose helpers for browser-launched runs (scan, safety, eval, benchmarks).
+Shared Docker Compose helpers for browser-launched runs (scan, safety, eval, benchmarks, personality).
 
 All stacks read secrets from the **repo-root ``.env``** (one file, see ``.env.example``).
 Compose ``environment:`` blocks map that single ``DUKE_GATEWAY_KEY`` / ``OPENAI_API_KEY``
@@ -36,11 +36,18 @@ STACKS: dict[str, tuple[Path, str]] = {
     "scanner": (Path("scanner/docker/compose.yml"), "scanner"),
     "evaluator": (Path("evaluator/docker/compose.yml"), "evaluator"),
     "benchmarks": (Path("benchmarks/docker/compose.yml"), "benchmarks"),
+    "personality": (Path("personality/docker/compose.yml"), "personality"),
     "safety": (Path("safety/docker/compose.yml"), "safety"),
 }
 
 _ready: set[str] = set()
 _lock = threading.Lock()
+
+
+class DockerUnavailableError(RuntimeError):
+    """A browser-launched run needs Docker, but it isn't usable here — the daemon
+    is unreachable or the pillar image hasn't been built on this host. Callers
+    should surface the message (503) instead of letting it become a bare 500."""
 
 
 def use_docker() -> bool:
@@ -86,7 +93,8 @@ def _docker_compose_ready(*, timeout: float = 20.0) -> bool:
         )
         return True
     except (OSError, subprocess.SubprocessError) as exc:
-        log.debug("docker compose version failed: %s", exc)
+        detail = getattr(exc, "stderr", None) or getattr(exc, "stdout", None) or str(exc)
+        log.warning("docker compose version failed: %s", detail.strip() if detail else exc)
         return False
 
 
@@ -189,9 +197,23 @@ def ensure_stack(stack: str) -> None:
     with _lock:
         if stack in _ready:
             return
+        # Pre-flight: fail fast with a readable reason when the daemon/socket
+        # isn't reachable, rather than letting the build subprocess emit a raw
+        # 500 to the browser.
+        if not docker_available():
+            raise DockerUnavailableError(docker_required_message(stack))
         _export_uid_gid()
         compose, service = _stack_paths(stack)
-        _compose_build(compose, service)
+        try:
+            _compose_build(compose, service)
+        except DockerUnavailableError:
+            raise
+        except Exception as exc:
+            # Missing compose file / build failure (e.g. pillar image was never
+            # built on this host) — surface it as the actionable message.
+            raise DockerUnavailableError(
+                f"{docker_required_message(stack)} (detail: {exc})"
+            ) from exc
         _ready.add(stack)
 
 

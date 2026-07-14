@@ -1,6 +1,6 @@
 # Team tracks and schedule
 
-Code+ 2026 — Duke OIT. The nutrition label has two pillars — **security** (scanning + safety) and **efficacy**.
+Code+ 2026 — Duke OIT. The AI Model Advisor has two pillars — **security** (scanning + safety) and **efficacy**.
 
 **Execution (tasks):** GitLab — [`.gitlab/README.md`](../.gitlab/README.md) (Track A, Track B, Team).
 
@@ -32,7 +32,7 @@ Dated, step-by-step milestones live in the GitLab tracker; this is the high-leve
 |-------|-------|---------|---------|
 | Spikes | Scaffold, gateway smoke, data-model sketch | HF scan + tool research | Gateway smoke; TruthfulQA pilot |
 | Pipelines | Docker stacks, catalog, `frontend/`, E2E on gateway models | `scanner/` pipeline; safety merge | `evaluator/` runner + judge; MVP suites + benchmarks |
-| Persistence | Postgres ingest + UI read (all pillars); REST live (all pillars) | scan/safety DB + API | eval + benchmark DB + API; `GET /api/models` list next |
+| Persistence | Postgres ingest + UI read (all pillars); REST live (all pillars); cross-pillar `GET /api/models` | scan/safety DB + API | eval + benchmark DB + API |
 | Full UI | `frontend/` reads `api/` | Scanning + safety views | Efficacy charts |
 | Demo freeze | Representative catalog; documented limits | Gateway safety + HF samples | Gateway efficacy |
 

@@ -125,7 +125,7 @@ Compare anchor-by-anchor:
 - **Different anchor picked, same score** → coincidence; needs more samples
 - **Different score** → anchors are ambiguous; revise
 
-This is a small-scale precursor to the validation study in weeks 7-8. It catches ambiguity *before* you waste budget running the full pipeline.
+This is a small-scale precursor to the validation study. It catches ambiguity *before* you waste budget running the full pipeline.
 
 ### Step 8 — Lock and version
 
@@ -179,7 +179,7 @@ The literature's machinery, mapped to this project:
 | Stakeholder-owned weights | weights are *value judgments* — the policy office owns "citation_precision = 0.30", not the engineer | `aggregation.note` rationale; re-weight after validation |
 | Chain-of-thought steps (G-Eval) | the judge applies the anchors in a fixed order instead of free-associating | `evaluation_steps` |
 | Cross-judge concordance | residual judge bias that doesn't change any ranking can't change any conclusion | `compare_judges.py --from-results`; `docs/judge-selection.md` |
-| Human-agreement statistics | the rubric is validated by correlation with experts, never by inspection | weeks 7–8 study |
+| Human-agreement statistics | the rubric is validated by correlation with experts, never by inspection | validation study |
 
 **The proof standard (from G-Eval and MT-Bench):** a rubric + judge is
 "good" when its scores correlate with human expert judgments — G-Eval's
@@ -191,25 +191,25 @@ LLM judge agrees with humans about as often as humans agree with each
 other (~80%) — human-human agreement is the realistic target, not 100%.
 
 **Criteria drift (Shankar et al. 2024):** experts refine what they think
-the criteria mean *while* grading real outputs. So at the week-5 review,
+the criteria mean *while* grading real outputs. So at the OIT/policy review,
 have OIT/policy staff **grade 3–5 real model outputs with the rubric**
 before approving it — expect anchor revisions, and treat them as the
 process working.
 
-### Current status (week 4, honest)
+### Current status (honest)
 
 | Validity layer | Status | Fix |
 |---|---|---|
 | Face validity (questions look plausible) | ✅ | — |
-| Content validity (mirrors real demand) | ❌ hand-written | OIT ticket data, week 5 |
-| Anchor reliability (raters agree) | ❌ untested | expert pilot week 5; Kappa study weeks 7–8 |
-| Judge fidelity (LLM applies rubric like humans) | partial — rank concordance 100% across 3 judges | human validation, weeks 7–8 |
+| Content validity (mirrors real demand) | ❌ hand-written | OIT ticket data |
+| Anchor reliability (raters agree) | ❌ untested | expert pilot; Kappa study |
+| Judge fidelity (LLM applies rubric like humans) | partial — rank concordance 100% across 3 judges | human validation |
 
 ---
 
 ## Versioning
 
-Match the locked-file pattern from `CLAUDE.md`:
+Match the locked-file pattern used for rubrics in this repo:
 
 - New files for new versions: `it_support_v1.yaml` → `it_support_v1.1.yaml` → `it_support_v2.yaml`.
 - **Minor bumps** (e.g., `v1` → `v1.1`) are for structural changes that don't affect semantics — refactoring inline dimensions to reference the shared library, fixing typos in the description, etc. Same scores expected.

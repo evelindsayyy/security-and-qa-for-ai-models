@@ -22,8 +22,7 @@ Session state: Flask cookie (`user`, `view_mode`). Run ownership, visibility
 scoping, and dedup live in Postgres (`db/auth_schema.sql`) plus per-run
 `run_meta.json`/`scan_meta.json` sidecars on disk — see
 [`frontend/run_paths.py`](../frontend/run_paths.py) for how private runs are
-kept on a separate on-disk path per pillar, and
-[`PROJECT_GUIDE.md`](../PROJECT_GUIDE.md) for the full isolation model.
+kept on a separate on-disk path per pillar.
 
 ## Modules
 
@@ -62,7 +61,7 @@ curl -s -X POST http://127.0.0.1:5000/auth/logout
 
 Login is browser-only: header **Sign in with Duke NetID** opens `/auth/login?popup=1` → Duke OIDC → `/login` (or `/auth/callback`).
 
-Production HTTPS runs through the Caddy compose overlay in [`docker/`](../docker/).
+Production HTTPS runs through Caddy when `CADDY_DOMAIN` is set — see [`docker/README.md`](../docker/README.md).
 
 ### OIDC callback ports (local dev / IDE port-forwarding)
 

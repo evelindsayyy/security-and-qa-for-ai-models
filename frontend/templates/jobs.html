@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% from '_macros.html' import page_header, empty_state with context %}
+
+{% block title %}In-flight jobs — Model Advisor{% endblock %}
+
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span class="breadcrumb-current">In-flight jobs</span>
+{% endblock %}
+
+{% block content %}
+{{ page_header(
+     'In-flight jobs',
+     'Background pillar runs still active — including jobs that continued after a frontend restart. Open a job to watch its run log.'
+   ) }}
+
+{% if not jobs %}
+  {{ empty_state('No jobs are running right now.') }}
+{% else %}
+<section class="card p-5">
+  <ul class="jobs-list m-0 list-none space-y-0 p-0">
+    {% for job in jobs %}
+    <li class="jobs-list-row">
+      <div class="jobs-list-main">
+        <p class="jobs-list-label">{{ job.label }}</p>
+        {% if job.detail %}<p class="body mt-0.5">{{ job.detail }}</p>{% endif %}
+        <p class="mono mt-1">{{ job.slug }}{% if job.profile %}/{{ job.profile }}{% endif %}</p>
+      </div>
+      <div class="jobs-list-actions">
+        <span class="badge badge-pilot">{{ job.pillar }}</span>
+        <a class="btn-primary btn-sm" href="{{ job.url }}">Open run log</a>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

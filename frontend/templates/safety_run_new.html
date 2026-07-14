@@ -1,31 +1,48 @@
 {% extends "base.html" %}
+{% from '_macros.html' import launch_back, rerun_callout with context %}
 
 {% block title %}Start a safety run{% endblock %}
 
-{% block content %}
-<div class="eval-comparison">
-  <p class="back"><a href="{{ url_for('safety') }}">← all safety results</a></p>
-  <h1>Start a safety run</h1>
-  <p class="sub">
-    Launches <code>safety.run</code> via Docker Compose (default) — Promptfoo, Garak, and merge.
-    Full runs can take 30–90 minutes per model.
-    Host fallback: <code>uv run python -m safety.run "&lt;model&gt;"</code>.
-    {% if not docker_available %}
-    <span class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</span>
-    {% endif %}
-  </p>
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span><a href="{{ url_for('safety') }}">Safety</a></span>
+<span class="text-text-subtle">›</span>
+<span class="font-medium text-text">Start run</span>
+{% endblock %}
 
+{% block content %}
+<div class="launch-page">
+  {{ launch_back(url_for('safety'), 'all safety results') }}
+
+  <header>
+    <h1 class="page-title">Start a safety run</h1>
+    <p class="page-subtitle">
+      Launches <code>safety.run</code> via Docker Compose (default) — Promptfoo, Garak, and merge.
+      Full runs can take 30–90 minutes per model.
+      Host fallback: <code>uv run python -m safety.run "&lt;model&gt;"</code>.
+    </p>
+  </header>
+
+  {% if rerun %}{{ rerun_callout() }}{% endif %}
+  {% if not docker_available %}
+  <p class="form-warning">Docker Compose is not available — run <code>./docker/build-pillars.sh</code> first or set <code>FRONTEND_LAUNCH_MODE=host</code>.</p>
+  {% endif %}
   {% if gateway_error %}
   <p class="form-warning">Live catalog unavailable — showing fallback list. {{ gateway_error }}</p>
   {% endif %}
 
-  <form method="post" action="{{ url_for('safety_run_start') }}" class="launch-form" id="safety-form">
-    <fieldset class="candidate-source">
-      <legend>Candidate model</legend>
-      <label class="src-opt"><input type="radio" name="source" value="gateway" id="source_gateway" checked> Gateway model</label>
-      <label class="src-opt"><input type="radio" name="source" value="hf" id="source_hf"> Hugging Face model</label>
+  <form method="post" action="{{ url_for('safety_run_start') }}" class="launch-form card p-5" id="safety-form">
 
-      <div id="gateway-fields">
+    <section class="form-section">
+      <h2 class="form-section-title">Candidate model</h2>
+      <fieldset class="candidate-source">
+        <label class="src-opt"><input type="radio" name="source" value="gateway" id="source_gateway" checked> Gateway model</label>
+        <label class="src-opt"><input type="radio" name="source" value="hf" id="source_hf"> Hugging Face model</label>
+      </fieldset>
+
+      <div class="form-field" id="gateway-fields">
+        <label for="gateway_model">Model</label>
         <select name="gateway_model" id="gateway_model">
           {% for group in gateway_groups %}
           <optgroup label="{{ group.label }}">
@@ -35,10 +52,11 @@
           </optgroup>
           {% endfor %}
         </select>
-        <span class="form-hint">One of Duke's built-in models. It's already running, so your scan starts right away.</span>
+        <span class="form-hint">Chat-capable gateway ids — case-sensitive. It's already running, so your scan starts right away.</span>
       </div>
 
-      <div id="hf-fields" style="display: none;">
+      <div class="form-field" id="hf-fields" style="display: none;">
+        <label for="hf_repo">Hugging Face repo</label>
         <input type="text" name="hf_repo" id="hf_repo" list="hf_repo_suggestions"
                placeholder="Qwen/Qwen2.5-7B-Instruct" autocomplete="off" spellcheck="false">
         <datalist id="hf_repo_suggestions">
@@ -56,52 +74,60 @@
           model is a valid, scannable one, without running anything yet.
         </span>
       </div>
-    </fieldset>
 
-    <p id="overwrite-warning" class="form-warning" style="display: none;">
-      This model already has safety results — starting again will delete the prior outputs and replace them.
-    </p>
-    <p id="inflight-warning" class="form-warning" style="display: none;">
-      A safety run for this model and profile is already in progress.
-    </p>
-
-    <fieldset>
-      <legend>Test suites <span class="dim">(all on by default)</span></legend>
-      <label><input type="checkbox" name="run_policy" id="run_policy" value="1" checked> Promptfoo policy</label>
-      <label><input type="checkbox" name="run_redteam" id="run_redteam" value="1" checked> Promptfoo red-team</label>
-      <label><input type="checkbox" name="run_garak" id="run_garak" value="1" checked> Garak</label>
-    </fieldset>
-
-    <label id="redteam-profile-row">Red-team profile
-      <select name="redteam_profile" id="redteam_profile">
-        {% for p in profiles %}
-        <option value="{{ p.value }}" {% if p.value == 'base' %}selected{% endif %}>{{ p.label }}</option>
-        {% endfor %}
-      </select>
-      <span class="form-hint">attack plugins for the red-team suite — base is the general-purpose default</span>
-    </label>
-
-    <fieldset id="attacker-row" style="display: none;">
-      <legend>Attack-generator server <span class="dim">(required for a Hugging Face target)</span></legend>
-      <p class="form-hint">
-        Red-teaming works by having one model write tricky, adversarial questions, then checking
-        whether the model you're scanning falls for them. For a Duke gateway model, it's allowed
-        to write its own tricky questions. A Hugging Face model can't do that — you need a second
-        model just for writing the attacks. That model is fixed to
-        <code>{{ mandatory_attacker_repo }}</code> — you only need to say where it's running.
+      <p id="overwrite-warning" class="form-warning mt-3" style="display: none;">
+        This model already has safety results — starting again will delete the prior outputs and replace them.
       </p>
-      <input type="text" name="attacker_endpoint" id="attacker_endpoint"
-             placeholder="http://host:port/v1 (a server already running the attack-generator)"
-             autocomplete="off" spellcheck="false">
-      <span class="form-hint">The web address of a server already running {{ mandatory_attacker_repo }}.</span>
-    </fieldset>
+      <p id="inflight-warning" class="form-warning mt-3" style="display: none;">
+        A safety run for this model and profile is already in progress.
+      </p>
+    </section>
 
-    <label id="garak-probes-row">Garak probe subset <span class="dim">(optional)</span>
-      <input type="text" name="garak_probes" id="garak_probes" placeholder="encoding,promptinject">
-      <span class="form-hint">comma-separated modules; leave blank for the full default Duke set</span>
-    </label>
+    <section class="form-section">
+      <h2 class="form-section-title">Test suites <span class="dim font-normal">(all on by default)</span></h2>
+      <fieldset>
+        <label><input type="checkbox" name="run_policy" id="run_policy" value="1" checked> Promptfoo policy</label>
+        <label><input type="checkbox" name="run_redteam" id="run_redteam" value="1" checked> Promptfoo red-team</label>
+        <label><input type="checkbox" name="run_garak" id="run_garak" value="1" checked> Garak</label>
+      </fieldset>
+    </section>
 
-    <button type="submit" class="btn-primary" id="submit-btn">▶ Start safety run</button>
+    <section class="form-section">
+      <div class="form-field" id="redteam-profile-row">
+        <label for="redteam_profile">Red-team profile</label>
+        <select name="redteam_profile" id="redteam_profile">
+          {% for p in profiles %}
+          <option value="{{ p.value }}" {% if p.value == 'base' %}selected{% endif %}>{{ p.label }}</option>
+          {% endfor %}
+        </select>
+        <span class="form-hint">Attack plugins for the red-team suite — base is the general-purpose default.</span>
+      </div>
+
+      <fieldset class="form-field mt-4" id="attacker-row" style="display: none;">
+        <legend>Attack-generator server <span class="dim font-normal">(required for a Hugging Face target)</span></legend>
+        <p class="form-hint">
+          Red-teaming works by having one model write tricky, adversarial questions, then checking
+          whether the model you're scanning falls for them. For a Duke gateway model, it's allowed
+          to write its own tricky questions. A Hugging Face model can't do that — you need a second
+          model just for writing the attacks. That model is fixed to
+          <code>{{ mandatory_attacker_repo }}</code> — you only need to say where it's running.
+        </p>
+        <input type="text" name="attacker_endpoint" id="attacker_endpoint"
+               placeholder="http://host:port/v1 (a server already running the attack-generator)"
+               autocomplete="off" spellcheck="false">
+        <span class="form-hint">The web address of a server already running {{ mandatory_attacker_repo }}.</span>
+      </fieldset>
+
+      <div class="form-field mt-4" id="garak-probes-row">
+        <label for="garak_probes">Garak probe subset <span class="dim font-normal">(optional)</span></label>
+        <input type="text" name="garak_probes" id="garak_probes" placeholder="encoding,promptinject">
+        <span class="form-hint">Comma-separated modules; leave blank for the full default Duke set.</span>
+      </div>
+    </section>
+
+    <div class="form-actions">
+      <button type="submit" class="btn-primary" id="submit-btn">▶ Start safety run</button>
+    </div>
   </form>
 
   {% if hf_result %}
@@ -125,6 +151,7 @@
   const HAS_RESULTS = {{ model_has_results | tojson }};
   const MODEL_SLUGS = {{ model_slugs | tojson }};
   const INFLIGHT = new Set({{ inflight_safety_keys | tojson }});
+  const RERUN = {{ rerun | default(none) | tojson }};
 
   const modelSel   = document.getElementById("gateway_model");
   const profileSel = document.getElementById("redteam_profile");
@@ -143,6 +170,18 @@
   const hfRepoInput = document.getElementById("hf_repo");
   const hfEndpointInput = document.getElementById("hf_endpoint");
   const attackerEndpointInput = document.getElementById("attacker_endpoint");
+
+  function applyRerunPrefill() {
+    if (!RERUN) return;
+    if (RERUN.gateway_model) {
+      const match = [...modelSel.options].find((o) => o.value === RERUN.gateway_model);
+      if (match) modelSel.value = RERUN.gateway_model;
+    }
+    if (RERUN.redteam_profile) profileSel.value = RERUN.redteam_profile;
+    if (RERUN.run_policy != null) policyBox.checked = RERUN.run_policy;
+    if (RERUN.run_redteam != null) redteamBox.checked = RERUN.run_redteam;
+    if (RERUN.run_garak != null) garakBox.checked = RERUN.run_garak;
+  }
 
   function inflightKey() {
     const slug = MODEL_SLUGS[modelSel.value] || modelSel.value;
@@ -199,6 +238,7 @@
   hfEndpointInput.addEventListener("input", updateUI);
   attackerEndpointInput.addEventListener("input", updateUI);
 
+  applyRerunPrefill();
   updateUI();
 })();
 </script>

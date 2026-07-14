@@ -17,16 +17,22 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
 import time
 from pathlib import Path
 
+from markupsafe import escape
+
 from frontend import docker_launch
+from frontend.launch_registry import check_inflight_combo
 from frontend.log_status import run_log_payload, status_message
+from frontend.output_dirs import OutputDirError
 from frontend.path_safety import is_safe_slug
 from frontend.run_paths import inflight_scope_key
+from dbutils import run_lock
 
 ROOT = Path(__file__).parent.parent
 EVALUATOR = ROOT / "evaluator"
@@ -62,8 +68,7 @@ def candidate_models() -> tuple[str, ...]:
 
 # Judges the team has actually calibrated (cross-judge experiment, week 4).
 # Maverick is the primary judge; gpt-oss-120b the strict spot-check for Llama
-# candidates. Llama 3.3 was dropped — leniency ceiling (all 5s on strong
-# candidates).
+# candidates.
 # OpenAI judges re-enabled 2026-06-22: the gateway metadata/store bug that 400'd
 # all OpenAI models was fixed; GPT 4.1 Mini + gpt-5-chat verified to return
 # valid judge JSON (the bar gpt-oss-120b fails ~75% of the time), and both are
@@ -97,24 +102,130 @@ def model_family(model: str) -> str:
 
 # Suite key -> contract files. Rubric/prompt pairing lives here so the
 # form can't produce the judge-prompt/rubric mismatch the runner rejects.
+# `description` + `example` are the plain-language blurbs shown in the on-page
+# suite tooltips (surfaced via get_launch_options) — content only, no contract.
+# `scoring` is "judge" (LLM-as-judge vs a reference) or "execution" (the answer
+# is checked by RUNNING it — text-to-SQL / JSON / numeric). The runner reads
+# scoring=execution from the suite's own metadata line and auto-skips the judge,
+# so for execution suites the rubric below is never loaded — any existing file
+# satisfies build_command's argv. See _INERT_RUBRIC.
+_RUBRICS = EVALUATOR / "tasks" / "rubrics"
+_SYS = EVALUATOR / "prompts" / "system"
+# Placeholder rubric for execution suites: passed to the runner but never read
+# (the judge is auto-skipped for scoring=execution). Points at a file that
+# always exists so build_command's --rubric flag resolves.
+_INERT_RUBRIC = _RUBRICS / "it_support.yaml"
+
 SUITES: dict[str, dict] = {
     "it_support_v1": {
         "label": "IT support (12 questions, locked)",
+        "description": "Common Duke IT help-desk questions — passwords, VPN, "
+                       "email, and account access.",
+        "example": "How do I reset my NetID password?",
+        "scoring": "judge",
         "suite": EVALUATOR / "tasks" / "it_support_v1.jsonl",
-        "rubric": EVALUATOR / "tasks" / "rubrics" / "it_support.yaml",
-        "system_prompt": EVALUATOR / "prompts" / "system" / "it_support_v1.txt",
+        "rubric": _RUBRICS / "it_support.yaml",
+        "system_prompt": _SYS / "it_support_v1.txt",
     },
     "policy_qa_v1.1": {
         "label": "Duke policy Q&A (12 questions, draft)",
+        "description": "Questions about Duke policy, answered with citations to "
+                       "the source.",
+        "example": "What is Duke's policy on sharing student data with a vendor?",
+        "scoring": "judge",
         "suite": EVALUATOR / "tasks" / "policy_qa_v1.1.jsonl",
-        "rubric": EVALUATOR / "tasks" / "rubrics" / "policy_qa_v1.yaml",
-        "system_prompt": EVALUATOR / "prompts" / "system" / "it_support_v1.txt",
+        "rubric": _RUBRICS / "policy_qa_v1.yaml",
+        "system_prompt": _SYS / "it_support_v1.txt",
     },
     "summarization_v1": {
         "label": "Document summarization (6 docs, pilot)",
+        "description": "Summarize a document faithfully and concisely, without "
+                       "adding or dropping key facts.",
+        "example": "Summarize a two-page policy memo into three sentences.",
+        "scoring": "judge",
         "suite": EVALUATOR / "tasks" / "summarization_v1.jsonl",
-        "rubric": EVALUATOR / "tasks" / "rubrics" / "summarization_v1.yaml",
-        "system_prompt": EVALUATOR / "prompts" / "system" / "summarization_v1.txt",
+        "rubric": _RUBRICS / "summarization_v1.yaml",
+        "system_prompt": _SYS / "summarization_v1.txt",
+    },
+    # --- Execution-scored suites (checked by RUNNING the answer) --------------
+    "sql_duke_v2": {
+        "label": "Text-to-SQL (14 questions, execution-scored)",
+        "description": "Write a SQL query over a Duke-flavored schema. Scored by "
+                       "running the query against a throwaway database and "
+                       "comparing the rows — no LLM judge.",
+        "example": "List the 3 departments with the most enrolled students.",
+        "scoring": "execution",
+        "suite": EVALUATOR / "tasks" / "sql_duke_v2.jsonl",
+        "rubric": _RUBRICS / "sql_duke_v1.yaml",   # inert (judge auto-skipped)
+        "system_prompt": _SYS / "sql_v1.txt",
+    },
+    "json_duke_v1": {
+        "label": "Structured JSON output (6 questions, execution-scored)",
+        "description": "Return a single JSON value in exactly the shape asked. "
+                       "Scored by parsing and comparing the JSON — no LLM judge.",
+        "example": 'Return {"open": true, "closes_at": "17:00"} for the library.',
+        "scoring": "execution",
+        "suite": EVALUATOR / "tasks" / "json_duke_v1.jsonl",
+        "rubric": _INERT_RUBRIC,                     # inert (judge auto-skipped)
+        "system_prompt": _SYS / "json_v1.txt",
+    },
+    "numeric_duke_v1": {
+        "label": "Numeric answers (6 questions, execution-scored)",
+        "description": "Answer a word problem with a single number. Scored by "
+                       "extracting the number and tolerance-comparing to the "
+                       "gold answer — no LLM judge.",
+        "example": "A shuttle leaves every 12 min from 7:00am — how many trips "
+                   "by noon?",
+        "scoring": "execution",
+        "suite": EVALUATOR / "tasks" / "numeric_duke_v1.jsonl",
+        "rubric": _INERT_RUBRIC,                     # inert (judge auto-skipped)
+        "system_prompt": _SYS / "numeric_v1.txt",
+    },
+    "tool_use_duke_v1": {
+        "label": "Tool use / function calling (15 tasks, execution-scored)",
+        "description": "Given a set of tools, the model must reply with the "
+                       "correct function call (name + arguments) — or decline "
+                       "when no tool fits. Scored by parsing and comparing the "
+                       "call, no LLM judge.",
+        "example": "\"I can't get on the VPN with NetID ar455\" → "
+                   "check_vpn_status(netid=\"ar455\")",
+        "scoring": "execution",
+        "suite": EVALUATOR / "tasks" / "tool_use_duke_v1.jsonl",
+        "rubric": _INERT_RUBRIC,                     # inert (judge auto-skipped)
+        "system_prompt": _SYS / "tool_use_v1.txt",
+    },
+    # --- More judge-scored task domains --------------------------------------
+    "email_drafting_v1": {
+        "label": "Email drafting (5 scenarios, judge-scored)",
+        "description": "Draft a professional email for a Duke scenario. Scored "
+                       "by the LLM-as-judge against a reference draft.",
+        "example": "Email a professor to request a deadline extension.",
+        "scoring": "judge",
+        "suite": EVALUATOR / "tasks" / "email_drafting_v1.jsonl",
+        "rubric": _RUBRICS / "email_drafting_v1.yaml",
+        "system_prompt": _SYS / "generic_v1.txt",
+    },
+    "tutoring_v1": {
+        "label": "Tutoring (5 scenarios, judge-scored)",
+        "description": "Help a stuck student without just handing over the "
+                       "answer. Scored by the LLM-as-judge (pedagogy weighted "
+                       "highest) against a reference.",
+        "example": "A student can't see why their loop runs one time too many.",
+        "scoring": "judge",
+        "suite": EVALUATOR / "tasks" / "tutoring_v1.jsonl",
+        "rubric": _RUBRICS / "tutoring_v1.yaml",
+        "system_prompt": _SYS / "generic_v1.txt",
+    },
+    "plain_language_v1": {
+        "label": "Plain-language rewriting (5 passages, judge-scored)",
+        "description": "Rewrite a dense, bureaucratic passage for a general "
+                       "audience without losing meaning. Scored by the "
+                       "LLM-as-judge against a reference.",
+        "example": "Rewrite a paragraph of financial-aid policy in plain English.",
+        "scoring": "judge",
+        "suite": EVALUATOR / "tasks" / "plain_language_v1.jsonl",
+        "rubric": _RUBRICS / "plain_language_v1.yaml",
+        "system_prompt": _SYS / "generic_v1.txt",
     },
 }
 
@@ -123,6 +234,10 @@ SUITES: dict[str, dict] = {
 JUDGE_PROMPT = EVALUATOR / "prompts" / "judge" / "reference_based_v2.txt"
 
 MAX_TOKENS_MIN, MAX_TOKENS_MAX = 50, 4000
+# Clear a completed scan unless it flagged the repo as high risk — block only
+# high/critical (low + medium pass), matching the safety gate in pipeline.py.
+SCAN_ALLOWED_TIERS = frozenset({"low", "medium"})
+SCAN_COMPLETE_STATUSES = frozenset({"complete", "completed"})
 
 # --- Custom ("bring your own") question sets -------------------------------
 # Users who don't like our reference suites can supply their own questions +
@@ -141,6 +256,34 @@ CUSTOM_PREFIX = "custom_"
 _RUNNING: dict[str, subprocess.Popen] = {}
 _INFLIGHT: dict[tuple, str] = {}
 _LOCK = threading.Lock()
+
+
+def _run_lock_path(stem: str) -> Path:
+    return RESULTS_DIR / f"{stem}.run.lock"
+
+
+def _watch_process(stem: str, proc: subprocess.Popen, lock_path: Path) -> None:
+    proc.wait()
+    run_lock.release(lock_path)
+    with _LOCK:
+        if _RUNNING.get(stem) is proc:
+            _RUNNING.pop(stem, None)
+
+
+def inflight_eval_slugs() -> set[str]:
+    """Slugs with an active run.lock or in-memory subprocess."""
+    from dbutils import fs_safe
+
+    slugs: set[str] = set()
+    if fs_safe.is_dir(RESULTS_DIR):
+        for path in fs_safe.glob(RESULTS_DIR, "*.run.lock"):
+            if run_lock.is_active(path):
+                slugs.add(path.name[: -len(".run.lock")])
+    with _LOCK:
+        for slug, proc in _RUNNING.items():
+            if proc.poll() is None:
+                slugs.add(slug)
+    return slugs
 
 
 def _suite_cfg(suite_key: str) -> dict | None:
@@ -163,10 +306,52 @@ def _suite_cfg(suite_key: str) -> dict | None:
 
 def _all_suite_keys() -> list[str]:
     """Curated suite keys plus any saved custom suites."""
+    from dbutils import fs_safe
+
     custom = []
-    if CUSTOM_SUITES_DIR.is_dir():
-        custom = sorted(p.stem for p in CUSTOM_SUITES_DIR.glob(f"{CUSTOM_PREFIX}*.jsonl"))
+    if fs_safe.is_dir(CUSTOM_SUITES_DIR):
+        custom = sorted(p.stem for p in fs_safe.glob(CUSTOM_SUITES_DIR, f"{CUSTOM_PREFIX}*.jsonl"))
     return list(SUITES) + custom
+
+
+# --- Human-facing suite names -------------------------------------------------
+# The versioned key (e.g. "email_drafting_v1", "sql_duke_v2") is the permanent
+# record kept in the repo and used everywhere internally (data keys, sorting,
+# filter values). Users should never see the version tag — they see the clean
+# display name derived here (e.g. "Email Drafting", "Text-to-SQL"). A suite may
+# override the derived name with an explicit "display" key in SUITES.
+_SUITE_ACRONYMS = {
+    "it": "IT",
+    "sql": "SQL",
+    "json": "JSON",
+    "qa": "Q&A",
+    "bfi": "BFI",
+    "api": "API",
+}
+_SUITE_VERSION_RE = re.compile(r"_v\d+(?:\.\d+)*$", re.IGNORECASE)
+
+
+def _prettify_suite_key(suite_key: str) -> str:
+    """Strip the trailing version tag and title-case the slug, keeping known
+    acronyms uppercase. ``email_drafting_v1`` -> ``Email Drafting``."""
+    stem = _SUITE_VERSION_RE.sub("", suite_key or "")
+    words = [w for w in stem.split("_") if w]
+    if not words:
+        return (suite_key or "—").strip() or "—"
+    return " ".join(_SUITE_ACRONYMS.get(w.lower(), w.capitalize()) for w in words)
+
+
+def suite_display_name(suite_key: str) -> str:
+    """Clean, user-facing name for a suite key (no version tag). Display only —
+    the versioned key remains the source of truth for records and comparability."""
+    if not suite_key:
+        return "—"
+    cfg = SUITES.get(suite_key)
+    if cfg and cfg.get("display"):
+        return cfg["display"]
+    if suite_key.startswith(CUSTOM_PREFIX):
+        return "Custom questions"
+    return _prettify_suite_key(suite_key)
 
 
 def suite_question_count(suite_key: str) -> int:
@@ -182,17 +367,19 @@ def validate_launch(
     candidate: str, judge: str, suite_key: str, max_tokens: int
 ) -> str | None:
     """Return an error message, or None if the launch request is valid."""
+    # NOTE: these messages are rendered as HTML by the caller, so every reflected
+    # user value is HTML-escaped to prevent reflected XSS (e.g. candidate="<script>").
     if candidate not in candidate_models():
-        return f"candidate model not in allowlist: {candidate!r}"
+        return f"candidate model not in allowlist: '{escape(candidate)}'"
     if judge not in JUDGE_MODELS:
-        return f"judge model not in allowlist: {judge!r}"
+        return f"judge model not in allowlist: '{escape(judge)}'"
     if model_family(judge) == model_family(candidate):
         return (
-            f"judge {judge!r} is the same model family as candidate "
-            f"{candidate!r} — cross-family judging required (MT-Bench rule)"
+            f"judge '{escape(judge)}' is the same model family as candidate "
+            f"'{escape(candidate)}' — cross-family judging required (MT-Bench rule)"
         )
     if _suite_cfg(suite_key) is None:
-        return f"unknown suite: {suite_key!r}"
+        return f"unknown suite: '{escape(suite_key)}'"
     if not (MAX_TOKENS_MIN <= max_tokens <= MAX_TOKENS_MAX):
         return f"max_tokens must be {MAX_TOKENS_MIN}-{MAX_TOKENS_MAX}"
     if docker_launch.use_docker() and not docker_launch.docker_available():
@@ -200,11 +387,42 @@ def validate_launch(
     return None
 
 
+def validate_dcc_params(
+    hf_repo: str, judge: str, suite_key: str, max_tokens: int
+) -> str | None:
+    """Validate the NON-model parts of a DCC (HF-model) launch. Returns an error
+    message or None.
+
+    Servability of ``hf_repo`` is checked separately by ``validate_hf_candidate``
+    (the route calls it first and shows the reason inline), so here we only gate
+    the judge/suite/token params — mirroring ``validate_launch`` for the gateway
+    path. The candidate runs on the DCC, but the judge stays a gateway model, so
+    the MT-Bench cross-family rule still applies (judge family ≠ HF-repo family).
+    These messages are rendered as HTML, so reflected values are escaped.
+    """
+    if judge not in JUDGE_MODELS:
+        return f"judge model not in allowlist: '{escape(judge)}'"
+    if model_family(judge) == model_family(hf_repo):
+        return (
+            f"judge '{escape(judge)}' is the same model family as candidate "
+            f"'{escape(hf_repo)}' — cross-family judging required (MT-Bench rule)"
+        )
+    if _suite_cfg(suite_key) is None:
+        return f"unknown suite: '{escape(suite_key)}'"
+    if not (MAX_TOKENS_MIN <= max_tokens <= MAX_TOKENS_MAX):
+        return f"max_tokens must be {MAX_TOKENS_MIN}-{MAX_TOKENS_MAX}"
+    return None
+
+
 # Suggested open-weight models for the HF-model launcher field (datalist hints).
+# PUBLIC / ungated only: hf_intake.validate rejects gated or private repos (no HF
+# token is used anywhere), so suggesting a gated model — e.g. Meta Llama or Gemma
+# — would just hand the user a repo that fails validation. Every id here is a
+# public, ungated, vLLM-servable model that fits a single a5000.
 SUGGESTED_HF_REPOS: tuple[str, ...] = (
     "Qwen/Qwen2.5-7B-Instruct",
-    "mistralai/Mistral-7B-Instruct-v0.3",
-    "meta-llama/Llama-3.2-1B-Instruct",
+    "Qwen/Qwen2.5-1.5B-Instruct",
+    "microsoft/Phi-3-mini-4k-instruct",
     "gpt2",
 )
 
@@ -225,6 +443,118 @@ def validate_hf_candidate(repo_id: str) -> dict:
         "repo_id": repo_id,
         "architectures": info.architectures if info else None,
         "num_params": info.num_params if info else None,
+    }
+
+
+def _scan_result_path(repo_id: str) -> Path:
+    """Published scanner artifact for an HF repo id."""
+    from scanner.paths import output_dir
+
+    return output_dir(repo_id) / "scan_result.json"
+
+
+def _scan_verdict(base: dict, status: str, tier: str, score: object) -> dict:
+    """Apply the completed-and-low-risk rule to one scan's status/tier/score.
+
+    Shared by the on-disk artifact and the catalog fallback so both paths grade
+    a scan identically.
+    """
+    out = {**base, "status": status, "severity_tier": tier, "overall_risk_score": score}
+    if status not in SCAN_COMPLETE_STATUSES:
+        return {
+            **out,
+            "ok": False,
+            "error": f"security scan is not complete yet (status={status})",
+        }
+    if tier not in SCAN_ALLOWED_TIERS:
+        return {
+            **out,
+            "ok": False,
+            "error": (
+                "security scan did not clear this model "
+                f"(tier={tier}, score={score}); DCC serving is blocked"
+            ),
+        }
+    return {**out, "ok": True, "error": None}
+
+
+def _scan_from_catalog(repo_id: str) -> dict | None:
+    """Latest scan for ``repo_id`` from the same catalog /scans and /pipeline
+    read (Postgres when configured, on-disk artifacts otherwise).
+
+    This recognizes scans recorded before the pipeline existed — persisted to
+    the DB with no local ``scan_result.json`` on this host. Read-only over the
+    scanner data layer; returns None if nothing matches or the lookup fails.
+    Mirrors the safety gate's use of ``get_safety_data`` in ``pipeline.py``.
+    """
+    from scanner.paths import safe_dir_name
+
+    try:
+        from frontend.scan_data import get_scans_data
+
+        target_slug = safe_dir_name(repo_id)
+        for row in get_scans_data().get("scans") or []:
+            if row.get("model_id") == repo_id or row.get("slug") == target_slug:
+                return row
+    except Exception:  # noqa: BLE001 — a catalog hiccup must not block the gate path
+        return None
+    return None
+
+
+def validate_hf_scan_gate(repo_id: str) -> dict:
+    """Require a completed low-risk artifact scan before serving an HF model.
+
+    This is the cross-pillar handshake: evaluator never downloads or serves a
+    Hugging Face model on the DCC until the scanner pillar has produced a clear
+    scan for the same repo id. The gate is intentionally conservative for MVP
+    launch: only completed ``low``/``medium`` scans pass.
+
+    Evidence order: the local ``scan_result.json`` artifact first (fast, and it
+    covers not-yet-ingested private runs), then the scan catalog (Postgres on
+    deployment). The catalog fallback is what lets scans recorded before the
+    pipeline — DB rows with no local artifact — clear the gate instead of
+    reading as unscanned.
+    """
+    path = _scan_result_path(repo_id)
+    base = {
+        "repo_id": repo_id,
+        "path": str(path),
+        "status": None,
+        "severity_tier": None,
+        "overall_risk_score": None,
+    }
+    if path.is_file():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:  # noqa: BLE001
+            return {
+                **base,
+                "ok": False,
+                "error": f"security scan result is unreadable: {type(e).__name__}: {e}",
+            }
+        return _scan_verdict(
+            base,
+            str(data.get("status") or "unknown").lower(),
+            str(data.get("severity_tier") or "unknown").lower(),
+            data.get("overall_risk_score"),
+        )
+
+    row = _scan_from_catalog(repo_id)
+    if row is not None:
+        return _scan_verdict(
+            base,
+            str(row.get("status") or "unknown").lower(),
+            str(row.get("severity_tier") or "unknown").lower(),
+            row.get("overall_risk_score"),
+        )
+
+    return {
+        **base,
+        "ok": False,
+        "error": (
+            "security scan required before serving this Hugging Face model; "
+            f"run the scanner first, then retry. Expected {path}"
+        ),
     }
 
 
@@ -293,9 +623,10 @@ def _wipe_prior_runs(
     Wiping on launch keeps exactly one run per model+suite per scope.
     """
     from dbutils.run_meta import read_run_meta_for_pillar
+    from dbutils import fs_safe
 
     suffix = f"_{suite_key}_{_safe_slug(candidate)}"
-    for path in RESULTS_DIR.glob(f"*{suffix}*"):
+    for path in fs_safe.glob(RESULTS_DIR, f"*{suffix}*"):
         if path.suffix not in (".jsonl", ".log"):
             continue
         stem = _stem_from_artifact_path(path)
@@ -315,7 +646,7 @@ def start_run(
     Caller must have passed validate_launch first; this function assumes
     allowlisted inputs.
     """
-    from frontend.run_launch import build_launch_plan, persist_run_meta_dir, reused_slug
+    from frontend.run_launch import build_launch_plan, persist_run_meta_dir
 
     force_private = suite_key.startswith(CUSTOM_PREFIX)
     plan = build_launch_plan(
@@ -326,26 +657,27 @@ def start_run(
         suite_key=suite_key,
         max_tokens=max_tokens,
     )
-    if plan.reused:
-        stem = reused_slug(plan) or predict_stem(suite_key, candidate)
-        return stem, True, plan.visibility
+    # Explicit browser Start/Rerun must always spawn a fresh run (see scan_launch).
 
     combo = (
         candidate, judge, suite_key, max_tokens,
         *inflight_scope_key(plan.visibility, plan.owner_user_id),
     )
     with _LOCK:
-        existing = _INFLIGHT.get(combo)
-        if existing and _RUNNING.get(existing) is not None \
-                and _RUNNING[existing].poll() is None:
+        existing = check_inflight_combo(_RUNNING, _INFLIGHT, combo)
+        if existing:
             return existing, True, plan.visibility
 
-        # Fresh run — drop prior outputs for this model+suite (same scope
-        # only) so the table shows one current result instead of
-        # accumulating stale runs.
-        _wipe_prior_runs(
-            suite_key, candidate, visibility=plan.visibility, owner_user_id=plan.owner_user_id
+        from frontend.purge_rerun import purge_eval_for_launch
+
+        err = purge_eval_for_launch(
+            suite_key,
+            candidate,
+            visibility=plan.visibility,
+            owner_user_id=plan.owner_user_id,
         )
+        if err:
+            raise OutputDirError(err)
 
         if docker_launch.use_docker():
             docker_launch.ensure_stack("evaluator")
@@ -354,9 +686,11 @@ def start_run(
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         persist_run_meta_dir(RESULTS_DIR / stem, plan)
         log_path = RESULTS_DIR / f"{stem}.log"
+        lock_file = _run_lock_path(stem)
         cmd = build_command(candidate, judge, suite_key, max_tokens, stem)
+        cmd_str = " ".join(cmd)
         with log_path.open("wb") as log_f:
-            log_f.write(f"=== command: {' '.join(cmd)} ===\n".encode())
+            log_f.write(f"=== command: {cmd_str} ===\n".encode())
             # PYTHONUNBUFFERED: stream the runner's stdout into the log as it
             # happens — without it, a killed process loses everything Python
             # had buffered (observed: a .log with only this header line).
@@ -373,9 +707,122 @@ def start_run(
                 # question, so orphaned completion is safe and useful).
                 start_new_session=True,
             )
+        if not run_lock.try_acquire(
+            lock_file,
+            pid=proc.pid,
+            command=cmd_str,
+            source=run_lock.FRONTEND_SOURCE,
+        ):
+            proc.terminate()
+            return stem, True, plan.visibility
         _RUNNING[stem] = proc
         _INFLIGHT[combo] = stem
+        threading.Thread(
+            target=_watch_process,
+            args=(stem, proc, lock_file),
+            daemon=True,
+        ).start()
         return stem, False, plan.visibility
+
+
+def build_dcc_command(
+    candidate: str, judge: str, suite_key: str, max_tokens: int, stem: str
+) -> list[str]:
+    """argv for the DCC orchestrator subprocess (list form — never a shell).
+
+    Runs ``evaluator.dcc_orchestrate`` as a module from the repo root, which
+    validates the HF model, serves it on the DCC, runs the eval against the vLLM
+    endpoint, and tears the job down. ``--output-name``/``--slug`` = the predicted
+    stem so the status poller can find the results + per-run job state. No Docker
+    here: the orchestrator needs Slurm access and runs on the host; only the
+    candidate inference happens on the cluster.
+    """
+    cfg = _suite_cfg(suite_key)
+    return [
+        sys.executable, "-m", "evaluator.dcc_orchestrate",
+        "--hf-repo", candidate,
+        "--judge-model", judge,
+        "--suite", str(cfg["suite"]),
+        "--rubric", str(cfg["rubric"]),
+        "--system-prompt", str(cfg["system_prompt"]),
+        "--judge-prompt", str(JUDGE_PROMPT),
+        "--max-tokens", str(max_tokens),
+        "--slug", stem,
+        "--output-name", stem,
+    ]
+
+
+def start_dcc_run(
+    candidate: str, judge: str, suite_key: str, max_tokens: int
+) -> tuple[str, bool]:
+    """Spawn a DCC orchestration subprocess. Returns (slug, was_already_running).
+
+    Mirrors ``start_run`` (dedupe, wipe prior, predict stem, log-redirected
+    Popen, registry) but launches the orchestrator instead of the runner. The
+    caller must have passed ``validate_hf_candidate`` + ``validate_dcc_params``.
+    """
+    combo = (candidate, judge, suite_key, max_tokens, "dcc")
+    with _LOCK:
+        existing = _INFLIGHT.get(combo)
+        if existing and _RUNNING.get(existing) is not None \
+                and _RUNNING[existing].poll() is None:
+            return existing, True
+
+        _wipe_prior_runs(suite_key, candidate)
+
+        stem = predict_stem(suite_key, candidate)
+        RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        log_path = RESULTS_DIR / f"{stem}.log"
+        lock_file = _run_lock_path(stem)
+        cmd = build_dcc_command(candidate, judge, suite_key, max_tokens, stem)
+        cmd_str = " ".join(cmd)
+        with log_path.open("wb") as log_f:
+            log_f.write(f"=== command: {cmd_str} ===\n".encode())
+            env = os.environ.copy()
+            env["PYTHONUNBUFFERED"] = "1"
+            # cwd = repo root so `-m evaluator.dcc_orchestrate` resolves and its
+            # `from scripts.dcc import vllm` / `from evaluator import hf_intake`
+            # imports work.
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(ROOT),
+                stdout=log_f,
+                stderr=subprocess.STDOUT,
+                env=env,
+                start_new_session=True,
+            )
+        if not run_lock.try_acquire(
+            lock_file,
+            pid=proc.pid,
+            command=cmd_str,
+            source=run_lock.FRONTEND_SOURCE,
+        ):
+            proc.terminate()
+            return stem, True
+        _RUNNING[stem] = proc
+        _INFLIGHT[combo] = stem
+        threading.Thread(
+            target=_watch_process,
+            args=(stem, proc, lock_file),
+            daemon=True,
+        ).start()
+        return stem, False
+
+
+def _dcc_phase(log_path: Path) -> str | None:
+    """The latest ``PHASE:`` marker the orchestrator wrote to the run log, or
+    None for a non-DCC run (the runner writes no such markers)."""
+    if not log_path.is_file():
+        return None
+    phase: str | None = None
+    try:
+        for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            s = line.strip()
+            if s.startswith("PHASE:"):
+                phase = s[len("PHASE:"):].strip()
+    except OSError:
+        return None
+    return phase
 
 
 def get_status(
@@ -383,8 +830,10 @@ def get_status(
 ) -> dict:
     """Run status from the results artifact + the process registry.
 
-    complete: file has one row per suite question
-    running:  process alive (or file growing)
+    done:     file has one row per suite question
+    queued / provisioning / serving / evaluating / tearing-down:
+              DCC process is alive and phase markers are available
+    running:  non-DCC process alive (or file growing)
     failed:   process exited non-zero, or exited with an incomplete file
 
     ``visibility``/``owner_user_id`` are accepted for signature parity with
@@ -407,7 +856,7 @@ def get_status(
 
     if total and progress >= total:
         return {
-            "status": "complete",
+            "status": "done",
             "progress": progress,
             "total": total,
             "message": "",
@@ -416,16 +865,46 @@ def get_status(
 
     log_path = RESULTS_DIR / f"{slug}.log"
     rel_log = f"evaluator/results/{slug}.log"
+    # DCC orchestration writes phase markers (provisioning -> serving ->
+    # evaluating -> tearing-down); None for a gateway run, which the template
+    # simply doesn't render.
+    phase = _dcc_phase(log_path)
 
-    proc = _RUNNING.get(slug)
-    if proc is not None and proc.poll() is None:
+    def _running_payload(status: str) -> dict:
         return {
-            "status": "running",
+            "status": status,
             "progress": progress,
             "total": total,
             "log_path": rel_log,
+            "phase": phase,
             **run_log_payload(log_path),
         }
+
+    proc = _RUNNING.get(slug)
+    if proc is not None and proc.poll() is None:
+        status = phase or "running"
+        if phase is None and log_path.is_file():
+            try:
+                head = log_path.read_text(encoding="utf-8", errors="replace")[:500]
+            except OSError:
+                head = ""
+            if "evaluator.dcc_orchestrate" in head:
+                status = "queued"
+        return _running_payload(status)
+
+    # Flask/web restart: PID registry is empty but the durable lock + log
+    # still show the docker/host job is alive.
+    if run_lock.is_active(_run_lock_path(slug)):
+        status = phase or "running"
+        if phase is None and log_path.is_file():
+            try:
+                head = log_path.read_text(encoding="utf-8", errors="replace")[:500]
+            except OSError:
+                head = ""
+            if "evaluator.dcc_orchestrate" in head:
+                status = "queued"
+        return _running_payload(status)
+
     if proc is not None:  # exited without a complete file
         return {
             "status": "failed",
@@ -433,15 +912,17 @@ def get_status(
             "total": total,
             "message": status_message(log_path, failed=True),
             "log_path": rel_log,
+            "phase": phase,
         }
     if path.is_file():
-        # partial file, no registered process (e.g. Flask restarted mid-run)
+        # partial file, no registered process and no active lock
         return {
             "status": "failed",
             "progress": progress,
             "total": total,
             "message": status_message(log_path, failed=True),
             "log_path": rel_log,
+            "phase": phase,
         }
     return {"status": "not_found", "progress": 0, "total": 0, "message": ""}
 
@@ -453,7 +934,10 @@ def is_eval_run_in_progress(slug: str) -> bool:
     proc = _RUNNING.get(slug)
     if proc is not None and proc.poll() is None:
         return True
-    return get_status(slug)["status"] == "running"
+    if run_lock.is_active(_run_lock_path(slug)):
+        return True
+    status = get_status(slug)["status"]
+    return status in {"running", "queued", "provisioning", "serving", "evaluating", "tearing-down"}
 
 
 def validate_custom_questions(
@@ -528,7 +1012,14 @@ def get_launch_options() -> dict:
         "candidates": list(candidates),
         "judges": list(JUDGE_MODELS),
         "suites": [
-            {"key": k, "label": v["label"], "n": suite_question_count(k)}
+            {
+                "key": k,
+                "label": v["label"],
+                "n": suite_question_count(k),
+                "scoring": v.get("scoring", "judge"),
+                "description": v.get("description", ""),
+                "example": v.get("example", ""),
+            }
             for k, v in SUITES.items()
         ],
         "families": {m: model_family(m) for m in (*candidates, *JUDGE_MODELS)},

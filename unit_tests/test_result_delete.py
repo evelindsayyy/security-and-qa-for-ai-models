@@ -74,10 +74,41 @@ class DeleteScanTest(unittest.TestCase):
             with mock.patch("frontend.scan_data.OUTPUT_DIR", out), mock.patch(
                 "frontend.scan_launch.inflight_scan_slugs", return_value=set()
             ), mock.patch("frontend.scan_db_data.available", return_value=True), mock.patch(
-                "frontend.scan_db_data.delete_run_by_slug", return_value=True
+                "frontend.scan_db_data.resolve_delete_run_id", return_value="scan-uuid"
+            ), mock.patch(
+                "frontend.scan_db_data.delete_run_by_id", return_value=True
             ) as db_del:
                 self.assertIsNone(delete_scan(slug))
-            db_del.assert_called_once_with(slug, visibility="public", owner_user_id=None)
+            db_del.assert_called_once_with("scan-uuid")
+
+    def test_scan_delete_surfaces_db_failure_after_disk_removed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            slug = "TinyLlama--TinyLlama-1.1B-Chat-v1.0"
+            scan_dir = out / slug
+            scan_dir.mkdir()
+            (scan_dir / "scan_result.json").write_text(
+                json.dumps({
+                    "model_id": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+                    "scan_metadata": {"scanned_at": "2026-06-29T09:58:34-04:00"},
+                }),
+                encoding="utf-8",
+            )
+            with mock.patch("frontend.scan_data.OUTPUT_DIR", out), mock.patch(
+                "frontend.scan_launch.inflight_scan_slugs", return_value=set()
+            ), mock.patch("frontend.scan_db_data.available", return_value=True), mock.patch(
+                "frontend.scan_db_data.resolve_delete_run_id", return_value="scan-uuid"
+            ), mock.patch(
+                "frontend.scan_db_data.delete_run_by_id", return_value=False
+            ), mock.patch(
+                "frontend.scan_db_data.delete_run", return_value=False
+            ), mock.patch(
+                "frontend.scan_db_data.delete_run_by_slug", return_value=False
+            ):
+                err = delete_scan(slug)
+            self.assertIsNotNone(err)
+            self.assertIn("not removed", err or "")
+            self.assertFalse(scan_dir.exists())
 
 
 class DeleteSafetyTest(unittest.TestCase):
@@ -114,9 +145,72 @@ class DeleteSafetyTest(unittest.TestCase):
                 "frontend.safety_data.ROOT", out
             ), mock.patch("frontend.safety_launch.inflight_safety_keys", return_value=set()), mock.patch(
                 "frontend.safety_db_data.available", return_value=True
-            ), mock.patch("frontend.safety_db_data.delete_run_by_slug", return_value=True) as db_del:
+            ), mock.patch(
+                "frontend.safety_db_data.resolve_delete_run_id", return_value="run-uuid"
+            ), mock.patch(
+                "frontend.safety_db_data.delete_run_by_id", return_value=True
+            ) as db_del:
                 self.assertIsNone(delete_safety(slug, profile))
-            db_del.assert_called_once_with(slug, visibility="public", owner_user_id=None)
+            db_del.assert_called_once_with("run-uuid")
+
+    def test_stale_disk_keys_do_not_block_db_delete(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            slug, profile = "llama-4-scout", "base"
+            prof_dir = out / slug / profile
+            prof_dir.mkdir(parents=True)
+            (prof_dir / "merged_safety_result.json").write_text(
+                json.dumps({
+                    "gateway_model_id": slug,
+                    "completed_at": "2026-01-01T00:00:00Z",
+                }),
+                encoding="utf-8",
+            )
+            with mock.patch("frontend.safety_data.OUTPUT_DIR", out), mock.patch(
+                "frontend.safety_data.ROOT", out
+            ), mock.patch("frontend.safety_launch.inflight_safety_keys", return_value=set()), mock.patch(
+                "frontend.safety_db_data.available", return_value=True
+            ), mock.patch(
+                "frontend.safety_db_data.resolve_delete_run_id", return_value="run-uuid"
+            ), mock.patch(
+                "frontend.safety_db_data.delete_run_by_id", return_value=True
+            ) as by_id, mock.patch(
+                "frontend.safety_db_data.delete_run"
+            ) as by_keys:
+                self.assertIsNone(delete_safety(slug, profile))
+            by_id.assert_called_once_with("run-uuid")
+            by_keys.assert_not_called()
+
+    def test_surfaces_db_failure_after_disk_removed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            slug, profile = "llama-4-scout", "base"
+            prof_dir = out / slug / profile
+            prof_dir.mkdir(parents=True)
+            (prof_dir / "merged_safety_result.json").write_text(
+                json.dumps({
+                    "gateway_model_id": slug,
+                    "completed_at": "2026-06-29T09:58:34-04:00",
+                }),
+                encoding="utf-8",
+            )
+            with mock.patch("frontend.safety_data.OUTPUT_DIR", out), mock.patch(
+                "frontend.safety_data.ROOT", out
+            ), mock.patch("frontend.safety_launch.inflight_safety_keys", return_value=set()), mock.patch(
+                "frontend.safety_db_data.available", return_value=True
+            ), mock.patch(
+                "frontend.safety_db_data.resolve_delete_run_id", return_value="run-uuid"
+            ), mock.patch(
+                "frontend.safety_db_data.delete_run_by_id", return_value=False
+            ), mock.patch(
+                "frontend.safety_db_data.delete_run", return_value=False
+            ), mock.patch(
+                "frontend.safety_db_data.delete_run_by_slug", return_value=False
+            ):
+                err = delete_safety(slug, profile)
+            self.assertIsNotNone(err)
+            self.assertIn("not removed", err or "")
+            self.assertFalse(prof_dir.exists())
 
     def test_deletes_legacy_merged_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -154,6 +248,45 @@ class DeleteEvalRunTest(unittest.TestCase):
             ), mock.patch("frontend.eval_db_data.available", return_value=False):
                 self.assertIsNone(delete_eval_run(slug))
                 self.assertEqual(list(results.glob(f"{slug}*")), [])
+
+    def test_combo_delete_purges_suite_candidate(self) -> None:
+        from frontend.eval_run_data import delete_eval_combo_from_slug
+
+        detail = {
+            "slug": "20260624T152651Z_smoke_v1_stub-model",
+            "candidate_model": "stub-model",
+            "suite_version": "smoke_v1",
+            "judge_model": "stub-judge",
+        }
+        with mock.patch(
+            "frontend.eval_run_data.get_run_detail", return_value=detail
+        ), mock.patch(
+            "frontend.purge_rerun.purge_eval_for_launch", return_value=None
+        ) as purge:
+            err = delete_eval_combo_from_slug("20260624T152651Z_smoke_v1_stub-model")
+        self.assertIsNone(err)
+        purge.assert_called_once_with(
+            "smoke_v1",
+            "stub-model",
+            visibility="public",
+            owner_user_id=None,
+        )
+
+    def test_delete_confirm_never_returns_none(self) -> None:
+        from frontend import create_app
+        from frontend.result_delete import eval_delete_context
+
+        app = create_app({"TESTING": True})
+        with app.app_context(), app.test_request_context(), mock.patch(
+            "frontend.eval_launch.is_eval_run_in_progress", return_value=False
+        ), mock.patch(
+            "frontend.eval_run_data.get_run_detail", return_value=None
+        ):
+            ctx = eval_delete_context("missing-slug")
+        self.assertIsNotNone(ctx)
+        assert ctx is not None
+        self.assertTrue(ctx.get("delete_disabled"))
+        self.assertIn("No eval run found", ctx.get("error_message") or "")
 
 
 class DeleteConfirmContextTest(unittest.TestCase):

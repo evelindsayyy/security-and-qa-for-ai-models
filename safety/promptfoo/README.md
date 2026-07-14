@@ -123,10 +123,22 @@ Re-run **Run red-team** (or `./safety/run_safety.sh --skip-garak`).
 PYTHONPATH=. uv run python -m safety.merge \
   --promptfoo safety/promptfoo/output/${SLUG}/safety_result.json \
   --promptfoo safety/promptfoo/output/${SLUG}/redteam_safety_result.json \
-  -o safety/output/${SLUG}/merged_safety_result.json
+  -o safety/output/${SLUG}/base/merged_safety_result.json
 ```
 
 Add `--garak` if you also have a Garak export. See [`../README.md`](../README.md).
+
+## Troubleshooting
+
+### `Failed query: update "evals" set "prompts" = ?`
+
+Promptfoo's internal SQLite eval-history database (`PROMPTFOO_CONFIG_DIR`) was
+shared across concurrent runs. Each run now uses an isolated directory:
+`safety/output/<slug>/<profile>/.promptfoo`. If you see this error on an older
+checkout, rebuild the promptfoo image and re-run with a current `safety/run.py`.
+
+Concurrent safety runs for **different** models are allowed; they must not share
+one `PROMPTFOO_CONFIG_DIR`.
 
 ## Files
 

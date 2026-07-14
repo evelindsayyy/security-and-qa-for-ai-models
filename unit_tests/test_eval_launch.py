@@ -14,16 +14,33 @@ from __future__ import annotations
 import os
 
 # Browser launches default to Docker; unit tests exercise the host argv path.
-os.environ.setdefault("FRONTEND_LAUNCH_MODE", "host")
+# Force (don't setdefault) so a developer .env with FRONTEND_LAUNCH_MODE=docker
+# cannot break spawn tests that patch subprocess.Popen.
+os.environ["FRONTEND_LAUNCH_MODE"] = "host"
 
+import json
 import re
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from frontend import create_app
 from frontend import eval_launch
+
+
+def _alive_proc(*, pid: int = 4242) -> mock.Mock:
+    """Mock Popen that stays in-flight for watch-thread / dedupe tests.
+
+    ``Mock.wait()`` returns immediately by default, which lets the new
+    run-lock watch thread clear ``_RUNNING`` before a duplicate POST.
+    """
+    proc = mock.Mock()
+    proc.poll.return_value = None
+    proc.pid = pid
+    proc.wait = mock.Mock(side_effect=lambda *a, **k: threading.Event().wait(timeout=60))
+    return proc
 
 
 def _isolate_eval_output(test_case: unittest.TestCase) -> Path:
@@ -133,6 +150,80 @@ class ModelFamilyTest(unittest.TestCase):
         self.assertEqual(eval_launch.model_family("Qwen/Qwen2.5-7B-Instruct"), "qwen")
 
 
+class SuiteMetadataTest(unittest.TestCase):
+    """Each task suite carries a plain-language description + example question,
+    surfaced by get_launch_options for the on-page suite tooltips."""
+
+    def setUp(self) -> None:
+        patcher = mock.patch.object(
+            eval_launch, "candidate_models",
+            return_value=eval_launch._CANDIDATE_FALLBACK)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_every_suite_has_description_and_example(self) -> None:
+        for key, cfg in eval_launch.SUITES.items():
+            self.assertTrue(cfg.get("description"), f"{key} missing description")
+            self.assertTrue(cfg.get("example"), f"{key} missing example")
+
+    def test_launch_options_surfaces_suite_blurbs(self) -> None:
+        opts = eval_launch.get_launch_options()
+        self.assertTrue(opts["suites"])
+        for s in opts["suites"]:
+            self.assertTrue(s.get("description"), f"{s['key']} blurb missing")
+            self.assertTrue(s.get("example"), f"{s['key']} example missing")
+
+
+# Suites whose answer is checked by RUNNING it (execution_eval), not by the LLM
+# judge. The runner auto-skips the judge for these (scoring=execution).
+_EXPECTED_EXECUTION_SUITES = frozenset(
+    {"sql_duke_v2", "json_duke_v1", "numeric_duke_v1"})
+
+
+class SuiteCoverageTest(unittest.TestCase):
+    """The launch form must surface the execution-scored suites (so the Exec
+    column has runs to show) alongside the judge suites, and every suite must
+    declare a scoring type with contract files that actually resolve."""
+
+    def setUp(self) -> None:
+        patcher = mock.patch.object(
+            eval_launch, "candidate_models",
+            return_value=eval_launch._CANDIDATE_FALLBACK)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_execution_suites_present_and_marked(self) -> None:
+        for key in _EXPECTED_EXECUTION_SUITES:
+            self.assertIn(key, eval_launch.SUITES, f"{key} not surfaced")
+            self.assertEqual(eval_launch.SUITES[key].get("scoring"), "execution",
+                             f"{key} not marked scoring=execution")
+
+    def test_every_suite_declares_a_known_scoring_type(self) -> None:
+        for key, cfg in eval_launch.SUITES.items():
+            self.assertIn(cfg.get("scoring"), ("judge", "execution"),
+                          f"{key} missing/invalid scoring")
+
+    def test_every_suite_contract_file_resolves(self) -> None:
+        # Guards against a typo'd rubric/prompt path — build_command reads all
+        # three, so a missing file would crash the launch (not the judge-skip).
+        for key, cfg in eval_launch.SUITES.items():
+            for field in ("suite", "rubric", "system_prompt"):
+                self.assertTrue(cfg[field].is_file(),
+                                f"{key}.{field} does not exist: {cfg[field]}")
+
+    def test_launch_options_surfaces_scoring(self) -> None:
+        by_key = {s["key"]: s.get("scoring")
+                  for s in eval_launch.get_launch_options()["suites"]}
+        self.assertEqual(by_key.get("sql_duke_v2"), "execution")
+        self.assertEqual(by_key.get("it_support_v1"), "judge")
+
+    def test_build_command_targets_the_execution_suite_file(self) -> None:
+        cmd = eval_launch.build_command(
+            "gpt-5-chat", "Llama 4 Maverick", "sql_duke_v2", 500, "stemX")
+        self.assertIn("--suite", cmd)
+        self.assertIn("sql_duke_v2", cmd[cmd.index("--suite") + 1])
+
+
 class BuildCommandTest(unittest.TestCase):
     def test_command_is_argv_list_with_expected_flags(self) -> None:
         cmd = eval_launch.build_command(
@@ -178,12 +269,12 @@ class GetStatusTest(unittest.TestCase):
         s = eval_launch.get_status("20990101T000000Z_it_support_v1_x")
         self.assertEqual(s["status"], "not_found")
 
-    def test_complete_when_rows_match_suite_size(self) -> None:
+    def test_done_when_rows_match_suite_size(self) -> None:
         slug = "20990101T000000Z_it_support_v1_x"
         n = eval_launch.suite_question_count("it_support_v1")
         (self.dir / f"{slug}.jsonl").write_text("{}\n" * n, encoding="utf-8")
         s = eval_launch.get_status(slug)
-        self.assertEqual(s["status"], "complete")
+        self.assertEqual(s["status"], "done")
         self.assertEqual(s["progress"], n)
 
     def test_running_while_registered_process_alive(self) -> None:
@@ -218,6 +309,15 @@ class LaunchRoutesTest(unittest.TestCase):
         )
         patcher.start()
         self.addCleanup(patcher.stop)
+
+        # The gateway eval path now requires a cleared safety gate; keep the
+        # existing spawn tests green by treating every model as cleared. The
+        # block behavior is exercised in test_start_blocked_when_safety_missing.
+        gate = mock.patch(
+            "frontend.pipeline.require_ready_for_downstream", return_value=None
+        )
+        gate.start()
+        self.addCleanup(gate.stop)
         # /eval-run/new and /eval-run/start require a signed-in, allowlisted
         # user — force the dev-auth bypass on regardless of the real .env
         # AUTH_ENABLED.
@@ -249,8 +349,7 @@ class LaunchRoutesTest(unittest.TestCase):
         self.assertEqual(r.status_code, 400)
 
     def test_start_valid_spawns_and_redirects(self) -> None:
-        fake_proc = mock.Mock()
-        fake_proc.poll.return_value = None
+        fake_proc = _alive_proc()
         with mock.patch.object(
             eval_launch.subprocess, "Popen", return_value=fake_proc
         ) as popen:
@@ -266,8 +365,7 @@ class LaunchRoutesTest(unittest.TestCase):
         self.assertIn("GPT 4.1 Mini", argv)
 
     def test_duplicate_start_returns_same_slug_without_second_spawn(self) -> None:
-        fake_proc = mock.Mock()
-        fake_proc.poll.return_value = None  # still running
+        fake_proc = _alive_proc()
         data = {
             "candidate": "gpt-5.1-chat", "judge": "Llama 4 Maverick",
             "suite": "policy_qa_v1.1", "max_tokens": "500",
@@ -284,6 +382,20 @@ class LaunchRoutesTest(unittest.TestCase):
         r = self.client.get("/eval-run/nonexistent-slug/status")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.get_json()["status"], "not_found")
+
+    def test_start_blocked_when_safety_missing(self) -> None:
+        with mock.patch(
+            "frontend.pipeline.require_ready_for_downstream",
+            return_value="safety red-teaming required before this step",
+        ), mock.patch.object(eval_launch.subprocess, "Popen") as popen:
+            r = self.client.post("/eval-run/start", data={
+                "candidate": "GPT 4.1 Mini", "judge": "Llama 4 Maverick",
+                "suite": "it_support_v1", "max_tokens": "500",
+            })
+        self.assertEqual(r.status_code, 400)
+        self.assertIn(b"safety red-teaming required", r.data)
+        # The gate must short-circuit before any subprocess is spawned.
+        popen.assert_not_called()
 
     def test_delete_requires_login(self) -> None:
         with self.client.session_transaction() as sess:
@@ -400,6 +512,11 @@ class CustomRouteTest(unittest.TestCase):
         )
         cand.start()
         self.addCleanup(cand.stop)
+        gate = mock.patch(
+            "frontend.pipeline.require_ready_for_downstream", return_value=None
+        )
+        gate.start()
+        self.addCleanup(gate.stop)
         self.app = create_app({"TESTING": True, "SECRET_KEY": "test"})
         self.client = self.app.test_client()
         with self.client.session_transaction() as sess:
@@ -414,8 +531,7 @@ class CustomRouteTest(unittest.TestCase):
         self.assertEqual(r.status_code, 400)
 
     def test_valid_custom_spawns_and_redirects(self) -> None:
-        fake = mock.Mock()
-        fake.poll.return_value = None
+        fake = _alive_proc()
         with mock.patch.object(eval_launch.subprocess, "Popen", return_value=fake):
             r = self.client.post("/eval-run/start-custom", data={
                 "candidate": "gpt-5-chat", "judge": "Llama 4 Maverick",
@@ -424,6 +540,106 @@ class CustomRouteTest(unittest.TestCase):
             })
         self.assertEqual(r.status_code, 302)
         self.assertIn("custom_", r.headers["Location"])
+
+
+class UnreadableEvalOutputTest(unittest.TestCase):
+    def test_all_suite_keys_tolerates_unreadable_custom_dir(self) -> None:
+        with mock.patch("dbutils.fs_safe.is_dir", return_value=False):
+            keys = eval_launch._all_suite_keys()
+        self.assertIn("it_support_v1", keys)
+
+    def test_wipe_prior_runs_skips_unreadable_glob_match(self) -> None:
+        root = _isolate_eval_output(self)
+        good = root / "20260101_120000_gpt-5-chat_it-support.jsonl"
+        good.write_text('{"x":1}\n', encoding="utf-8")
+
+        real_glob = Path.glob
+
+        def patched_glob(self, pattern):
+            for match in real_glob(self, pattern):
+                if "bad" in match.name:
+                    raise PermissionError("denied")
+                yield match
+
+        bad = root / "20260101_bad_gpt-5-chat_it-support.jsonl"
+        bad.write_text('{"x":1}\n', encoding="utf-8")
+        with mock.patch.object(Path, "glob", patched_glob):
+            eval_launch._wipe_prior_runs(
+                "it_support_v1", "gpt-5-chat", visibility="public", owner_user_id=None
+            )
+        self.assertTrue(good.is_file())
+        self.assertTrue(bad.is_file())
+
+
+class RerunReusesScanHistoryTest(unittest.TestCase):
+    """Re-running a past eval goes through the same gated /eval-run/start, so it
+    reuses the model's existing safety history and never triggers a new scan.
+
+    A model with a completed non-high-risk safety run (under ANY red-team
+    profile) is approved from history; a model with no history is blocked (you
+    would run safety first). This locks in "old evals reuse prior scannings".
+    """
+
+    def setUp(self) -> None:
+        # /eval-run/start is @require_login — use the dev-auth bypass + a session.
+        env = mock.patch.dict(os.environ, {"AUTH_ENABLED": "0"})
+        env.start()
+        self.addCleanup(env.stop)
+        cand = mock.patch.object(
+            eval_launch, "candidate_models",
+            return_value=eval_launch._CANDIDATE_FALLBACK,
+        )
+        cand.start()
+        self.addCleanup(cand.stop)
+        self.client = create_app({"TESTING": True, "SECRET_KEY": "test"}).test_client()
+        with self.client.session_transaction() as sess:
+            sess["user"] = {"id": "u-test", "netid": "testuser", "display_name": "Test"}
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+
+    def _history(self, tier: str) -> list[tuple[str, Path]]:
+        """A completed safety run already in history, under a non-base profile."""
+        p = Path(self._tmp.name) / "merged_safety_result.json"
+        p.write_text(json.dumps({"status": "complete", "composite_tier": tier}),
+                     encoding="utf-8")
+        return [("education", p)]
+
+    def _rerun_post(self):
+        # a re-run posts the past run's params to the same launch endpoint
+        return self.client.post("/eval-run/start", data={
+            "candidate": "GPT 4.1 Mini", "judge": "Llama 4 Maverick",
+            "suite": "it_support_v1", "max_tokens": "500",
+        })
+
+    def test_rerun_start_reuses_existing_safety_history(self) -> None:
+        from frontend import pipeline
+        with mock.patch.object(pipeline, "_safety_runs_from_ui_catalog",
+                               return_value=[]), \
+             mock.patch.object(pipeline, "_safety_result_paths",
+                               return_value=self._history("medium")), \
+             mock.patch.object(eval_launch, "start_run",
+                               return_value=("slug1", False, "public")) as sr:
+            r = self._rerun_post()
+        # existing history approves the re-run — launched, no new scan triggered
+        self.assertEqual(r.status_code, 302)
+        sr.assert_called_once()
+
+    def test_rerun_start_blocked_without_history(self) -> None:
+        from frontend import pipeline
+        with mock.patch.object(pipeline, "_safety_runs_from_ui_catalog",
+                               return_value=[]), \
+             mock.patch.object(pipeline, "_safety_result_paths", return_value=[]), \
+             mock.patch.object(eval_launch, "start_run") as sr:
+            r = self._rerun_post()
+        self.assertEqual(r.status_code, 400)
+        self.assertIn(b"safety red-teaming required", r.data)
+        sr.assert_not_called()
+
+    def test_rerun_prefill_entrypoint_renders(self) -> None:
+        # /eval-run/new?from=<slug> is the re-run entry point; it renders even
+        # when the source run is missing (prefill just degrades to none).
+        r = self.client.get("/eval-run/new?from=nonexistent-slug")
+        self.assertEqual(r.status_code, 200)
 
 
 if __name__ == "__main__":

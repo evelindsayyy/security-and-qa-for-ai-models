@@ -1,16 +1,28 @@
 {% extends "base.html" %}
-{% from '_macros.html' import expandable, cli_eval_docker, start_button, delete_button with context %}
+{% from '_macros.html' import expandable, start_button, delete_button, rerun_button, staleness_badge, page_header, list_compare_tabs, empty_state with context %}
 
-{% block title %}Model comparison{% endblock %}
+{% block title %}Eval runs{% endblock %}
+
+{% block breadcrumbs %}
+<span><a href="{{ url_for('index') }}">Overview</a></span>
+<span class="text-text-subtle">›</span>
+<span class="breadcrumb-current">Eval</span>
+{% endblock %}
 
 {% block content %}
 <div class="eval-comparison">
-  <h1>Model comparison</h1>
-  <p>{{ start_button(url_for('eval_run_new'), '▶ Start a new run') }}</p>
+  {% set actions %}{{ start_button(url_for('eval_run_new'), '▶ Start eval') }}{% endset %}
+  {{ page_header('Eval runs', 'LLM-as-judge task suites — rubric dimensions, overall score, cost/quality tradeoffs.', actions) }}
 
-  <section class="key">
-    <h2>How to read this</h2>
-    <dl class="legend-grid">
+  {% if guide_rows %}
+  {% with title="Eval reference & guide", intro="Task rubrics, scoring, and reference comparisons." %}
+  {% include '_eval_guide.html' %}
+  {% endwith %}
+  {% endif %}
+
+  <section class="key card p-4 mb-6">
+    <h2 class="subsection-title">How to read this</h2>
+    <dl class="legend-grid mt-3">
       <dt>Score columns</dt>
       <dd>From each run's rubric (usually 1–5; tone 1–3). Higher is better; "—" means not graded.</dd>
       <dt class="num-sample">Overall</dt>
@@ -21,60 +33,84 @@
       <dd>Weighted tradeoff <code>w_Q·quality − w_C·cost − w_L·latency</code> (weights shown above the table); compares models within a suite, not an absolute score.</dd>
       <dt><span class="badge badge-warn">⚠ empty</span></dt>
       <dd>Candidate returned no text (often token budget) — re-run with higher max-tokens before comparing.</dd>
+      {% if has_comparison %}
+      <dt>Compare</dt>
+      <dd>Matrix of overall scores (suite × model). Best run per suite shown when multiple judges exist.</dd>
+      {% endif %}
     </dl>
   </section>
 
   {% if not has_runs %}
-    <p class="sub">
-      No runs yet. Use <b>Start a new run</b> above, or from repo root:
-      <code>{{ cli_eval_docker() }}</code>
-    </p>
+    {{ empty_state('No eval runs yet. Start an eval run from the button above.') }}
   {% else %}
-    <p class="sub">
-      {{ runs|length }} run{{ "" if runs|length == 1 else "s" }} ·
-      {{ n_summary }} question{{ "" if n_summary == "1" else "s" }} ·
-      judge: <b>{{ judge_summary }}</b>
-    </p>
-    {% if cost_perf_weights %}
-    <p class="sub">
-      <b>Value</b> = {{ "%g"|format(cost_perf_weights.w_quality) }}·quality −
-      {{ "%g"|format(cost_perf_weights.w_cost) }}·cost −
-      {{ "%g"|format(cost_perf_weights.w_latency) }}·latency
-      ({{ cost_perf_weights.preset }} weighting, each axis normalized 0–1 within a suite) ·
-      <b>q / $</b> = quality points per dollar
-    </p>
-    {% endif %}
+    {{ list_compare_tabs(has_comparison) }}
 
-    <div class="table-controls">
-      <label>Suite <select id="f-suite"><option value="">all</option></select></label>
-      <label>Candidate <select id="f-candidate"><option value="">all</option></select></label>
-      <label>Judge <select id="f-judge"><option value="">all</option></select></label>
-      <label>Group by
-        <select id="g-by">
-          <option value="">none</option>
-          <option value="candidate">candidate</option>
-          <option value="judge">judge</option>
-          <option value="suite">suite</option>
-        </select>
-      </label>
-      <span class="controls-hint">click Overall / Latency / Cost headers to sort ⇅ · click a row for per-question detail</span>
+    <div id="pillar-view-list" class="bench-view-panel" role="tabpanel">
+    <div class="pillar-toolbar card p-4 mb-4">
+      <div class="pillar-list-meta">
+        <p class="sub">
+          {{ runs|length }} run{{ "" if runs|length == 1 else "s" }} ·
+          {{ n_summary }} question{{ "" if n_summary == "1" else "s" }} ·
+          judge: <b>{{ judge_summary }}</b>
+        </p>
+      </div>
+      {% if cost_perf_weights %}
+      <style>
+        .cp-controls { margin: 0.3rem 0 0.6rem; }
+        .cp-sliders { display: flex; flex-wrap: wrap; gap: 0.9rem; align-items: center; margin-top: 0.35rem; }
+        .cp-sliders label { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85em; }
+        .cp-sliders input[type=range] { width: 92px; vertical-align: middle; }
+        .cp-sliders output { min-width: 1.8em; font-variant-numeric: tabular-nums; color: #555; }
+        .cp-preset { font-size: 0.8em; padding: 1px 7px; margin-left: 3px; cursor: pointer; }
+        .badge-frontier { background: #e6f4ea; color: #1a7f37; border: 1px solid #b7e0c4; border-radius: 3px; padding: 0 5px; font-size: 0.75em; margin-left: 4px; white-space: nowrap; }
+        .cp-hint { display: block; font-size: 0.78em; color: #777; margin-top: 0.3rem; }
+      </style>
+      <div class="cp-controls sub" id="cp-controls">
+        <b>Value</b> = <span id="cp-formula"></span> · <b>q / $</b> = quality points per dollar
+        <div class="cp-sliders">
+          <label>quality <input type="range" id="w-quality" min="0" max="3" step="0.05" value="{{ cost_perf_weights.w_quality }}"><output id="o-quality"></output></label>
+          <label>cost <input type="range" id="w-cost" min="0" max="3" step="0.05" value="{{ cost_perf_weights.w_cost }}"><output id="o-cost"></output></label>
+          <label>latency <input type="range" id="w-latency" min="0" max="3" step="0.05" value="{{ cost_perf_weights.w_latency }}"><output id="o-latency"></output></label>
+          <span class="cp-presets">presets:
+            <button type="button" class="cp-preset" data-q="1" data-c="1" data-l="0.5">Balanced</button>
+            <button type="button" class="cp-preset" data-q="0.5" data-c="2" data-l="1">Budget</button>
+            <button type="button" class="cp-preset" data-q="2" data-c="0.1" data-l="0.05">Quality-first</button>
+          </span>
+        </div>
+        <span class="cp-hint">✓ = on the quality-vs-cost efficient frontier (no model beats it on both). Drag a slider to re-weight <b>Value</b> live; each axis is normalized 0–1 within a suite.</span>
+      </div>
+      {% endif %}
+
+      <div class="table-controls pillar-table-controls mb-0">
+        <label>Tasks <select id="f-suite"><option value="">all</option></select></label>
+        <label>Candidate <select id="f-candidate"><option value="">all</option></select></label>
+        <label>Judge <select id="f-judge"><option value="">all</option></select></label>
+        <label>Group by
+          <select id="g-by">
+            <option value="">none</option>
+            <option value="candidate">candidate</option>
+            <option value="judge">judge</option>
+            <option value="suite">tasks</option>
+          </select>
+        </label>
+        <span class="controls-hint">click Overall / Latency / Cost headers to sort ⇅ · click a row for per-question detail</span>
+      </div>
     </div>
 
     <div class="table-wrap">
     <table class="run-table" id="runs-table">
       <thead>
         <tr>
-          <th>Candidate</th>
+          <th class="col-candidate min-w-[11rem]">Candidate</th>
           <th>Judge</th>
-          <th>Suite</th>
-          {% for dim in dim_columns %}
-          <th class="num">{{ dim|replace("_", " ") }}</th>
-          {% endfor %}
+          <th>Tasks</th>
           <th class="num sortable" data-sort="overall" style="cursor: pointer;">Overall <span class="s-ind">▼</span></th>
+          <th class="num" title="Functional pass-rate — execution-scored suites (SQL/JSON/numeric) only; the oracle, not the judge">Exec</th>
           <th class="num sortable" data-sort="latency" style="cursor: pointer;">Latency (mean / p95) <span class="s-ind"></span></th>
           <th class="num sortable" data-sort="cost" style="cursor: pointer;">Cost <span class="s-ind"></span></th>
           <th class="num sortable" data-sort="qpd" style="cursor: pointer;">q / $ <span class="s-ind"></span></th>
           <th class="num sortable" data-sort="utility" style="cursor: pointer;">Value <span class="s-ind"></span></th>
+          <th class="col-nowrap sortable" data-sort="when" style="cursor: pointer;">Completed <span class="s-ind"></span></th>
           <th class="col-nowrap">Status</th>
           <th class="col-actions">Actions</th>
         </tr>
@@ -87,23 +123,28 @@
             role="link"
             aria-label="Open eval run for {{ r.candidate_model }}"
             data-suite="{{ r.suite }}"
+            data-suite-label="{{ r.suite_display }}"
             data-candidate="{{ r.candidate_model }}"
             data-judge="{{ r.judge_model }}"
             data-overall="{{ r.overall if r.overall is not none else '' }}"
             data-latency="{{ r.mean_latency_ms }}"
             data-cost="{{ "%.4f"|format(r.total_cost_usd) }}"
             data-qpd="{{ "%.4f"|format(r.cost_perf.quality_per_dollar) if r.cost_perf and r.cost_perf.quality_per_dollar is not none else '' }}"
-            data-utility="{{ "%.4f"|format(r.cost_perf.utility) if r.cost_perf else '' }}">
-          <td>
+            data-utility="{{ "%.4f"|format(r.cost_perf.utility) if r.cost_perf else '' }}"
+            data-qnorm="{{ "%.6f"|format(r.cost_perf.quality_norm) if r.cost_perf else '' }}"
+            data-cnorm="{{ "%.6f"|format(r.cost_perf.cost_norm) if r.cost_perf else '' }}"
+            data-lnorm="{{ "%.6f"|format(r.cost_perf.latency_norm) if r.cost_perf else '' }}"
+            data-when="{{ r.timestamp or '' }}">
+          <td class="col-candidate min-w-[11rem]">
             <a class="model" href="{{ url_for('model_detail', slug=r.model_slug) }}">{{ r.candidate_model }}</a>
+            {{ staleness_badge(r.staleness) }}
             {% if r.is_best %}<span class="badge badge-best">best</span>{% endif %}
+            {% if r.cost_perf and r.cost_perf.on_frontier %}<span class="badge badge-frontier" title="On the quality-vs-cost efficient frontier — no model beats it on both quality and cost">✓ efficient</span>{% endif %}
           </td>
           <td><span class="dim">{{ r.judge_model }}</span></td>
-          <td><span class="dim">{{ r.suite }}</span></td>
-          {% for dim in dim_columns %}
-          <td class="num">{{ "%.2f"|format(r.dim_means[dim]) if r.dim_means.get(dim) is not none else "—" }}</td>
-          {% endfor %}
+          <td><span class="dim">{{ r.suite_display }}</span></td>
           <td class="num overall">{{ "%.2f"|format(r.overall) if r.overall is not none else "—" }}</td>
+          <td class="num">{% if r.execution_pass_rate is defined and r.execution_pass_rate is not none %}{{ "%.0f%%"|format(r.execution_pass_rate * 100) }}{% else %}<span class="dim">—</span>{% endif %}</td>
           <td class="num">{{ r.mean_latency_ms }} / {{ r.p95_latency_ms }} ms</td>
           <td class="num">${{ "%.4f"|format(r.total_cost_usd) }}</td>
           <td class="num">
@@ -113,7 +154,8 @@
               <span class="dim" title="{{ r.cost_perf.note }}">N/A</span>
             {% else %}—{% endif %}
           </td>
-          <td class="num">{% if r.cost_perf %}{{ "%+.2f"|format(r.cost_perf.utility) }}{% else %}—{% endif %}</td>
+          <td class="num cp-value">{% if r.cost_perf %}{{ "%+.2f"|format(r.cost_perf.utility) }}{% else %}—{% endif %}</td>
+          <td class="col-nowrap dim">{{ r.timestamp[:10] if r.timestamp and r.timestamp != "—" else "—" }}</td>
           <td class="col-long">
             {% if r.note %}
               {{ expandable(r.note, clamp=1) }}
@@ -124,6 +166,7 @@
             {% endif %}
           </td>
           <td class="col-actions" onclick="event.stopPropagation()">
+            {{ rerun_button(url_for('eval_run_new', from=r.slug), 'Rerun', 'btn-primary btn-sm' if r.staleness and r.staleness.stale else 'btn-secondary btn-sm') }}
             {{ delete_button(url_for('eval_run_delete_private' if view_mode == 'private' else 'eval_run_delete', slug=r.slug), 'Delete', classes='btn-danger btn-sm') }}
           </td>
         </tr>
@@ -131,7 +174,21 @@
       </tbody>
     </table>
     </div>
+    </div>
 
+    {% if has_comparison %}
+    <div id="pillar-view-compare" class="bench-view-panel" role="tabpanel" hidden>
+      <p class="sub">
+        Overall score per suite and model — click a cell for per-question detail.
+        Empty cells mean no run for that suite yet.
+      </p>
+      {% with detail_endpoint='eval_run_detail' %}
+      {% include '_pillar_comparison_matrix.html' %}
+      {% endwith %}
+    </div>
+    {% endif %}
+
+    <script src="{{ url_for('static', filename='table-sort.js') }}"></script>
     <script>
       (function () {
         const tbody = document.querySelector("#runs-table tbody");
@@ -139,12 +196,21 @@
         const nCols = document.querySelectorAll("#runs-table thead th").length;
         let sortKey = "overall", sortDir = -1, groupBy = "";
 
-        // populate filter dropdowns from the rows themselves
+        // Suite keys are versioned records (e.g. "email_drafting_v1"); users see
+        // the clean display name (data-suite-label) while filtering/grouping still
+        // key off the raw value. Word "suite" is surfaced to users as "tasks".
+        const suiteLabels = {};
+        rows.forEach(r => {
+          if (r.dataset.suite) suiteLabels[r.dataset.suite] = r.dataset.suiteLabel || r.dataset.suite;
+        });
+        const GROUP_WORDS = { suite: "tasks", candidate: "candidate", judge: "judge" };
+        const displayFor = (key, v) => (key === "suite" && suiteLabels[v]) ? suiteLabels[v] : v;
+
         for (const [id, key] of [["f-suite", "suite"], ["f-candidate", "candidate"], ["f-judge", "judge"]]) {
           const sel = document.getElementById(id);
           [...new Set(rows.map(r => r.dataset[key]))].sort().forEach(v => {
             const o = document.createElement("option");
-            o.value = v; o.textContent = v;
+            o.value = v; o.textContent = displayFor(key, v);
             sel.appendChild(o);
           });
           sel.addEventListener("change", render);
@@ -164,11 +230,6 @@
           });
         });
 
-        function num(row, key) {
-          const v = parseFloat(row.dataset[key]);
-          return isNaN(v) ? -Infinity : v;
-        }
-
         function render() {
           const fs = document.getElementById("f-suite").value;
           const fc = document.getElementById("f-candidate").value;
@@ -179,7 +240,14 @@
             (!fc || r.dataset.candidate === fc) &&
             (!fj || r.dataset.judge === fj));
 
-          visible.sort((a, b) => sortDir * (num(a, sortKey) - num(b, sortKey)));
+          visible.sort((a, b) => {
+            if (sortKey === "when") {
+              const av = a.dataset.when || "";
+              const bv = b.dataset.when || "";
+              return sortDir * av.localeCompare(bv);
+            }
+            return sortDir * (num(a, sortKey) - num(b, sortKey));
+          });
           if (groupBy) {
             visible.sort((a, b) => a.dataset[groupBy].localeCompare(b.dataset[groupBy]));
           }
@@ -193,7 +261,8 @@
               tr.className = "group-row";
               const td = document.createElement("td");
               td.colSpan = nCols;
-              td.textContent = groupBy + ": " + lastGroup +
+              td.textContent = (GROUP_WORDS[groupBy] || groupBy) + ": " +
+                displayFor(groupBy, lastGroup) +
                 " (" + visible.filter(x => x.dataset[groupBy] === lastGroup).length + " runs)";
               tr.appendChild(td);
               tbody.appendChild(tr);
@@ -201,8 +270,55 @@
             tbody.appendChild(r);
           }
         }
+
+        // ---- cost-perf weight sliders (v2): recompute Value live, client-side ----
+        // utility = wQ·quality_norm − wC·cost_norm − wL·latency_norm. The norms are
+        // per-row constants (server-computed); only the weights change, so no reload.
+        const cpS = {
+          quality: document.getElementById("w-quality"),
+          cost: document.getElementById("w-cost"),
+          latency: document.getElementById("w-latency"),
+        };
+        const cpFormula = document.getElementById("cp-formula");
+        function cpUpdateFormula() {
+          const g = k => parseFloat(cpS[k].value);
+          for (const k of ["quality", "cost", "latency"]) {
+            const o = document.getElementById("o-" + k);
+            if (o) o.textContent = cpS[k].value;
+          }
+          if (cpFormula) cpFormula.textContent =
+            g("quality") + "·quality − " + g("cost") + "·cost − " + g("latency") + "·latency";
+        }
+        function cpRecompute() {
+          const wq = parseFloat(cpS.quality.value),
+                wc = parseFloat(cpS.cost.value),
+                wl = parseFloat(cpS.latency.value);
+          for (const r of rows) {
+            const q = parseFloat(r.dataset.qnorm);
+            if (isNaN(q)) continue;                 // run with no cost_perf
+            const u = wq * q - wc * parseFloat(r.dataset.cnorm) - wl * parseFloat(r.dataset.lnorm);
+            r.dataset.utility = u.toFixed(4);
+            const cell = r.querySelector(".cp-value");
+            if (cell) cell.textContent = (u >= 0 ? "+" : "") + u.toFixed(2);
+          }
+          cpUpdateFormula();
+          render();
+        }
+        if (cpS.quality) {
+          Object.values(cpS).forEach(s => s.addEventListener("input", cpRecompute));
+          document.querySelectorAll(".cp-preset").forEach(b =>
+            b.addEventListener("click", () => {
+              cpS.quality.value = b.dataset.q;
+              cpS.cost.value = b.dataset.c;
+              cpS.latency.value = b.dataset.l;
+              cpRecompute();
+            }));
+          cpUpdateFormula();  // initial formula + slider read-outs (keeps server order)
+        }
       })();
     </script>
+    {% if has_comparison %}
+    {% endif %}
   {% endif %}
 </div>
 {% endblock %}

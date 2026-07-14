@@ -2,7 +2,7 @@
 
 Code+ 2026 — Duke Office of Information Technology
 
-Automated **nutrition labels** for Duke AI Gateway models: **security** (artifact scanning + inference safety) and **efficacy** (Duke judge suites + public benchmarks).
+Automated **report cards** for Duke AI Gateway models: **security** (artifact scanning + inference safety) and **efficacy** (Duke judge suites + public benchmarks).
 
 | Pillar | Question |
 |--------|----------|
@@ -18,18 +18,16 @@ Automated **nutrition labels** for Duke AI Gateway models: **security** (artifac
 | I want to… | Start here |
 |------------|------------|
 | **Run the UI** | [Quick start](#quick-start) |
-| **CLI and JSON API** — scans, safety, eval, benchmarks, tests | [`docs/cli.md`](docs/cli.md) · [`api/README.md`](api/README.md) |
+| **CLI and JSON API** — scans, safety, evaluation, benchmarks, tests | [`docs/cli.md`](docs/cli.md) · [`api/README.md`](api/README.md) |
 | **Docker model** (UI + pillar jobs) | [`docs/docker.md`](docs/docker.md) · [`docker/`](docker/) |
 | **Understand the system** (VM, Postgres, background jobs) | [`docs/architecture.md`](docs/architecture.md) |
 | **Postgres schema and ingest** | [`docs/data-model.md`](docs/data-model.md) · [`dbutils/README.md`](dbutils/README.md) |
-| **Authentication (OIDC, public/private views)** | [`auth/README.md`](auth/README.md) |
-| **HTTPS / TLS (production Caddy)** | [`docker/README.md`](docker/README.md) |
 | **Track A** (scanning + safety) | [`docs/track-a-framework.md`](docs/track-a-framework.md) |
 | **Track B** (evaluator + benchmarks) | [`docs/track-b-framework.md`](docs/track-b-framework.md) |
 | **Gateway models and HF scan tiers** | [`docs/gateway-models.md`](docs/gateway-models.md) |
 | **All documentation** | [`docs/README.md`](docs/README.md) |
 
-**Pillar READMEs:** [`scanner/`](scanner/README.md) · [`safety/`](safety/README.md) · [`evaluator/`](evaluator/README.md) · [`benchmarks/`](benchmarks/README.md) · [`frontend/`](frontend/README.md) · [`gateway/`](gateway/README.md)
+**Pillar READMEs:** [`scanner/`](scanner/README.md) · [`safety/`](safety/README.md) · [`evaluator/`](evaluator/README.md) · [`benchmarks/`](benchmarks/README.md) · [`personality/`](personality/README.md) · [`frontend/`](frontend/README.md) · [`gateway/`](gateway/README.md)
 
 ---
 
@@ -40,9 +38,9 @@ scanner/       Track A — HF artifact scanning
 safety/        Track A — promptfoo + garak red team
 evaluator/     Track B — Duke LLM-as-judge suites
 benchmarks/    Track B — public benchmarks (IFEval, TruthfulQA, …)
+personality/   Extra — Big Five Inventory (not in model rollup)
 gateway/       Live gateway catalog
-auth/          Duke OIDC login, sessions, allowlist
-frontend/      Nutrition-label UI
+frontend/      AI Model Advisor UI
 docker/        Containerized UI for the application VM
 dbutils/       Shared Postgres ingest helpers
 docs/          Architecture, data model, frameworks
@@ -50,7 +48,7 @@ api/           Flask REST under /api (reads + job POST); see api/README.md
 unit_tests/    Automated tests
 ```
 
-Runtime outputs are gitignored (`scanner/output`, `safety/output`, `evaluator/results`, `benchmarks/results`).
+Runtime outputs are gitignored (`scanner/output`, `safety/output`, `evaluator/results`, `benchmarks/results`, `personality/results`).
 
 ---
 
@@ -76,7 +74,6 @@ When `POSTGRES_DSN` is set; Set `EFFICACY_DB_DSN` to the same value. Runs auto-s
 
 ```bash
 ./scripts/apply-schemas.sh --bootstrap
-# Auth backfill (after schema apply): uv run python db/migrate_auth_columns.py --apply
 # Or one file: uv run python -m dbutils.apply_schema scanner/db/scan_schema.sql
 ```
 
@@ -98,7 +95,7 @@ For UI-only iteration without containerizing the app (pillar jobs still use Dock
 ```bash
 uv sync --group dev
 cp .env.example .env
-uv run python main.py --host           # dev Flask on APP_PORT (default 5000)
+python3 main.py --host           # or: uv run flask --app frontend:create_app run --debug --port 5001
 ```
 
 See [`frontend/README.md`](frontend/README.md) for API curl examples.
@@ -119,14 +116,18 @@ Dependencies: [`pyproject.toml`](pyproject.toml) + [`uv.lock`](uv.lock).
 
 One repo-root [`.env.example`](.env.example) → `.env` (never commit). Key variables:
 
-- `DUKE_GATEWAY_URL`, `DUKE_GATEWAY_KEY` — gateway chat and catalog (aliases: `OPENAI_*`)
-- `HF_TOKEN` — gated Hugging Face downloads (scanning)
-- `POSTGRES_DSN`, `EFFICACY_DB_DSN` — Postgres (set both to the same DSN); UI/API read DB when reachable
-- `AUTH_ENABLED`, `DUKE_OIDC_*`, `AUTH_ALLOWED_NETIDS` — optional OIDC; see [`auth/README.md`](auth/README.md)
-- `APP_PORT` — containerized UI port (default 5000 via `./docker/run.sh`)
-- `FRONTEND_LAUNCH_MODE` — defaults to `docker` for Start buttons; set `host` for legacy dev
+| Variable | Role |
+|----------|------|
+| `DUKE_GATEWAY_URL`, `DUKE_GATEWAY_KEY` | Gateway chat and catalog (aliases: `OPENAI_*`) |
+| `HF_TOKEN` | Gated Hugging Face downloads (scanning) |
+| `POSTGRES_DSN`, `EFFICACY_DB_DSN` | Postgres (usually the same DSN) |
+| `APP_PORT` | UI port (default 5000) |
+| `CADDY_DOMAIN`, `TRUST_PROXY` | Production HTTPS on the VM — see [`docker/README.md`](docker/README.md) |
+| `FRONTEND_LAUNCH_MODE` | `docker` (default) for Start buttons |
+| `AUTH_ENABLED`, `DUKE_OIDC_*`, `AUTH_ALLOWED_NETIDS` | Duke OIDC — [`auth/README.md`](auth/README.md) |
 
-Host-specific values (user id, Docker socket group, repo path) are auto-detected by `./docker/run.sh` and `./docker/build-pillars.sh`.
+Host-specific values (`HOST_UID`, `DOCKER_GID`, `HOST_REPO`) are auto-detected by
+`./docker/run.sh` and `./docker/build-pillars.sh`.
 
 ---
 

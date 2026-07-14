@@ -4,7 +4,12 @@ Default entry: containerized UI (same as ./docker/run.sh).
     uv run python main.py                  # foreground: up --build
     uv run python main.py up -d --build    # pass through any docker compose args
     uv run python main.py down
+    uv run python main.py restart-deploy   # production VM: WEB_IMAGE must be set
     uv run python main.py --host           # dev Flask (PORT or APP_PORT, default 5000)
+
+Host Flask dev needs the Vite asset watcher in a second terminal:
+``cd frontend/assets && npm run dev`` (or ``npm run build`` once). Production
+images build ``frontend/static/dist/`` during the Docker multi-stage build.
 
 See docs/cli.md and auth/README.md.
 """
@@ -26,10 +31,25 @@ def _usage() -> None:
 
 
 def _run_host_flask() -> int:
+    import socket
+
     from dbutils.env import load_repo_env
 
     load_repo_env()
     port = int(os.environ.get("PORT", os.environ.get("APP_PORT", "5000")))
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("0.0.0.0", port))
+        except OSError as exc:
+            print(
+                f"Port {port} is already in use — stop the containerized UI first "
+                f"(./docker/run.sh down) or choose another port: "
+                f"APP_PORT=5001 uv run python main.py --host",
+                file=sys.stderr,
+            )
+            print(f"Bind error: {exc}", file=sys.stderr)
+            return 1
     from frontend import create_app
 
     create_app().run(debug=True, host="0.0.0.0", port=port)

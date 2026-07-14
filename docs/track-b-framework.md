@@ -13,7 +13,7 @@ Gateway catalog: [`gateway-models.md`](gateway-models.md). Structured outputs: [
 ```text
 1. Duke YAML suites (primary)
 2. Adapted public benchmark subsets (optional)
-3. Published external scores (nutrition label reference only)
+3. Published external scores (report card reference only)
 ```
 
 Record latency, tokens, cost, and failure rate on every run.
@@ -48,7 +48,7 @@ First wave for gateway eval — not the full table above. Start on **one** cheap
 | P1 | Document summarization | ROUGE-L + judge |
 | P1 | Student study | Undergrad help — not graded submissions |
 
-Other suites (creative writing, med education, coding, etc.) follow in later weeks. GitLab: [`.gitlab/README.md`](../.gitlab/README.md).
+Other suites (creative writing, med education, coding, etc.) follow in later milestones. GitLab: [`.gitlab/README.md`](../.gitlab/README.md).
 
 ## Rollout
 

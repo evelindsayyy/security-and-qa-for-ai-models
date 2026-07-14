@@ -80,10 +80,14 @@ def _cache_key(
     question: str,
     candidate_response: str,
     rubric_version: str,
+    max_tokens: int,
 ) -> str:
+    # max_tokens is part of the key: a reasoning judge (e.g. gpt-oss-120b) re-run
+    # with a larger --judge-max-tokens must MISS the cache, not return the stale
+    # (possibly empty/truncated) answer from the smaller budget.
     raw = (
         f"{judge_model}|{judge_prompt_version}|{question}"
-        f"|{candidate_response}|{rubric_version}"
+        f"|{candidate_response}|{rubric_version}|{max_tokens}"
     ).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
 
@@ -147,6 +151,7 @@ def _strip_fences(text: str) -> str:
 def _parse_scores(
     raw: str,
     expected_dims: tuple[str, ...] = _EXPECTED_DIMENSIONS,
+    scales: Optional[dict[str, tuple[float, float]]] = None,
 ) -> dict[str, DimensionScore]:
     """Parse a JSON judge response into a {dim: DimensionScore} dict.
 
@@ -186,6 +191,20 @@ def _parse_scores(
             score = float(entry["score"])
         except (TypeError, ValueError) as e:
             raise ValueError(f"dimension '{dim}' score is not numeric") from e
+        # A judge can hallucinate an out-of-range or fractional score (the prompt
+        # asks for an INTEGER inside the dimension's scale). Clamp to the scale and
+        # round, so one bad dimension can't silently push the weighted overall out
+        # of the display range. Warn so the misbehavior is surfaced, not buried.
+        if scales and dim in scales:
+            lo, hi = scales[dim]
+            fixed = float(round(max(lo, min(hi, score))))
+            if fixed != score:
+                print(
+                    f"  WARN: judge score {score:g} for '{dim}' outside scale "
+                    f"[{lo:g}, {hi:g}] — clamped to {fixed:g}",
+                    file=sys.stderr,
+                )
+            score = fixed
         rationale = str(entry["rationale"]).strip()
         scores[dim] = DimensionScore(score=score, rationale=rationale)
 
@@ -315,6 +334,7 @@ def judge_response(
         question=question,
         candidate_response=candidate_response,
         rubric_version=rubric_version,
+        max_tokens=max_tokens,
     )
     cached = _cache_read(key)
     if cached is not None:
@@ -327,6 +347,12 @@ def judge_response(
     expected_dims: tuple[str, ...] = tuple((rubric.get("dimensions") or {}).keys())
     if not expected_dims:
         expected_dims = _EXPECTED_DIMENSIONS
+
+    # Per-dimension [min, max] scale, used by _parse_scores to clamp scores.
+    scales = {
+        d: tuple((rubric.get("dimensions") or {}).get(d, {}).get("scale", [1, 5]))
+        for d in expected_dims
+    }
 
     output_schema_lines = ["{"]
     max_dim_len = max(len(d) for d in expected_dims)
@@ -373,7 +399,7 @@ def judge_response(
         )
 
     try:
-        scores = _parse_scores(raw1, expected_dims=expected_dims)
+        scores = _parse_scores(raw1, expected_dims=expected_dims, scales=scales)
         result = JudgeResult(scores=scores, raw_response=raw1)
         _cache_write(key, result)
         return result
@@ -412,7 +438,7 @@ def judge_response(
         )
 
     try:
-        scores = _parse_scores(raw2, expected_dims=expected_dims)
+        scores = _parse_scores(raw2, expected_dims=expected_dims, scales=scales)
         result = JudgeResult(scores=scores, raw_response=raw2)
         _cache_write(key, result)
         return result
@@ -423,6 +449,178 @@ def judge_response(
                 f"JSON parse failed twice. first: {first_error}. "
                 f"second: {parse_err_2}."
             ),
+            raw_response=raw2,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Pairwise judging (Track 1 validation study — reference-free, MT-Bench style)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PairwiseResult:
+    """What ``judge_pairwise`` returns. ``winner`` is 'A', 'B', or 'tie',
+    where A/B are the two responses in the order passed in. The driver maps
+    A/B back to system ids and runs each pair in both orders (position-bias
+    probe)."""
+
+    winner: str = ""          # "A" | "B" | "tie"
+    rationale: str = ""
+    failed: bool = False
+    error: Optional[str] = None
+    raw_response: str = ""
+
+
+def _parse_pairwise(raw: str) -> tuple[str, str]:
+    """Parse the judge's pairwise JSON → (winner, rationale).
+
+    winner is normalized to 'A', 'B', or 'tie'. Tolerates code fences, prose
+    around the JSON, and a few natural synonyms for a tie. Raises ValueError if
+    no verdict can be read (drives the one retry in ``judge_pairwise``)."""
+    text = _strip_fences(raw)
+    if not text.startswith("{"):
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        if m:
+            text = m.group(0)
+    try:
+        obj = json.loads(text)
+    except (json.JSONDecodeError, ValueError) as e:
+        raise ValueError(f"pairwise judge did not return valid JSON: {e}")
+    if not isinstance(obj, dict) or "winner" not in obj:
+        raise ValueError("pairwise judge JSON missing 'winner'")
+    w = str(obj["winner"]).strip().lower()
+    if w in ("a", "response a", "1", "response 1"):
+        winner = "A"
+    elif w in ("b", "response b", "2", "response 2"):
+        winner = "B"
+    elif w in ("tie", "equal", "same", "neither", "both", "draw"):
+        winner = "tie"
+    else:
+        raise ValueError(
+            f"pairwise judge returned an unrecognized winner: {obj['winner']!r}")
+    return winner, str(obj.get("rationale", "")).strip()
+
+
+def _pairwise_cache_key(
+    *, judge_model: str, judge_prompt_version: str,
+    question: str, response_a: str, response_b: str,
+) -> str:
+    # Order-DEPENDENT on purpose: (A,B) and (B,A) are distinct API calls (the
+    # position-bias probe re-runs each pair swapped), so they must cache
+    # separately. The "PW|" prefix keeps these off the score-cache namespace.
+    raw = (
+        f"PW|{judge_model}|{judge_prompt_version}|{question}"
+        f"|{response_a}|{response_b}"
+    ).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _pairwise_cache_read(key: str) -> Optional[PairwiseResult]:
+    path = _cache_path(key)
+    if not path.exists():
+        return None
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        return PairwiseResult(**data)
+    except (json.JSONDecodeError, OSError, TypeError, KeyError) as e:
+        print(f"  WARN: discarding corrupt pairwise cache entry {path.name}: {e}",
+              file=sys.stderr)
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return None
+
+
+def _pairwise_cache_write(key: str, result: PairwiseResult) -> None:
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    target = _cache_path(key)
+    tmp = target.with_name(f"{key}.{os.getpid()}.tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(asdict(result), f, ensure_ascii=False, indent=2)
+    tmp.replace(target)
+
+
+def judge_pairwise(
+    *,
+    question: str,
+    response_a: str,
+    response_b: str,
+    judge_model: str,
+    judge_prompt_path: Path,
+    timeout_sec: float = 30.0,
+    max_tokens: int = 400,
+) -> PairwiseResult:
+    """Ask the judge which of two responses is better for ``question`` — no
+    reference (MT-Bench pairwise). Returns winner 'A', 'B', or 'tie'.
+
+    Temperature 0 (MT-Bench rule). Parses strict JSON; on parse failure retries
+    ONCE asking for JSON only, then returns ``PairwiseResult(failed=True)``.
+    Cached per (judge_model, prompt_version, question, response_a, response_b) —
+    order matters, so the swapped re-run is a separate entry. Failures are not
+    cached, so a transient error retries on re-run."""
+    template = judge_prompt_path.read_text(encoding="utf-8")
+    version = judge_prompt_path.stem
+
+    key = _pairwise_cache_key(
+        judge_model=judge_model, judge_prompt_version=version,
+        question=question, response_a=response_a, response_b=response_b,
+    )
+    cached = _pairwise_cache_read(key)
+    if cached is not None:
+        return cached
+
+    user_message = template.format(
+        question=question, response_a=response_a, response_b=response_b,
+    )
+    client = gateway_client().with_options(timeout=timeout_sec)
+    messages: list[dict] = [{"role": "user", "content": user_message}]
+
+    # ----- attempt 1 -----
+    try:
+        resp = client.chat.completions.create(
+            model=judge_model, messages=messages, temperature=0, max_tokens=max_tokens,
+        )
+        raw1 = (resp.choices[0].message.content or "").strip()
+    except Exception as e:  # noqa: BLE001 — never crash the run
+        return PairwiseResult(failed=True, error=f"{type(e).__name__}: {e}",
+                              raw_response="")
+
+    try:
+        winner, rationale = _parse_pairwise(raw1)
+        result = PairwiseResult(winner=winner, rationale=rationale, raw_response=raw1)
+        _pairwise_cache_write(key, result)
+        return result
+    except ValueError as parse_err_1:
+        first_error = str(parse_err_1)
+
+    # ----- attempt 2 (ask for valid JSON only) -----
+    messages.extend([
+        {"role": "assistant", "content": raw1},
+        {"role": "user", "content":
+            "Return ONLY valid JSON in this exact shape, nothing else: "
+            '{"winner": "A" | "B" | "tie", "rationale": "<one sentence>"}'},
+    ])
+    try:
+        resp2 = client.chat.completions.create(
+            model=judge_model, messages=messages, temperature=0, max_tokens=max_tokens,
+        )
+        raw2 = (resp2.choices[0].message.content or "").strip()
+    except Exception as e:  # noqa: BLE001
+        return PairwiseResult(failed=True, error=f"{type(e).__name__}: {e}",
+                              raw_response=raw1)
+
+    try:
+        winner, rationale = _parse_pairwise(raw2)
+        result = PairwiseResult(winner=winner, rationale=rationale, raw_response=raw2)
+        _pairwise_cache_write(key, result)
+        return result
+    except ValueError as parse_err_2:
+        return PairwiseResult(
+            failed=True,
+            error=f"pairwise parse failed twice: {first_error} | {parse_err_2}",
             raw_response=raw2,
         )
 
@@ -456,8 +654,8 @@ if __name__ == "__main__":
     candidate_model = "gpt-5-chat"
     # MT-Bench rule: judge ≠ candidate family AND judge >= candidate capability.
     # Llama 4 Maverick is the strongest different-family judge on Duke's allowlist
-    # for a GPT-5 candidate. See compare_judges.py for the Llama 3.3 vs Maverick
-    # delta experiment that justified picking Maverick over 3.3.
+    # for a GPT-5 candidate. See compare_judges.py / docs/judge-selection.md for
+    # the cross-judge experiment behind picking Maverick.
     judge_model = "Llama 4 Maverick"
 
     print(f"Candidate: {candidate_model}  |  Judge: {judge_model}")
