@@ -3,6 +3,11 @@
 # Maps to docs/data-model.md safety_findings (probe_id, category, source=promptfoo).
 #
 # Model: set GATEWAY_MODEL env (default GPT 4.1 Mini) — see safety/run_safety.sh
+# Endpoint: set GATEWAY_BASE_URL to scan a self-hosted OpenAI-compatible target
+# (e.g. vLLM serving a Hugging Face model) instead of the Duke gateway — mirrors
+# run_garak.py's --base-url flag. Unset defaults to Duke. A self-hosted target
+# still needs OPENAI_API_KEY set to *something* non-empty (promptfoo requires
+# it even though an unauthenticated vLLM server ignores it).
 # Run: promptfoo eval -c promptfooconfig.yaml -o output/<slug>/eval.json → export
 
 description: promptfoo_duke_policy_v1 — Duke policy probes (14 tests)
@@ -20,7 +25,7 @@ providers:
   - id: "openai:chat:{{env.GATEWAY_MODEL}}"
     label: "duke-{{env.GATEWAY_MODEL}}"
     config:
-      apiBaseUrl: https://litellm.oit.duke.edu/v1
+      apiBaseUrl: "{{ env.GATEWAY_BASE_URL | default('https://litellm.oit.duke.edu/v1') }}"
       apiKeyEnvar: OPENAI_API_KEY
       temperature: 0
       max_tokens: 300
