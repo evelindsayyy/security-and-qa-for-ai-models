@@ -104,5 +104,27 @@ class CustomExclusionTest(unittest.TestCase):
         self.assertNotIn("custom_20260615T000000Z", suites)
 
 
+class RetiredJudgeTest(unittest.TestCase):
+    def test_predicate_matches_llama_3_3_variants(self) -> None:
+        for j in ("Llama 3.3", "Llama-3.3", "llama-3.3-70b", "openai/Llama 3.3"):
+            self.assertTrue(erd._is_retired_judge(j), j)
+        for j in ("Llama 4 Maverick", "GPT 4.1 Mini", "gpt-oss-120b", None, ""):
+            self.assertFalse(erd._is_retired_judge(j), j)
+
+    def test_get_runs_data_hides_retired_judge(self) -> None:
+        source = {"runs": [
+            {"judge_model": "Llama 3.3", "suite": "it_support_v1"},
+            {"judge_model": "Llama 4 Maverick", "suite": "it_support_v1"},
+        ]}
+        with mock.patch("frontend.db_fallback.get_data_with_db_fallback",
+                        return_value={"runs": list(source["runs"])}), \
+             mock.patch.object(erd, "attach_cost_perf", side_effect=lambda d: d), \
+             mock.patch.object(erd, "_build_eval_comparison_section", return_value={}), \
+             mock.patch("frontend.staleness.attach_staleness", lambda runs, pillar: None), \
+             mock.patch("frontend.eval_launch.suite_display_name", side_effect=lambda s: s):
+            out = erd.get_runs_data()
+        self.assertEqual([r["judge_model"] for r in out["runs"]], ["Llama 4 Maverick"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -703,22 +703,41 @@ def attach_cost_perf(data: dict, weights: CostPerfWeights = BALANCED) -> dict:
 # Public entry points — Postgres when configured, artifact fallback otherwise.
 
 
+# Judges retired from the pool are hidden from every dashboard view so users
+# never see them presented as a judge — their results stay on disk / in the DB,
+# they're just not displayed. Fuzzy match catches id variants ("Llama 3.3",
+# "Llama-3.3", "llama-3.3-70b").
+def _is_retired_judge(judge: str | None) -> bool:
+    j = (judge or "").lower()
+    return "llama" in j and "3.3" in j
+
+
 def get_runs_data() -> dict:
     from frontend import eval_db_data
     from frontend.db_fallback import get_data_with_db_fallback
 
-    data = attach_cost_perf(
-        get_data_with_db_fallback(
-            eval_db_data.available,
-            eval_db_data.get_runs_data_db,
-            _get_runs_data_files,
-            pillar="eval",
-        )
+    data = get_data_with_db_fallback(
+        eval_db_data.available,
+        eval_db_data.get_runs_data_db,
+        _get_runs_data_files,
+        pillar="eval",
     )
+    # Drop retired-judge runs before any downstream processing (cost-perf
+    # cohorts, comparison matrix, report cards) so they never surface.
+    data["runs"] = [
+        r for r in (data.get("runs") or [])
+        if not _is_retired_judge(r.get("judge_model"))
+    ]
+    data = attach_cost_perf(data)
     runs = data.get("runs") or []
     from frontend.staleness import attach_staleness
+    from frontend.eval_launch import suite_display_name
 
     attach_staleness(runs, "eval")
+    # User-facing suite name (no version tag). The raw ``suite`` key stays the
+    # record/sort/filter value; ``suite_display`` is display-only.
+    for r in runs:
+        r["suite_display"] = suite_display_name(r.get("suite") or "")
     data.update(_build_eval_comparison_section(runs))
     return data
 
@@ -1041,7 +1060,7 @@ _EVAL_SUITE_ABOUT = {
 
 def get_eval_guide_data() -> dict:
     """Rows for the eval reference/guide pages."""
-    from frontend.eval_launch import SUITES, suite_question_count
+    from frontend.eval_launch import SUITES, suite_question_count, suite_display_name
 
     runs = get_runs_data().get("runs") or []
     example = runs[0] if runs else None
@@ -1068,7 +1087,7 @@ def get_eval_guide_data() -> dict:
         "has_example": example is not None,
         "example_slug": example["slug"] if example else None,
         "example_model": example["candidate_model"] if example else None,
-        "example_suite": example["suite"] if example else None,
+        "example_suite": suite_display_name(example["suite"]) if example else None,
     }
 
 
