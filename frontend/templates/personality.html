@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import start_button, page_header, empty_state with context %}
+{% from '_macros.html' import start_button, page_header, empty_state, localtime with context %}
 
 {% block title %}Personality{% endblock %}
 
@@ -84,7 +84,7 @@
               </span>
               {% endif %}
             </td>
-            <td class="col-nowrap dim">{{ r.timestamp }}</td>
+            <td class="col-nowrap dim">{{ localtime(r.timestamp_iso, r.timestamp) }}</td>
             <td class="col-actions" onclick="event.stopPropagation()">
               {% if is_logged_in %}
               <form method="post"

@@ -65,6 +65,29 @@ def _format_ts(raw: str) -> str:
         return raw
 
 
+def _iso_ts(raw: str) -> str:
+    """Machine-readable UTC ISO for client-side local-time rendering."""
+    if not raw:
+        return ""
+    txt = raw.strip()
+    dt = None
+    try:
+        norm = txt[:-1] + "+00:00" if txt.endswith("Z") else txt
+        dt = datetime.fromisoformat(norm)
+    except ValueError:
+        for fmt in ("%Y%m%dT%H%M%SZ", "%Y%m%dT%H%M%S"):
+            try:
+                dt = datetime.strptime(txt, fmt)
+                break
+            except ValueError:
+                continue
+    if dt is None:
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _normalize_model_name(raw: str) -> str:
     return (raw or "—").strip() or "—"
 
@@ -185,6 +208,7 @@ def _summarize_file(path: Path, *, slug: str) -> dict | None:
         "model": _normalize_model_name(data.get("model") or "—"),
         "timestamp_raw": data.get("timestamp") or "",
         "timestamp": _format_ts(data.get("timestamp") or ""),
+        "timestamp_iso": _iso_ts(data.get("timestamp") or ""),
         "filename": path.name,
         "coverage": summary.get("coverage"),
         "attempted": summary.get("attempted"),
@@ -278,6 +302,7 @@ def get_personality_detail(
             "model": _normalize_model_name(data.get("model") or "—"),
             "timestamp_raw": data.get("timestamp") or "",
             "timestamp": _format_ts(data.get("timestamp") or ""),
+            "timestamp_iso": _iso_ts(data.get("timestamp") or ""),
             "filename": path.name,
             "items": data.get("items") or [],
             "summary": summary,

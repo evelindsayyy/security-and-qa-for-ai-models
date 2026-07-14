@@ -74,6 +74,16 @@ class GetModelDetailTest(unittest.TestCase):
         self.assertIsNotNone(detail)
         self.assertEqual(detail["model"], "GPT 4.1 Mini")
 
+    def test_resolves_gateway_normalized_slug_form(self) -> None:
+        # The /models catalog links with the gateway-normalized (lowercase)
+        # slug; get_model_detail must resolve that form too, or the detail
+        # page's eval table is empty for every mixed-case model.
+        runs = [_run(model="GPT 4.1 Mini", overall=4.2)]
+        with self._stub(runs):
+            detail = erd.get_model_detail("gpt-4.1-mini")
+        self.assertIsNotNone(detail)
+        self.assertEqual(detail["model"], "GPT 4.1 Mini")
+
     def test_unknown_model_returns_none(self) -> None:
         with self._stub([_run()]):
             self.assertIsNone(erd.get_model_detail("no-such-model"))
