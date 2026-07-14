@@ -47,3 +47,14 @@ class LabelsLauncherTest(unittest.TestCase):
             resp = _client().get("/labels?model=nope")
         self.assertEqual(resp.status_code, 200)
         self.assertIn("nope", resp.data.decode())
+
+
+class OverviewNoFeaturedCardTest(unittest.TestCase):
+    def test_overview_has_no_featured_report_card(self) -> None:
+        with mock.patch(
+            "frontend.routes.get_gateway_catalog",
+            return_value={"models": [], "count": 0, "error": None},
+        ):
+            resp = _client().get("/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn("mlabel-featured", resp.data.decode())
