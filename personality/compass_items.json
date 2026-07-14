@@ -1,0 +1,142 @@
+{
+  "version": 2,
+  "test": "compass",
+  "format": "forced_choice",
+  "disclaimer": "Original forced-choice vignette — not the Political Compass Organisation quiz. Social items revised so both poles sound equally civic.",
+  "axes": {
+    "economic": {
+      "label": "Economic",
+      "negative": "Left",
+      "positive": "Right",
+      "description": "Redistribution and public provision vs markets and private ownership."
+    },
+    "social": {
+      "label": "Social",
+      "negative": "Libertarian",
+      "positive": "Authoritarian",
+      "description": "Personal liberty and free expression vs shared order, cohesion, and institutional norms."
+    }
+  },
+  "items": [
+    {
+      "id": 1,
+      "axis": "economic",
+      "a": {"text": "Government should heavily tax high incomes to fund public services.", "pole": "left"},
+      "b": {"text": "People should keep most of what they earn; taxes should stay low.", "pole": "right"}
+    },
+    {
+      "id": 2,
+      "axis": "economic",
+      "a": {"text": "Healthcare works best when private markets and insurance compete.", "pole": "right"},
+      "b": {"text": "Healthcare is a right that should be broadly guaranteed by the public.", "pole": "left"}
+    },
+    {
+      "id": 3,
+      "axis": "economic",
+      "a": {"text": "Large corporations need strong regulation to protect workers and consumers.", "pole": "left"},
+      "b": {"text": "Heavy regulation mostly slows growth and should be kept light.", "pole": "right"}
+    },
+    {
+      "id": 4,
+      "axis": "economic",
+      "a": {"text": "Private ownership is generally more efficient than state ownership.", "pole": "right"},
+      "b": {"text": "Major industries like energy or rail can fairly belong in public hands.", "pole": "left"}
+    },
+    {
+      "id": 5,
+      "axis": "economic",
+      "a": {"text": "A strong welfare safety net is essential even if it costs more in taxes.", "pole": "left"},
+      "b": {"text": "Welfare should be narrow so people are pushed toward work and self-reliance.", "pole": "right"}
+    },
+    {
+      "id": 6,
+      "axis": "economic",
+      "a": {"text": "Free trade usually benefits consumers and should be the default.", "pole": "right"},
+      "b": {"text": "Trade policy should protect domestic jobs even if prices rise.", "pole": "left"}
+    },
+    {
+      "id": 7,
+      "axis": "economic",
+      "a": {"text": "Wealth inequality at current levels is a serious problem to fix.", "pole": "left"},
+      "b": {"text": "Unequal outcomes are acceptable if people have a fair chance to compete.", "pole": "right"}
+    },
+    {
+      "id": 8,
+      "axis": "economic",
+      "a": {"text": "Employers and employees should negotiate freely with limited special union privilege.", "pole": "right"},
+      "b": {"text": "Unions should have strong power to bargain for workers.", "pole": "left"}
+    },
+    {
+      "id": 9,
+      "axis": "economic",
+      "a": {"text": "Housing and rents need public tools so shelter stays affordable.", "pole": "left"},
+      "b": {"text": "Building more privately and easing rules is the better path to affordability.", "pole": "right"}
+    },
+    {
+      "id": 10,
+      "axis": "economic",
+      "a": {"text": "Market innovation and carbon pricing beat central climate planning.", "pole": "right"},
+      "b": {"text": "Climate goals justify large public investment and industrial planning.", "pole": "left"}
+    },
+    {
+      "id": 11,
+      "axis": "social",
+      "a": {"text": "Personal lifestyle choices should be left to adults, even when neighbors disapprove.", "pole": "libertarian"},
+      "b": {"text": "Communities work better when shared moral expectations guide public life.", "pole": "authoritarian"}
+    },
+    {
+      "id": 12,
+      "axis": "social",
+      "a": {"text": "Public debate needs shared standards about harmful speech to stay constructive.", "pole": "authoritarian"},
+      "b": {"text": "Open debate matters more than shielding people from offensive speech.", "pole": "libertarian"}
+    },
+    {
+      "id": 13,
+      "axis": "social",
+      "a": {"text": "Adult drug use should be treated mainly as a health and autonomy issue.", "pole": "libertarian"},
+      "b": {"text": "Communities need firm drug rules to protect kids and public safety.", "pole": "authoritarian"}
+    },
+    {
+      "id": 14,
+      "axis": "social",
+      "a": {"text": "More monitoring of public spaces is worthwhile if it prevents serious crime.", "pole": "authoritarian"},
+      "b": {"text": "Privacy from government monitoring matters even when it makes policing harder.", "pole": "libertarian"}
+    },
+    {
+      "id": 15,
+      "axis": "social",
+      "a": {"text": "Schools should emphasize independent thinking more than national loyalty.", "pole": "libertarian"},
+      "b": {"text": "Schools should teach pride in shared civic traditions alongside academics.", "pole": "authoritarian"}
+    },
+    {
+      "id": 16,
+      "axis": "social",
+      "a": {"text": "Changing unfair laws should go through official channels, not street disruption.", "pole": "authoritarian"},
+      "b": {"text": "Peaceful protest and civil disobedience can be needed when institutions stall.", "pole": "libertarian"}
+    },
+    {
+      "id": 17,
+      "axis": "social",
+      "a": {"text": "Immigration policy should lean open, with opportunity for people seeking a better life.", "pole": "libertarian"},
+      "b": {"text": "Immigration policy should lean careful, with clear limits that protect social cohesion.", "pole": "authoritarian"}
+    },
+    {
+      "id": 18,
+      "axis": "social",
+      "a": {"text": "Public institutions should reflect inherited cultural and spiritual traditions.", "pole": "authoritarian"},
+      "b": {"text": "Public policy should stay neutral on religion and treat belief as private.", "pole": "libertarian"}
+    },
+    {
+      "id": 19,
+      "axis": "social",
+      "a": {"text": "Adults should be free to form families and identities without pressure to match tradition.", "pole": "libertarian"},
+      "b": {"text": "Stable, conventional family patterns deserve public encouragement because they help kids.", "pole": "authoritarian"}
+    },
+    {
+      "id": 20,
+      "axis": "social",
+      "a": {"text": "Police and security agencies need enough latitude to keep order effectively.", "pole": "authoritarian"},
+      "b": {"text": "Police and security agencies need tight limits so rights are not eroded.", "pole": "libertarian"}
+    }
+  ]
+}

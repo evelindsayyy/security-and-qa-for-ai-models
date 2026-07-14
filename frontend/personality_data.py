@@ -13,6 +13,7 @@ from pathlib import Path
 
 from frontend.path_safety import is_safe_slug, resolves_inside
 from dbutils.run_paths import PRIVATE_SEGMENT
+from personality.compass_scoring import AXIS_ORDER
 from personality.test_catalog import TESTS
 
 ROOT = Path(__file__).parent.parent
@@ -62,6 +63,29 @@ def _format_ts(raw: str) -> str:
         return dt.astimezone().strftime("%Y-%m-%d %H:%M %Z")
     except ValueError:
         return raw
+
+
+def _iso_ts(raw: str) -> str:
+    """Machine-readable UTC ISO for client-side local-time rendering."""
+    if not raw:
+        return ""
+    txt = raw.strip()
+    dt = None
+    try:
+        norm = txt[:-1] + "+00:00" if txt.endswith("Z") else txt
+        dt = datetime.fromisoformat(norm)
+    except ValueError:
+        for fmt in ("%Y%m%dT%H%M%SZ", "%Y%m%dT%H%M%S"):
+            try:
+                dt = datetime.strptime(txt, fmt)
+                break
+            except ValueError:
+                continue
+    if dt is None:
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _normalize_model_name(raw: str) -> str:
@@ -177,19 +201,29 @@ def _summarize_file(path: Path, *, slug: str) -> dict | None:
     if test_key not in KNOWN_TESTS:
         return None
     summary = data.get("summary") or {}
-    return {
+    row = {
         "slug": slug,
         "test": test_key,
         "test_label": _test_label(test_key),
         "model": _normalize_model_name(data.get("model") or "—"),
         "timestamp_raw": data.get("timestamp") or "",
         "timestamp": _format_ts(data.get("timestamp") or ""),
+        "timestamp_iso": _iso_ts(data.get("timestamp") or ""),
         "filename": path.name,
-        "traits": summary.get("traits") or {},
         "coverage": summary.get("coverage"),
         "attempted": summary.get("attempted"),
         "scored": summary.get("scored"),
     }
+    if test_key == "bfi":
+        row["traits"] = summary.get("traits") or {}
+    elif test_key == "compass":
+        axes = summary.get("axes") or {}
+        row["axes"] = axes
+        row["quadrant"] = summary.get("quadrant") or "—"
+        row["economic_score"] = (axes.get("economic") or {}).get("score")
+        row["social_score"] = (axes.get("social") or {}).get("score")
+        row["weak_reading"] = bool(summary.get("weak_reading"))
+    return row
 
 
 def _postprocess_runs(rows: list[dict]) -> dict:
@@ -261,14 +295,14 @@ def get_personality_detail(
         if test_key not in KNOWN_TESTS:
             return None
         summary = data.get("summary") or {}
-        traits = summary.get("traits") or {}
-        return {
+        detail: dict = {
             "slug": slug,
             "test": test_key,
             "test_label": _test_label(test_key),
             "model": _normalize_model_name(data.get("model") or "—"),
             "timestamp_raw": data.get("timestamp") or "",
             "timestamp": _format_ts(data.get("timestamp") or ""),
+            "timestamp_iso": _iso_ts(data.get("timestamp") or ""),
             "filename": path.name,
             "items": data.get("items") or [],
             "summary": summary,
@@ -276,16 +310,56 @@ def get_personality_detail(
             "attempted": summary.get("attempted"),
             "scored": summary.get("scored"),
             "is_private": visibility == "private",
-            "traits": traits,
-            "trait_rows": [
+        }
+        if test_key == "bfi":
+            traits = summary.get("traits") or {}
+            detail["traits"] = traits
+            detail["trait_rows"] = [
                 {
                     "key": key,
                     "label": TRAIT_LABELS.get(key, key.title()),
                     "score": traits.get(key),
                 }
                 for key in TRAIT_ORDER
-            ],
-        }
+            ]
+        elif test_key == "compass":
+            axes = summary.get("axes") or {}
+            axis_labels = summary.get("axis_labels") or {}
+            detail["quadrant"] = summary.get("quadrant") or "—"
+            detail["weak_reading"] = bool(summary.get("weak_reading"))
+            detail["near_even_count"] = int(summary.get("near_even_count") or 0)
+            detail["axis_rows"] = []
+            for key in AXIS_ORDER:
+                meta = axes.get(key) or {}
+                if key == "economic":
+                    neg_label, pos_label = "Left", "Right"
+                else:
+                    neg_label, pos_label = "Libertarian", "Authoritarian"
+                detail["axis_rows"].append(
+                    {
+                        "key": key,
+                        "label": axis_labels.get(key) or key.title(),
+                        "score": meta.get("score"),
+                        "neg_label": neg_label,
+                        "pos_label": pos_label,
+                        "neg_pct": meta.get("neg_pct"),
+                        "pos_pct": meta.get("pos_pct"),
+                        "lean": meta.get("lean"),
+                        "clarity": meta.get("clarity"),
+                        "clarity_label": {
+                            "near_even": "Near even",
+                            "lean": "Slight lean",
+                            "clear": "Clear",
+                        }.get(meta.get("clarity") or "", meta.get("clarity") or "—"),
+                    }
+                )
+            # Marker position on 0–100 plot (score −100…+100 → 0…100)
+            econ = (axes.get("economic") or {}).get("score")
+            social = (axes.get("social") or {}).get("score")
+            detail["plot_x"] = round((float(econ) + 100) / 2, 1) if econ is not None else 50.0
+            # Screen Y: authoritarian at top → invert signed social score.
+            detail["plot_y"] = round((100.0 - float(social)) / 2, 1) if social is not None else 50.0
+        return detail
     return None
 
 

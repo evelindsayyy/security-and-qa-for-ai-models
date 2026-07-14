@@ -352,6 +352,14 @@ def _format_ts(raw: str) -> str:
     return raw[:19] if len(raw) > 19 else raw or "—"
 
 
+def _iso_ts(raw: str) -> str:
+    """Machine-readable UTC ISO for client-side local-time rendering."""
+    parsed = _parse_timestamp(raw)
+    if parsed is not None:
+        return parsed.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return ""
+
+
 def _detect_kind(path: Path) -> str | None:
     try:
         if path.suffix == ".jsonl":
@@ -403,6 +411,7 @@ def _summarize_truthfulqa(path: Path, data: dict) -> dict:
         "model": data.get("model") or "—",
         "timestamp_raw": data.get("timestamp") or "",
         "timestamp": _format_ts(data.get("timestamp") or ""),
+        "timestamp_iso": _iso_ts(data.get("timestamp") or ""),
         "headline_metric": "accuracy",
         "headline_value": metrics.get("accuracy"),
         "headline_display": f"{metrics.get('accuracy', 0):.1%}" if metrics.get("accuracy") is not None else "—",
@@ -426,6 +435,7 @@ def _summarize_mmlu(path: Path, data: dict) -> dict:
         "model": data.get("model") or "—",
         "timestamp_raw": data.get("timestamp") or "",
         "timestamp": _format_ts(data.get("timestamp") or ""),
+        "timestamp_iso": _iso_ts(data.get("timestamp") or ""),
         "headline_metric": "accuracy",
         "headline_value": acc,
         "headline_display": f"{acc:.1%}" if acc is not None else "—",
@@ -448,6 +458,7 @@ def _summarize_tomi(path: Path, data: dict) -> dict:
         "model": data.get("model") or "—",
         "timestamp_raw": data.get("timestamp") or "",
         "timestamp": _format_ts(data.get("timestamp") or ""),
+        "timestamp_iso": _iso_ts(data.get("timestamp") or ""),
         "headline_metric": "accuracy",
         "headline_value": acc,
         "headline_display": f"{acc:.1%}" if acc is not None else "—",
@@ -467,6 +478,7 @@ def _summarize_consistency(path: Path, data: dict) -> dict:
         "model": data.get("model") or "—",
         "timestamp_raw": data.get("timestamp") or "",
         "timestamp": _format_ts(data.get("timestamp") or ""),
+        "timestamp_iso": _iso_ts(data.get("timestamp") or ""),
         "headline_metric": "mean F1",
         "headline_value": mean_f1,
         "headline_display": f"{mean_f1:.3f}" if mean_f1 is not None else "—",
@@ -527,6 +539,7 @@ def _summarize_ifeval(path: Path) -> dict:
         "model": model,
         "timestamp_raw": ts_raw,
         "timestamp": _format_ts(ts_raw),
+        "timestamp_iso": _iso_ts(ts_raw),
         "headline_metric": "pass rate",
         "headline_value": rate,
         "headline_display": f"{rate:.1%}" if rate is not None else "—",
@@ -545,6 +558,7 @@ def _summarize_mbpp(path: Path, data: dict) -> dict:
         "model": data.get("model") or "—",
         "timestamp_raw": data.get("timestamp") or "",
         "timestamp": _format_ts(data.get("timestamp") or ""),
+        "timestamp_iso": _iso_ts(data.get("timestamp") or ""),
         "headline_metric": "accuracy",
         "headline_value": acc,
         "headline_display": f"{acc:.1%}" if acc is not None else "—",
@@ -855,6 +869,7 @@ def _summarize_quality(path: Path, data: dict) -> dict:
         "model": data.get("model") or "—",
         "timestamp_raw": data.get("timestamp") or "",
         "timestamp": _format_ts(data.get("timestamp") or ""),
+        "timestamp_iso": _iso_ts(data.get("timestamp") or ""),
         "headline_metric": "accuracy",
         "headline_value": acc,
         "headline_display": f"{acc:.1%}" if acc is not None else "—",

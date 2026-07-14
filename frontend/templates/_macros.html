@@ -49,6 +49,17 @@
 <p class="back"><a class="font-semibold text-duke-blue" href="{{ url }}">← {{ label }}</a></p>
 {%- endmacro %}
 
+{# Render a UTC timestamp in the viewer's local timezone (see static/localtime.js).
+   iso      — machine-readable UTC ISO string (…Z). Falls back to plain text if empty.
+   fallback — text shown before JS runs / if JS is off (usually the UTC display string).
+   mode     — "datetime" (default), "date", or "time". #}
+{% macro localtime(iso, fallback='—', mode='datetime') -%}
+{%- if iso -%}
+<time class="localtime" datetime="{{ iso }}" data-utc="{{ iso }}"
+      {%- if mode != 'datetime' %} data-localtime="{{ mode }}"{% endif %}>{{ fallback }}</time>
+{%- else -%}{{ fallback }}{%- endif -%}
+{%- endmacro %}
+
 {% macro staleness_badge(staleness) %}
 {% if staleness and staleness.stale %}
 <span class="staleness-pill"

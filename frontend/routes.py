@@ -146,6 +146,17 @@ def register_routes(app):
 
         return render_template("jobs.html", jobs=list_inflight_jobs())
 
+    @app.route("/labels")
+    def model_labels():
+        from frontend.eval_run_data import get_all_model_cards
+
+        cards = []
+        try:
+            cards = get_all_model_cards()
+        except Exception:  # noqa: BLE001 — gallery degrades to empty, never 500s
+            cards = []
+        return render_template("model_cards.html", cards=cards)
+
     @app.route("/scans")
     def scans():
         from frontend.scan_data import get_scan_guide_data, get_scans_data
@@ -1039,11 +1050,12 @@ def register_routes(app):
         from frontend.personality_launch import start_run, validate_launch
 
         model = request.form.get("model", "")
-        error = validate_launch(model)
+        test_key = request.form.get("test", "bfi")
+        error = validate_launch(model, test_key)
         if error:
             return error, 400
         try:
-            slug, _already, visibility = start_run(model)
+            slug, _already, visibility = start_run(model, test_key)
         except OutputDirError as exc:
             return str(exc), 503
         endpoint = "personality_detail_private" if visibility == "private" else "personality_detail"
@@ -1454,7 +1466,7 @@ def register_routes(app):
             rollup_by_gateway_id=rollup_by_gateway_id,
         )
 
-    @app.route("/models/<slug>")
+    @app.route("/models/<path:slug>")
     def model_detail(slug: str):
         from frontend import model_rollup, model_summary
         from frontend.eval_run_data import get_model_detail
@@ -1489,17 +1501,23 @@ def register_routes(app):
         from frontend.read_context import read_context
 
         visibility, owner_user_id = read_context()
-        personality_row = get_latest_for_model(
+        personality_bfi = get_latest_for_model(
             rollup["display_name"],
             test_key="bfi",
             visibility=visibility,
             owner_user_id=owner_user_id,
         )
+        personality_compass = get_latest_for_model(
+            rollup["display_name"],
+            test_key="compass",
+            visibility=visibility,
+            owner_user_id=owner_user_id,
+        )
         personality_summary = None
-        if personality_row:
-            traits = personality_row.get("traits") or {}
+        if personality_bfi:
+            traits = personality_bfi.get("traits") or {}
             personality_summary = {
-                "slug": personality_row.get("slug"),
+                "slug": personality_bfi.get("slug"),
                 "trait_rows": [
                     {
                         "label": TRAIT_LABELS[key],
@@ -1507,6 +1525,14 @@ def register_routes(app):
                     }
                     for key in TRAIT_ORDER
                 ],
+            }
+        personality_compass_summary = None
+        if personality_compass:
+            personality_compass_summary = {
+                "slug": personality_compass.get("slug"),
+                "quadrant": personality_compass.get("quadrant") or "—",
+                "economic_score": personality_compass.get("economic_score"),
+                "social_score": personality_compass.get("social_score"),
             }
         linked_scan_slug = get_linked_scan(rollup["display_name"])
         available_scans = [
@@ -1520,6 +1546,7 @@ def register_routes(app):
             recommendation=recommendation,
             pillar_findings=pillar_findings,
             personality_summary=personality_summary,
+            personality_compass_summary=personality_compass_summary,
             gateway_profile=gateway_profile,
             gateway_id=gateway_id or rollup["display_name"],
             can_hf_scan=can_hf_scan,
