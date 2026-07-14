@@ -12,7 +12,7 @@ def auth_fields_from_artifact(artifact_path: Path, *, pillar: str) -> dict[str, 
     """Read run_meta.json (or merged scan_meta.json) for ingest columns."""
     if pillar == "scan":
         directory = artifact_path.parent
-    elif pillar in ("eval", "benchmark"):
+    elif pillar in ("eval", "benchmark", "personality"):
         directory = artifact_path.parent / artifact_path.stem
     else:
         directory = artifact_path.parent

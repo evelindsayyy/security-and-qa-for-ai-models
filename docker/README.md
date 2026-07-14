@@ -11,17 +11,17 @@ Containerized Flask UI for local dev and the application VM. Scripts auto-detect
 ./docker/build-pillars.sh
 ```
 
-**Run the UI:**
+**Run the UI** — [`docs/cli.md`](../docs/cli.md#web-ui-containerized)
 
 ```bash
-python3 main.py up --build      # foreground
-python3 main.py up -d --build   # background
-python3 main.py down            # stop
-python3 main.py logs -f web     # logs
+./docker/run.sh up -d --build
+./docker/run.sh restart      # after git pull
+./docker/run.sh down
+./docker/run.sh logs -f web
+# Same: python3 main.py … or uv run python main.py …
 ```
 
-Equivalent: `./docker/run.sh …`. Always use project name `qa-ai-models` (set in
-`compose.yml`).
+Use project name **`qa-ai-models`** (set in `compose.yml`).
 
 The repo is bind-mounted at the **same absolute path** inside and outside the
 container so pillar jobs launched via the Docker socket resolve bind mounts on the

@@ -191,9 +191,9 @@ chat call is identical.
 | Safety | A | `/safety` | Duke Gateway | Planned | `safety_runs`, `safety_findings` |
 | Eval | B | `/eval-run` | Duke Gateway | CLI today; UI future | `eval_runs`, `eval_results` |
 | Benchmark | B | `/benchmarks` | Duke Gateway | Planned | `benchmark_runs` |
+| Personality | Extra | `/personality` | Duke Gateway | — | `personality_runs` |
 
-All four pillars have optional Postgres ingest. When a DSN is set and reachable, the UI reads Postgres for every pillar (merged
-with artifacts not yet loaded); otherwise it reads artifacts directly.
+Audit pillars (scan, safety, eval, benchmarks) plus personality have optional Postgres ingest. When a DSN is set and reachable, the UI reads Postgres for wired pillars (disk only when no DSN). Personality is informational only and is **not** included in model rollup.
 
 ## Why JSON → Postgres
 

@@ -1,5 +1,4 @@
-#!/usr/bin/env bash
-# Apply all four pillar Postgres DDL files (one-time or after schema changes).
+# Apply all pillar Postgres DDL files (one-time or after schema changes).
 #
 #   ./scripts/apply-schemas.sh              # apply schemas only
 #   ./scripts/apply-schemas.sh --bootstrap  # apply schemas + api.ingest bootstrap --apply
@@ -29,12 +28,14 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
+# Pillar base tables first, then auth ALTER columns / indexes.
 for schema in \
-  db/auth_schema.sql \
   scanner/db/scan_schema.sql \
   safety/db/safety_schema.sql \
   evaluator/db/efficacy_schema.sql \
-  benchmarks/db/benchmark_schema.sql; do
+  benchmarks/db/benchmark_schema.sql \
+  personality/db/personality_schema.sql \
+  db/auth_schema.sql; do
   echo "Applying ${schema}..."
   uv run python -m dbutils.apply_schema "$schema"
 done

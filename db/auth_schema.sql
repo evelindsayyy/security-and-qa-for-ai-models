@@ -29,13 +29,19 @@ CREATE INDEX IF NOT EXISTS idx_users_netid ON public.users (netid);
 CREATE TABLE IF NOT EXISTS public.user_run_links (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    pillar          TEXT NOT NULL CHECK (pillar IN ('scan', 'safety', 'eval', 'benchmark')),
+    pillar          TEXT NOT NULL,
     run_id          UUID NOT NULL,
     link_type       TEXT NOT NULL DEFAULT 'reused' CHECK (link_type IN ('owner', 'reused')),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     UNIQUE (user_id, pillar, run_id)
 );
+
+-- Recreate so existing DBs pick up new pillars (CREATE TABLE IF NOT EXISTS is a no-op).
+ALTER TABLE public.user_run_links DROP CONSTRAINT IF EXISTS user_run_links_pillar_check;
+ALTER TABLE public.user_run_links
+    ADD CONSTRAINT user_run_links_pillar_check
+    CHECK (pillar IN ('scan', 'safety', 'eval', 'benchmark', 'personality'));
 
 CREATE INDEX IF NOT EXISTS idx_user_run_links_user_pillar
     ON public.user_run_links (user_id, pillar);
@@ -64,6 +70,11 @@ ALTER TABLE public.benchmark_runs ADD COLUMN IF NOT EXISTS visibility TEXT NOT N
 ALTER TABLE public.benchmark_runs ADD COLUMN IF NOT EXISTS owner_user_id UUID REFERENCES public.users(id);
 ALTER TABLE public.benchmark_runs ADD COLUMN IF NOT EXISTS config_fingerprint TEXT;
 ALTER TABLE public.benchmark_runs ADD COLUMN IF NOT EXISTS config_json JSONB;
+
+ALTER TABLE public.personality_runs ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public';
+ALTER TABLE public.personality_runs ADD COLUMN IF NOT EXISTS owner_user_id UUID REFERENCES public.users(id);
+ALTER TABLE public.personality_runs ADD COLUMN IF NOT EXISTS config_fingerprint TEXT;
+ALTER TABLE public.personality_runs ADD COLUMN IF NOT EXISTS config_json JSONB;
 
 -- Partial unique indexes for run deduplication (complete runs only)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_scans_public_fingerprint
@@ -98,7 +109,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_benchmark_runs_private_fingerprint_owner
     ON public.benchmark_runs (config_fingerprint, owner_user_id)
     WHERE visibility = 'private' AND status = 'complete' AND config_fingerprint IS NOT NULL;
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_personality_runs_public_fingerprint
+    ON public.personality_runs (config_fingerprint)
+    WHERE visibility = 'public' AND status = 'complete' AND config_fingerprint IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_personality_runs_private_fingerprint_owner
+    ON public.personality_runs (config_fingerprint, owner_user_id)
+    WHERE visibility = 'private' AND status = 'complete' AND config_fingerprint IS NOT NULL;
+
 CREATE INDEX IF NOT EXISTS idx_scans_visibility ON public.scans (visibility);
 CREATE INDEX IF NOT EXISTS idx_safety_runs_visibility ON public.safety_runs (visibility);
 CREATE INDEX IF NOT EXISTS idx_eval_runs_visibility ON public.eval_runs (visibility);
 CREATE INDEX IF NOT EXISTS idx_benchmark_runs_visibility ON public.benchmark_runs (visibility);
+CREATE INDEX IF NOT EXISTS idx_personality_runs_visibility ON public.personality_runs (visibility);

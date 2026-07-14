@@ -10,6 +10,7 @@ Concise map for humans and agents working in this repo. Public docs: [`README.md
 | `safety/` | A | garak + promptfoo → `MergedSafetyResult` → Postgres |
 | `evaluator/` | B | LLM-as-judge suites → JSONL → Postgres |
 | `benchmarks/` | B | Public benchmarks → results → Postgres |
+| `personality/` | Extra | Big Five Inventory self-report → JSON → Postgres (not in rollup) |
 | `gateway/` | Shared | LiteLLM catalog |
 | `frontend/` | Shared | Flask UI; Postgres when DSN set; browser launchers |
 | `api/` | Shared | REST GET/POST per pillar + `/health`; `api.ingest` CLI |
@@ -27,11 +28,11 @@ UI modules (`*_data.py`) read **only from Postgres** via `*_db_data.py` when a D
 
 Duke OIDC login (`auth/`, see [`auth/README.md`](auth/README.md)). Browsing the public catalog needs no login; starting a run or deleting a result always does (`@require_login`, enforced server-side).
 
-Every pillar has two independent data slices, selected by the public/private toggle at launch time:
+Every pillar (including personality) has two independent data slices, selected by the public/private toggle at launch time:
 - **Public** — shared catalog, visible to everyone.
 - **Private** — per-user runs on sibling paths (`frontend/run_paths.py::scoped_dir`, `.private/<owner_user_id>/…`) and Postgres rows (`visibility`, `owner_user_id` in `db/auth_schema.sql`).
 
-Public and private runs of the same model never collide on disk or share a URL (`/scans/<slug>` vs `/scans/<slug>/private`, same pattern for safety/eval/benchmarks).
+Public and private runs of the same model never collide on disk or share a URL (`/scans/<slug>` vs `/scans/<slug>/private`; same pattern for safety, eval, benchmarks, and personality).
 
 ## Shared helpers (reuse before duplicating)
 
@@ -64,9 +65,9 @@ Always start the production UI via `./docker/run.sh` or `python3 main.py` — ne
 
 | Variable | Role |
 |----------|------|
-| `DUKE_GATEWAY_*`, `OPENAI_*` | Gateway for safety/eval/benchmarks |
+| `DUKE_GATEWAY_*`, `OPENAI_*` | Gateway for safety / eval / benchmarks / personality |
 | `HF_TOKEN` | Scanner gated downloads |
-| `POSTGRES_DSN` | Scan, safety, benchmark loaders + UI reads |
+| `POSTGRES_DSN` | Scan, safety, benchmark, personality loaders (+ UI reads for wired pillars) |
 | `EFFICACY_DB_DSN` | Eval loader + `/eval-run` (same server usually) |
 | `CADDY_DOMAIN`, `TRUST_PROXY` | Production HTTPS (VM); blank locally — see `docker/README.md` |
 | `FRONTEND_LAUNCH_MODE=docker` | Browser Start buttons use Docker (default) |
@@ -76,7 +77,7 @@ Always start the production UI via `./docker/run.sh` or `python3 main.py` — ne
 ## Hosts
 
 1. **Application VM** (`model-advisor.colab.duke.edu`) — production UI, all pillar Docker jobs, ingest
-2. **Duke AI Gateway** — default chat for safety / eval / benchmarks
+2. **Duke AI Gateway** — default chat for safety / eval / benchmarks / personality
 3. **DCC** — optional open-weight vLLM (`scripts/dcc/`); eval CLI today; safety + benchmarks planned
 4. **DGX** — optional dev workstation (not required for production)
 
@@ -89,15 +90,18 @@ uv sync --group dev
 cp .env.example .env
 ./docker/build-pillars.sh
 cd frontend/assets && npm ci && npm run build   # CI does this in frontend-build
-python3 main.py up -d --build
+uv run python main.py up -d --build             # or: ./docker/run.sh up -d --build
 curl -s http://127.0.0.1:5000/api/health | python3 -m json.tool
 ```
+
+After code changes: `./docker/run.sh restart` (or `uv run python main.py restart`). Command reference: [`docs/cli.md`](docs/cli.md#web-ui-containerized).
 
 ## Ingest commands
 
 ```bash
 ./scripts/apply-schemas.sh --bootstrap
 uv run python -m api.ingest --apply
+uv run python -m api.ingest --personality --apply   # personality only
 ```
 
 ## Test and lint
@@ -119,3 +123,4 @@ uv run python -m unittest discover -s unit_tests -q
 | Postgres schema | [`docs/data-model.md`](docs/data-model.md) |
 | Gateway models | [`docs/gateway-models.md`](docs/gateway-models.md) |
 | Frontend routes | [`frontend/README.md`](frontend/README.md) |
+| Personality (extra) | [`personality/README.md`](personality/README.md) |

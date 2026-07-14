@@ -125,6 +125,9 @@ def run(
         src = _newest_match(results_dir, since=started, legacy_glob=spec["legacy_glob"])
         if src is not None and src.resolve() != dest.resolve():
             src.unlink(missing_ok=True)
+    from dbutils.post_run import maybe_sync_artifact
+
+    maybe_sync_artifact(dest, "personality")
     return dest
 
 

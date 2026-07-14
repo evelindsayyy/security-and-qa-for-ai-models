@@ -58,6 +58,16 @@ _LOOKUP_SQL: dict[Pillar, str] = {
         ORDER BY completed_at DESC NULLS LAST
         LIMIT 1
     """,
+    "personality": """
+        SELECT id, visibility, output_slug
+        FROM public.personality_runs
+        WHERE config_fingerprint = %(fp)s
+          AND visibility = %(vis)s
+          AND status = 'complete'
+          {owner_clause}
+        ORDER BY completed_at DESC NULLS LAST
+        LIMIT 1
+    """,
 }
 
 

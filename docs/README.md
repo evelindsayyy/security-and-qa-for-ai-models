@@ -6,8 +6,8 @@ Project guides. **GitLab CI/CD:** [`.gitlab/README.md`](../.gitlab/README.md).
 
 | Document | Role |
 |----------|------|
+| [`cli.md`](cli.md) | **All CLI commands** — UI (`run.sh` / `main.py`), SSH, pillars, ingest, tests |
 | [`architecture.md`](architecture.md) | System design, data flow, deployment |
-| [`cli.md`](cli.md) | All CLI commands |
 | [`docker.md`](docker.md) | Docker layers, assets, CI, Caddy HTTPS |
 | [`../docker/README.md`](../docker/README.md) | Compose scripts, production setup, troubleshooting |
 | [`data-model.md`](data-model.md) | Postgres schema and ingest mapping |
@@ -34,6 +34,6 @@ Project guides. **GitLab CI/CD:** [`.gitlab/README.md`](../.gitlab/README.md).
 
 **Pillar READMEs:** [`scanner/`](../scanner/README.md) · [`safety/`](../safety/README.md) ·
 [`evaluator/`](../evaluator/README.md) · [`benchmarks/`](../benchmarks/README.md) ·
-[`gateway/`](../gateway/README.md)
+[`personality/`](../personality/README.md) · [`gateway/`](../gateway/README.md)
 
 **Tests:** [`testing/README.md`](../testing/README.md) · [`unit_tests/README.md`](../unit_tests/README.md)

@@ -210,6 +210,27 @@ If a benchmark needs SQL filtering over items, promote to child `benchmark_items
 
 ---
 
+## `personality_runs` (extras — Big Five Inventory)
+
+Self-report trait profiles from `personality/` (BFI and political compass today). **Not** part of model rollup or aggregate score. Same flat-JSON + stem-slug pattern as `benchmark_runs`.
+
+**`personality_runs`:**
+
+| Column | Type (sketch) | Example |
+|--------|---------------|---------|
+| `id` | UUID | |
+| `output_slug` | string (unique) | `20260714T120000Z_bfi_GPT-4.1-Mini` |
+| `gateway_model_id` | string | `GPT 4.1 Mini` |
+| `test_key` | string | `bfi` |
+| `status` | string | `complete` |
+| `n_items` / `attempted` / `scored` / `coverage` | int / float | 44 / 44 / 1.0 |
+| `traits` | JSONB | `{"extraversion": 3.2, …}` |
+| `items` / `summary` | JSONB | per-item rows + run summary |
+| `completed_at` | timestamptz | |
+| `visibility` / `owner_user_id` / `config_fingerprint` / `config_json` | auth cols | via `db/auth_schema.sql` |
+
+---
+
 ## `deployment_context`
 
 How the model is offered (ITSO). Stored on `models` and/or copied onto `safety_runs`.

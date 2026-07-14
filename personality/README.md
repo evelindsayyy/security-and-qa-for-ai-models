@@ -24,6 +24,9 @@ docker compose --env-file .env -f personality/docker/compose.yml run --rm person
 ```
 
 Artifacts land in `personality/results/` as `{timestamp}_{test}_{model}.json`.
+When `POSTGRES_DSN` is set and `AUTO_INGEST` is not disabled, successful runs
+auto-sync into `public.personality_runs`. Bulk load:
+`uv run python -m api.ingest --personality --apply`. See [`db/README.md`](db/README.md).
 
 ## Browser
 
