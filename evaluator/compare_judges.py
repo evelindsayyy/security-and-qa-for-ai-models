@@ -32,7 +32,8 @@ from candidate import generate_candidate
 from judge import judge_response, resolve_rubric
 
 
-JUDGES_TO_COMPARE = ("Llama 3.3", "Llama 4 Maverick")
+# Current judge pool (Llama 3.3 retired — leniency ceiling; see docs/judge-selection.md).
+JUDGES_TO_COMPARE = ("Llama 4 Maverick", "gpt-oss-120b")
 CANDIDATE_MODEL = "gpt-5-chat"
 
 
