@@ -110,6 +110,7 @@
           <th class="num sortable" data-sort="cost" style="cursor: pointer;">Cost <span class="s-ind"></span></th>
           <th class="num sortable" data-sort="qpd" style="cursor: pointer;">q / $ <span class="s-ind"></span></th>
           <th class="num sortable" data-sort="utility" style="cursor: pointer;">Value <span class="s-ind"></span></th>
+          <th class="col-nowrap sortable" data-sort="when" style="cursor: pointer;">Completed <span class="s-ind"></span></th>
           <th class="col-nowrap">Status</th>
           <th class="col-actions">Actions</th>
         </tr>
@@ -131,7 +132,8 @@
             data-utility="{{ "%.4f"|format(r.cost_perf.utility) if r.cost_perf else '' }}"
             data-qnorm="{{ "%.6f"|format(r.cost_perf.quality_norm) if r.cost_perf else '' }}"
             data-cnorm="{{ "%.6f"|format(r.cost_perf.cost_norm) if r.cost_perf else '' }}"
-            data-lnorm="{{ "%.6f"|format(r.cost_perf.latency_norm) if r.cost_perf else '' }}">
+            data-lnorm="{{ "%.6f"|format(r.cost_perf.latency_norm) if r.cost_perf else '' }}"
+            data-when="{{ r.timestamp or '' }}">
           <td class="col-candidate min-w-[11rem]">
             <a class="model" href="{{ url_for('model_detail', slug=r.model_slug) }}">{{ r.candidate_model }}</a>
             {{ staleness_badge(r.staleness) }}
@@ -152,6 +154,7 @@
             {% else %}—{% endif %}
           </td>
           <td class="num cp-value">{% if r.cost_perf %}{{ "%+.2f"|format(r.cost_perf.utility) }}{% else %}—{% endif %}</td>
+          <td class="col-nowrap dim">{{ r.timestamp[:10] if r.timestamp and r.timestamp != "—" else "—" }}</td>
           <td class="col-long">
             {% if r.note %}
               {{ expandable(r.note, clamp=1) }}
@@ -226,7 +229,14 @@
             (!fc || r.dataset.candidate === fc) &&
             (!fj || r.dataset.judge === fj));
 
-          visible.sort((a, b) => sortDir * (num(a, sortKey) - num(b, sortKey)));
+          visible.sort((a, b) => {
+            if (sortKey === "when") {
+              const av = a.dataset.when || "";
+              const bv = b.dataset.when || "";
+              return sortDir * av.localeCompare(bv);
+            }
+            return sortDir * (num(a, sortKey) - num(b, sortKey));
+          });
           if (groupBy) {
             visible.sort((a, b) => a.dataset[groupBy].localeCompare(b.dataset[groupBy]));
           }

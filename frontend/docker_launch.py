@@ -1,5 +1,5 @@
 """
-Shared Docker Compose helpers for browser-launched runs (scan, safety, eval, benchmarks).
+Shared Docker Compose helpers for browser-launched runs (scan, safety, eval, benchmarks, personality).
 
 All stacks read secrets from the **repo-root ``.env``** (one file, see ``.env.example``).
 Compose ``environment:`` blocks map that single ``DUKE_GATEWAY_KEY`` / ``OPENAI_API_KEY``
@@ -36,6 +36,7 @@ STACKS: dict[str, tuple[Path, str]] = {
     "scanner": (Path("scanner/docker/compose.yml"), "scanner"),
     "evaluator": (Path("evaluator/docker/compose.yml"), "evaluator"),
     "benchmarks": (Path("benchmarks/docker/compose.yml"), "benchmarks"),
+    "personality": (Path("personality/docker/compose.yml"), "personality"),
     "safety": (Path("safety/docker/compose.yml"), "safety"),
 }
 

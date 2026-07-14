@@ -37,6 +37,13 @@
           <a href="{{ url_for('eval_run') }}" class="nav-link{% if request.endpoint and request.endpoint.startswith('eval') %} is-active{% endif %}">Eval</a>
           <a href="{{ url_for('benchmarks') }}" class="nav-link{% if request.endpoint and request.endpoint.startswith('benchmark') %} is-active{% endif %}">Benchmarks</a>
         </div>
+        <div class="space-y-1">
+          <p class="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-text-subtle">Extras</p>
+          <a href="{{ url_for('personality') }}" class="nav-link nav-link-extra{% if request.endpoint and request.endpoint.startswith('personality') %} is-active{% endif %}" title="Big Five personality snapshot — not part of model rollup">
+            Personality (BFI)
+          </a>
+          <p class="px-3 text-xs text-text-subtle">Fun self-report quiz · not a quality score</p>
+        </div>
       </nav>
 
       {% if is_logged_in and current_user %}

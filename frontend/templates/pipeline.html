@@ -20,6 +20,8 @@
 {% macro stage_pill(stage) -%}
 {%- if stage.state == 'n/a' -%}
 <span class="dim" title="{{ stage.detail }}">n/a</span>
+{%- elif stage.href -%}
+<a href="{{ stage.href }}" class="tier-link" title="{{ stage.detail }}"><span class="tier tier-{{ stage_tier(stage.state) }}">{{ stage.state }}</span></a>
 {%- else -%}
 <span class="tier tier-{{ stage_tier(stage.state) }}" title="{{ stage.detail }}">{{ stage.state }}</span>
 {%- endif -%}
@@ -73,7 +75,7 @@
             <td class="col-nowrap">{{ stage_pill(r.safety) }}</td>
             <td class="col-nowrap">
               {% if r.eval_unlocked %}
-                <a href="{{ url_for('eval_run_new') }}" class="status-ok">unlocked →</a>
+                <a href="{{ r.eval_href or url_for('eval_run_new') }}" class="status-ok">unlocked →</a>
               {% else %}
                 <span class="dim">locked</span>
               {% endif %}

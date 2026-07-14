@@ -133,6 +133,25 @@
           </div>
         </li>
         <li class="pillar-cta-row">
+          <span class="pillar-cta-label dim">Personality <span class="text-text-subtle">(extra)</span></span>
+          <div class="pillar-cta-status">
+            {% if personality_summary %}
+              BFI
+              {% for row in personality_summary.trait_rows %}
+              · {{ row.label }} <b>{{ "%.2f"|format(row.score) if row.score is not none else "—" }}</b>
+              {% endfor %}
+              <a href="{{ url_for('personality_detail', slug=personality_summary.slug) }}">detail</a>
+            {% else %}
+              <span class="dim">no BFI run</span>
+            {% endif %}
+          </div>
+          <div class="pillar-cta-actions">
+            {% if not personality_summary %}
+              {{ start_button(url_for('personality_run_new'), 'Run BFI', classes='btn-secondary btn-sm') }}
+            {% endif %}
+          </div>
+        </li>
+        <li class="pillar-cta-row">
           <span class="pillar-cta-label dim">Benchmarks</span>
           <div class="pillar-cta-status">
             {% if rollup.benchmark and rollup.benchmark.kinds %}

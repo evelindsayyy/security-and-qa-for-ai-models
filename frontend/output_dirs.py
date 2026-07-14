@@ -17,6 +17,7 @@ _PILLAR_OUTPUT_ROOTS = (
     "scanner/output",
     "evaluator/results",
     "benchmarks/results",
+    "personality/results",
 )
 
 

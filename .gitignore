@@ -65,6 +65,7 @@ evaluator/results/
 # User-generated ad-hoc "bring your own" suites (not locked/comparable)
 evaluator/tasks/custom/
 benchmarks/results/
+personality/results/
 
 # AI-only briefings — personal notes for Claude, not project documentation
 evaluator/CLAUDE.md
