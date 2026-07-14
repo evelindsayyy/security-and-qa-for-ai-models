@@ -170,6 +170,8 @@ def register_routes(app):
             opts["rerun"] = get_scan_rerun_params(
                 from_slug, visibility=visibility, owner_user_id=owner_user_id
             )
+        elif request.args.get("model", "").strip():
+            opts["rerun"] = {"hf_repo": request.args.get("model", "").strip()}
         return render_template("scan_run_new.html", **opts)
 
     @app.route("/scans/start", methods=["POST"])
@@ -369,6 +371,13 @@ def register_routes(app):
             opts["rerun"] = get_eval_rerun_params(
                 from_slug, visibility=visibility, owner_user_id=owner_user_id
             )
+        else:
+            candidate = request.args.get("candidate", "").strip()
+            hf_repo = request.args.get("hf_repo", "").strip()
+            if candidate:
+                opts["rerun"] = {"candidate_model": candidate}
+            elif hf_repo:
+                opts["rerun"] = {"hf_repo": hf_repo}
         return render_template("eval_run_new.html", **opts)
 
     @app.route("/eval-run/start", methods=["POST"])
@@ -1194,6 +1203,17 @@ def register_routes(app):
             opts["rerun"] = get_safety_rerun_params(
                 from_slug, profile, visibility=visibility, owner_user_id=owner_user_id
             )
+        elif request.args.get("model", "").strip():
+            from frontend.safety_data import _gateway_catalog_id_for_slug
+
+            model = request.args.get("model", "").strip()
+            opts["rerun"] = {
+                "gateway_model": _gateway_catalog_id_for_slug(model) or model,
+                "redteam_profile": profile,
+                "run_policy": True,
+                "run_redteam": True,
+                "run_garak": True,
+            }
         return render_template("safety_run_new.html", **opts)
 
     @app.route("/safety/start", methods=["POST"])

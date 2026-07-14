@@ -6,7 +6,7 @@
 {% block content %}
 <div class="scan-detail">
   {% if missing %}
-    <h1>Run not found</h1>
+    <h1 class="page-title">Run not found</h1>
     <p class="sub empty">no results JSONL for slug <code>{{ slug }}</code>.</p>
     <p class="form-hint">{{ start_button(url_for('eval_run_new'), 'Start an eval run', classes='') }}</p>
     <p><a class="font-semibold text-duke-blue" href="{{ url_for('eval_run') }}">← all eval runs</a></p>
@@ -29,12 +29,16 @@
     {% endif %}
   {% else %}
     {{ back_link(url_for('eval_run'), 'all eval runs') }}
-    <h1>{{ candidate_model }}{% if is_private %} {{ private_badge() }}{% endif %}</h1>
-    <p class="sub">
-      slug <code>{{ slug }}</code> ·
-      run <code>{{ run_id }}</code> ·
-      {{ timestamp }}
-    </p>
+    <div class="page-header">
+      <div>
+        <h1 class="page-title"><span class="model">{{ candidate_model }}</span>{% if is_private %} {{ private_badge() }}{% endif %}</h1>
+        <p class="page-subtitle">
+          completed {{ timestamp[:10] if timestamp and timestamp != "—" else "—" }} ·
+          judge {{ judge_model }} · suite {{ suite_version }} ·
+          slug <code>{{ slug }}</code> · run <code>{{ run_id }}</code>
+        </p>
+      </div>
+    </div>
 
     <p class="detail-delete-form">
       {{ rerun_button(url_for('eval_run_new', from=slug), '↻ Run again') }}

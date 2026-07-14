@@ -6,13 +6,13 @@
 {% block content %}
 <div class="eval-comparison">
   {% if missing %}
-    <h1>Scan not found</h1>
+    <h1 class="page-title">Scan not found</h1>
     <p class="sub empty">no <code>scan_result.json</code> for slug <code>{{ slug }}</code>.</p>
     <p class="form-hint">{{ start_button(url_for('scan_run_new'), 'Start a scan', classes='') }}</p>
     <p><a class="font-semibold text-duke-blue" href="{{ url_for('scans') }}">← all scans</a></p>
   {% elif running %}
     {{ back_link(url_for('scans'), 'all scans') }}
-    <h1>Scan in progress</h1>
+    <h1 class="page-title">Scan in progress</h1>
     <p class="sub">slug <code>{{ slug }}</code> · live log updates every 5 seconds</p>
     {{ progress_terminal(
          url_for('scan_run_status_private' if is_private else 'scan_run_status', slug=slug),
@@ -30,7 +30,16 @@
     {% endif %}
   {% else %}
     {{ back_link(url_for('scans'), 'all scans') }}
-    <h1><span class="model">{{ model_id }}</span>{% if is_private %} {{ private_badge() }}{% endif %}</h1>
+    <div class="page-header">
+      <div>
+        <h1 class="page-title"><span class="model">{{ model_id }}</span>{% if is_private %} {{ private_badge() }}{% endif %}</h1>
+        <p class="page-subtitle">
+          {{ tier_label(severity_tier) }}
+          · risk {{ overall_risk_score }} · {{ n_findings }} finding{{ "" if n_findings == 1 else "s" }} ·
+          scanned {{ scanned_at[:10] if scanned_at != "—" else "—" }}
+        </p>
+      </div>
+    </div>
 
     <p class="detail-delete-form">
       {{ rerun_button(url_for('scan_run_new', from=slug), '↻ Run again') }}
