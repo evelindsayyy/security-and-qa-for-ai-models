@@ -98,21 +98,8 @@ def _hub_context() -> dict:
     except Exception:
         pass
 
-    # Featured per-model report card (the AI Model Advisor label). Best-effort:
-    # the home page never breaks if a pillar's data is missing.
-    model_card = None
-    try:
-        from frontend.eval_run_data import featured_model_slug, get_model_card
-
-        fslug = featured_model_slug()
-        if fslug:
-            model_card = get_model_card(fslug)
-    except Exception:
-        model_card = None
-
     gw = get_gateway_catalog()
     return {
-        "model_card": model_card,
         "gateway_models": gw["models"],
         "gateway_count": gw["count"],
         "gateway_error": gw["error"],
@@ -148,14 +135,33 @@ def register_routes(app):
 
     @app.route("/labels")
     def model_labels():
+        from flask import redirect, request, url_for
         from frontend.eval_run_data import get_all_model_cards
 
-        cards = []
         try:
             cards = get_all_model_cards()
-        except Exception:  # noqa: BLE001 — gallery degrades to empty, never 500s
+        except Exception:  # noqa: BLE001 — launcher degrades to empty, never 500s
             cards = []
-        return render_template("model_cards.html", cards=cards)
+        models = [
+            {"slug": c["detail_slug"], "name": c["model"]}
+            for c in cards
+            if c.get("detail_slug") and c.get("model")
+        ]
+
+        query = (request.args.get("model") or "").strip()
+        if query:
+            match = next(
+                (
+                    m
+                    for m in models
+                    if m["slug"] == query or m["name"].lower() == query.lower()
+                ),
+                None,
+            )
+            if match:
+                return redirect(url_for("model_detail", slug=match["slug"]))
+            return render_template("model_cards.html", models=models, not_found=query)
+        return render_template("model_cards.html", models=models, not_found=None)
 
     @app.route("/scans")
     def scans():
@@ -1487,6 +1493,7 @@ def register_routes(app):
                 return render_template("model_detail.html", missing=True, slug=slug)
 
         detail = get_model_detail(slug) or {
+            "slug": slug,
             "model": rollup["display_name"], "runs": [], "dim_columns": [],
             "n_runs": 0, "suites": [], "avg_overall": None, "best_overall": None, "total_cost_usd": 0,
         }
@@ -1553,6 +1560,30 @@ def register_routes(app):
             linked_scan_slug=linked_scan_slug,
             available_scans=available_scans,
             **detail,
+        )
+
+    @app.route("/models/<path:slug>/report")
+    def model_report_print(slug):
+        from datetime import datetime, timezone
+
+        from frontend import model_rollup, model_summary
+        from frontend.eval_run_data import get_model_detail
+
+        rollup = model_rollup.get_model_rollup(slug)
+        if rollup is None:
+            return render_template("model_report_print.html", missing=True, slug=slug)
+        detail = get_model_detail(slug) or {"model": rollup["display_name"], "runs": []}
+        recommendation = model_summary.get_recommendation_summary(rollup)
+        generated_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+        return render_template(
+            "model_report_print.html",
+            missing=False,
+            slug=slug,
+            model=rollup["display_name"],
+            rollup=rollup,
+            detail=detail,
+            recommendation=recommendation,
+            generated_utc=generated_utc,
         )
 
     @app.route("/compare")

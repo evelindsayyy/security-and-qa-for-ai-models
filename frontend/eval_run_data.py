@@ -712,6 +712,16 @@ def _is_retired_judge(judge: str | None) -> bool:
     return "llama" in j and "3.3" in j
 
 
+def _is_failed_run(run: dict) -> bool:
+    """True when every candidate call errored (e.g. the gateway returned 429
+    'budget exceeded' for the whole run → all responses empty). Such a run
+    carries no signal, so it's hidden from every view instead of showing as a
+    spurious '12/12 empty' row. Execution suites (overall None but candidates
+    succeeded, cand_fail 0) are NOT matched."""
+    n = run.get("n") or 0
+    return n > 0 and (run.get("cand_fail") or 0) >= n
+
+
 def get_runs_data() -> dict:
     from frontend import eval_db_data
     from frontend.db_fallback import get_data_with_db_fallback
@@ -722,11 +732,12 @@ def get_runs_data() -> dict:
         _get_runs_data_files,
         pillar="eval",
     )
-    # Drop retired-judge runs before any downstream processing (cost-perf
-    # cohorts, comparison matrix, report cards) so they never surface.
+    # Drop retired-judge and fully-failed (all-candidate-error, e.g. gateway
+    # budget-exceeded) runs before any downstream processing (cost-perf cohorts,
+    # comparison matrix, report cards) so they never surface.
     data["runs"] = [
         r for r in (data.get("runs") or [])
-        if not _is_retired_judge(r.get("judge_model"))
+        if not _is_retired_judge(r.get("judge_model")) and not _is_failed_run(r)
     ]
     data = attach_cost_perf(data)
     runs = data.get("runs") or []

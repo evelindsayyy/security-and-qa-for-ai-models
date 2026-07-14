@@ -211,7 +211,7 @@ def _activity_events(limit: int = 5) -> list[dict[str, Any]]:
                 f"Eval · {row.get('candidate_model', '—')}",
                 row.get("timestamp"),
                 url=_detail_path("eval", slug) if slug else None,
-                meta=f"{row.get('suite', '—')} · overall {row.get('overall', '—')}",
+                meta=f"{row.get('suite_display') or row.get('suite', '—')} · overall {row.get('overall', '—')}",
             )
     except Exception:
         pass

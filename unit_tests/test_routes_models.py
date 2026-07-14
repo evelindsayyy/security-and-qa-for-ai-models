@@ -101,15 +101,17 @@ class ModelLabelsGalleryTest(unittest.TestCase):
         "recommended_use": "IT support",
     }
 
-    def test_renders_card_grid_linking_to_detail(self) -> None:
+    def test_renders_searchable_picker_not_grid(self) -> None:
+        # /labels is now a searchable launcher (pick a model → its report),
+        # not an all-cards grid. See test_routes_labels.py for redirect coverage.
         with mock.patch("frontend.eval_run_data.get_all_model_cards",
                         return_value=[self._CARD]):
             resp = _client().get("/labels")
         self.assertEqual(resp.status_code, 200)
         html = resp.data.decode()
-        self.assertIn("mlabel-grid", html)
-        self.assertIn('href="/models/gpt-4.1-mini"', html)  # gateway-form link
-        self.assertIn("GPT 4.1 Mini", html)
+        self.assertIn("<datalist", html)
+        self.assertIn("GPT 4.1 Mini", html)  # offered as a picker option
+        self.assertNotIn("mlabel-grid", html)
 
     def test_empty_state_when_no_cards(self) -> None:
         with mock.patch("frontend.eval_run_data.get_all_model_cards", return_value=[]):

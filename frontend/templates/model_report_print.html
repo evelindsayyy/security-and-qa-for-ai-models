@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{% if missing %}Model not found{% else %}{{ model }} — report{% endif %}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+           color: #111; background: #fff; margin: 0; padding: 2rem; line-height: 1.5; }
+    .report { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+    h2 { font-size: 1.05rem; margin: 1.5rem 0 .5rem; border-bottom: 1px solid #ccc; padding-bottom: .25rem; }
+    .meta { color: #555; font-size: .85rem; margin-bottom: 1rem; }
+    dt { font-weight: 600; margin-top: .5rem; }
+    dd { margin: 0 0 .25rem; }
+    .rec-summary { white-space: pre-wrap; }
+    table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    th, td { text-align: left; padding: .3rem .5rem; border-bottom: 1px solid #eee; }
+    .pillar { margin-bottom: 1rem; }
+    .na { color: #888; }
+    .toolbar { margin-bottom: 1.5rem; }
+    button { font-size: .9rem; padding: .4rem .8rem; cursor: pointer; }
+    ul { margin: .3rem 0; padding-left: 1.2rem; }
+    @media print {
+      .toolbar { display: none; }
+      body { padding: 0; }
+      h2 { page-break-after: avoid; }
+      .pillar { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="report">
+    <div class="toolbar">
+      <button type="button" onclick="window.print()">⬇ Print / Save as PDF</button>
+    </div>
+    {% if missing %}
+    <h1>Model not found</h1>
+    <p class="na">No rollup data for <code>{{ slug }}</code>.</p>
+    {% else %}
+    <h1>{{ model }}</h1>
+    <p class="meta">Cross-pillar model report · Generated {{ generated_utc }} UTC</p>
+
+    <h2>Recommendation</h2>
+    {% if recommendation.sections %}
+    <dl>
+      {% for s in recommendation.sections %}
+      <dt>{{ s.label }}</dt>
+      <dd>{{ s.text }}</dd>
+      {% endfor %}
+    </dl>
+    {% endif %}
+    {% if recommendation.summary %}
+    <p class="rec-summary">{{ recommendation.summary }}</p>
+    {% endif %}
+    {% if recommendation.tradeoffs %}
+    <ul>
+      {% for t in recommendation.tradeoffs %}<li>{{ t }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if not recommendation.sections and not recommendation.summary %}
+    <p class="na">No recommendation available yet.</p>
+    {% endif %}
+
+    <h2>Security — file scan</h2>
+    <div class="pillar">
+      {% if rollup.scan %}
+      <p>Risk tier: <b>{{ rollup.scan.tier }}</b> · risk score {{ rollup.scan.overall_risk_score }}</p>
+      {% else %}<p class="na">No scan on record.</p>{% endif %}
+    </div>
+
+    <h2>Safety — red-team</h2>
+    <div class="pillar">
+      {% if rollup.safety %}
+      <p>Tier: <b>{{ rollup.safety.tier }}</b> · pass rate {{ '%.0f%%'|format(rollup.safety.pass_rate * 100) }}</p>
+      {% else %}<p class="na">No safety run on record.</p>{% endif %}
+    </div>
+
+    <h2>Eval — task suites</h2>
+    <div class="pillar">
+      {% if detail.runs %}
+      <table>
+        <thead><tr><th>Tasks</th><th>Judge</th><th>Overall</th></tr></thead>
+        <tbody>
+        {% for r in detail.runs %}
+          <tr>
+            <td>{{ r.suite_display }}</td>
+            <td>{{ r.judge_model }}</td>
+            <td>{{ '%.2f'|format(r.overall) if r.overall is not none else '—' }} / 5</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="na">No eval runs on record.</p>{% endif %}
+    </div>
+
+    <h2>Benchmarks</h2>
+    <div class="pillar">
+      {% if rollup.benchmark and rollup.benchmark.kinds %}
+      <table>
+        <thead><tr><th>Benchmark</th><th>Result</th></tr></thead>
+        <tbody>
+        {% for kind, info in rollup.benchmark.kinds.items() %}
+          <tr><td>{{ kind }}</td><td>{{ info.headline_display or '—' }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="na">No benchmark runs on record.</p>{% endif %}
+    </div>
+
+    <p class="meta" style="margin-top:2rem;">Generated from the Model Advisor dashboard.</p>
+    {% endif %}
+  </div>
+  {% if not missing %}
+  <script>window.addEventListener("load", function () { window.print(); });</script>
+  {% endif %}
+</body>
+</html>

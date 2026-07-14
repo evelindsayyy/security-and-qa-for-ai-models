@@ -15,7 +15,7 @@
   {{ page_header('Eval runs', 'LLM-as-judge task suites — rubric dimensions, overall score, cost/quality tradeoffs.', actions) }}
 
   {% if guide_rows %}
-  {% with title="Eval reference & guide", intro="Suite rubrics, scoring, and reference comparisons." %}
+  {% with title="Eval reference & guide", intro="Task rubrics, scoring, and reference comparisons." %}
   {% include '_eval_guide.html' %}
   {% endwith %}
   {% endif %}
@@ -82,7 +82,7 @@
       {% endif %}
 
       <div class="table-controls pillar-table-controls mb-0">
-        <label>Suite <select id="f-suite"><option value="">all</option></select></label>
+        <label>Tasks <select id="f-suite"><option value="">all</option></select></label>
         <label>Candidate <select id="f-candidate"><option value="">all</option></select></label>
         <label>Judge <select id="f-judge"><option value="">all</option></select></label>
         <label>Group by
@@ -90,7 +90,7 @@
             <option value="">none</option>
             <option value="candidate">candidate</option>
             <option value="judge">judge</option>
-            <option value="suite">suite</option>
+            <option value="suite">tasks</option>
           </select>
         </label>
         <span class="controls-hint">click Overall / Latency / Cost headers to sort ⇅ · click a row for per-question detail</span>
@@ -103,7 +103,7 @@
         <tr>
           <th class="col-candidate min-w-[11rem]">Candidate</th>
           <th>Judge</th>
-          <th>Suite</th>
+          <th>Tasks</th>
           <th class="num sortable" data-sort="overall" style="cursor: pointer;">Overall <span class="s-ind">▼</span></th>
           <th class="num" title="Functional pass-rate — execution-scored suites (SQL/JSON/numeric) only; the oracle, not the judge">Exec</th>
           <th class="num sortable" data-sort="latency" style="cursor: pointer;">Latency (mean / p95) <span class="s-ind"></span></th>
@@ -123,6 +123,7 @@
             role="link"
             aria-label="Open eval run for {{ r.candidate_model }}"
             data-suite="{{ r.suite }}"
+            data-suite-label="{{ r.suite_display }}"
             data-candidate="{{ r.candidate_model }}"
             data-judge="{{ r.judge_model }}"
             data-overall="{{ r.overall if r.overall is not none else '' }}"
@@ -141,7 +142,7 @@
             {% if r.cost_perf and r.cost_perf.on_frontier %}<span class="badge badge-frontier" title="On the quality-vs-cost efficient frontier — no model beats it on both quality and cost">✓ efficient</span>{% endif %}
           </td>
           <td><span class="dim">{{ r.judge_model }}</span></td>
-          <td><span class="dim">{{ r.suite }}</span></td>
+          <td><span class="dim">{{ r.suite_display }}</span></td>
           <td class="num overall">{{ "%.2f"|format(r.overall) if r.overall is not none else "—" }}</td>
           <td class="num">{% if r.execution_pass_rate is defined and r.execution_pass_rate is not none %}{{ "%.0f%%"|format(r.execution_pass_rate * 100) }}{% else %}<span class="dim">—</span>{% endif %}</td>
           <td class="num">{{ r.mean_latency_ms }} / {{ r.p95_latency_ms }} ms</td>
@@ -195,11 +196,21 @@
         const nCols = document.querySelectorAll("#runs-table thead th").length;
         let sortKey = "overall", sortDir = -1, groupBy = "";
 
+        // Suite keys are versioned records (e.g. "email_drafting_v1"); users see
+        // the clean display name (data-suite-label) while filtering/grouping still
+        // key off the raw value. Word "suite" is surfaced to users as "tasks".
+        const suiteLabels = {};
+        rows.forEach(r => {
+          if (r.dataset.suite) suiteLabels[r.dataset.suite] = r.dataset.suiteLabel || r.dataset.suite;
+        });
+        const GROUP_WORDS = { suite: "tasks", candidate: "candidate", judge: "judge" };
+        const displayFor = (key, v) => (key === "suite" && suiteLabels[v]) ? suiteLabels[v] : v;
+
         for (const [id, key] of [["f-suite", "suite"], ["f-candidate", "candidate"], ["f-judge", "judge"]]) {
           const sel = document.getElementById(id);
           [...new Set(rows.map(r => r.dataset[key]))].sort().forEach(v => {
             const o = document.createElement("option");
-            o.value = v; o.textContent = v;
+            o.value = v; o.textContent = displayFor(key, v);
             sel.appendChild(o);
           });
           sel.addEventListener("change", render);
@@ -250,7 +261,8 @@
               tr.className = "group-row";
               const td = document.createElement("td");
               td.colSpan = nCols;
-              td.textContent = groupBy + ": " + lastGroup +
+              td.textContent = (GROUP_WORDS[groupBy] || groupBy) + ": " +
+                displayFor(groupBy, lastGroup) +
                 " (" + visible.filter(x => x.dataset[groupBy] === lastGroup).length + " runs)";
               tr.appendChild(td);
               tbody.appendChild(tr);
