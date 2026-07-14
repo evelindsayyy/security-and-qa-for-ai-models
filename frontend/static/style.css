@@ -25,6 +25,8 @@
 .detail-delete-form { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0; }
 .pillar-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
 .refresh-form { display: inline; }
+.gateway-refresh-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+.gateway-refresh-row.refresh-form { display: flex; }
 .key summary { cursor: pointer; font-weight: 600; }
 .legend-grid { display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 1rem; font-size: 0.875rem; }
 .legend-grid dt { font-weight: 700; color: #1a1a18; }
