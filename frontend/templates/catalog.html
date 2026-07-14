@@ -45,7 +45,16 @@
     </dl>
   </details>
 
+  <div class="catalog-toolbar">
+    <input type="search" id="catalog-search" class="catalog-search"
+           placeholder="Filter models by name or profile…" aria-label="Filter models"
+           autocomplete="off">
+    <span class="section-hint">Tip: click any row to open that model's report card.</span>
+  </div>
+  <p class="empty" id="catalog-no-match" hidden>No models match your filter.</p>
+
   {% for section in gateway_by_category %}
+  <section class="catalog-section">
   <h2 class="section-title">{{ section.label }}</h2>
   <p class="section-hint">
     exact liteLLM <code>model=</code> strings — ranked by cross-pillar aggregate within this section.
@@ -94,6 +103,7 @@
     </tbody>
   </table>
   </div>
+  </section>
   {% endfor %}
 
   {% if gateway_deprecated %}
@@ -123,4 +133,35 @@
   </div>
 </div>
 <script src="{{ url_for('static', filename='compare-panel.js') }}"></script>
+<style>
+  .catalog-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:.75rem;
+                     margin:1rem 0 .25rem; }
+  .catalog-search { flex:1 1 280px; max-width:420px; padding:.5rem .7rem;
+                    border:1px solid #cfd6e6; border-radius:8px; font-size:1rem; }
+  .catalog-search:focus { outline:2px solid #1b2a5e; outline-offset:1px; }
+</style>
+<script>
+(function () {
+  var input = document.getElementById("catalog-search");
+  if (!input) return;
+  var sections = document.querySelectorAll(".catalog-section");
+  var noMatch = document.getElementById("catalog-no-match");
+  function apply() {
+    var q = input.value.trim().toLowerCase();
+    var anyVisible = false;
+    sections.forEach(function (section) {
+      var shown = 0;
+      section.querySelectorAll("tbody tr").forEach(function (row) {
+        var show = !q || row.textContent.toLowerCase().indexOf(q) !== -1;
+        row.hidden = !show;
+        if (show) shown++;
+      });
+      section.hidden = shown === 0;
+      if (shown) anyVisible = true;
+    });
+    if (noMatch) noMatch.hidden = anyVisible;
+  }
+  input.addEventListener("input", apply);
+})();
+</script>
 {% endblock %}
