@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import start_button, stat_card, page_header with context %}
+{% from '_macros.html' import start_button, stat_card, page_header, localtime with context %}
 {% from '_model_label_card.html' import model_label_styles, model_label_card with context %}
 
 {% block title %}Overview — Model Advisor{% endblock %}
@@ -61,7 +61,7 @@
         {% if ev.url %}
         <a href="{{ ev.url }}" class="activity-link">
           <p class="text-sm font-semibold text-text">{{ ev.label }}</p>
-          <p class="text-xs text-text-subtle">{{ ev.ts }}{% if ev.meta %} · {{ ev.meta }}{% endif %}</p>
+          <p class="text-xs text-text-subtle">{{ localtime(ev.iso, ev.ts) }}{% if ev.meta %} · {{ ev.meta }}{% endif %}</p>
         </a>
         {% else %}
         <p class="text-sm font-semibold text-text">{{ ev.label }}</p>

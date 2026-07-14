@@ -11,7 +11,13 @@ from frontend import launch_registry
 def _parse_ts(value: str | None) -> datetime | None:
     if not value or value == "—":
         return None
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+    for fmt in (
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d",
+    ):
         try:
             return datetime.strptime(value[:19], fmt)
         except ValueError:
@@ -149,11 +155,15 @@ def _activity_events(limit: int = 5) -> list[dict[str, Any]]:
         meta: str = "",
     ):
         parsed = _parse_ts(ts)
+        # Stored timestamps are UTC; emit a machine-readable UTC ISO so the
+        # browser can render it in the viewer's own timezone (localtime.js).
+        iso = parsed.strftime("%Y-%m-%dT%H:%M:%SZ") if parsed else ""
         events.append(
             {
                 "kind": kind,
                 "label": label,
                 "ts": ts or "—",
+                "iso": iso,
                 "sort": parsed or datetime.min,
                 "url": url,
                 "meta": meta,
