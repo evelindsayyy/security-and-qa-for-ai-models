@@ -244,6 +244,30 @@ class BuildOverviewTest(unittest.TestCase):
         self.assertTrue(ov["has_rows"])
         self.assertEqual({r["source"] for r in ov["rows"]}, {"gateway", "hf"})
 
+    def test_catalog_only_scan_clears_hf_row(self) -> None:
+        # End-to-end (real gate, not mocked): a scan that lives only in the
+        # catalog (e.g. a Postgres row from before the pipeline, no local
+        # scan_result.json) must show the HF row as cleared + unlocked, not
+        # "missing". Repo has no on-disk artifact, so the gate falls back to
+        # the catalog.
+        catalog = {"scans": [{
+            "model_id": "Qwen/Qwen2.5-7B-Instruct",
+            "slug": "Qwen--Qwen2.5-7B-Instruct",
+            "status": "complete",
+            "severity_tier": "low",
+            "overall_risk_score": 0,
+        }]}
+        with mock.patch(
+            "gateway.catalog.get_gateway_catalog", return_value={"models": []}
+        ), mock.patch(
+            "frontend.scan_data.get_scans_data", return_value=catalog
+        ):
+            ov = pipeline.build_overview()
+        hf_rows = [r for r in ov["rows"] if r["source"] == "hf"]
+        self.assertEqual(len(hf_rows), 1)
+        self.assertEqual(hf_rows[0]["scan"]["state"], "cleared")
+        self.assertTrue(hf_rows[0]["eval_unlocked"])
+
 
 from frontend import create_app  # noqa: E402  (top-of-file group is fine too)
 

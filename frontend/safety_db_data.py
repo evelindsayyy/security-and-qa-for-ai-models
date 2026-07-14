@@ -21,7 +21,7 @@ from frontend.safety_data import (
 
 load_repo_env()
 
-_DSN_KEYS = ("POSTGRES_DSN", "DATABASE_URL")
+_DSN_KEYS = ("POSTGRES_DSN", "DATABASE_URL", "EFFICACY_DB_DSN")
 _CONNECT_TIMEOUT_S = 2
 _AVAILABILITY_TTL_S = 60.0
 _avail_cache = {"checked_at": 0.0, "ok": False}
