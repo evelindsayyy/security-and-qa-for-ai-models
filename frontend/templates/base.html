@@ -27,6 +27,7 @@
         <div class="space-y-1">
           <a href="{{ url_for('index') }}" class="nav-link{% if request.endpoint == 'index' %} is-active{% endif %}">Overview</a>
           <a href="{{ url_for('models_catalog') }}" class="nav-link{% if request.endpoint in ('models_catalog', 'model_detail') %} is-active{% endif %}">Model catalog</a>
+          <a href="{{ url_for('model_labels') }}" class="nav-link{% if request.endpoint == 'model_labels' %} is-active{% endif %}">Report cards</a>
           <a href="{{ url_for('compare_models') }}" class="nav-link{% if request.endpoint == 'compare_models' %} is-active{% endif %}">Compare</a>
           <a href="{{ url_for('pipeline_overview') }}" class="nav-link{% if request.endpoint == 'pipeline_overview' %} is-active{% endif %}">Pipeline</a>
         </div>
@@ -98,6 +99,7 @@
   <div class="fixed inset-0 z-20 bg-black/30 lg:hidden hidden" id="sidebar-backdrop" data-sidebar-toggle></div>
 
   <script src="{{ url_for('static', filename=vite_entry) }}" type="module"></script>
+  <script src="{{ url_for('static', filename='localtime.js') }}"></script>
   <script>
   (function () {
     var loginBtn = document.getElementById("auth-login-btn");

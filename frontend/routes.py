@@ -146,6 +146,17 @@ def register_routes(app):
 
         return render_template("jobs.html", jobs=list_inflight_jobs())
 
+    @app.route("/labels")
+    def model_labels():
+        from frontend.eval_run_data import get_all_model_cards
+
+        cards = []
+        try:
+            cards = get_all_model_cards()
+        except Exception:  # noqa: BLE001 — gallery degrades to empty, never 500s
+            cards = []
+        return render_template("model_cards.html", cards=cards)
+
     @app.route("/scans")
     def scans():
         from frontend.scan_data import get_scan_guide_data, get_scans_data
@@ -1434,7 +1445,7 @@ def register_routes(app):
             rollup_by_gateway_id=rollup_by_gateway_id,
         )
 
-    @app.route("/models/<slug>")
+    @app.route("/models/<path:slug>")
     def model_detail(slug: str):
         from frontend import model_rollup, model_summary
         from frontend.eval_run_data import get_model_detail
