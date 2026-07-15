@@ -76,8 +76,12 @@
       <fieldset class="candidate-source">
         <label class="src-opt"><input type="radio" name="source" value="gateway" checked> Gateway model</label>
         <select name="candidate" id="candidate">
-          {% for m in candidates %}
-          <option value="{{ m }}">{{ m }}</option>
+          {% for group in candidate_groups %}
+          <optgroup label="{{ group.label }}">
+            {% for m in group.models %}
+            <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </optgroup>
           {% endfor %}
         </select>
 
@@ -192,8 +196,12 @@
         <fieldset class="candidate-source">
           <label class="src-opt"><input type="radio" name="source" value="gateway" checked> Gateway model</label>
           <select name="candidate" id="candidate_c">
-            {% for m in candidates %}
-            <option value="{{ m }}">{{ m }}</option>
+            {% for group in candidate_groups %}
+            <optgroup label="{{ group.label }}">
+              {% for m in group.models %}
+              <option value="{{ m }}">{{ m }}</option>
+              {% endfor %}
+            </optgroup>
             {% endfor %}
           </select>
 

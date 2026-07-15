@@ -10,6 +10,22 @@
 {% endblock %}
 
 {% block content %}
+{#- Rating -> colour band (green strong ... red weak), mirroring the safety tables. -#}
+{% macro overall_pill(v) -%}
+  {%- if v is none -%}<span class="dim">—</span>
+  {%- else -%}
+    {%- set cls = 'score-strong' if v >= 4.5 else ('score-good' if v >= 4.0 else ('score-fair' if v >= 3.5 else 'score-weak')) -%}
+    <span class="score-pill {{ cls }}">{{ '%.2f'|format(v) }}</span>
+  {%- endif -%}
+{%- endmacro %}
+{% macro exec_pill(rate) -%}
+  {%- if rate is none -%}<span class="dim">—</span>
+  {%- else -%}
+    {%- set pct = rate * 100 -%}
+    {%- set cls = 'score-strong' if pct >= 90 else ('score-good' if pct >= 70 else ('score-fair' if pct >= 50 else 'score-weak')) -%}
+    <span class="score-pill {{ cls }}">{{ '%.0f%%'|format(pct) }}</span>
+  {%- endif -%}
+{%- endmacro %}
 <div class="eval-comparison">
   {% set actions %}{{ start_button(url_for('eval_run_new'), '▶ Start eval') }}{% endset %}
   {{ page_header('Eval runs', 'LLM-as-judge task suites — rubric dimensions, overall score, cost/quality tradeoffs.', actions) }}
@@ -110,6 +126,15 @@
       /* Overall (rating) + Exec columns — center the score/pass-rate and the — placeholder */
       .run-table th.col-rating, .run-table td.col-rating,
       .run-table th.col-exec, .run-table td.col-exec { text-align: center; }
+
+      /* Score pills — colour a rating by band (green→red) so higher vs lower reads
+         at a glance, reusing the safety tables' tier palette. */
+      .score-pill { display: inline-block; min-width: 2.9rem; padding: 0.12rem 0.5rem; border-radius: 999px;
+        font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.35; }
+      .score-strong   { background: var(--color-tier-low-bg);      color: var(--color-tier-low); }
+      .score-good     { background: var(--color-tier-medium-bg);   color: var(--color-tier-medium); }
+      .score-fair     { background: var(--color-tier-high-bg);     color: var(--color-tier-high); }
+      .score-weak     { background: var(--color-tier-critical-bg); color: var(--color-tier-critical); }
 
       /* ---- Eval report-card toolbar: three stacked zones (summary · value · filters) ---- */
       .pillar-toolbar { display: flex; flex-direction: column; }
@@ -311,8 +336,8 @@
           </td>
           <td><span class="dim">{{ r.judge_model }}</span></td>
           <td><span class="dim">{{ r.suite_display }}</span></td>
-          <td class="num overall col-rating">{{ "%.2f"|format(r.overall) if r.overall is not none else "—" }}</td>
-          <td class="num col-exec">{% if r.execution_pass_rate is defined and r.execution_pass_rate is not none %}{{ "%.0f%%"|format(r.execution_pass_rate * 100) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+          <td class="num overall col-rating">{{ overall_pill(r.overall) }}</td>
+          <td class="num col-exec">{{ exec_pill(r.execution_pass_rate if r.execution_pass_rate is defined else none) }}</td>
           <td class="num">{{ r.mean_latency_ms }} / {{ r.p95_latency_ms }} ms</td>
           <td class="num">${{ "%.4f"|format(r.total_cost_usd) }}</td>
           <td class="num">
