@@ -42,9 +42,9 @@ compose() {
 # is rebuilt. Prefer this after git pull instead of hunting for a VS Code port.
 if [ "${1:-}" = "restart" ]; then
   shift || true
-  echo "Stopping qa-ai-models…"
-  compose down --remove-orphans || true
-  echo "Rebuilding and starting (detached)…"
+  echo "Recreating qa-ai-models (build + force-recreate)…"
+  # Keep the old web container serving until the replacement is up — avoid a
+  # compose-down gap that shows Internal Server Error during deploy.
   compose up -d --build --force-recreate --remove-orphans "$@"
   echo "UI recreating. Follow logs with: ./docker/run.sh logs -f web"
   echo "Stop with: ./docker/run.sh down"

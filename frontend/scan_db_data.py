@@ -101,7 +101,7 @@ def _slug_for_scan(hf_repo: str, scan_metadata: dict | None) -> str:
 def _findings_to_json(rows: list[tuple], *, list_view: bool = False) -> list[dict]:
     out: list[dict] = []
     for row in rows:
-        if list_view and len(row) == 8:
+        if list_view and len(row) == 7:
             (
                 finding_key,
                 source,

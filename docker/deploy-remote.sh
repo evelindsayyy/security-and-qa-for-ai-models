@@ -64,4 +64,18 @@ fi
 
 ./docker/run.sh restart
 
+APP_PORT="${APP_PORT:-5000}"
+echo "Waiting for web health on 127.0.0.1:${APP_PORT}…"
+for attempt in $(seq 1 45); do
+  if curl -sf "http://127.0.0.1:${APP_PORT}/api/health" >/dev/null; then
+    echo "Web healthy after ${attempt} attempt(s)."
+    break
+  fi
+  if [ "$attempt" -eq 45 ]; then
+    echo "Web did not become healthy within 90s — check: ./docker/run.sh logs web" >&2
+    exit 1
+  fi
+  sleep 2
+done
+
 echo "Deployed at ${DEPLOY_PATH} ($(git rev-parse --short HEAD))"
