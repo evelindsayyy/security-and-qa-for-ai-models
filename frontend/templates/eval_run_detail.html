@@ -28,35 +28,65 @@
     </p>
     {% endif %}
   {% else %}
+    <style>
+      /* Run title — the page's main heading, larger than the section titles */
+      .eval-run-title { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; color: var(--color-text); margin: 0.15rem 0 0; }
+
+      /* Run metrics — labeled stat tiles instead of one dim run-on line */
+      .run-stats { display: flex; flex-wrap: wrap; gap: 1.1rem 2.5rem; margin: 0 0 1.5rem; padding: 1rem 1.25rem; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+      .run-stat { display: flex; flex-direction: column; gap: 0.2rem; }
+      .run-stat-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-subtle); }
+      .run-stat-value { font-size: 1.15rem; font-weight: 700; line-height: 1.2; color: var(--color-text); font-variant-numeric: tabular-nums; }
+      .run-stat-value.is-muted { color: var(--color-text-subtle); font-weight: 600; }
+      .run-stat-value .unit { font-size: 0.8rem; font-weight: 400; color: var(--color-text-muted); }
+      .run-stat-sub { font-size: 0.72rem; color: var(--color-text-muted); }
+    </style>
+
     {{ back_link(url_for('eval_run'), 'all eval runs') }}
-    <div class="page-header">
-      <div>
-        <h1 class="page-title"><span class="model">{{ candidate_model }}</span>{% if is_private %} {{ private_badge() }}{% endif %}</h1>
-        <p class="page-subtitle">
-          completed {{ timestamp[:10] if timestamp and timestamp != "—" else "—" }} ·
-          judge {{ judge_model }} · suite {{ suite_version }} ·
-          slug <code>{{ slug }}</code> · run <code>{{ run_id }}</code>
-        </p>
-      </div>
-    </div>
+    <h1 class="eval-run-title">{{ candidate_model }}{% if is_private %} {{ private_badge() }}{% endif %}</h1>
+    <p class="sub">
+      slug <code>{{ slug }}</code> ·
+      run <code>{{ run_id }}</code> ·
+      {{ timestamp }}
+    </p>
 
     <p class="detail-delete-form">
       {{ rerun_button(url_for('eval_run_new', from=slug), '↻ Run again') }}
       {{ delete_button(url_for('eval_run_delete_private' if is_private else 'eval_run_delete', slug=slug)) }}
     </p>
 
-    <div class="summary-row">
-      {% if mean_overall is not none %}
-        <span class="summary-score">overall <b>{{ "%.2f"|format(mean_overall) }}</b> / 5</span>
-      {% else %}
-        <span class="summary-score">overall <b>—</b></span>
-      {% endif %}
-      <span class="dim">mean latency {{ mean_latency_ms }} ms · p95 {{ p95_latency_ms }} ms</span>
-      <span class="dim">total cost ${{ "%.4f"|format(total_cost_usd) }}</span>
+    <div class="run-stats">
+      <div class="run-stat">
+        <span class="run-stat-label">Overall score</span>
+        {% if mean_overall is not none %}
+        <span class="run-stat-value">{{ "%.2f"|format(mean_overall) }} <span class="unit">/ 5</span></span>
+        {% else %}
+        <span class="run-stat-value is-muted" title="No judge rubric for this suite — it is scored functionally (see Exec)">—</span>
+        {% endif %}
+      </div>
       {% if execution %}
-      <span class="summary-score" title="functional pass-rate — the execution oracle, not the judge">exec <b>{{ "%.0f%%"|format(execution.pass_rate * 100) }}</b> ({{ execution.passed }}/{{ execution.n }})</span>
+      <div class="run-stat">
+        <span class="run-stat-label" title="Functional pass-rate — the execution oracle, not the judge">Exec pass-rate</span>
+        <span class="run-stat-value">{{ "%.0f%%"|format(execution.pass_rate * 100) }} <span class="unit">{{ execution.passed }}/{{ execution.n }} passed</span></span>
+      </div>
       {% endif %}
-      <span class="dim">{{ ok }}/{{ n }} OK · {{ cand_fail }} cand_fail · {{ judge_fail }} judge_fail</span>
+      <div class="run-stat">
+        <span class="run-stat-label">Latency</span>
+        <span class="run-stat-value">{{ mean_latency_ms }} <span class="unit">ms mean</span> · {{ p95_latency_ms }} <span class="unit">ms p95</span></span>
+      </div>
+      <div class="run-stat">
+        <span class="run-stat-label">Total cost</span>
+        <span class="run-stat-value">${{ "%.4f"|format(total_cost_usd) }}</span>
+      </div>
+      <div class="run-stat">
+        <span class="run-stat-label">Reliability</span>
+        <span class="run-stat-value">{{ ok }}/{{ n }} <span class="unit">OK</span></span>
+        {% if cand_fail or judge_fail %}
+        <span class="run-stat-sub">{{ cand_fail }} candidate · {{ judge_fail }} judge errors</span>
+        {% else %}
+        <span class="run-stat-sub">no failures</span>
+        {% endif %}
+      </div>
     </div>
 
     {{ pillar_summary_card(pillar_summary) }}

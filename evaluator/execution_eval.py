@@ -362,19 +362,24 @@ def tool_report(results_rows: list[dict], suite: dict) -> dict:
     }
 
 
-def score_results_file(results_path: Path, suite_version: str | None = None) -> dict:
-    """Functional pass/fail per question for a results JSONL, by executing each
-    candidate's SQL against the suite's setup and comparing to expected.
+def score_results_rows(
+    rows: list[dict],
+    suite_version: str,
+    *,
+    results_file: str = "",
+    candidate_model: str = "",
+) -> dict:
+    """Functional pass/fail for already-loaded result rows (no file access).
 
-    Carries the judge's ``overall`` along so execution and judge can be compared
-    side by side (the "functional vs surface/subjective" story)."""
-    rows = [json.loads(line) for line in
-            results_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    Each row needs ``question_id`` and ``candidate_response``; ``overall`` is
+    carried through for the functional-vs-judge comparison when present. This is
+    the shared core: ``score_results_file`` feeds it JSONL rows read from disk,
+    and the Postgres aggregator feeds it rows reconstructed from the DB — both
+    get identical execution scoring. A non-execution (judge-only) suite yields
+    ``n == 0`` because none of its question ids carry an ``expected`` answer."""
     if not rows:
-        return {"results_file": results_path.name, "n": 0, "rows": []}
+        return {"results_file": results_file, "n": 0, "rows": []}
 
-    if suite_version is None:
-        suite_version = rows[0].get("adaptation", {}).get("task_suite_version", "")
     suite = load_suite(suite_version)
     check_type = suite_check_type(suite_version)
     checker = CHECKERS.get(check_type)
@@ -399,15 +404,36 @@ def score_results_file(results_path: Path, suite_version: str | None = None) -> 
     n = len(scored)
     npass = sum(1 for s in scored if s["passed"])
     return {
-        "results_file": results_path.name,
+        "results_file": results_file,
         "suite_version": suite_version,
         "check": check_type,
-        "candidate_model": rows[0].get("adaptation", {}).get("candidate_model", ""),
+        "candidate_model": candidate_model,
         "n": n,
         "passed": npass,
         "pass_rate": round(npass / n, 4) if n else 0.0,
         "rows": scored,
     }
+
+
+def score_results_file(results_path: Path, suite_version: str | None = None) -> dict:
+    """Functional pass/fail per question for a results JSONL, by executing each
+    candidate's SQL against the suite's setup and comparing to expected.
+
+    Carries the judge's ``overall`` along so execution and judge can be compared
+    side by side (the "functional vs surface/subjective" story)."""
+    rows = [json.loads(line) for line in
+            results_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not rows:
+        return {"results_file": results_path.name, "n": 0, "rows": []}
+
+    if suite_version is None:
+        suite_version = rows[0].get("adaptation", {}).get("task_suite_version", "")
+    return score_results_rows(
+        rows,
+        suite_version,
+        results_file=results_path.name,
+        candidate_model=rows[0].get("adaptation", {}).get("candidate_model", ""),
+    )
 
 
 def main() -> int:

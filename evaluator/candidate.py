@@ -144,6 +144,34 @@ def _cache_write(key: str, result: CandidateResult) -> None: # save the results 
 
 # Public API
 
+def _is_temperature_unsupported(err: Exception) -> bool:
+    """True for the gateway's 400 when a model only allows the default
+    temperature — newer reasoning models return "temperature does not support
+    0.2 ... Only the default (1) value is supported". We retry these at
+    temperature=1 rather than record a spurious empty/failed run."""
+    msg = str(err).lower()
+    return "temperature" in msg and (
+        "does not support" in msg or "only the default" in msg
+    )
+
+
+def _is_timeout(err: Exception) -> bool:
+    """True for a request timeout (openai raises APITimeoutError → "Request
+    timed out."). Slow reasoning models (e.g. gpt-5.x-pro) routinely exceed the
+    default 30s budget; we retry once with a generous timeout rather than record
+    a spurious empty/failed run."""
+    return "timeout" in type(err).__name__.lower() or "timed out" in str(err).lower()
+
+
+# On a timeout, retry once with a much longer budget: 4× the requested timeout,
+# but never less than this floor (slow reasoning models can take minutes).
+_TIMEOUT_RETRY_FLOOR_SEC = 120.0
+
+
+def _retry_timeout(timeout_sec: float) -> float:
+    return max(timeout_sec * 4.0, _TIMEOUT_RETRY_FLOOR_SEC)
+
+
 def generate_candidate(
     *,
     question: str,
@@ -180,26 +208,45 @@ def generate_candidate(
         return cached
 
     t0 = time.perf_counter()
-    try: # otherwise call the API, and capture latency and token usage. If it fails, return a CandidateResult with failed=True and the error message.
-        client = _client_for(endpoint).with_options(timeout=timeout_sec)
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": question},
-            ],
-            temperature=temperature,
-            max_tokens=max_tokens,
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": question},
+    ]
+    base_client = _client_for(endpoint)
+
+    def _attempt(temp: float, timeout: float):
+        # A fresh with_options() per attempt so the retry can widen the timeout.
+        return base_client.with_options(timeout=timeout).chat.completions.create(
+            model=model, messages=messages, temperature=temp, max_tokens=max_tokens,
         )
-    except Exception as e:  # never crash a run; record and continue.
+
+    def _failed(err: Exception) -> CandidateResult:
         return CandidateResult(
-            response="",
-            latency_ms=int((time.perf_counter() - t0) * 1000),
-            prompt_tokens=0,
-            completion_tokens=0,
-            failed=True,
-            error=f"{type(e).__name__}: {e}",
+            response="", latency_ms=int((time.perf_counter() - t0) * 1000),
+            prompt_tokens=0, completion_tokens=0, failed=True,
+            error=f"{type(err).__name__}: {err}",
         )
+
+    try:  # call the API, capturing latency and token usage.
+        resp = _attempt(temperature, timeout_sec)
+    except Exception as e:  # never crash a run; record and continue.
+        if _is_temperature_unsupported(e):
+            # Newer reasoning models only accept the default temperature; retry
+            # once at 1 so they can still be evaluated (comparability caveat:
+            # these rows were graded at temperature 1, not the run's config).
+            try:
+                resp = _attempt(1.0, timeout_sec)
+            except Exception as e2:
+                return _failed(e2)
+        elif _is_timeout(e):
+            # Slow reasoning models (gpt-5.x-pro) exceed the default timeout;
+            # retry once with a generous budget before recording a failure.
+            try:
+                resp = _attempt(temperature, _retry_timeout(timeout_sec))
+            except Exception as e2:
+                return _failed(e2)
+        else:
+            return _failed(e)
     latency_ms = int((time.perf_counter() - t0) * 1000)
 
     # if successful, parse the response and token usage. 

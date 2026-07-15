@@ -234,6 +234,41 @@ SUITES: dict[str, dict] = {
 JUDGE_PROMPT = EVALUATOR / "prompts" / "judge" / "reference_based_v2.txt"
 
 MAX_TOKENS_MIN, MAX_TOKENS_MAX = 50, 4000
+
+# Completion-budget tiers shown on the launch form instead of a raw number box.
+# `tokens` is the max_tokens actually sent to the runner; still bounded by
+# MAX_TOKENS_MIN..MAX_TOKENS_MAX so the server validation is unchanged. The UI
+# preselects "reasoning" for reasoning models (they burn hidden thinking tokens
+# and go empty at a chat-sized budget) and "standard" for everyone else.
+MAX_TOKEN_TIERS: tuple[dict, ...] = (
+    {"key": "quick", "label": "Quick", "tokens": 512,
+     "hint": "Short, structured answers — SQL, extraction, classification"},
+    {"key": "standard", "label": "Standard", "tokens": 2000,
+     "hint": "Most chat models and everyday drafting tasks"},
+    {"key": "extended", "label": "Extended", "tokens": 3000,
+     "hint": "Long-form drafting or multi-step answers"},
+    {"key": "reasoning", "label": "Reasoning", "tokens": 4000,
+     "hint": "Thinking models that spend tokens reasoning before answering"},
+)
+DEFAULT_TOKEN_TIER = "standard"
+REASONING_TOKEN_TIER = "reasoning"
+
+
+def is_reasoning_model(model: str) -> bool:
+    """True for models that emit hidden reasoning/thinking tokens before the
+    answer (o-series, gpt-5 mini/nano, gpt-oss, DeepSeek-R1, Qwen QwQ). These
+    need the top completion budget or they run out mid-thought and return empty.
+    """
+    m = (model or "").lower()
+    if m.startswith(("o1", "o3", "o4")):
+        return True
+    keywords = ("gpt-oss", "gpt-5-mini", "gpt-5-nano", "qwq", "reasoning", "-r1", "deepseek-r")
+    return any(k in m for k in keywords)
+
+
+def default_tier_for(model: str) -> str:
+    """Preselected tier key for a candidate model."""
+    return REASONING_TOKEN_TIER if is_reasoning_model(model) else DEFAULT_TOKEN_TIER
 # Clear a completed scan unless it flagged the repo as high risk — block only
 # high/critical (low + medium pass), matching the safety gate in pipeline.py.
 SCAN_ALLOWED_TIERS = frozenset({"low", "medium"})
@@ -1027,6 +1062,11 @@ def get_launch_options() -> dict:
         "pricing_json": json.dumps({m: list(r) for m, r in _COST_PER_M_TOKENS.items()}),
         "max_tokens_min": MAX_TOKENS_MIN,
         "max_tokens_max": MAX_TOKENS_MAX,
+        "token_tiers": [dict(t) for t in MAX_TOKEN_TIERS],
+        "default_token_tier": DEFAULT_TOKEN_TIER,
+        # Preselected tier per candidate so the form can jump to "Reasoning" the
+        # moment a reasoning model is picked (JS mirrors is_reasoning_model()).
+        "reasoning_models": [m for m in candidates if is_reasoning_model(m)],
         "suggested_hf_repos": list(SUGGESTED_HF_REPOS),
         "custom_max_questions": CUSTOM_MAX_QUESTIONS,
         "launch_mode": "docker" if docker_launch.use_docker() else "host",
