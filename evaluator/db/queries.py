@@ -156,12 +156,17 @@ def _result_dict(row) -> dict:
 # ---------------------------------------------------------------------------
 
 
+# Skips the heavy `scores` rationales/`error`/`schema_version` of the full
+# detail JSONB, but keeps the real `candidate_response`: the list page scores
+# execution suites (SQL/JSON/numeric/tool-use) functionally, which needs the
+# actual answer text — a placeholder makes every check fail (0%). It's also
+# what powers the ⚠ empty-response badge.
 _RESULTS_LIST_SQL = """
 SELECT eval_run_id::text, task_id, score, latency_ms, tokens_in, tokens_out,
        cost_usd, candidate_failed, judge_failed,
        detail->'scores' AS scores,
        detail->'dim_order' AS dim_order,
-       (COALESCE(TRIM(detail->>'candidate_response'), '') = '') AS empty_response
+       detail->>'candidate_response' AS candidate_response
 FROM public.eval_results
 WHERE metric = 'judge_score' AND eval_run_id = ANY(%(run_ids)s::uuid[])
 ORDER BY task_id
@@ -169,7 +174,8 @@ ORDER BY task_id
 
 
 def fetch_runs_list(conn) -> list[dict]:
-    """List-page runs: aggregate fields without full result detail JSONB."""
+    """List-page runs: aggregate fields plus candidate_response, but without the
+    full result detail JSONB (judge rationales, error, schema_version)."""
     vis_clause, vis_params = _run_visibility()
     with conn.cursor() as cur:
         cur.execute(_RUNS_SQL.format(visibility_filter=vis_clause), vis_params)
@@ -180,7 +186,7 @@ def fetch_runs_list(conn) -> list[dict]:
         cur.execute(_RESULTS_LIST_SQL, {"run_ids": run_ids})
         by_run: dict[str, list[dict]] = {}
         for (rid, task_id, score, lat, tin, tout, cost, cfail, jfail,
-             scores, dim_order, empty_response) in cur.fetchall():
+             scores, dim_order, candidate_response) in cur.fetchall():
             by_run.setdefault(rid, []).append({
                 "task_id": task_id, "score": score, "latency_ms": lat,
                 "tokens_in": tin, "tokens_out": tout, "cost_usd": cost,
@@ -188,7 +194,7 @@ def fetch_runs_list(conn) -> list[dict]:
                 "detail": {
                     "scores": scores or {},
                     "dim_order": dim_order,
-                    "candidate_response": "" if empty_response else "…",
+                    "candidate_response": candidate_response or "",
                 },
             })
     return [
