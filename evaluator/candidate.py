@@ -155,6 +155,23 @@ def _is_temperature_unsupported(err: Exception) -> bool:
     )
 
 
+def _is_timeout(err: Exception) -> bool:
+    """True for a request timeout (openai raises APITimeoutError → "Request
+    timed out."). Slow reasoning models (e.g. gpt-5.x-pro) routinely exceed the
+    default 30s budget; we retry once with a generous timeout rather than record
+    a spurious empty/failed run."""
+    return "timeout" in type(err).__name__.lower() or "timed out" in str(err).lower()
+
+
+# On a timeout, retry once with a much longer budget: 4× the requested timeout,
+# but never less than this floor (slow reasoning models can take minutes).
+_TIMEOUT_RETRY_FLOOR_SEC = 120.0
+
+
+def _retry_timeout(timeout_sec: float) -> float:
+    return max(timeout_sec * 4.0, _TIMEOUT_RETRY_FLOOR_SEC)
+
+
 def generate_candidate(
     *,
     question: str,
@@ -195,34 +212,41 @@ def generate_candidate(
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": question},
     ]
-    client = _client_for(endpoint).with_options(timeout=timeout_sec)
-    try: # call the API, capturing latency and token usage.
-        resp = client.chat.completions.create(
-            model=model, messages=messages,
-            temperature=temperature, max_tokens=max_tokens,
+    base_client = _client_for(endpoint)
+
+    def _attempt(temp: float, timeout: float):
+        # A fresh with_options() per attempt so the retry can widen the timeout.
+        return base_client.with_options(timeout=timeout).chat.completions.create(
+            model=model, messages=messages, temperature=temp, max_tokens=max_tokens,
         )
+
+    def _failed(err: Exception) -> CandidateResult:
+        return CandidateResult(
+            response="", latency_ms=int((time.perf_counter() - t0) * 1000),
+            prompt_tokens=0, completion_tokens=0, failed=True,
+            error=f"{type(err).__name__}: {err}",
+        )
+
+    try:  # call the API, capturing latency and token usage.
+        resp = _attempt(temperature, timeout_sec)
     except Exception as e:  # never crash a run; record and continue.
         if _is_temperature_unsupported(e):
             # Newer reasoning models only accept the default temperature; retry
             # once at 1 so they can still be evaluated (comparability caveat:
             # these rows were graded at temperature 1, not the run's config).
             try:
-                resp = client.chat.completions.create(
-                    model=model, messages=messages,
-                    temperature=1.0, max_tokens=max_tokens,
-                )
+                resp = _attempt(1.0, timeout_sec)
             except Exception as e2:
-                return CandidateResult(
-                    response="", latency_ms=int((time.perf_counter() - t0) * 1000),
-                    prompt_tokens=0, completion_tokens=0, failed=True,
-                    error=f"{type(e2).__name__}: {e2}",
-                )
+                return _failed(e2)
+        elif _is_timeout(e):
+            # Slow reasoning models (gpt-5.x-pro) exceed the default timeout;
+            # retry once with a generous budget before recording a failure.
+            try:
+                resp = _attempt(temperature, _retry_timeout(timeout_sec))
+            except Exception as e2:
+                return _failed(e2)
         else:
-            return CandidateResult(
-                response="", latency_ms=int((time.perf_counter() - t0) * 1000),
-                prompt_tokens=0, completion_tokens=0, failed=True,
-                error=f"{type(e).__name__}: {e}",
-            )
+            return _failed(e)
     latency_ms = int((time.perf_counter() - t0) * 1000)
 
     # if successful, parse the response and token usage. 

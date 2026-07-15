@@ -137,5 +137,55 @@ class TestTemperatureRetry(unittest.TestCase):
         self.assertEqual(client.chat.completions.create.call_count, 1)  # no retry
 
 
+class TestTimeoutRetry(unittest.TestCase):
+    class _APITimeoutError(Exception):
+        pass
+
+    def test_predicate(self):
+        self.assertTrue(candidate._is_timeout(Exception("Request timed out.")))
+        self.assertTrue(candidate._is_timeout(self._APITimeoutError("boom")))
+        self.assertFalse(candidate._is_timeout(Exception("429 rate limit")))
+        self.assertFalse(candidate._is_timeout(Exception("budget exceeded")))
+
+    def test_retries_with_longer_timeout_on_timeout(self):
+        good = mock.Mock(
+            choices=[mock.Mock(message=mock.Mock(content="hi"))],
+            usage=mock.Mock(prompt_tokens=3, completion_tokens=2),
+        )
+        client = mock.Mock()
+        client.chat.completions.create.side_effect = [
+            self._APITimeoutError("Request timed out."), good,
+        ]
+        inner = mock.Mock()
+        inner.with_options.return_value = client
+        with mock.patch.object(candidate, "_client_for", return_value=inner), \
+             mock.patch.object(candidate, "_cache_write"):
+            r = candidate.generate_candidate(
+                question=f"t-{uuid.uuid4()}", model="gpt-5.4-pro",
+                system_prompt="s", timeout_sec=30.0,
+            )
+        self.assertFalse(r.failed)
+        self.assertEqual(r.response, "hi")
+        self.assertEqual(client.chat.completions.create.call_count, 2)  # first + retry
+        # the retry must widen the per-call timeout (with_options(timeout=...))
+        timeouts = [c.kwargs.get("timeout") for c in inner.with_options.call_args_list]
+        self.assertEqual(timeouts[0], 30.0)          # original attempt
+        self.assertGreater(timeouts[1], 30.0)        # retry is more generous
+
+    def test_timeout_on_retry_returns_failed(self):
+        client = mock.Mock()
+        client.chat.completions.create.side_effect = [
+            self._APITimeoutError("timed out"), self._APITimeoutError("timed out again"),
+        ]
+        inner = mock.Mock()
+        inner.with_options.return_value = client
+        with mock.patch.object(candidate, "_client_for", return_value=inner):
+            r = candidate.generate_candidate(
+                question=f"t-{uuid.uuid4()}", model="gpt-5.4-pro", system_prompt="s",
+            )
+        self.assertTrue(r.failed)
+        self.assertEqual(client.chat.completions.create.call_count, 2)  # one retry only
+
+
 if __name__ == "__main__":
     unittest.main()
