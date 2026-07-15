@@ -84,7 +84,7 @@ def _aggregate_db_run(run: dict, results: list[dict]) -> dict:
 
     slug = (run["source_file"] or "").removesuffix(".jsonl")
     adaptation = run["adaptation"] or {}
-    return {
+    data = {
         "filename": run["source_file"],
         "slug": slug,
         "timestamp": _ts(run["started_at"]),
@@ -107,6 +107,46 @@ def _aggregate_db_run(run: dict, results: list[dict]) -> dict:
         "total_cost_usd": float(sum(r["cost_usd"] or 0 for r in results)),
         "note": f"⚠ {empty}/{n} empty" if empty else "",
     }
+    _attach_execution_pass_rate(data, results, adaptation)
+    return data
+
+
+def _execution_for_results(results: list[dict], adaptation: dict) -> dict | None:
+    """Full functional scoring (run totals + per-question rows) for the DB
+    result rows, or None for a judge-only suite / any error. Scores from the DB
+    payload so the Postgres path matches the file path (``_execution_summary``).
+    Never raises: a scoring hiccup must not break the dashboard."""
+    suite_version = adaptation.get("task_suite_version", "")
+    if not suite_version:
+        return None
+    try:
+        import execution_eval  # lazy: a bad import mustn't break the dashboard
+
+        rows = [
+            {
+                "question_id": r["task_id"],
+                "candidate_response": (r["detail"] or {}).get("candidate_response", ""),
+                "overall": r["score"],
+            }
+            for r in results
+        ]
+        ex = execution_eval.score_results_rows(rows, suite_version)
+    except Exception:
+        return None
+    return ex if ex.get("n") else None
+
+
+def _attach_execution_pass_rate(
+    data: dict, results: list[dict], adaptation: dict
+) -> None:
+    """Add the functional pass-rate for execution suites (SQL/JSON/numeric) to a
+    comparison-table row. Judge-only suites leave the field unset, so the table
+    renders ``—``."""
+    ex = _execution_for_results(results, adaptation)
+    if ex:
+        data["execution_pass_rate"] = ex["pass_rate"]
+        data["execution_passed"] = ex["passed"]
+        data["execution_n"] = ex["n"]
 
 
 def get_runs_data_db() -> dict:
@@ -151,6 +191,14 @@ def get_run_detail_db(
         adaptation.get("task_suite_version", ""))
     dims = _ordered_dims(results)
 
+    # Execution (functional) scoring, if this is an execution suite — drives the
+    # per-question pass/fail and the run-level exec metric. None on judge-only
+    # suites so those rows render — instead of a spurious "fail".
+    exec_summary = _execution_for_results(results, adaptation)
+    exec_by_qid = {
+        row["question_id"]: row for row in (exec_summary or {}).get("rows", [])
+    }
+
     questions_rows = []
     for r in results:
         scores = r["detail"].get("scores") or {}
@@ -173,6 +221,8 @@ def get_run_detail_db(
             },
             "rationales": {d: scores[d]["rationale"] for d in row_dims},
             "overall": r["score"],
+            "exec_passed": (exec_by_qid.get(r["task_id"]) or {}).get("passed"),
+            "exec_error": (exec_by_qid.get(r["task_id"]) or {}).get("error"),
             "latency_ms": r["latency_ms"],
             "cost_usd": float(r["cost_usd"] or 0),
             "status": status,
@@ -210,6 +260,12 @@ def get_run_detail_db(
         "total_prompt_tokens": sum(r["tokens_in"] or 0 for r in results),
         "total_completion_tokens": sum(r["tokens_out"] or 0 for r in results),
         "questions": questions_rows,
+        "execution": (
+            {"pass_rate": exec_summary["pass_rate"],
+             "passed": exec_summary["passed"], "n": exec_summary["n"],
+             "check": exec_summary.get("check")}
+            if exec_summary else None
+        ),
     }
 
 
