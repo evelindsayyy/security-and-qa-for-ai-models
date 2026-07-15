@@ -33,9 +33,12 @@ _sync_repo() {
   origin_url="$(_git_origin_url)"
   local attempt
   for attempt in 1 2 3; do
+    # Hard reset to the fetched CI ref — merge --ff-only left the VM "ahead of
+    # origin" with local commits and could skip the commit GitLab just built.
     if git fetch "$origin_url" "$ref" \
-      && git checkout "$ref" \
-      && git merge --ff-only "FETCH_HEAD"; then
+      && git checkout -B "$ref" FETCH_HEAD \
+      && git reset --hard FETCH_HEAD \
+      && git clean -fd --exclude=.env --exclude=.docker-home --exclude='*.local'; then
       return 0
     fi
     echo "git sync attempt ${attempt}/3 failed; retrying..." >&2
@@ -53,8 +56,13 @@ rm -rf "${DEPLOY_PATH}/frontend/static/dist"
 # shellcheck source=docker/host-env.sh
 source docker/host-env.sh
 
+echo "Deploy runtime identity: ssh=$(id -un) HOST_UID=${HOST_UID} HOST_GID=${HOST_GID} (repo owner)"
+
 mkdir -p "${DEPLOY_PATH}/.docker-home"
 chmod 2775 "${DEPLOY_PATH}/.docker-home" 2>/dev/null || chmod 775 "${DEPLOY_PATH}/.docker-home" 2>/dev/null || true
+# Ensure the UID the web container will run as can use Docker CLI config here.
+mkdir -p "${DEPLOY_PATH}/.docker-home/${HOST_UID}"
+chmod 2775 "${DEPLOY_PATH}/.docker-home/${HOST_UID}" 2>/dev/null || true
 
 printf '%s' "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin "$CI_REGISTRY"
 
