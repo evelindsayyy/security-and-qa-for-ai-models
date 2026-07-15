@@ -15,9 +15,16 @@ reviewed efficacy_schema.sql.
 Idempotent: re-running with --apply cannot duplicate rows — every INSERT
 uses the schema's unique keys via ON CONFLICT DO NOTHING.
 
-Run from the evaluator/ directory:
-    python db/load_results.py                 # dry run (no DB needed)
-    python db/load_results.py --apply         # real load (needs psycopg + DSN)
+Run as a module from the repo root (it imports the repo-root ``dbutils``
+package, so running the file directly fails with ``ModuleNotFoundError: No
+module named 'dbutils'``):
+    python -m evaluator.db.load_results           # dry run (no DB needed)
+    python -m evaluator.db.load_results --apply   # real load (needs psycopg + DSN)
+
+The DSN comes from --dsn or, in order, the EFFICACY_DB_DSN / POSTGRES_DSN /
+DATABASE_URL env vars. It is read from <repo>/.env via python-dotenv (which
+handles the keyword-conninfo format with spaces) — do NOT `source .env` first,
+as the shell splits that value on its spaces.
 """
 
 from __future__ import annotations
