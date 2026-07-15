@@ -256,13 +256,28 @@ REASONING_TOKEN_TIER = "reasoning"
 
 def is_reasoning_model(model: str) -> bool:
     """True for models that emit hidden reasoning/thinking tokens before the
-    answer (o-series, gpt-5 mini/nano, gpt-oss, DeepSeek-R1, Qwen QwQ). These
-    need the top completion budget or they run out mid-thought and return empty.
+    answer (o-series, the GPT-5 reasoning family, gpt-oss, DeepSeek-R1, Qwen
+    QwQ). These need the top completion budget or they run out mid-thought and
+    return an empty response.
+
+    The GPT-5 family reasons by default — ``gpt-5``, ``gpt-5.1``, ``gpt-5-mini``,
+    ``gpt-5.4-nano``, ``gpt-5.4-pro`` … — EXCEPT the conversational ``-chat`` /
+    ``-instruct`` variants, which don't. We match the whole family and exclude
+    those, so a newly added ``gpt-5.x`` is flagged automatically. Erring toward
+    reasoning is deliberate: over-budgeting merely costs a little; under-budgeting
+    a reasoning model produces empty answers.
     """
     m = (model or "").lower()
+    # Explicit conversational / instruct variants don't hide-reason.
+    if "chat" in m or "instruct" in m:
+        return False
     if m.startswith(("o1", "o3", "o4")):
         return True
-    keywords = ("gpt-oss", "gpt-5-mini", "gpt-5-nano", "qwq", "reasoning", "-r1", "deepseek-r")
+    # GPT-5 family: gpt-5, gpt5, "gpt 5", gpt-5.4-mini, … (the -chat ones already
+    # returned False above).
+    if re.search(r"gpt[\s-]?5", m):
+        return True
+    keywords = ("gpt-oss", "qwq", "reasoning", "-r1", "deepseek-r")
     return any(k in m for k in keywords)
 
 
