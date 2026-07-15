@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -51,8 +52,7 @@ class VllmWaitTest(unittest.TestCase):
     200 /health, and assert the wait succeeds.
     """
 
-    def _args(self, sf: Path) -> "argparse.Namespace":
-        import argparse
+    def _args(self, sf: Path) -> argparse.Namespace:
         return argparse.Namespace(
             session_file=str(sf), max_attempts=3, sleep_seconds=0,
         )
