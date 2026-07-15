@@ -11,6 +11,7 @@
 #   ./docker/run.sh up --build         # start (foreground; Ctrl+C stops)
 #   ./docker/run.sh up -d --build      # start (background / detached)
 #   ./docker/run.sh restart            # stop + rebuild + recreate (pick up code)
+#   ./docker/run.sh wait-health [sec]    # block until web /api/health answers (deploy)
 #   ./docker/run.sh down               # stop
 #   ./docker/run.sh logs -f web        # follow logs (works for detached too)
 #
@@ -49,6 +50,27 @@ if [ "${1:-}" = "restart" ]; then
   echo "UI recreating. Follow logs with: ./docker/run.sh logs -f web"
   echo "Stop with: ./docker/run.sh down"
   exit 0
+fi
+
+if [ "${1:-}" = "wait-health" ]; then
+  shift || true
+  max_sec="${1:-120}"
+  attempts=$((max_sec / 2))
+  if [ "$attempts" -lt 1 ]; then
+    attempts=1
+  fi
+  echo "Waiting for web health (up to ${max_sec}s)…"
+  for attempt in $(seq 1 "$attempts"); do
+    if compose exec -T web curl -sf http://localhost:5000/api/health >/dev/null 2>&1; then
+      echo "Web healthy after ${attempt} attempt(s)."
+      exit 0
+    fi
+    if [ "$attempt" -eq "$attempts" ]; then
+      echo "Web did not become healthy within ${max_sec}s — check: ./docker/run.sh logs web" >&2
+      exit 1
+    fi
+    sleep 2
+  done
 fi
 
 exec docker compose --project-name qa-ai-models "${ENV_ARGS[@]}" \

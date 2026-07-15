@@ -86,7 +86,7 @@ CLI config.
 | Unstyled / 404 on `/static/dist/…` | Missing frontend build | Dev: `./docker/run.sh up -d --build`. VM: CI deploy with `frontend-build` + `build-web-image` |
 | `https://…` unreachable, `localhost:5000` works | `CADDY_DOMAIN` unset or Caddy not running | Set `CADDY_DOMAIN` + `TRUST_PROXY=1`; confirm `qa-ai-models-caddy-1` is up |
 | Port 5000 in use | Stray process or wrong compose project | `ss -ltnp \| grep :5000`; use `--project-name qa-ai-models` |
-| Deploy health wait timeout | Web failed to start | `docker compose --project-name qa-ai-models logs web`; `curl -s http://127.0.0.1:5000/api/health` |
+| Deploy health wait timeout | Web failed to start | `docker compose --project-name qa-ai-models logs web`; `./docker/run.sh exec -T web curl -sf http://localhost:5000/api/health` (production has no host :5000 when Caddy is enabled) |
 
 Do not run `python3 main.py --host` on the shared VM — it binds port 5000 outside
 Docker and blocks the production container.
