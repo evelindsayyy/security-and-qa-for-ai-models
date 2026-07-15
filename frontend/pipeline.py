@@ -43,16 +43,24 @@ def _safety_result_paths(model: str) -> list[tuple[str, Path]]:
     slug = normalize_gateway_model_id(model)
     model_dir = SAFETY_OUTPUT_DIR / slug
     out: list[tuple[str, Path]] = []
-    if not model_dir.is_dir():
+    try:
+        if not model_dir.is_dir():
+            return out
+        legacy = model_dir / "merged_safety_result.json"
+        if legacy.is_file():
+            out.append(("base", legacy))
+        for prof_dir in sorted(model_dir.iterdir()):
+            if prof_dir.is_dir() and not prof_dir.name.startswith("."):
+                mp = prof_dir / "merged_safety_result.json"
+                if mp.is_file():
+                    out.append((prof_dir.name, mp))
+    except OSError:
+        # Unreadable artifacts — e.g. a deploy-time file owned by another user
+        # with restrictive perms (PermissionError from is_file()/iterdir()) —
+        # must not abort the whole pipeline listing. Return whatever resolved so
+        # far; the DB/UI catalog (tried first) still supplies cleared runs, and
+        # the gate otherwise reports "missing".
         return out
-    legacy = model_dir / "merged_safety_result.json"
-    if legacy.is_file():
-        out.append(("base", legacy))
-    for prof_dir in sorted(model_dir.iterdir()):
-        if prof_dir.is_dir() and not prof_dir.name.startswith("."):
-            mp = prof_dir / "merged_safety_result.json"
-            if mp.is_file():
-                out.append((prof_dir.name, mp))
     return out
 
 
@@ -333,6 +341,32 @@ def stage_state(model: str, source: str) -> dict:
     }
 
 
+def _row_or_placeholder(model: str | None, source: str) -> dict:
+    """``stage_state`` for one model, but never propagate a per-model failure.
+
+    A single model with an unreadable artifact used to raise inside the build
+    loop, and the broad handler then dropped that model AND every model after it
+    (the table showed 15 of 41). Each model is now isolated: on error it still
+    gets a row, with its gate marked unknown, so the full catalog always renders.
+    """
+    try:
+        return stage_state(model, source)
+    except Exception as exc:  # noqa: BLE001 — keep the model visible, don't abort
+        detail = f"pipeline state unavailable: {exc}"
+        return {
+            "model": model,
+            "source": source,
+            "scan": (
+                {"state": "n/a", "detail": "nothing to scan (API endpoint)"}
+                if source == "gateway"
+                else {"state": "unknown", "detail": detail}
+            ),
+            "safety": {"state": "unknown", "detail": detail},
+            "eval_unlocked": False,
+            "eval_href": _eval_stage_href(model, source, unlocked=False),
+        }
+
+
 def build_overview() -> dict:
     """All gateway models + every HF repo that already has a scan, each with its
     pipeline stage state. Degrades gracefully if a data source is unavailable."""
@@ -347,7 +381,7 @@ def build_overview() -> dict:
         models = catalog.get("models") or []
         gateway_count = len(models)
         for m in models:
-            rows.append(stage_state(m["id"], "gateway"))
+            rows.append(_row_or_placeholder(m.get("id"), "gateway"))
     except Exception as exc:  # noqa: BLE001 — a catalog hiccup must not 500 the page
         gateway_error = str(exc)
     try:
@@ -356,7 +390,7 @@ def build_overview() -> dict:
         for s in get_scans_data().get("scans", []):
             repo = s.get("model_id")
             if repo:
-                rows.append(stage_state(repo, "hf"))
+                rows.append(_row_or_placeholder(repo, "hf"))
     except Exception:  # noqa: BLE001
         pass
     return {

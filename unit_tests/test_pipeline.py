@@ -185,6 +185,53 @@ class RequireReadyTest(unittest.TestCase):
             )
 
 
+class BuildOverviewResilienceTest(unittest.TestCase):
+    """One model with an unreadable artifact must not drop the rest of the
+    catalog. Regression for the /pipeline table showing 15 of 41 models after a
+    PermissionError on one model's safety file aborted the whole build loop."""
+
+    def _ok_row(self, model, source):
+        return {"model": model, "source": source,
+                "scan": {"state": "n/a", "detail": ""},
+                "safety": {"state": "cleared", "detail": ""},
+                "eval_unlocked": True, "eval_href": ""}
+
+    def test_one_failing_gateway_model_keeps_all_rows(self) -> None:
+        catalog = {"models": [{"id": "m1"}, {"id": "bad"}, {"id": "m3"}],
+                   "error": None}
+
+        def flaky(model, source):
+            if model == "bad":
+                raise PermissionError("[Errno 13] Permission denied")
+            return self._ok_row(model, source)
+
+        with mock.patch("gateway.catalog.get_gateway_catalog",
+                        return_value=catalog), \
+             mock.patch.object(pipeline, "stage_state", side_effect=flaky), \
+             mock.patch("frontend.scan_data.get_scans_data",
+                        return_value={"scans": []}):
+            ov = pipeline.build_overview()
+
+        # Every gateway model still listed, in order — none dropped.
+        self.assertEqual([r["model"] for r in ov["rows"]], ["m1", "bad", "m3"])
+        self.assertEqual(ov["gateway_count"], 3)
+        bad = next(r for r in ov["rows"] if r["model"] == "bad")
+        self.assertEqual(bad["safety"]["state"], "unknown")  # degraded, not gone
+        self.assertFalse(bad["eval_unlocked"])
+
+    def test_unreadable_safety_dir_does_not_raise(self) -> None:
+        # is_file()/iterdir() raising PermissionError must be swallowed so the
+        # gate degrades to "no readable runs" instead of aborting the page.
+        boom = mock.Mock(side_effect=PermissionError("[Errno 13] denied"))
+        with mock.patch.object(pipeline, "SAFETY_OUTPUT_DIR") as sdir:
+            sdir.__truediv__ = mock.Mock(return_value=mock.Mock(
+                is_dir=mock.Mock(return_value=True), iterdir=boom,
+                __truediv__=mock.Mock(return_value=mock.Mock(
+                    is_file=mock.Mock(return_value=False)))))
+            # Should return [] rather than raise.
+            self.assertEqual(pipeline._safety_result_paths("gpt-4.1-mini"), [])
+
+
 class StageStateTest(unittest.TestCase):
     def test_gateway_cleared_unlocks_eval(self) -> None:
         with mock.patch.object(
