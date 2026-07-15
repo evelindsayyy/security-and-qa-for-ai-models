@@ -14,7 +14,14 @@ from typing import Any
 
 from dbutils.env import REPO_ROOT
 
-_SCAN_TOOLS = ("modelscan", "fickling", "modelaudit", "dependencies", "secrets")
+_SCAN_TOOL_ROWS = (
+    ("modelscan", "ModelScan", "badge-scan"),
+    ("fickling", "Fickling", "badge-scan"),
+    ("modelaudit", "ModelAudit", "badge-scan"),
+    ("dependencies", "Dependencies", "badge-scan"),
+    ("secrets", "Secrets", "badge-scan"),
+)
+_SCAN_TOOLS = tuple(key for key, _, _ in _SCAN_TOOL_ROWS)
 _SCAN_SKIP_KEYS = {
     "modelscan": "skip_modelscan",
     "fickling": "skip_fickling",
@@ -22,6 +29,14 @@ _SCAN_SKIP_KEYS = {
     "dependencies": "skip_deps",
     "secrets": "skip_secrets",
 }
+
+
+SCAN_TOOL_ROWS = _SCAN_TOOL_ROWS
+
+
+def scan_tool_ids() -> tuple[str, ...]:
+    """Canonical scanner tool keys for list views and staleness checks."""
+    return _SCAN_TOOLS
 
 _PICKLE_SUFFIXES = (".bin", ".pt", ".pth", ".pkl", ".pickle", ".ckpt")
 _MANIFEST_MARKERS = (
@@ -142,7 +157,7 @@ def safety_staleness_reasons(row: dict[str, Any]) -> list[str]:
     run_spec = garak_probes or current_spec
     expected = expected_garak_module_count(run_spec)
 
-    stored_digest = row.get("garak_probe_spec_digest")
+    stored_digest = row.get("garak_probe_spec_digest") or config.get("garak_probe_spec_digest")
     current_digest = garak_probe_spec_digest(current_spec)
     if stored_digest and stored_digest != current_digest and not garak_probes:
         reasons.append("garak probe set changed since run")
@@ -201,6 +216,20 @@ def _rubric_dimension_keys(path: Path) -> list[str]:
     return []
 
 
+def current_eval_suite_file_digests(suite_key: str) -> dict[str, str] | None:
+    """SHA-256 digests of suite/rubric/system_prompt files at read time."""
+    cfg = _eval_suite_cfg(suite_key)
+    if not cfg:
+        return None
+    out: dict[str, str] = {}
+    for label, path in cfg.items():
+        digest = _file_digest(path)
+        if digest is None:
+            return None
+        out[label] = digest
+    return out
+
+
 def current_eval_suite_versions(suite_key: str) -> dict[str, str] | None:
     cfg = _eval_suite_cfg(suite_key)
     if not cfg:
@@ -252,8 +281,18 @@ def eval_staleness_reasons(row: dict[str, Any]) -> list[str]:
 
     cfg = _eval_suite_cfg(suite)
     if cfg:
-        # The suite JSONL and system prompt must still exist; the (inert) rubric
-        # file only matters for judge-scored suites.
+        stored_digests = row.get("eval_suite_file_digests")
+        config = row.get("config_json") if isinstance(row.get("config_json"), dict) else {}
+        if not isinstance(stored_digests, dict):
+            stored_digests = config.get("eval_suite_file_digests")
+        current_digests = current_eval_suite_file_digests(suite)
+        if isinstance(stored_digests, dict) and current_digests:
+            for label, digest in current_digests.items():
+                if is_execution and label == "rubric":
+                    continue
+                run_digest = stored_digests.get(label)
+                if run_digest and run_digest != digest:
+                    reasons.append(f"suite file {label} changed since run")
         for label, path in cfg.items():
             if is_execution and label == "rubric":
                 continue

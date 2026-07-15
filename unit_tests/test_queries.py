@@ -170,9 +170,9 @@ class ConnectionLayerTest(unittest.TestCase):
 
 
 class DashboardRoutesThroughRepositoryTest(unittest.TestCase):
-    """get_runs_data_db must obtain its rows from queries.fetch_runs."""
+    """get_runs_data_db must obtain its rows from queries.fetch_runs_list."""
 
-    def test_get_runs_data_db_uses_fetch_runs(self) -> None:
+    def test_get_runs_data_db_uses_fetch_runs_list(self) -> None:
         from frontend import eval_db_data
 
         record = {"run": {"id": "rid1", "source_file": "zzz_repo_test.jsonl",
@@ -194,7 +194,7 @@ class DashboardRoutesThroughRepositoryTest(unittest.TestCase):
 
         with mock.patch.object(eval_db_data.queries, "connect",
                                return_value=_NullCtx()), \
-             mock.patch.object(eval_db_data.queries, "fetch_runs",
+             mock.patch.object(eval_db_data.queries, "fetch_runs_list",
                                return_value=[record]) as fetch:
             data = eval_db_data.get_runs_data_db()
 

@@ -108,6 +108,12 @@ def _aggregate_db_run(run: dict, results: list[dict]) -> dict:
         "note": f"⚠ {empty}/{n} empty" if empty else "",
     }
     _attach_execution_pass_rate(data, results, adaptation)
+    config_json = run.get("config_json")
+    if isinstance(config_json, dict):
+        data["config_json"] = config_json
+        digests = config_json.get("eval_suite_file_digests")
+        if isinstance(digests, dict):
+            data["eval_suite_file_digests"] = digests
     return data
 
 
@@ -158,7 +164,7 @@ def get_runs_data_db() -> dict:
     from frontend.eval_run_data import _postprocess_runs
 
     with queries.connect() as conn:
-        records = queries.fetch_runs(conn)
+        records = queries.fetch_runs_list(conn)
     db_runs = [_aggregate_db_run(rec["run"], rec["results"]) for rec in records]
 
     return _postprocess_runs(db_runs)

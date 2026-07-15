@@ -205,6 +205,34 @@ class EvalStalenessSpecTest(unittest.TestCase):
         )
 
 
+    def test_zero_files_scanned_is_stale(self) -> None:
+        row = {
+            "scanned_file_count": 0,
+            "status": "complete",
+            "scanner_version": staleness_spec.current_scanner_version(),
+            "tool_status": {t: {} for t in staleness_spec.scan_tool_ids()},
+        }
+        reasons = staleness_spec.scan_staleness_reasons(row)
+        self.assertIn("0 files scanned", reasons)
+
+    def test_eval_suite_file_digest_change_is_stale(self) -> None:
+        current = staleness_spec.current_eval_suite_file_digests("it_support_v1")
+        self.assertIsNotNone(current)
+        row = {
+            "suite": "it_support_v1",
+            **(staleness_spec.current_eval_suite_versions("it_support_v1") or {}),
+            "eval_suite_file_digests": {**current, "suite": "stale-digest"},
+            "dim_means": {
+                "accuracy": 4.0,
+                "completeness": 4.0,
+                "policy_adherence": 4.0,
+                "tone": 3.0,
+            },
+        }
+        reasons = staleness_spec.eval_staleness_reasons(row)
+        self.assertTrue(any("suite file suite changed" in r for r in reasons))
+
+
 class BenchmarkStalenessSpecTest(unittest.TestCase):
     def test_reference_slug_never_stale(self) -> None:
         with mock.patch(

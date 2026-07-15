@@ -29,6 +29,44 @@ def _private_scope() -> tuple[str, str]:
     return "private", current_user_id()
 
 
+_COMPARE_MAX = 5
+_COMPARE_DEFAULT = 2
+_COMPARE_CATEGORIES = frozenset({"general_chat", "codex", "research"})
+
+
+def _compare_gateway_options() -> list[dict[str, str]]:
+    from gateway.catalog import eligible_models
+    from frontend.model_identity import gateway_slug
+
+    ids = eligible_models(_COMPARE_CATEGORIES)
+    return [{"id": mid, "slug": gateway_slug(mid)} for mid in ids]
+
+
+def _resolve_compare_slugs(request) -> list[str]:
+    from frontend import model_rollup
+
+    raw = request.args.getlist("models")
+    expanded: list[str] = []
+    for item in raw:
+        if "," in item:
+            expanded.extend(p.strip() for p in item.split(",") if p.strip())
+        elif item.strip():
+            expanded.append(item.strip())
+    if not expanded and request.args.get("models"):
+        expanded = [p.strip() for p in request.args.get("models", "").split(",") if p.strip()]
+    if expanded:
+        return expanded[:_COMPARE_MAX]
+    options = _compare_gateway_options()
+    with_data = [
+        o["slug"]
+        for o in options
+        if (model_rollup.get_model_rollup(o["slug"]) or {}).get("aggregate") is not None
+    ]
+    if len(with_data) >= _COMPARE_DEFAULT:
+        return with_data[:_COMPARE_DEFAULT]
+    return [o["slug"] for o in options[:_COMPARE_DEFAULT]]
+
+
 def _attach_pillar_summary(detail: dict, *, pillar: str) -> dict:
     from frontend.pillar_summary import attach_pillar_summary
 
@@ -36,8 +74,13 @@ def _attach_pillar_summary(detail: dict, *, pillar: str) -> dict:
     return detail
 
 
-def _hub_context() -> dict:
-    """build home page counts — never crash if one data dir is missing."""
+def _hub_context(*, payloads: dict | None = None) -> dict:
+    """Build home page counts — never crash if one data dir is missing."""
+    if payloads is None:
+        from frontend.overview import pillar_payloads_once
+
+        payloads = pillar_payloads_once()
+
     scan_count = 0
     scan_worst_tier = "—"
     scan_worst_score = None
@@ -54,47 +97,43 @@ def _hub_context() -> dict:
     benchmark_latest = None
 
     try:
-        from frontend.scan_data import get_scans_data
-
-        sd = get_scans_data()
-        scan_has = sd["has_scans"]
-        scan_count = len(sd["scans"])
-        if sd["scans"]:
+        sd = payloads.get("scans") or {}
+        scan_has = sd.get("has_scans", False)
+        scan_count = len(sd.get("scans") or [])
+        if sd.get("scans"):
             scan_worst_tier = sd["scans"][0]["severity_tier"]
             scan_worst_score = sd["scans"][0]["overall_risk_score"]
     except Exception:
         pass
 
     try:
-        from frontend.eval_run_data import get_runs_data
-
-        ed = get_runs_data()
-        eval_has = ed["has_runs"]
-        eval_count = len(ed["runs"])
-        if ed["runs"]:
+        ed = payloads.get("eval") or {}
+        eval_has = ed.get("has_runs", False)
+        eval_count = len(ed.get("runs") or [])
+        if ed.get("runs"):
             eval_best_overall = ed["runs"][0]["overall"]
     except Exception:
         pass
 
     try:
-        from frontend.safety_data import get_safety_data
-
-        saf = get_safety_data()
-        safety_has = saf["has_safety"]
-        safety_count = len(saf["models"])
-        if saf["models"]:
+        saf = payloads.get("safety") or {}
+        safety_has = saf.get("has_safety", False)
+        safety_count = len(saf.get("models") or [])
+        if saf.get("models"):
             safety_worst_pass_rate = saf["models"][0]["summary_pass_rate"]
             safety_worst_tier = saf["models"][0]["tier"]
     except Exception:
         pass
 
     try:
-        from frontend.benchmark_data import get_benchmark_latest_for_hub, get_benchmarks_data
+        from frontend.benchmark_data import get_benchmark_latest_for_hub
 
-        bench = get_benchmarks_data()
-        benchmark_has = bench["has_runs"]
-        benchmark_count = len(bench["runs"])
-        benchmark_latest = get_benchmark_latest_for_hub(bench.get("all_runs") or bench.get("runs"))
+        bench = payloads.get("benchmarks") or {}
+        benchmark_has = bench.get("has_runs", False)
+        benchmark_count = len(bench.get("runs") or [])
+        benchmark_latest = get_benchmark_latest_for_hub(
+            bench.get("all_runs") or bench.get("runs")
+        )
     except Exception:
         pass
 
@@ -132,36 +171,6 @@ def register_routes(app):
         from frontend.launch_registry import list_inflight_jobs
 
         return render_template("jobs.html", jobs=list_inflight_jobs())
-
-    @app.route("/labels")
-    def model_labels():
-        from flask import redirect, request, url_for
-        from frontend.eval_run_data import get_all_model_cards
-
-        try:
-            cards = get_all_model_cards()
-        except Exception:  # noqa: BLE001 — launcher degrades to empty, never 500s
-            cards = []
-        models = [
-            {"slug": c["detail_slug"], "name": c["model"]}
-            for c in cards
-            if c.get("detail_slug") and c.get("model")
-        ]
-
-        query = (request.args.get("model") or "").strip()
-        if query:
-            match = next(
-                (
-                    m
-                    for m in models
-                    if m["slug"] == query or m["name"].lower() == query.lower()
-                ),
-                None,
-            )
-            if match:
-                return redirect(url_for("model_detail", slug=match["slug"]))
-            return render_template("model_cards.html", models=models, not_found=query)
-        return render_template("model_cards.html", models=models, not_found=None)
 
     @app.route("/scans")
     def scans():
@@ -369,7 +378,7 @@ def register_routes(app):
         from frontend.eval_run_data import get_eval_guide_data, get_runs_data
 
         data = get_runs_data()
-        data.update(get_eval_guide_data())
+        data.update(get_eval_guide_data(runs=data.get("runs")))
         return render_template("eval_run.html", **data)
 
     @app.route("/eval-run/new")
@@ -1201,7 +1210,7 @@ def register_routes(app):
         from frontend.safety_data import get_safety_data, get_safety_guide_data
 
         data = get_safety_data()
-        data.update(get_safety_guide_data())
+        data.update(get_safety_guide_data(models=data.get("models")))
         return render_template("safety.html", **data)
 
     @app.route("/safety/new")
@@ -1647,8 +1656,7 @@ def register_routes(app):
         from frontend import model_rollup, model_summary
         from frontend.model_identity import gateway_slug
 
-        raw = request.args.get("models", "")
-        slugs = [s for s in (p.strip() for p in raw.split(",")) if s]
+        slugs = _resolve_compare_slugs(request)
         gw = get_gateway_catalog()
         id_by_slug = {gateway_slug(m["id"]): m["id"] for m in gw["models"]}
         rollups = []
@@ -1686,12 +1694,18 @@ def register_routes(app):
                     "benchmark": bench,
                 }
             )
+        form_slugs = slugs if slugs else [""] * _COMPARE_DEFAULT
+        while len(form_slugs) < _COMPARE_DEFAULT:
+            form_slugs.append("")
         return render_template(
             "compare.html",
             rollups=rollups,
             recommendations=recommendations,
             compare_summary=compare_summary,
             requested_slugs=slugs,
+            form_slugs=form_slugs[:_COMPARE_MAX],
+            gateway_options=_compare_gateway_options(),
+            compare_max=_COMPARE_MAX,
             unmatched=unmatched,
             benchmark_kinds=benchmark_kinds,
             chart_models=chart_models,

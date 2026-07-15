@@ -70,8 +70,7 @@ def _connect():
 
 _LIST_SQL = """
 SELECT output_slug, source_filename, gateway_model_id, benchmark_key,
-       headline_metric, headline_value, n_items, metrics, items, run_params,
-       completed_at, config_json
+       headline_metric, headline_value, n_items, metrics, completed_at, config_json
 FROM public.benchmark_runs b
 WHERE {visibility_filter}
 ORDER BY completed_at DESC NULLS LAST, output_slug
@@ -152,8 +151,6 @@ def _summarize_db_run(row: tuple) -> dict:
         headline_value,
         n_items,
         metrics,
-        _items,
-        _run_params,
         completed_at,
         config_json,
     ) = row

@@ -156,8 +156,10 @@ def rollups_for_gateway_ids(gateway_ids: list[str]) -> dict[str, dict]:
     return {gid: lookup_rollup_for_gateway(gid, by_slug=by_slug) for gid in gateway_ids}
 
 
-def _add_scan_rows(by_key: dict[str, dict]) -> None:
-    for s in scan_data.get_scans_data().get("scans", []):
+def _add_scan_rows(by_key: dict[str, dict], *, scans: list[dict] | None = None) -> None:
+    if scans is None:
+        scans = scan_data.get_scans_data().get("scans", [])
+    for s in scans:
         key = s["slug"]
         model_id = s.get("model_id") or hf_repo_id(key)
         scan_summary = {
@@ -173,8 +175,10 @@ def _add_scan_rows(by_key: dict[str, dict]) -> None:
             grow["scan"] = scan_summary
 
 
-def _add_safety_rows(by_key: dict[str, dict]) -> None:
-    for m in safety_data.get_safety_data().get("models", []):
+def _add_safety_rows(by_key: dict[str, dict], *, models: list[dict] | None = None) -> None:
+    if models is None:
+        models = safety_data.get_safety_data().get("models", [])
+    for m in models:
         key = gateway_slug(m["gateway_model_id"])
         row = _row(by_key, key, m.get("display_name") or m["gateway_model_id"])
         row["safety"] = {
@@ -185,9 +189,11 @@ def _add_safety_rows(by_key: dict[str, dict]) -> None:
         }
 
 
-def _add_eval_rows(by_key: dict[str, dict]) -> None:
+def _add_eval_rows(by_key: dict[str, dict], *, runs: list[dict] | None = None) -> None:
+    if runs is None:
+        runs = eval_run_data.get_runs_data().get("runs", [])
     runs_by_key: dict[str, list[dict]] = {}
-    for r in eval_run_data.get_runs_data().get("runs", []):
+    for r in runs:
         runs_by_key.setdefault(gateway_slug(r["candidate_model"]), []).append(r)
 
     for key, runs in runs_by_key.items():
@@ -206,9 +212,11 @@ def _add_eval_rows(by_key: dict[str, dict]) -> None:
         }
 
 
-def _add_benchmark_rows(by_key: dict[str, dict]) -> None:
+def _add_benchmark_rows(by_key: dict[str, dict], *, runs: list[dict] | None = None) -> None:
+    if runs is None:
+        runs = benchmark_data.get_benchmarks_data().get("runs", [])
     kinds_by_key: dict[str, dict[str, dict]] = {}
-    for r in benchmark_data.get_benchmarks_data().get("runs", []):
+    for r in runs:
         model = r.get("model")
         if not model or model == "—":
             continue
@@ -224,24 +232,34 @@ def _add_benchmark_rows(by_key: dict[str, dict]) -> None:
         row["benchmark"] = {"kinds": kinds}
 
 
-def get_models_union() -> list[dict]:
+def get_models_union(*, payloads: dict | None = None) -> list[dict]:
     """One row per model with data in at least one pillar."""
     global _UNION_CACHE, _UNION_CACHE_AT
     now = time.monotonic()
-    if _UNION_CACHE is not None and (now - _UNION_CACHE_AT) < _UNION_CACHE_TTL_SEC:
+    if payloads is None and _UNION_CACHE is not None and (now - _UNION_CACHE_AT) < _UNION_CACHE_TTL_SEC:
         return _UNION_CACHE
 
     by_key: dict[str, dict] = {}
-    _add_scan_rows(by_key)
-    from frontend.scan_links import apply_scan_links
+    if payloads is not None:
+        _add_scan_rows(by_key, scans=(payloads.get("scans") or {}).get("scans", []))
+        from frontend.scan_links import apply_scan_links
 
-    apply_scan_links(by_key)
-    _add_safety_rows(by_key)
-    _add_eval_rows(by_key)
-    _add_benchmark_rows(by_key)
+        apply_scan_links(by_key)
+        _add_safety_rows(by_key, models=(payloads.get("safety") or {}).get("models", []))
+        _add_eval_rows(by_key, runs=(payloads.get("eval") or {}).get("runs", []))
+        _add_benchmark_rows(by_key, runs=(payloads.get("benchmarks") or {}).get("runs", []))
+    else:
+        _add_scan_rows(by_key)
+        from frontend.scan_links import apply_scan_links
+
+        apply_scan_links(by_key)
+        _add_safety_rows(by_key)
+        _add_eval_rows(by_key)
+        _add_benchmark_rows(by_key)
     rows = [enrich_row(r) for r in sorted(by_key.values(), key=lambda r: r["slug"])]
-    _UNION_CACHE = rows
-    _UNION_CACHE_AT = now
+    if payloads is None:
+        _UNION_CACHE = rows
+        _UNION_CACHE_AT = now
     return rows
 
 

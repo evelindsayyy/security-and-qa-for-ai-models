@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # Run on the application VM (invoked by GitLab deploy job over SSH).
 #
-# Expects env: DEPLOY_PATH, WEB_IMAGE, CI_REGISTRY, CI_JOB_TOKEN
+# Expects env: DEPLOY_PATH, CI_REGISTRY, CI_JOB_TOKEN
 # Optional: GIT_REF (default main), BUILD_PILLARS=1 to rebuild pillar images after pull
 # Optional: CI_SERVER_HOST, CI_PROJECT_PATH, CI_SERVER_PROTOCOL — HTTPS git sync via CI_JOB_TOKEN
 set -euo pipefail
 
 DEPLOY_PATH="${DEPLOY_PATH:?DEPLOY_PATH required}"
-WEB_IMAGE="${WEB_IMAGE:?WEB_IMAGE required}"
 CI_REGISTRY="${CI_REGISTRY:?CI_REGISTRY required}"
 CI_JOB_TOKEN="${CI_JOB_TOKEN:?CI_JOB_TOKEN required}"
 GIT_REF="${GIT_REF:-main}"
@@ -48,18 +47,12 @@ _sync_repo() {
 
 _sync_repo "$GIT_REF"
 
-# The VM never builds frontend assets on the host; production serves the Vite
-# bundle baked into the CI-built image (/opt/frontend-dist). frontend/static/dist
-# is gitignored and must not exist here, or a stale leftover (e.g. from an older
-# deploy) would shadow the fresh image bake and the UI would render with outdated
-# styles. Remove it so vite_assets.py falls through to the image bake.
+# Stale host dist must not shadow the image bake (vite_assets.py fallback).
 rm -rf "${DEPLOY_PATH}/frontend/static/dist"
 
 # shellcheck source=docker/host-env.sh
 source docker/host-env.sh
 
-# Per-UID Docker CLI homes under .docker-home; group-writable so deploy user and
-# interactive VM users (different UIDs) can each mkdir their own subdir.
 mkdir -p "${DEPLOY_PATH}/.docker-home"
 chmod 2775 "${DEPLOY_PATH}/.docker-home" 2>/dev/null || chmod 775 "${DEPLOY_PATH}/.docker-home" 2>/dev/null || true
 
@@ -69,7 +62,6 @@ if [ "${BUILD_PILLARS:-0}" = "1" ]; then
   ./docker/build-pillars.sh
 fi
 
-export WEB_IMAGE
-./docker/run.sh restart-deploy
+./docker/run.sh restart
 
-echo "Deployed ${WEB_IMAGE} at ${DEPLOY_PATH} ($(git rev-parse --short HEAD))"
+echo "Deployed at ${DEPLOY_PATH} ($(git rev-parse --short HEAD))"

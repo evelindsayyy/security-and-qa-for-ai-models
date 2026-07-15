@@ -22,6 +22,37 @@ class LaunchPlan:
     reused: ReusableRun | None
 
 
+def _enrich_launch_config(pillar: Pillar, config: dict[str, Any]) -> dict[str, Any]:
+    """Persist run-time spec digests in sidecar config_json for staleness checks."""
+    enriched = dict(config)
+    if pillar == "safety" and not enriched.get("skip_garak"):
+        from dbutils.staleness_spec import (
+            current_safety_garak_probe_spec,
+            garak_probe_spec_digest,
+        )
+
+        probes = (enriched.get("garak_probes") or "").strip()
+        spec = probes or current_safety_garak_probe_spec()
+        enriched["garak_probe_spec_digest"] = garak_probe_spec_digest(spec)
+    if pillar == "eval":
+        suite_key = (enriched.get("suite_key") or "").strip()
+        if suite_key and not suite_key.startswith("custom_"):
+            from dbutils.staleness_spec import current_eval_suite_file_digests
+
+            digests = current_eval_suite_file_digests(suite_key)
+            if digests:
+                enriched["eval_suite_file_digests"] = digests
+    if pillar == "benchmark":
+        benchmark_key = (enriched.get("benchmark_key") or "").strip()
+        if benchmark_key:
+            from dbutils.staleness_spec import current_benchmark_spec_digest
+
+            digest = current_benchmark_spec_digest(benchmark_key)
+            if digest:
+                enriched["benchmark_spec_digest"] = digest
+    return enriched
+
+
 def build_launch_plan(
     pillar: Pillar,
     *,
@@ -30,7 +61,7 @@ def build_launch_plan(
 ) -> LaunchPlan:
     from dbutils.run_fingerprint import normalize_config
 
-    config = normalize_config(pillar, **config_kwargs)
+    config = _enrich_launch_config(pillar, normalize_config(pillar, **config_kwargs))
     fp = fingerprint(pillar, config)
     private_mode = get_view_mode() == "private"
     visibility = resolve_visibility(
