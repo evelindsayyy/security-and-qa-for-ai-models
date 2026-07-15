@@ -103,6 +103,19 @@ class CustomExclusionTest(unittest.TestCase):
         self.assertIn("it_support_v1", suites)
         self.assertNotIn("custom_20260615T000000Z", suites)
 
+    def test_retired_and_experimental_suites_excluded(self) -> None:
+        # Runs on suites that aren't current curated suites (a retired
+        # experimental suite like robustness_v1, or a leftover smoke test)
+        # must not clutter the comparison with a permanent "Needs rerun".
+        runs = [
+            _run(suite="it_support_v1", fname="a.jsonl"),
+            _run(suite="robustness_v1", fname="b.jsonl"),
+            _run(suite="smoke_v1", fname="c.jsonl"),
+        ]
+        out = erd._postprocess_runs(runs)
+        suites = {r["suite"] for r in out["runs"]}
+        self.assertEqual(suites, {"it_support_v1"})
+
 
 class RetiredJudgeTest(unittest.TestCase):
     def test_predicate_matches_llama_3_3_variants(self) -> None:

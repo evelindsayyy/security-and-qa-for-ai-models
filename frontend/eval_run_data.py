@@ -369,10 +369,13 @@ def _postprocess_runs(runs: list[dict]) -> dict:
     """Shared tail for both data paths (files and DB): dedupe to the latest
     run per (candidate, judge, suite), sort best-first, flag ``is_best``,
     and build the page-level summary fields."""
-    # Custom ("bring your own") runs are ad-hoc, not a locked comparable suite —
-    # keep them out of the cross-model comparison table (they're still reachable
-    # by slug from the launch redirect / detail page).
-    runs = [r for r in runs if not str(r.get("suite", "")).startswith("custom_")]
+    # The comparison table is only meaningful across the current curated suites.
+    # Drop anything else: custom ("bring your own") ad-hoc runs, and retired or
+    # experimental suites (e.g. robustness_v1, an old smoke_v1) that would
+    # otherwise linger with a permanent "Needs rerun". Their data is preserved —
+    # each run stays reachable by slug from the launch redirect / detail page.
+    from frontend.eval_launch import SUITES
+    runs = [r for r in runs if r.get("suite") in SUITES]
     # Result filenames are timestamped, so the lexicographically-largest
     # filename is newest. This drops superseded runs (e.g. an old
     # "12/12 empty" row that a fresh run already fixed) instead of showing both.
