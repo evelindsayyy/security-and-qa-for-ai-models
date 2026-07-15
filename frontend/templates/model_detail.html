@@ -19,6 +19,10 @@
     <p><a href="{{ url_for('models_catalog') }}">← model catalog</a></p>
   {% else %}
     {{ page_header(model, gateway_profile or 'Cross-pillar nutrition label') }}
+    <p class="mb-6">
+      <a class="btn-secondary btn-sm" href="{{ url_for('model_report_print', slug=slug) }}"
+         target="_blank" rel="noopener">⬇ Download PDF</a>
+    </p>
     <div class="nutrition-grid mb-8">
       {{ stat_card('Aggregate', '%.0f'|format(rollup.aggregate) if rollup.aggregate is not none else '—', '/ 100') }}
       {{ stat_card('Scan', rollup.scan.tier if rollup.scan else '—', 'risk ' ~ rollup.scan.overall_risk_score if rollup.scan else '') }}
@@ -251,7 +255,7 @@
         <tbody>
           {% for r in runs %}
           <tr>
-            <td><span class="model">{{ r.suite }}</span></td>
+            <td><span class="model">{{ r.suite_display }}</span></td>
             <td><span class="dim">{{ r.judge_model }}</span></td>
             {% for dim in dim_columns %}
             <td class="num">{{ "%.2f"|format(r.dim_means[dim]) if r.dim_means.get(dim) is not none else "—" }}</td>

@@ -245,11 +245,17 @@ def view_mode():
         user = current_user()
         if not user or not is_allowlisted(user):
             set_view_mode("public")
+            from frontend.read_context import invalidate_view_caches
+
+            invalidate_view_caches()
             if request.headers.get("Accept", "").startswith("application/json"):
                 return jsonify({"ok": False, "error": "login required for private view"}), 403
             return redirect(request.referrer or url_for("index"))
     else:
         set_view_mode(mode)
+    from frontend.read_context import invalidate_view_caches
+
+    invalidate_view_caches()
     if request.headers.get("Accept", "").startswith("application/json"):
         return jsonify({"ok": True, "view_mode": mode})
     return redirect(request.referrer or url_for("index"))

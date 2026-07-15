@@ -6,13 +6,13 @@
 {% block content %}
 <div class="eval-comparison">
   {% if missing %}
-    <h1>Safety result not found</h1>
+    <h1 class="page-title">Safety result not found</h1>
     <p class="sub empty">no result for <code>{{ slug }}/{{ profile }}</code>.</p>
     <p class="form-hint">{{ start_button(url_for('safety_run_new'), 'Start a safety run', classes='') }}</p>
     <p><a class="font-semibold text-duke-blue" href="{{ url_for('safety') }}">← all safety results</a></p>
   {% elif running %}
     {{ back_link(url_for('safety'), 'all safety results') }}
-    <h1>Safety run in progress</h1>
+    <h1 class="page-title">Safety run in progress</h1>
     <p class="sub"><code>{{ slug }}</code> · profile <span class="badge">{{ profile }}</span> · live log every 5 seconds</p>
     {{ progress_terminal(
          url_for('safety_run_status_private' if is_private else 'safety_run_status', slug=slug, profile=profile),
@@ -28,19 +28,22 @@
     {% endif %}
   {% else %}
     {{ back_link(url_for('safety'), 'all safety results') }}
-    <h1><span class="model">{{ gateway_model_id }}</span> <span class="badge">{{ profile }}</span>{% if is_private %} {{ private_badge() }}{% endif %}</h1>
+    <div class="page-header">
+      <div>
+        <h1 class="page-title"><span class="model">{{ gateway_model_id }}</span> <span class="badge">{{ profile }}</span>{% if is_private %} {{ private_badge() }}{% endif %}</h1>
+        <p class="page-subtitle">
+          {{ tier_label(tier) }} ·
+          <span class="{{ pass_rate_class }}">{{ pass_rate_display }}</span> pass rate ·
+          {{ n_passed }}/{{ n_findings }} probes resisted ·
+          completed {{ completed_at[:10] if completed_at != "—" else "—" }}
+        </p>
+      </div>
+    </div>
 
     <p class="detail-delete-form">
       {{ rerun_button(url_for('safety_run_new', from=slug, profile=profile), '↻ Run again') }}
       {{ delete_button(url_for('safety_delete_private' if is_private else 'safety_delete', slug=slug, profile=profile)) }}
     </p>
-
-    <div class="summary-row">
-      {{ tier_label(tier) }}
-      <span class="summary-score"><span class="{{ pass_rate_class }}">{{ pass_rate_display }}</span> pass rate</span>
-      <span class="dim">{{ n_passed }}/{{ n_findings }} probes resisted</span>
-      <span class="dim">completed {{ completed_at[:10] if completed_at != "—" else "—" }}</span>
-    </div>
 
     {{ pillar_summary_card(pillar_summary) }}
     {% if missing_suites %}

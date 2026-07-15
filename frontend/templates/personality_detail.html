@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-{% from '_macros.html' import back_link, delete_button, private_badge, progress_terminal with context %}
+{% from '_macros.html' import back_link, delete_button, private_badge, progress_terminal, localtime with context %}
 
 {% block title %}{% if missing %}Personality not found{% else %}{{ test_label }} — {{ model }}{% endif %}{% endblock %}
 
 {% block content %}
 <div class="scan-detail">
   {% if missing %}
-    <h1>Personality result not found</h1>
+    <h1 class="page-title">Personality result not found</h1>
     <p class="sub empty">No personality artifact for slug <code>{{ slug }}</code>.</p>
     <p><a href="{{ url_for('personality') }}">← all personality results</a></p>
   {% elif running %}
-    {{ back_link(url_for('personality'), '← all personality results') }}
+    {{ back_link(url_for('personality'), 'all personality results') }}
     <h1 class="page-title">Personality run in progress</h1>
     <p class="sub">
       {% if run_status.model %}{{ run_status.model }}{% endif %}
@@ -31,12 +31,16 @@
     </p>
     {% endif %}
   {% else %}
-    {{ back_link(url_for('personality'), '← all personality results') }}
-    <h1 class="page-title">{{ test_label }} — {{ model }}{% if is_private %} {{ private_badge() }}{% endif %}</h1>
-    <p class="sub">
-      slug <code>{{ slug }}</code> · {{ timestamp }}
-      · {{ scored or 0 }}/{{ attempted or 0 }} items scored
-    </p>
+    {{ back_link(url_for('personality'), 'all personality results') }}
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">{{ test_label }} — <span class="model">{{ model }}</span>{% if is_private %} {{ private_badge() }}{% endif %}</h1>
+        <p class="page-subtitle">
+          completed {{ localtime(timestamp_iso, timestamp or '—', mode='date') }} ·
+          slug <code>{{ slug }}</code> · {{ scored or 0 }}/{{ attempted or 0 }} items scored
+        </p>
+      </div>
+    </div>
 
     {% if is_logged_in %}
     <p class="detail-actions">

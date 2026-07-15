@@ -33,8 +33,6 @@ def _db_row(**overrides):
             "total_evaluated": 10,
             "summary": {"accuracy": 0.9, "correct": 9, "total_evaluated": 10},
         },
-        "items": [{"question": "q1", "model_answer": "A"}],
-        "run_params": None,
         "completed_at": "2026-06-08T09:55:40+00:00",
     }
     base.update(overrides)
@@ -47,8 +45,6 @@ def _db_row(**overrides):
         base["headline_value"],
         base["n_items"],
         base["metrics"],
-        base["items"],
-        base["run_params"],
         base["completed_at"],
         base.get("config_json"),
     )

@@ -654,8 +654,8 @@ if __name__ == "__main__":
     candidate_model = "gpt-5-chat"
     # MT-Bench rule: judge ≠ candidate family AND judge >= candidate capability.
     # Llama 4 Maverick is the strongest different-family judge on Duke's allowlist
-    # for a GPT-5 candidate. See compare_judges.py for the Llama 3.3 vs Maverick
-    # delta experiment that justified picking Maverick over 3.3.
+    # for a GPT-5 candidate. See compare_judges.py / docs/judge-selection.md for
+    # the cross-judge experiment behind picking Maverick.
     judge_model = "Llama 4 Maverick"
 
     print(f"Candidate: {candidate_model}  |  Judge: {judge_model}")

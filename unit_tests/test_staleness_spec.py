@@ -159,6 +159,79 @@ class EvalStalenessSpecTest(unittest.TestCase):
         reasons = staleness_spec.eval_staleness_reasons(row)
         self.assertTrue(any("missing rubric dimensions" in r for r in reasons))
 
+    def test_execution_suite_not_stale_without_rubric(self) -> None:
+        # Execution-scored suites (text-to-SQL/JSON/numeric/tool-use) are graded
+        # by running the answer, not an LLM judge — they carry an inert
+        # placeholder rubric and no judge dimensions. A current execution run
+        # must NOT be flagged stale for "rubric_version changed" or "missing
+        # rubric dimensions" (the bug that flagged every execution run).
+        current = staleness_spec.current_eval_suite_versions("json_duke_v1")
+        if current is None:
+            self.skipTest("json_duke_v1 suite not configured")
+        row = {
+            "suite": "json_duke_v1",
+            "system_prompt_version": current["system_prompt_version"],
+            # no rubric_version, no dim_means — exactly what an execution run records
+            "dim_means": {},
+        }
+        self.assertEqual(staleness_spec.eval_staleness_reasons(row), [])
+
+    def test_execution_suite_with_inert_rubric_mismatch_not_stale(self) -> None:
+        # sql_duke_v2's config points its (inert) rubric at sql_duke_v1.yaml.
+        # Even if the run recorded some placeholder rubric_version, an execution
+        # suite must not go stale on it.
+        current = staleness_spec.current_eval_suite_versions("sql_duke_v2")
+        if current is None:
+            self.skipTest("sql_duke_v2 suite not configured")
+        row = {
+            "suite": "sql_duke_v2",
+            "rubric_version": "(none)",
+            "system_prompt_version": current["system_prompt_version"],
+            "dim_means": {},
+        }
+        self.assertEqual(staleness_spec.eval_staleness_reasons(row), [])
+
+    def test_execution_suite_still_flags_wrong_system_prompt(self) -> None:
+        # The system prompt version IS meaningful for execution suites — a
+        # changed system prompt should still flag stale.
+        row = {
+            "suite": "json_duke_v1",
+            "system_prompt_version": "old_json_prompt",
+            "dim_means": {},
+        }
+        reasons = staleness_spec.eval_staleness_reasons(row)
+        self.assertTrue(
+            any("system_prompt_version changed" in r for r in reasons), reasons
+        )
+
+
+    def test_zero_files_scanned_is_stale(self) -> None:
+        row = {
+            "scanned_file_count": 0,
+            "status": "complete",
+            "scanner_version": staleness_spec.current_scanner_version(),
+            "tool_status": {t: {} for t in staleness_spec.scan_tool_ids()},
+        }
+        reasons = staleness_spec.scan_staleness_reasons(row)
+        self.assertIn("0 files scanned", reasons)
+
+    def test_eval_suite_file_digest_change_is_stale(self) -> None:
+        current = staleness_spec.current_eval_suite_file_digests("it_support_v1")
+        self.assertIsNotNone(current)
+        row = {
+            "suite": "it_support_v1",
+            **(staleness_spec.current_eval_suite_versions("it_support_v1") or {}),
+            "eval_suite_file_digests": {**current, "suite": "stale-digest"},
+            "dim_means": {
+                "accuracy": 4.0,
+                "completeness": 4.0,
+                "policy_adherence": 4.0,
+                "tone": 3.0,
+            },
+        }
+        reasons = staleness_spec.eval_staleness_reasons(row)
+        self.assertTrue(any("suite file suite changed" in r for r in reasons))
+
 
 class BenchmarkStalenessSpecTest(unittest.TestCase):
     def test_reference_slug_never_stale(self) -> None:

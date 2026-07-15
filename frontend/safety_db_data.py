@@ -21,7 +21,7 @@ from frontend.safety_data import (
 
 load_repo_env()
 
-_DSN_KEYS = ("POSTGRES_DSN", "DATABASE_URL")
+_DSN_KEYS = ("POSTGRES_DSN", "DATABASE_URL", "EFFICACY_DB_DSN")
 _CONNECT_TIMEOUT_S = 2
 _AVAILABILITY_TTL_S = 60.0
 _avail_cache = {"checked_at": 0.0, "ok": False}
@@ -90,28 +90,42 @@ ORDER BY passed, severity, source, probe_id
 """
 
 _FINDINGS_FOR_RUNS_SQL = """
-SELECT run_id::text, finding_key, category, source, passed, severity, title,
-       description, probe_id, probe_suite, corroborated_by
+SELECT run_id::text, finding_key, category, source, passed, severity,
+       probe_id, probe_suite, corroborated_by
 FROM public.safety_findings
 WHERE run_id = ANY(%(run_ids)s::uuid[])
 ORDER BY run_id, passed, severity, source, probe_id
 """
 
 
-def _findings_to_json(rows: list[tuple]) -> list[dict]:
+def _findings_to_json(rows: list[tuple], *, list_view: bool = False) -> list[dict]:
     out: list[dict] = []
-    for (
-        finding_key,
-        category,
-        source,
-        passed,
-        severity,
-        title,
-        description,
-        probe_id,
-        probe_suite,
-        corroborated_by,
-    ) in rows:
+    for row in rows:
+        if list_view and len(row) == 8:
+            (
+                finding_key,
+                category,
+                source,
+                passed,
+                severity,
+                probe_id,
+                probe_suite,
+                corroborated_by,
+            ) = row
+            title, description = "—", ""
+        else:
+            (
+                finding_key,
+                category,
+                source,
+                passed,
+                severity,
+                title,
+                description,
+                probe_id,
+                probe_suite,
+                corroborated_by,
+            ) = row
         out.append(
             {
                 "id": finding_key,
@@ -196,7 +210,7 @@ def _fetch_findings_by_run_id(conn, run_ids: list[str]) -> dict[str, list[dict]]
         rows = cur.fetchall()
     grouped: dict[str, list[dict]] = {run_id: [] for run_id in run_ids}
     for run_id, *finding in rows:
-        grouped.setdefault(run_id, []).extend(_findings_to_json([finding]))
+        grouped.setdefault(run_id, []).extend(_findings_to_json([finding], list_view=True))
     return grouped
 
 

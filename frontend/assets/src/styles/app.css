@@ -214,6 +214,13 @@
   .tier {
     @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide;
   }
+  .tier-link {
+    @apply inline-block no-underline;
+    color: inherit;
+  }
+  .tier-link:hover .tier {
+    @apply opacity-90;
+  }
   .tier-low { background: var(--color-tier-low-bg); color: var(--color-tier-low); }
   .tier-medium { background: var(--color-tier-medium-bg); color: var(--color-tier-medium); }
   .tier-high { background: var(--color-tier-high-bg); color: var(--color-tier-high); }

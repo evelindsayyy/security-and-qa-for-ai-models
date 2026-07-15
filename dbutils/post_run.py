@@ -10,7 +10,7 @@ from typing import Literal
 from dbutils.connection import psycopg_available
 from dbutils.env import load_repo_env, resolve_dsn
 
-Pillar = Literal["scan", "safety", "eval", "benchmark"]
+Pillar = Literal["scan", "safety", "eval", "benchmark", "personality"]
 
 _DSN_KEYS = ("POSTGRES_DSN", "DATABASE_URL", "EFFICACY_DB_DSN")
 
@@ -37,8 +37,10 @@ def sync_artifact(path: Path, pillar: Pillar, *, dsn: str) -> None:
         from safety.db.load_safety import sync_file
     elif pillar == "eval":
         from evaluator.db.load_results import sync_file
-    else:
+    elif pillar == "benchmark":
         from benchmarks.db.load_benchmarks import sync_file
+    else:
+        from personality.db.load_personality import sync_file
     sync_file(path, dsn=dsn)
 
 

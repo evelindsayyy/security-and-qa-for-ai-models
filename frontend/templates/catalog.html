@@ -13,16 +13,20 @@
 <div class="catalog-page">
   {% set actions %}
   <a class="btn-secondary btn-sm" href="{{ url_for('compare_models') }}">Compare models</a>
-  <form method="post" action="{{ url_for('gateway_refresh') }}" class="refresh-form">
-    <input type="hidden" name="next" value="{{ url_for('models_catalog') }}">
-    <button type="submit" class="btn-secondary btn-sm">↻ Refresh</button>
-  </form>
   {% endset %}
-  {{ page_header('Model catalog', gateway_count ~ ' gateway models · cross-pillar rollup by section', actions) }}
+  {{ page_header('Model catalog', 'Cross-pillar rollup by section', actions) }}
 
   {% if gateway_error %}
   <p class="empty pillar-stat">{{ gateway_error }}</p>
   {% endif %}
+
+  <form method="post" action="{{ url_for('gateway_refresh') }}" class="refresh-form gateway-refresh-row mb-6">
+    <input type="hidden" name="next" value="{{ url_for('models_catalog') }}">
+    <button type="submit" class="btn-secondary btn-sm" title="Re-fetch GET /v1/models now">↻ Refresh gateway catalog</button>
+    {% if gateway_count %}
+    <span class="form-hint">{{ gateway_count }} live gateway model{{ "" if gateway_count == 1 else "s" }}</span>
+    {% endif %}
+  </form>
 
   <section class="key card p-4 mb-8">
     {{ section_header('How this is ranked / how to read') }}
@@ -46,12 +50,12 @@
     <input type="search" id="catalog-search" class="catalog-search"
            placeholder="Filter models by name or profile…" aria-label="Filter models"
            autocomplete="off">
-    <span class="section-hint">Tip: click any row to open that model's report card.</span>
+    <span class="section-hint">Tip: click any row to open that model's detail page.</span>
   </div>
   <p class="empty" id="catalog-no-match" hidden>No models match your filter.</p>
 
   {% for section in gateway_by_category %}
-  <section class="catalog-section mb-10">
+  <section class="catalog-section mb-10{% if loop.first %} catalog-section-first{% endif %}">
     {{ section_header(section.label, 'Ranked by cross-pillar aggregate within this section.') }}
     <div class="table-wrap">
     <table class="run-table catalog-table">
@@ -136,7 +140,9 @@
 {% block scripts %}
 <style>
   .catalog-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:.75rem;
-                     margin:1rem 0 .25rem; }
+                     margin:0 0 2.5rem; }
+  .catalog-section-first { margin-top: .25rem; }
+  .gateway-refresh-row { display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; }
   .catalog-search { flex:1 1 280px; max-width:420px; padding:.5rem .7rem;
                     border:1px solid #e8e6e1; border-radius:8px; font-size:1rem;
                     background:#fff; color:#1a1a18; }

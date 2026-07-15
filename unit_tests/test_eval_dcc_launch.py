@@ -220,6 +220,48 @@ class HfScanGateTest(_Base):
         self.assertFalse(out["ok"])
         self.assertIn("blocked", out["error"])
 
+    def test_scan_gate_clears_from_catalog_when_no_disk_file(self) -> None:
+        # A scan recorded before the pipeline lives in the catalog (Postgres on
+        # deployment) but has no local scan_result.json on this host. The gate
+        # must recognize it rather than reporting the model as unscanned.
+        path = self._scan_path(None)  # nothing on disk
+        catalog = {"scans": [{
+            "model_id": _REPO,
+            "slug": _REPO.replace("/", "--"),
+            "status": "complete",
+            "severity_tier": "low",
+            "overall_risk_score": 0,
+        }]}
+        with mock.patch.object(eval_launch, "_scan_result_path", return_value=path), \
+             mock.patch("frontend.scan_data.get_scans_data", return_value=catalog):
+            out = eval_launch.validate_hf_scan_gate(_REPO)
+        self.assertTrue(out["ok"], out["error"])
+
+    def test_scan_gate_blocks_high_risk_catalog_scan_without_disk(self) -> None:
+        # A catalog-only scan that flagged the model high risk still blocks.
+        path = self._scan_path(None)
+        catalog = {"scans": [{
+            "model_id": _REPO,
+            "slug": _REPO.replace("/", "--"),
+            "status": "complete",
+            "severity_tier": "critical",
+            "overall_risk_score": 90,
+        }]}
+        with mock.patch.object(eval_launch, "_scan_result_path", return_value=path), \
+             mock.patch("frontend.scan_data.get_scans_data", return_value=catalog):
+            out = eval_launch.validate_hf_scan_gate(_REPO)
+        self.assertFalse(out["ok"])
+        self.assertIn("blocked", out["error"])
+
+    def test_scan_gate_missing_when_catalog_has_no_match(self) -> None:
+        # No disk file and no catalog row for this repo -> still "missing".
+        path = self._scan_path(None)
+        with mock.patch.object(eval_launch, "_scan_result_path", return_value=path), \
+             mock.patch("frontend.scan_data.get_scans_data", return_value={"scans": []}):
+            out = eval_launch.validate_hf_scan_gate(_REPO)
+        self.assertFalse(out["ok"])
+        self.assertIn("security scan required", out["error"])
+
 
 class DccBuildCommandTest(_Base):
     def test_command_targets_orchestrator_with_dcc_args(self) -> None:

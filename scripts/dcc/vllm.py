@@ -142,7 +142,10 @@ def cmd_wait(args: argparse.Namespace) -> int:
         node = parts[3] if len(parts) > 3 else ""
         print(f"Job {job_id} state={state_col} node={node}")
 
-        if state_col == "R" and node and node not in ("(null)", "n/a"):
+        # squeue is invoked with %T (long form) so state_col is "RUNNING", not
+        # the short "R". Accept both so the health check actually fires — with
+        # only "R" it never did, and the wait timed out on a healthy server.
+        if state_col in ("R", "RUNNING") and node and node not in ("(null)", "n/a"):
             url = f"http://{node}:{port}/health"
             try:
                 with urllib.request.urlopen(url, timeout=5) as resp:

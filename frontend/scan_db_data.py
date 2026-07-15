@@ -22,7 +22,7 @@ from scanner.paths import safe_dir_name, slug_to_model_id
 
 load_repo_env()
 
-_DSN_KEYS = ("POSTGRES_DSN", "DATABASE_URL")
+_DSN_KEYS = ("POSTGRES_DSN", "DATABASE_URL", "EFFICACY_DB_DSN")
 _CONNECT_TIMEOUT_S = 2
 _AVAILABILITY_TTL_S = 60.0
 _avail_cache = {"checked_at": 0.0, "ok": False}
@@ -85,8 +85,8 @@ ORDER BY severity, source, title
 """
 
 _FINDINGS_FOR_SCANS_SQL = """
-SELECT scan_id::text, finding_key, source, title, severity, file_path, description,
-       raw_tool_severity, remediation, corroborated_by
+SELECT scan_id::text, finding_key, source, title, severity, file_path,
+       raw_tool_severity, corroborated_by
 FROM public.findings
 WHERE scan_id = ANY(%(scan_ids)s::uuid[])
 ORDER BY scan_id, severity, source, title
@@ -98,19 +98,32 @@ def _slug_for_scan(hf_repo: str, scan_metadata: dict | None) -> str:
     return meta.get("output_slug") or safe_dir_name(hf_repo)
 
 
-def _findings_to_json(rows: list[tuple]) -> list[dict]:
+def _findings_to_json(rows: list[tuple], *, list_view: bool = False) -> list[dict]:
     out: list[dict] = []
-    for (
-        finding_key,
-        source,
-        title,
-        severity,
-        file_path,
-        description,
-        raw_tool_severity,
-        remediation,
-        corroborated_by,
-    ) in rows:
+    for row in rows:
+        if list_view and len(row) == 7:
+            (
+                finding_key,
+                source,
+                title,
+                severity,
+                file_path,
+                raw_tool_severity,
+                corroborated_by,
+            ) = row
+            description, remediation = "", None
+        else:
+            (
+                finding_key,
+                source,
+                title,
+                severity,
+                file_path,
+                description,
+                raw_tool_severity,
+                remediation,
+                corroborated_by,
+            ) = row
         out.append(
             {
                 "id": finding_key,
@@ -172,7 +185,7 @@ def _fetch_findings_by_scan_id(conn, scan_ids: list[str]) -> dict[str, list[dict
         rows = cur.fetchall()
     grouped: dict[str, list[dict]] = {scan_id: [] for scan_id in scan_ids}
     for scan_id, *finding in rows:
-        grouped.setdefault(scan_id, []).extend(_findings_to_json([finding]))
+        grouped.setdefault(scan_id, []).extend(_findings_to_json([finding], list_view=True))
     return grouped
 
 

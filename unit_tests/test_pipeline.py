@@ -185,6 +185,53 @@ class RequireReadyTest(unittest.TestCase):
             )
 
 
+class BuildOverviewResilienceTest(unittest.TestCase):
+    """One model with an unreadable artifact must not drop the rest of the
+    catalog. Regression for the /pipeline table showing 15 of 41 models after a
+    PermissionError on one model's safety file aborted the whole build loop."""
+
+    def _ok_row(self, model, source):
+        return {"model": model, "source": source,
+                "scan": {"state": "n/a", "detail": ""},
+                "safety": {"state": "cleared", "detail": ""},
+                "eval_unlocked": True, "eval_href": ""}
+
+    def test_one_failing_gateway_model_keeps_all_rows(self) -> None:
+        catalog = {"models": [{"id": "m1"}, {"id": "bad"}, {"id": "m3"}],
+                   "error": None}
+
+        def flaky(model, source):
+            if model == "bad":
+                raise PermissionError("[Errno 13] Permission denied")
+            return self._ok_row(model, source)
+
+        with mock.patch("gateway.catalog.get_gateway_catalog",
+                        return_value=catalog), \
+             mock.patch.object(pipeline, "stage_state", side_effect=flaky), \
+             mock.patch("frontend.scan_data.get_scans_data",
+                        return_value={"scans": []}):
+            ov = pipeline.build_overview()
+
+        # Every gateway model still listed, in order — none dropped.
+        self.assertEqual([r["model"] for r in ov["rows"]], ["m1", "bad", "m3"])
+        self.assertEqual(ov["gateway_count"], 3)
+        bad = next(r for r in ov["rows"] if r["model"] == "bad")
+        self.assertEqual(bad["safety"]["state"], "unknown")  # degraded, not gone
+        self.assertFalse(bad["eval_unlocked"])
+
+    def test_unreadable_safety_dir_does_not_raise(self) -> None:
+        # is_file()/iterdir() raising PermissionError must be swallowed so the
+        # gate degrades to "no readable runs" instead of aborting the page.
+        boom = mock.Mock(side_effect=PermissionError("[Errno 13] denied"))
+        with mock.patch.object(pipeline, "SAFETY_OUTPUT_DIR") as sdir:
+            sdir.__truediv__ = mock.Mock(return_value=mock.Mock(
+                is_dir=mock.Mock(return_value=True), iterdir=boom,
+                __truediv__=mock.Mock(return_value=mock.Mock(
+                    is_file=mock.Mock(return_value=False)))))
+            # Should return [] rather than raise.
+            self.assertEqual(pipeline._safety_result_paths("gpt-4.1-mini"), [])
+
+
 class StageStateTest(unittest.TestCase):
     def test_gateway_cleared_unlocks_eval(self) -> None:
         with mock.patch.object(
@@ -223,6 +270,43 @@ class StageStateTest(unittest.TestCase):
         self.assertEqual(st["scan"]["state"], "cleared")
         self.assertEqual(st["safety"]["state"], "unsupported")
         self.assertTrue(st["eval_unlocked"])
+        self.assertIn("/scans/", st["scan"]["href"])
+        self.assertNotIn("href", st["safety"])
+        self.assertIn("hf_repo=", st["eval_href"])
+
+    def test_gateway_missing_safety_links_to_prefilled_run(self) -> None:
+        with mock.patch.object(
+            pipeline, "validate_safety_gate",
+            return_value={"ok": False, "error": "run safety", "status": None},
+        ):
+            st = pipeline.stage_state("Llama 4 Maverick", "gateway")
+        self.assertEqual(st["safety"]["state"], "missing")
+        self.assertIn("/safety/new", st["safety"]["href"])
+        self.assertIn("model=", st["safety"]["href"])
+
+    def test_gateway_cleared_safety_links_to_detail(self) -> None:
+        with mock.patch.object(
+            pipeline, "validate_safety_gate",
+            return_value={
+                "ok": True,
+                "error": None,
+                "status": "complete",
+                "profile": "education",
+            },
+        ):
+            st = pipeline.stage_state("Llama 4 Maverick", "gateway")
+        self.assertEqual(st["safety"]["state"], "cleared")
+        self.assertIn("/safety/llama-4-maverick/education", st["safety"]["href"])
+
+    def test_hf_missing_scan_links_to_prefilled_run(self) -> None:
+        with mock.patch(
+            "frontend.eval_launch.validate_hf_scan_gate",
+            return_value={"ok": False, "error": "scan required", "status": None},
+        ):
+            st = pipeline.stage_state("Qwen/Qwen2.5-7B-Instruct", "hf")
+        self.assertEqual(st["scan"]["state"], "missing")
+        self.assertIn("/scans/new", st["scan"]["href"])
+        self.assertIn("model=Qwen", st["scan"]["href"])
 
 
 class BuildOverviewTest(unittest.TestCase):
@@ -244,6 +328,30 @@ class BuildOverviewTest(unittest.TestCase):
         self.assertTrue(ov["has_rows"])
         self.assertEqual({r["source"] for r in ov["rows"]}, {"gateway", "hf"})
 
+    def test_catalog_only_scan_clears_hf_row(self) -> None:
+        # End-to-end (real gate, not mocked): a scan that lives only in the
+        # catalog (e.g. a Postgres row from before the pipeline, no local
+        # scan_result.json) must show the HF row as cleared + unlocked, not
+        # "missing". Repo has no on-disk artifact, so the gate falls back to
+        # the catalog.
+        catalog = {"scans": [{
+            "model_id": "Qwen/Qwen2.5-7B-Instruct",
+            "slug": "Qwen--Qwen2.5-7B-Instruct",
+            "status": "complete",
+            "severity_tier": "low",
+            "overall_risk_score": 0,
+        }]}
+        with mock.patch(
+            "gateway.catalog.get_gateway_catalog", return_value={"models": []}
+        ), mock.patch(
+            "frontend.scan_data.get_scans_data", return_value=catalog
+        ):
+            ov = pipeline.build_overview()
+        hf_rows = [r for r in ov["rows"] if r["source"] == "hf"]
+        self.assertEqual(len(hf_rows), 1)
+        self.assertEqual(hf_rows[0]["scan"]["state"], "cleared")
+        self.assertTrue(hf_rows[0]["eval_unlocked"])
+
 
 from frontend import create_app  # noqa: E402  (top-of-file group is fine too)
 
@@ -262,11 +370,14 @@ class PipelineRouteTest(unittest.TestCase):
         rows = [
             {"model": "Llama 4 Maverick", "source": "gateway",
              "scan": {"state": "n/a", "detail": ""},
-             "safety": {"state": "missing", "detail": "run safety"},
-             "eval_unlocked": False},
+             "safety": {"state": "missing", "detail": "run safety",
+                        "href": "/safety/new?model=Llama+4+Maverick"},
+             "eval_unlocked": False, "eval_href": ""},
         ]
         with mock.patch("frontend.pipeline.build_overview",
                         return_value={"rows": rows, "has_rows": True}):
             r = self.client.get("/pipeline")
         self.assertEqual(r.status_code, 200)
         self.assertIn(b"Llama 4 Maverick", r.data)
+        self.assertIn(b"/safety/new?model=Llama+4+Maverick", r.data)
+        self.assertIn(b"tier-link", r.data)

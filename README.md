@@ -18,7 +18,7 @@ Automated **report cards** for Duke AI Gateway models: **security** (artifact sc
 | I want to… | Start here |
 |------------|------------|
 | **Run the UI** | [Quick start](#quick-start) |
-| **CLI and JSON API** — scans, safety, eval, benchmarks, tests | [`docs/cli.md`](docs/cli.md) · [`api/README.md`](api/README.md) |
+| **CLI and JSON API** — scans, safety, evaluation, benchmarks, tests | [`docs/cli.md`](docs/cli.md) · [`api/README.md`](api/README.md) |
 | **Docker model** (UI + pillar jobs) | [`docs/docker.md`](docs/docker.md) · [`docker/`](docker/) |
 | **Understand the system** (VM, Postgres, background jobs) | [`docs/architecture.md`](docs/architecture.md) |
 | **Postgres schema and ingest** | [`docs/data-model.md`](docs/data-model.md) · [`dbutils/README.md`](dbutils/README.md) |
@@ -27,7 +27,7 @@ Automated **report cards** for Duke AI Gateway models: **security** (artifact sc
 | **Gateway models and HF scan tiers** | [`docs/gateway-models.md`](docs/gateway-models.md) |
 | **All documentation** | [`docs/README.md`](docs/README.md) |
 
-**Pillar READMEs:** [`scanner/`](scanner/README.md) · [`safety/`](safety/README.md) · [`evaluator/`](evaluator/README.md) · [`benchmarks/`](benchmarks/README.md) · [`frontend/`](frontend/README.md) · [`gateway/`](gateway/README.md)
+**Pillar READMEs:** [`scanner/`](scanner/README.md) · [`safety/`](safety/README.md) · [`evaluator/`](evaluator/README.md) · [`benchmarks/`](benchmarks/README.md) · [`personality/`](personality/README.md) · [`frontend/`](frontend/README.md) · [`gateway/`](gateway/README.md)
 
 ---
 
@@ -38,6 +38,7 @@ scanner/       Track A — HF artifact scanning
 safety/        Track A — promptfoo + garak red team
 evaluator/     Track B — Duke LLM-as-judge suites
 benchmarks/    Track B — public benchmarks (IFEval, TruthfulQA, …)
+personality/   Extra — Big Five Inventory (not in model rollup)
 gateway/       Live gateway catalog
 frontend/      AI Model Advisor UI
 docker/        Containerized UI for the application VM
@@ -47,7 +48,7 @@ api/           Flask REST under /api (reads + job POST); see api/README.md
 unit_tests/    Automated tests
 ```
 
-Runtime outputs are gitignored (`scanner/output`, `safety/output`, `evaluator/results`, `benchmarks/results`).
+Runtime outputs are gitignored (`scanner/output`, `safety/output`, `evaluator/results`, `benchmarks/results`, `personality/results`).
 
 ---
 

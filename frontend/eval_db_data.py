@@ -84,7 +84,7 @@ def _aggregate_db_run(run: dict, results: list[dict]) -> dict:
 
     slug = (run["source_file"] or "").removesuffix(".jsonl")
     adaptation = run["adaptation"] or {}
-    return {
+    data = {
         "filename": run["source_file"],
         "slug": slug,
         "timestamp": _ts(run["started_at"]),
@@ -107,6 +107,70 @@ def _aggregate_db_run(run: dict, results: list[dict]) -> dict:
         "total_cost_usd": float(sum(r["cost_usd"] or 0 for r in results)),
         "note": f"⚠ {empty}/{n} empty" if empty else "",
     }
+    _attach_execution_pass_rate(data, results, adaptation)
+    config_json = run.get("config_json")
+    if isinstance(config_json, dict):
+        data["config_json"] = config_json
+        digests = config_json.get("eval_suite_file_digests")
+        if isinstance(digests, dict):
+            data["eval_suite_file_digests"] = digests
+    return data
+
+
+# Memoize execution scoring per run. A completed run is immutable, so its
+# functional score never changes; keying on the run's source_file (unique,
+# timestamped) means the /eval-run list runs the SQL/JSON/numeric checkers once
+# per run instead of on EVERY request. Without this, each page load re-executed
+# ~100 runs' worth of SQLite/JSON checks — enough to make the (dev-server-bound)
+# page slow and intermittently 500 under concurrent loads. Cleared on restart.
+_EXEC_SCORE_CACHE: dict[str, dict | None] = {}
+
+
+def _execution_for_results(
+    results: list[dict], adaptation: dict, *, cache_key: str | None = None
+) -> dict | None:
+    """Full functional scoring (run totals + per-question rows) for the DB
+    result rows, or None for a judge-only suite / any error. Scores from the DB
+    payload so the Postgres path matches the file path (``_execution_summary``).
+    Memoized by ``cache_key`` (a run's source_file). Never raises: a scoring
+    hiccup must not break the dashboard."""
+    if cache_key is not None and cache_key in _EXEC_SCORE_CACHE:
+        return _EXEC_SCORE_CACHE[cache_key]
+    suite_version = adaptation.get("task_suite_version", "")
+    result: dict | None = None
+    if suite_version:
+        try:
+            import execution_eval  # lazy: a bad import mustn't break the dashboard
+
+            rows = [
+                {
+                    "question_id": r["task_id"],
+                    "candidate_response": (r["detail"] or {}).get(
+                        "candidate_response", ""),
+                    "overall": r["score"],
+                }
+                for r in results
+            ]
+            ex = execution_eval.score_results_rows(rows, suite_version)
+            result = ex if ex.get("n") else None
+        except Exception:
+            result = None
+    if cache_key is not None:
+        _EXEC_SCORE_CACHE[cache_key] = result
+    return result
+
+
+def _attach_execution_pass_rate(
+    data: dict, results: list[dict], adaptation: dict
+) -> None:
+    """Add the functional pass-rate for execution suites (SQL/JSON/numeric) to a
+    comparison-table row. Judge-only suites leave the field unset, so the table
+    renders ``—``."""
+    ex = _execution_for_results(results, adaptation, cache_key=data.get("slug"))
+    if ex:
+        data["execution_pass_rate"] = ex["pass_rate"]
+        data["execution_passed"] = ex["passed"]
+        data["execution_n"] = ex["n"]
 
 
 def get_runs_data_db() -> dict:
@@ -118,7 +182,7 @@ def get_runs_data_db() -> dict:
     from frontend.eval_run_data import _postprocess_runs
 
     with queries.connect() as conn:
-        records = queries.fetch_runs(conn)
+        records = queries.fetch_runs_list(conn)
     db_runs = [_aggregate_db_run(rec["run"], rec["results"]) for rec in records]
 
     return _postprocess_runs(db_runs)
@@ -151,6 +215,14 @@ def get_run_detail_db(
         adaptation.get("task_suite_version", ""))
     dims = _ordered_dims(results)
 
+    # Execution (functional) scoring, if this is an execution suite — drives the
+    # per-question pass/fail and the run-level exec metric. None on judge-only
+    # suites so those rows render — instead of a spurious "fail".
+    exec_summary = _execution_for_results(results, adaptation, cache_key=slug)
+    exec_by_qid = {
+        row["question_id"]: row for row in (exec_summary or {}).get("rows", [])
+    }
+
     questions_rows = []
     for r in results:
         scores = r["detail"].get("scores") or {}
@@ -173,6 +245,8 @@ def get_run_detail_db(
             },
             "rationales": {d: scores[d]["rationale"] for d in row_dims},
             "overall": r["score"],
+            "exec_passed": (exec_by_qid.get(r["task_id"]) or {}).get("passed"),
+            "exec_error": (exec_by_qid.get(r["task_id"]) or {}).get("error"),
             "latency_ms": r["latency_ms"],
             "cost_usd": float(r["cost_usd"] or 0),
             "status": status,
@@ -210,6 +284,12 @@ def get_run_detail_db(
         "total_prompt_tokens": sum(r["tokens_in"] or 0 for r in results),
         "total_completion_tokens": sum(r["tokens_out"] or 0 for r in results),
         "questions": questions_rows,
+        "execution": (
+            {"pass_rate": exec_summary["pass_rate"],
+             "passed": exec_summary["passed"], "n": exec_summary["n"],
+             "check": exec_summary.get("check")}
+            if exec_summary else None
+        ),
     }
 
 

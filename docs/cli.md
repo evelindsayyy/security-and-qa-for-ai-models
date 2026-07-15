@@ -15,6 +15,7 @@ uv sync --group dev
 cp .env.example .env   # DUKE_GATEWAY_KEY required; POSTGRES_DSN when DB is configured
 ./docker/build-pillars.sh
 python3 main.py         # same as ./docker/run.sh up --build
+# Or: uv run python main.py
 ```
 
 Open `http://127.0.0.1:5000`. See [`../README.md`](../README.md#quick-start) for the full step list.
@@ -101,34 +102,59 @@ uv sync --group dev --group safety       # garak on host
 uv sync --group dev --group benchmarks   # benchmark runners on host
 ```
 
-For the Docker model, see [`docker.md`](docker.md).
+For the Docker model, see [`docker.md`](docker.md) and [Web UI](#web-ui-containerized) below.
 
-## Web UI
+## Web UI (containerized)
+
+Entry points (equivalent): **`./docker/run.sh`**, **`python3 main.py`**, **`uv run python main.py`**.
+
+All use Compose project **`qa-ai-models`**, load `.env`, auto-detect host UID/GID and repo path, and build frontend assets before start. See [`docker/README.md`](../docker/README.md).
+
+| Action | Command |
+|--------|---------|
+| Start (foreground) | `… up --build` — bare `main.py` defaults to this |
+| Start (background) | `… up -d --build` |
+| After code changes | `… restart` |
+| Stop | `… down` |
+| Logs | `… logs -f web` |
+
+`restart` runs `down`, then `up -d --build --force-recreate --remove-orphans`.
+
+**One-time:** `./docker/build-pillars.sh`. **`APP_PORT`** in `.env` (default `5000`). With **`CADDY_DOMAIN`** set, `run.sh` adds `compose.caddy.yml` for HTTPS.
+
+### Host Flask (UI only)
 
 ```bash
-# Default — containerized (auto-detects user, Docker group, repo path)
-python3 main.py                   # foreground (up --build)
-python3 main.py up -d --build     # background
-python3 main.py down              # stop
-python3 main.py logs -f web       # logs
-# Equivalent: ./docker/run.sh …
-
-# Development — host Flask only (port 5001 avoids clash with container on 5000)
-python3 main.py --host
-# Pair with: cd frontend/assets && npm run dev
-# Or: uv run flask --app frontend:create_app run --debug --port 5001
+uv run python main.py --host
+APP_PORT=5001 uv run python main.py --host   # alternate port
+cd frontend/assets && npm run dev            # live assets (second terminal)
 ```
 
-Set `APP_PORT` in `.env` to change the container port. One-time pillar builds: `./docker/build-pillars.sh`.
+Pillar jobs still use Docker unless `FRONTEND_LAUNCH_MODE=host`.
 
-**Browsing a remote host from your laptop** — use a stable SSH tunnel so Duke OIDC
-sees `localhost:5000`:
+## Remote access
+
+| Host | SSH |
+|------|-----|
+| Application VM | `ssh <netid>@model-advisor.colab.duke.edu` |
+| DGX (optional dev) | `ssh <netid>@<dgx-host>` |
+| DCC (vLLM) | [`scripts/dcc/README.md`](../scripts/dcc/README.md) |
+
+After login:
 
 ```bash
-ssh -L 5000:localhost:5000 <user>@<remote-host>
+cd security-and-qa-for-ai-models
+git pull && ./docker/run.sh restart
+curl -s http://127.0.0.1:5000/api/health | python3 -m json.tool
 ```
 
-Then open `http://localhost:5000`. See [`auth/README.md`](../auth/README.md).
+**Port forward** when the UI is on localhost only:
+
+```bash
+ssh -L 5000:localhost:5000 <netid>@<host>
+```
+
+Open `http://localhost:5000`. OIDC redirect URIs: [`auth/README.md`](../auth/README.md).
 
 ## JSON API
 
@@ -193,11 +219,16 @@ env UID=$(id -u) GID=$(id -g) \
 env UID=$(id -u) GID=$(id -g) \
   docker compose --env-file .env -f benchmarks/docker/compose.yml run --rm benchmarks \
   python run_benchmark.py --benchmark truthfulqa --model "GPT 4.1 Mini"
+
+# Personality (Big Five Inventory) -> personality/results/
+env UID=$(id -u) GID=$(id -g) \
+  docker compose --env-file .env -f personality/docker/compose.yml run --rm personality \
+  python run_personality.py --model "GPT 4.1 Mini"
 ```
 
 Per-pillar flags and host-only paths: [`scanner/`](../scanner/README.md) ·
 [`safety/`](../safety/README.md) · [`evaluator/`](../evaluator/README.md) ·
-[`benchmarks/`](../benchmarks/README.md).
+[`benchmarks/`](../benchmarks/README.md) · [`personality/`](../personality/README.md).
 
 ### Concurrent runs and locks
 
@@ -206,7 +237,7 @@ Per-pillar flags and host-only paths: [`scanner/`](../scanner/README.md) ·
 | Scan | `scanner/output/<slug>/run.lock` | exit **2** |
 | Safety | `safety/output/<slug>/<profile>/run.lock` | exit **2** |
 | Benchmark | `benchmarks/results/<stem>.run.lock` | UI only (no CLI lock yet) |
-
+| Personality | `personality/results/<stem>.lock` | UI only |
 Scan and safety start forms show a warning when that model/repo is already in progress.
 
 **Stale locks:** removed when the holder PID is dead. Safety UI also treats orphaned locks as `failed` when the log shows `Complete:` or errors without a live process. Delete `run.lock` manually after `kill -9` if needed.
@@ -258,12 +289,14 @@ curl -s localhost:5000/api/health | python3 -m json.tool
 uv run python -m api.ingest
 uv run python -m api.ingest --apply
 uv run python -m api.ingest bootstrap --apply   # all pillars + summary line
+uv run python -m api.ingest --personality --apply
 ```
 
 Schema and per-pillar loaders: [`scanner/db/README.md`](../scanner/db/README.md),
 [`safety/db/README.md`](../safety/db/README.md),
 [`evaluator/db/README.md`](../evaluator/db/README.md),
-[`benchmarks/db/README.md`](../benchmarks/db/README.md).
+[`benchmarks/db/README.md`](../benchmarks/db/README.md),
+[`personality/db/`](../personality/db/) (`personality_schema.sql`, `load_personality.py`).
 
 ## DCC vLLM (open-weight inference)
 
@@ -297,7 +330,7 @@ uv sync --group dev
 ./scripts/apply-schemas.sh --bootstrap
 uv run python db/migrate_auth_columns.py --apply   # one-time
 
-python3 main.py up -d --build
+uv run python main.py up -d --build
 curl -s http://127.0.0.1:5000/api/health | python3 -m json.tool
 curl -s https://model-advisor.colab.duke.edu/api/health | python3 -m json.tool
 ```

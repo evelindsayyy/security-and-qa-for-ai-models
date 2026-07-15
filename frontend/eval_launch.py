@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -47,8 +48,11 @@ from runner import _COST_PER_M_TOKENS, _safe_slug  # noqa: E402
 # Allowlists — the security boundary for POST /eval-run/start
 # ---------------------------------------------------------------------------
 
-# Candidate categories eligible for the IT-support/chat suites.
-_CANDIDATE_CATEGORIES = frozenset({"general_chat"})
+# Candidate categories eligible for the task suites — every chat-capable model
+# family (general chat, agentic coding, deep-research/reasoning). Audio,
+# embeddings, and rerank models can't answer the suites, so they're excluded.
+# Mirrors the safety scan form's categories so both offer the same catalog.
+_CANDIDATE_CATEGORIES = frozenset({"general_chat", "codex", "research"})
 
 # Offline fallback (gateway unreachable): the curated/priced known-good set.
 _CANDIDATE_FALLBACK: tuple[str, ...] = tuple(_COST_PER_M_TOKENS.keys())
@@ -65,10 +69,31 @@ def candidate_models() -> tuple[str, ...]:
     return tuple(ids) if ids else _CANDIDATE_FALLBACK
 
 
+def candidate_groups() -> list[dict]:
+    """Eligible candidates grouped by gateway category (General chat, Codex,
+    Research), for the ``<optgroup>`` dropdown — same shape/structure the safety
+    scan form uses. Falls back to one flat group when the gateway is offline."""
+    try:
+        from gateway.catalog import get_gateway_catalog
+
+        catalog = get_gateway_catalog()
+        groups: list[dict] = []
+        for section in catalog.get("by_category", []):
+            if section["key"] not in _CANDIDATE_CATEGORIES:
+                continue
+            models = [m["id"] for m in section["models"]]
+            if models:
+                groups.append({"label": section["label"], "models": models})
+        if groups:
+            return groups
+    except Exception:  # noqa: BLE001 — never break the form on a gateway hiccup
+        pass
+    return [{"label": "Gateway models", "models": list(candidate_models())}]
+
+
 # Judges the team has actually calibrated (cross-judge experiment, week 4).
 # Maverick is the primary judge; gpt-oss-120b the strict spot-check for Llama
-# candidates. Llama 3.3 was dropped — leniency ceiling (all 5s on strong
-# candidates).
+# candidates.
 # OpenAI judges re-enabled 2026-06-22: the gateway metadata/store bug that 400'd
 # all OpenAI models was fixed; GPT 4.1 Mini + gpt-5-chat verified to return
 # valid judge JSON (the bar gpt-oss-120b fails ~75% of the time), and both are
@@ -234,6 +259,56 @@ SUITES: dict[str, dict] = {
 JUDGE_PROMPT = EVALUATOR / "prompts" / "judge" / "reference_based_v2.txt"
 
 MAX_TOKENS_MIN, MAX_TOKENS_MAX = 50, 4000
+
+# Completion-budget tiers shown on the launch form instead of a raw number box.
+# `tokens` is the max_tokens actually sent to the runner; still bounded by
+# MAX_TOKENS_MIN..MAX_TOKENS_MAX so the server validation is unchanged. The UI
+# preselects "reasoning" for reasoning models (they burn hidden thinking tokens
+# and go empty at a chat-sized budget) and "standard" for everyone else.
+MAX_TOKEN_TIERS: tuple[dict, ...] = (
+    {"key": "quick", "label": "Quick", "tokens": 512,
+     "hint": "Short, structured answers — SQL, extraction, classification"},
+    {"key": "standard", "label": "Standard", "tokens": 2000,
+     "hint": "Most chat models and everyday drafting tasks"},
+    {"key": "extended", "label": "Extended", "tokens": 3000,
+     "hint": "Long-form drafting or multi-step answers"},
+    {"key": "reasoning", "label": "Reasoning", "tokens": 4000,
+     "hint": "Thinking models that spend tokens reasoning before answering"},
+)
+DEFAULT_TOKEN_TIER = "standard"
+REASONING_TOKEN_TIER = "reasoning"
+
+
+def is_reasoning_model(model: str) -> bool:
+    """True for models that emit hidden reasoning/thinking tokens before the
+    answer (o-series, the GPT-5 reasoning family, gpt-oss, DeepSeek-R1, Qwen
+    QwQ). These need the top completion budget or they run out mid-thought and
+    return an empty response.
+
+    The GPT-5 family reasons by default — ``gpt-5``, ``gpt-5.1``, ``gpt-5-mini``,
+    ``gpt-5.4-nano``, ``gpt-5.4-pro`` … — EXCEPT the conversational ``-chat`` /
+    ``-instruct`` variants, which don't. We match the whole family and exclude
+    those, so a newly added ``gpt-5.x`` is flagged automatically. Erring toward
+    reasoning is deliberate: over-budgeting merely costs a little; under-budgeting
+    a reasoning model produces empty answers.
+    """
+    m = (model or "").lower()
+    # Explicit conversational / instruct variants don't hide-reason.
+    if "chat" in m or "instruct" in m:
+        return False
+    if m.startswith(("o1", "o3", "o4")):
+        return True
+    # GPT-5 family: gpt-5, gpt5, "gpt 5", gpt-5.4-mini, … (the -chat ones already
+    # returned False above).
+    if re.search(r"gpt[\s-]?5", m):
+        return True
+    keywords = ("gpt-oss", "qwq", "reasoning", "-r1", "deepseek-r")
+    return any(k in m for k in keywords)
+
+
+def default_tier_for(model: str) -> str:
+    """Preselected tier key for a candidate model."""
+    return REASONING_TOKEN_TIER if is_reasoning_model(model) else DEFAULT_TOKEN_TIER
 # Clear a completed scan unless it flagged the repo as high risk — block only
 # high/critical (low + medium pass), matching the safety gate in pipeline.py.
 SCAN_ALLOWED_TIERS = frozenset({"low", "medium"})
@@ -312,6 +387,46 @@ def _all_suite_keys() -> list[str]:
     if fs_safe.is_dir(CUSTOM_SUITES_DIR):
         custom = sorted(p.stem for p in fs_safe.glob(CUSTOM_SUITES_DIR, f"{CUSTOM_PREFIX}*.jsonl"))
     return list(SUITES) + custom
+
+
+# --- Human-facing suite names -------------------------------------------------
+# The versioned key (e.g. "email_drafting_v1", "sql_duke_v2") is the permanent
+# record kept in the repo and used everywhere internally (data keys, sorting,
+# filter values). Users should never see the version tag — they see the clean
+# display name derived here (e.g. "Email Drafting", "Text-to-SQL"). A suite may
+# override the derived name with an explicit "display" key in SUITES.
+_SUITE_ACRONYMS = {
+    "it": "IT",
+    "sql": "SQL",
+    "json": "JSON",
+    "qa": "Q&A",
+    "bfi": "BFI",
+    "api": "API",
+}
+_SUITE_VERSION_RE = re.compile(r"_v\d+(?:\.\d+)*$", re.IGNORECASE)
+
+
+def _prettify_suite_key(suite_key: str) -> str:
+    """Strip the trailing version tag and title-case the slug, keeping known
+    acronyms uppercase. ``email_drafting_v1`` -> ``Email Drafting``."""
+    stem = _SUITE_VERSION_RE.sub("", suite_key or "")
+    words = [w for w in stem.split("_") if w]
+    if not words:
+        return (suite_key or "—").strip() or "—"
+    return " ".join(_SUITE_ACRONYMS.get(w.lower(), w.capitalize()) for w in words)
+
+
+def suite_display_name(suite_key: str) -> str:
+    """Clean, user-facing name for a suite key (no version tag). Display only —
+    the versioned key remains the source of truth for records and comparability."""
+    if not suite_key:
+        return "—"
+    cfg = SUITES.get(suite_key)
+    if cfg and cfg.get("display"):
+        return cfg["display"]
+    if suite_key.startswith(CUSTOM_PREFIX):
+        return "Custom questions"
+    return _prettify_suite_key(suite_key)
 
 
 def suite_question_count(suite_key: str) -> int:
@@ -413,49 +528,13 @@ def _scan_result_path(repo_id: str) -> Path:
     return output_dir(repo_id) / "scan_result.json"
 
 
-def validate_hf_scan_gate(repo_id: str) -> dict:
-    """Require a completed low-risk artifact scan before serving an HF model.
+def _scan_verdict(base: dict, status: str, tier: str, score: object) -> dict:
+    """Apply the completed-and-low-risk rule to one scan's status/tier/score.
 
-    This is the cross-pillar handshake: evaluator never downloads or serves a
-    Hugging Face model on the DCC until the scanner pillar has produced a clear
-    ``scan_result.json`` for the same repo id. The gate is intentionally
-    conservative for MVP launch: only completed ``low`` scans pass.
+    Shared by the on-disk artifact and the catalog fallback so both paths grade
+    a scan identically.
     """
-    path = _scan_result_path(repo_id)
-    base = {
-        "repo_id": repo_id,
-        "path": str(path),
-        "status": None,
-        "severity_tier": None,
-        "overall_risk_score": None,
-    }
-    if not path.is_file():
-        return {
-            **base,
-            "ok": False,
-            "error": (
-                "security scan required before serving this Hugging Face model; "
-                f"run the scanner first, then retry. Expected {path}"
-            ),
-        }
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception as e:  # noqa: BLE001
-        return {
-            **base,
-            "ok": False,
-            "error": f"security scan result is unreadable: {type(e).__name__}: {e}",
-        }
-
-    status = str(data.get("status") or "unknown").lower()
-    tier = str(data.get("severity_tier") or "unknown").lower()
-    score = data.get("overall_risk_score")
-    out = {
-        **base,
-        "status": status,
-        "severity_tier": tier,
-        "overall_risk_score": score,
-    }
+    out = {**base, "status": status, "severity_tier": tier, "overall_risk_score": score}
     if status not in SCAN_COMPLETE_STATUSES:
         return {
             **out,
@@ -472,6 +551,86 @@ def validate_hf_scan_gate(repo_id: str) -> dict:
             ),
         }
     return {**out, "ok": True, "error": None}
+
+
+def _scan_from_catalog(repo_id: str) -> dict | None:
+    """Latest scan for ``repo_id`` from the same catalog /scans and /pipeline
+    read (Postgres when configured, on-disk artifacts otherwise).
+
+    This recognizes scans recorded before the pipeline existed — persisted to
+    the DB with no local ``scan_result.json`` on this host. Read-only over the
+    scanner data layer; returns None if nothing matches or the lookup fails.
+    Mirrors the safety gate's use of ``get_safety_data`` in ``pipeline.py``.
+    """
+    from scanner.paths import safe_dir_name
+
+    try:
+        from frontend.scan_data import get_scans_data
+
+        target_slug = safe_dir_name(repo_id)
+        for row in get_scans_data().get("scans") or []:
+            if row.get("model_id") == repo_id or row.get("slug") == target_slug:
+                return row
+    except Exception:  # noqa: BLE001 — a catalog hiccup must not block the gate path
+        return None
+    return None
+
+
+def validate_hf_scan_gate(repo_id: str) -> dict:
+    """Require a completed low-risk artifact scan before serving an HF model.
+
+    This is the cross-pillar handshake: evaluator never downloads or serves a
+    Hugging Face model on the DCC until the scanner pillar has produced a clear
+    scan for the same repo id. The gate is intentionally conservative for MVP
+    launch: only completed ``low``/``medium`` scans pass.
+
+    Evidence order: the local ``scan_result.json`` artifact first (fast, and it
+    covers not-yet-ingested private runs), then the scan catalog (Postgres on
+    deployment). The catalog fallback is what lets scans recorded before the
+    pipeline — DB rows with no local artifact — clear the gate instead of
+    reading as unscanned.
+    """
+    path = _scan_result_path(repo_id)
+    base = {
+        "repo_id": repo_id,
+        "path": str(path),
+        "status": None,
+        "severity_tier": None,
+        "overall_risk_score": None,
+    }
+    if path.is_file():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:  # noqa: BLE001
+            return {
+                **base,
+                "ok": False,
+                "error": f"security scan result is unreadable: {type(e).__name__}: {e}",
+            }
+        return _scan_verdict(
+            base,
+            str(data.get("status") or "unknown").lower(),
+            str(data.get("severity_tier") or "unknown").lower(),
+            data.get("overall_risk_score"),
+        )
+
+    row = _scan_from_catalog(repo_id)
+    if row is not None:
+        return _scan_verdict(
+            base,
+            str(row.get("status") or "unknown").lower(),
+            str(row.get("severity_tier") or "unknown").lower(),
+            row.get("overall_risk_score"),
+        )
+
+    return {
+        **base,
+        "ok": False,
+        "error": (
+            "security scan required before serving this Hugging Face model; "
+            f"run the scanner first, then retry. Expected {path}"
+        ),
+    }
 
 
 def _container_rel(path: Path) -> str:
@@ -926,6 +1085,7 @@ def get_launch_options() -> dict:
     candidates = candidate_models()
     return {
         "candidates": list(candidates),
+        "candidate_groups": candidate_groups(),
         "judges": list(JUDGE_MODELS),
         "suites": [
             {
@@ -943,6 +1103,11 @@ def get_launch_options() -> dict:
         "pricing_json": json.dumps({m: list(r) for m, r in _COST_PER_M_TOKENS.items()}),
         "max_tokens_min": MAX_TOKENS_MIN,
         "max_tokens_max": MAX_TOKENS_MAX,
+        "token_tiers": [dict(t) for t in MAX_TOKEN_TIERS],
+        "default_token_tier": DEFAULT_TOKEN_TIER,
+        # Preselected tier per candidate so the form can jump to "Reasoning" the
+        # moment a reasoning model is picked (JS mirrors is_reasoning_model()).
+        "reasoning_models": [m for m in candidates if is_reasoning_model(m)],
         "suggested_hf_repos": list(SUGGESTED_HF_REPOS),
         "custom_max_questions": CUSTOM_MAX_QUESTIONS,
         "launch_mode": "docker" if docker_launch.use_docker() else "host",

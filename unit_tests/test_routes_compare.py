@@ -63,12 +63,26 @@ class CompareRouteTest(unittest.TestCase):
         with mock.patch.object(model_rollup, "get_model_rollup", return_value=None):
             resp = _client().get("/compare?models=nope1,nope2")
         self.assertEqual(resp.status_code, 200)
-        self.assertIn("None of the requested slugs matched", resp.data.decode())
+        self.assertIn("None of the selected models matched a known gateway model", resp.data.decode())
 
-    def test_no_query_param_renders_empty_form(self) -> None:
-        with mock.patch.object(model_rollup, "get_model_rollup", return_value=None):
+    def test_no_query_param_renders_gateway_dropdowns(self) -> None:
+        with mock.patch.object(model_rollup, "get_model_rollup", side_effect=_fake_rollup), \
+             mock.patch("frontend.routes._compare_gateway_options", return_value=[
+                 {"id": "GPT 4.1 Mini", "slug": "gpt-4.1-mini"},
+                 {"id": "Llama 3.3", "slug": "llama-3.3"},
+             ]):
             resp = _client().get("/compare")
         self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode()
+        self.assertIn("compare-model-select", html)
+        self.assertIn("GPT 4.1 Mini", html)
+
+    def test_caps_at_five_models(self) -> None:
+        slugs = ",".join(f"m{i}" for i in range(8))
+        with mock.patch.object(model_rollup, "get_model_rollup", return_value=None):
+            resp = _client().get(f"/compare?models={slugs}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertLessEqual(resp.data.decode().count("Not found"), 6)
 
 
 if __name__ == "__main__":

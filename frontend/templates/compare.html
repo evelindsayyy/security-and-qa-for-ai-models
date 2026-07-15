@@ -15,16 +15,30 @@
 <div class="eval-comparison">
   {{ page_header('Compare models', 'Head-to-head view over the cross-pillar rollup (scan, safety, eval, benchmarks).') }}
 
-  <form method="get" action="{{ url_for('compare_models') }}" class="launch-form card p-4 mb-6">
-    <label>Model slugs (comma-separated)
-      <input type="text" name="models" value="{{ requested_slugs|join(',') }}" placeholder="gpt-4.1-mini,llama-3.3">
-    </label>
-    <p class="form-hint mt-2">Slugs match each model's <code>/models/&lt;slug&gt;</code> URL.</p>
-    <button type="submit" class="btn-primary mt-3">Compare</button>
+  <form method="get" action="{{ url_for('compare_models') }}" class="launch-form card p-4 mb-6" id="compare-form">
+    <p class="form-hint mb-3">Pick gateway models (up to {{ compare_max }}).</p>
+    <div id="compare-slots" class="compare-slots">
+      {% for slug in form_slugs %}
+      <div class="compare-slot">
+        <label class="compare-slot-label">Model {{ loop.index }}
+          <select name="models" class="compare-model-select">
+            <option value="">— choose —</option>
+            {% for opt in gateway_options %}
+            <option value="{{ opt.slug }}"{% if opt.slug == slug %} selected{% endif %}>{{ opt.id }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="form-actions mt-3">
+      <button type="button" class="btn-secondary btn-sm" id="compare-add"{% if form_slugs|length >= compare_max %} hidden{% endif %}>+ Add model</button>
+      <button type="submit" class="btn-primary btn-sm">Compare</button>
+    </p>
   </form>
 
   {% if requested_slugs and not rollups %}
-  <p class="empty-state">None of the requested slugs matched a known model.</p>
+  <p class="empty-state">None of the selected models matched a known gateway model.</p>
   {% elif rollups %}
   {% if compare_summary and rollups|length >= 2 %}
   <section class="card p-5 mb-6">
@@ -77,4 +91,44 @@
   {% endfor %}
   {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+  .compare-slots { display: flex; flex-direction: column; gap: 0.75rem; }
+  .compare-model-select { width: 100%; max-width: 28rem; padding: 0.5rem; border: 1px solid #e8e6e1; border-radius: 0.5rem; }
+  .compare-select:disabled { opacity: 0.45; cursor: not-allowed; }
+</style>
+<script>
+(function () {
+  var max = {{ compare_max }};
+  var slots = document.getElementById("compare-slots");
+  var addBtn = document.getElementById("compare-add");
+  if (!slots || !addBtn) return;
+  var template = slots.querySelector(".compare-slot");
+  if (!template) return;
+  var optionHtml = template.querySelector("select").innerHTML;
+
+  function slotCount() {
+    return slots.querySelectorAll(".compare-slot").length;
+  }
+
+  function relabel() {
+    slots.querySelectorAll(".compare-slot").forEach(function (slot, i) {
+      var label = slot.querySelector(".compare-slot-label");
+      if (label) label.firstChild.textContent = "Model " + (i + 1) + " ";
+    });
+  }
+
+  addBtn.addEventListener("click", function () {
+    if (slotCount() >= max) return;
+    var div = document.createElement("div");
+    div.className = "compare-slot";
+    div.innerHTML = '<label class="compare-slot-label">Model <select name="models" class="compare-model-select">' + optionHtml + "</select></label>";
+    slots.appendChild(div);
+    relabel();
+    if (slotCount() >= max) addBtn.hidden = true;
+  });
+})();
+</script>
 {% endblock %}

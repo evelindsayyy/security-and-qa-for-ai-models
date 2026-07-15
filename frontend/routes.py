@@ -29,6 +29,44 @@ def _private_scope() -> tuple[str, str]:
     return "private", current_user_id()
 
 
+_COMPARE_MAX = 5
+_COMPARE_DEFAULT = 2
+_COMPARE_CATEGORIES = frozenset({"general_chat", "codex", "research"})
+
+
+def _compare_gateway_options() -> list[dict[str, str]]:
+    from gateway.catalog import eligible_models
+    from frontend.model_identity import gateway_slug
+
+    ids = eligible_models(_COMPARE_CATEGORIES)
+    return [{"id": mid, "slug": gateway_slug(mid)} for mid in ids]
+
+
+def _resolve_compare_slugs(request) -> list[str]:
+    from frontend import model_rollup
+
+    raw = request.args.getlist("models")
+    expanded: list[str] = []
+    for item in raw:
+        if "," in item:
+            expanded.extend(p.strip() for p in item.split(",") if p.strip())
+        elif item.strip():
+            expanded.append(item.strip())
+    if not expanded and request.args.get("models"):
+        expanded = [p.strip() for p in request.args.get("models", "").split(",") if p.strip()]
+    if expanded:
+        return expanded[:_COMPARE_MAX]
+    options = _compare_gateway_options()
+    with_data = [
+        o["slug"]
+        for o in options
+        if (model_rollup.get_model_rollup(o["slug"]) or {}).get("aggregate") is not None
+    ]
+    if len(with_data) >= _COMPARE_DEFAULT:
+        return with_data[:_COMPARE_DEFAULT]
+    return [o["slug"] for o in options[:_COMPARE_DEFAULT]]
+
+
 def _attach_pillar_summary(detail: dict, *, pillar: str) -> dict:
     from frontend.pillar_summary import attach_pillar_summary
 
@@ -36,8 +74,13 @@ def _attach_pillar_summary(detail: dict, *, pillar: str) -> dict:
     return detail
 
 
-def _hub_context() -> dict:
-    """build home page counts — never crash if one data dir is missing."""
+def _hub_context(*, payloads: dict | None = None) -> dict:
+    """Build home page counts — never crash if one data dir is missing."""
+    if payloads is None:
+        from frontend.overview import pillar_payloads_once
+
+        payloads = pillar_payloads_once()
+
     scan_count = 0
     scan_worst_tier = "—"
     scan_worst_score = None
@@ -54,65 +97,48 @@ def _hub_context() -> dict:
     benchmark_latest = None
 
     try:
-        from frontend.scan_data import get_scans_data
-
-        sd = get_scans_data()
-        scan_has = sd["has_scans"]
-        scan_count = len(sd["scans"])
-        if sd["scans"]:
+        sd = payloads.get("scans") or {}
+        scan_has = sd.get("has_scans", False)
+        scan_count = len(sd.get("scans") or [])
+        if sd.get("scans"):
             scan_worst_tier = sd["scans"][0]["severity_tier"]
             scan_worst_score = sd["scans"][0]["overall_risk_score"]
     except Exception:
         pass
 
     try:
-        from frontend.eval_run_data import get_runs_data
-
-        ed = get_runs_data()
-        eval_has = ed["has_runs"]
-        eval_count = len(ed["runs"])
-        if ed["runs"]:
+        ed = payloads.get("eval") or {}
+        eval_has = ed.get("has_runs", False)
+        eval_count = len(ed.get("runs") or [])
+        if ed.get("runs"):
             eval_best_overall = ed["runs"][0]["overall"]
     except Exception:
         pass
 
     try:
-        from frontend.safety_data import get_safety_data
-
-        saf = get_safety_data()
-        safety_has = saf["has_safety"]
-        safety_count = len(saf["models"])
-        if saf["models"]:
+        saf = payloads.get("safety") or {}
+        safety_has = saf.get("has_safety", False)
+        safety_count = len(saf.get("models") or [])
+        if saf.get("models"):
             safety_worst_pass_rate = saf["models"][0]["summary_pass_rate"]
             safety_worst_tier = saf["models"][0]["tier"]
     except Exception:
         pass
 
     try:
-        from frontend.benchmark_data import get_benchmark_latest_for_hub, get_benchmarks_data
+        from frontend.benchmark_data import get_benchmark_latest_for_hub
 
-        bench = get_benchmarks_data()
-        benchmark_has = bench["has_runs"]
-        benchmark_count = len(bench["runs"])
-        benchmark_latest = get_benchmark_latest_for_hub(bench.get("all_runs") or bench.get("runs"))
+        bench = payloads.get("benchmarks") or {}
+        benchmark_has = bench.get("has_runs", False)
+        benchmark_count = len(bench.get("runs") or [])
+        benchmark_latest = get_benchmark_latest_for_hub(
+            bench.get("all_runs") or bench.get("runs")
+        )
     except Exception:
         pass
 
-    # Featured per-model report card (the AI Model Advisor label). Best-effort:
-    # the home page never breaks if a pillar's data is missing.
-    model_card = None
-    try:
-        from frontend.eval_run_data import featured_model_slug, get_model_card
-
-        fslug = featured_model_slug()
-        if fslug:
-            model_card = get_model_card(fslug)
-    except Exception:
-        model_card = None
-
     gw = get_gateway_catalog()
     return {
-        "model_card": model_card,
         "gateway_models": gw["models"],
         "gateway_count": gw["count"],
         "gateway_error": gw["error"],
@@ -146,17 +172,6 @@ def register_routes(app):
 
         return render_template("jobs.html", jobs=list_inflight_jobs())
 
-    @app.route("/labels")
-    def model_labels():
-        from frontend.eval_run_data import get_all_model_cards
-
-        cards = []
-        try:
-            cards = get_all_model_cards()
-        except Exception:  # noqa: BLE001 — gallery degrades to empty, never 500s
-            cards = []
-        return render_template("model_cards.html", cards=cards)
-
     @app.route("/scans")
     def scans():
         from frontend.scan_data import get_scan_guide_data, get_scans_data
@@ -181,6 +196,8 @@ def register_routes(app):
             opts["rerun"] = get_scan_rerun_params(
                 from_slug, visibility=visibility, owner_user_id=owner_user_id
             )
+        elif request.args.get("model", "").strip():
+            opts["rerun"] = {"hf_repo": request.args.get("model", "").strip()}
         return render_template("scan_run_new.html", **opts)
 
     @app.route("/scans/start", methods=["POST"])
@@ -361,7 +378,7 @@ def register_routes(app):
         from frontend.eval_run_data import get_eval_guide_data, get_runs_data
 
         data = get_runs_data()
-        data.update(get_eval_guide_data())
+        data.update(get_eval_guide_data(runs=data.get("runs")))
         return render_template("eval_run.html", **data)
 
     @app.route("/eval-run/new")
@@ -380,6 +397,13 @@ def register_routes(app):
             opts["rerun"] = get_eval_rerun_params(
                 from_slug, visibility=visibility, owner_user_id=owner_user_id
             )
+        else:
+            candidate = request.args.get("candidate", "").strip()
+            hf_repo = request.args.get("hf_repo", "").strip()
+            if candidate:
+                opts["rerun"] = {"candidate_model": candidate}
+            elif hf_repo:
+                opts["rerun"] = {"hf_repo": hf_repo}
         return render_template("eval_run_new.html", **opts)
 
     @app.route("/eval-run/start", methods=["POST"])
@@ -1186,7 +1210,7 @@ def register_routes(app):
         from frontend.safety_data import get_safety_data, get_safety_guide_data
 
         data = get_safety_data()
-        data.update(get_safety_guide_data())
+        data.update(get_safety_guide_data(models=data.get("models")))
         return render_template("safety.html", **data)
 
     @app.route("/safety/new")
@@ -1206,6 +1230,17 @@ def register_routes(app):
             opts["rerun"] = get_safety_rerun_params(
                 from_slug, profile, visibility=visibility, owner_user_id=owner_user_id
             )
+        elif request.args.get("model", "").strip():
+            from frontend.safety_data import _gateway_catalog_id_for_slug
+
+            model = request.args.get("model", "").strip()
+            opts["rerun"] = {
+                "gateway_model": _gateway_catalog_id_for_slug(model) or model,
+                "redteam_profile": profile,
+                "run_policy": True,
+                "run_redteam": True,
+                "run_garak": True,
+            }
         return render_template("safety_run_new.html", **opts)
 
     @app.route("/safety/start", methods=["POST"])
@@ -1213,9 +1248,63 @@ def register_routes(app):
     def safety_run_start():
         from flask import redirect, request, url_for
 
-        from frontend.safety_launch import start_run, validate_launch
         from frontend import docker_launch
         from frontend.output_dirs import OutputDirError
+        from frontend.safety_launch import (
+            get_launch_options,
+            start_run,
+            validate_hf_candidate,
+            validate_hf_launch,
+            validate_launch,
+        )
+
+        # Candidate source: a gateway model, or a Hugging Face model. An HF
+        # model with no endpoint just validates the repo (no server to scan
+        # against yet); with an endpoint, it actually launches. Red-team for
+        # an HF target needs its own dedicated attacker endpoint (see
+        # validate_hf_launch's docstring) — the attacker model itself is
+        # fixed (safety_launch.MANDATORY_ATTACKER_REPO), not user input.
+        if request.form.get("source") == "hf":
+            hf_repo = request.form.get("hf_repo", "").strip()
+            hf_endpoint = request.form.get("hf_endpoint", "").strip()
+            hf_redteam_profile = request.form.get("redteam_profile", "base")
+            hf_skip_policy = not bool(request.form.get("run_policy"))
+            hf_skip_garak = not bool(request.form.get("run_garak"))
+            hf_redteam = bool(request.form.get("run_redteam"))
+            hf_attacker_endpoint = request.form.get("attacker_endpoint", "").strip()
+
+            if not hf_endpoint:
+                hf_result = validate_hf_candidate(hf_repo)
+                return render_template("safety_run_new.html",
+                                       hf_result=hf_result, **get_launch_options())
+
+            error = validate_hf_launch(
+                hf_repo, hf_endpoint,
+                redteam_profile=hf_redteam_profile,
+                skip_policy=hf_skip_policy,
+                skip_garak=hf_skip_garak,
+                redteam=hf_redteam,
+                attacker_endpoint=hf_attacker_endpoint,
+            )
+            if error:
+                hf_result = {"ok": False, "error": error, "repo_id": hf_repo,
+                            "architectures": None, "num_params": None}
+                return render_template("safety_run_new.html",
+                                       hf_result=hf_result, **get_launch_options()), 400
+
+            run_key, _already, visibility = start_run(
+                hf_repo,
+                redteam_profile=hf_redteam_profile,
+                skip_policy=hf_skip_policy,
+                skip_garak=hf_skip_garak,
+                skip_redteam=not hf_redteam,
+                hf_repo=hf_repo,
+                endpoint=hf_endpoint,
+                attacker_endpoint=hf_attacker_endpoint or None,
+            )
+            slug, profile = run_key.split("/", 1)
+            endpoint_name = "safety_detail_private" if visibility == "private" else "safety_detail"
+            return redirect(url_for(endpoint_name, slug=slug, profile=profile, status="running"))
 
         model = request.form.get("gateway_model", "")
         redteam_profile = request.form.get("redteam_profile", "base")
@@ -1467,6 +1556,7 @@ def register_routes(app):
                 return render_template("model_detail.html", missing=True, slug=slug)
 
         detail = get_model_detail(slug) or {
+            "slug": slug,
             "model": rollup["display_name"], "runs": [], "dim_columns": [],
             "n_runs": 0, "suites": [], "avg_overall": None, "best_overall": None, "total_cost_usd": 0,
         }
@@ -1535,6 +1625,30 @@ def register_routes(app):
             **detail,
         )
 
+    @app.route("/models/<path:slug>/report")
+    def model_report_print(slug):
+        from datetime import datetime, timezone
+
+        from frontend import model_rollup, model_summary
+        from frontend.eval_run_data import get_model_detail
+
+        rollup = model_rollup.get_model_rollup(slug)
+        if rollup is None:
+            return render_template("model_report_print.html", missing=True, slug=slug)
+        detail = get_model_detail(slug) or {"model": rollup["display_name"], "runs": []}
+        recommendation = model_summary.get_recommendation_summary(rollup)
+        generated_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+        return render_template(
+            "model_report_print.html",
+            missing=False,
+            slug=slug,
+            model=rollup["display_name"],
+            rollup=rollup,
+            detail=detail,
+            recommendation=recommendation,
+            generated_utc=generated_utc,
+        )
+
     @app.route("/compare")
     def compare_models():
         from flask import request
@@ -1542,8 +1656,7 @@ def register_routes(app):
         from frontend import model_rollup, model_summary
         from frontend.model_identity import gateway_slug
 
-        raw = request.args.get("models", "")
-        slugs = [s for s in (p.strip() for p in raw.split(",")) if s]
+        slugs = _resolve_compare_slugs(request)
         gw = get_gateway_catalog()
         id_by_slug = {gateway_slug(m["id"]): m["id"] for m in gw["models"]}
         rollups = []
@@ -1581,12 +1694,18 @@ def register_routes(app):
                     "benchmark": bench,
                 }
             )
+        form_slugs = slugs if slugs else [""] * _COMPARE_DEFAULT
+        while len(form_slugs) < _COMPARE_DEFAULT:
+            form_slugs.append("")
         return render_template(
             "compare.html",
             rollups=rollups,
             recommendations=recommendations,
             compare_summary=compare_summary,
             requested_slugs=slugs,
+            form_slugs=form_slugs[:_COMPARE_MAX],
+            gateway_options=_compare_gateway_options(),
+            compare_max=_COMPARE_MAX,
             unmatched=unmatched,
             benchmark_kinds=benchmark_kinds,
             chart_models=chart_models,

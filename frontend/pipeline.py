@@ -43,16 +43,24 @@ def _safety_result_paths(model: str) -> list[tuple[str, Path]]:
     slug = normalize_gateway_model_id(model)
     model_dir = SAFETY_OUTPUT_DIR / slug
     out: list[tuple[str, Path]] = []
-    if not model_dir.is_dir():
+    try:
+        if not model_dir.is_dir():
+            return out
+        legacy = model_dir / "merged_safety_result.json"
+        if legacy.is_file():
+            out.append(("base", legacy))
+        for prof_dir in sorted(model_dir.iterdir()):
+            if prof_dir.is_dir() and not prof_dir.name.startswith("."):
+                mp = prof_dir / "merged_safety_result.json"
+                if mp.is_file():
+                    out.append((prof_dir.name, mp))
+    except OSError:
+        # Unreadable artifacts — e.g. a deploy-time file owned by another user
+        # with restrictive perms (PermissionError from is_file()/iterdir()) —
+        # must not abort the whole pipeline listing. Return whatever resolved so
+        # far; the DB/UI catalog (tried first) still supplies cleared runs, and
+        # the gate otherwise reports "missing".
         return out
-    legacy = model_dir / "merged_safety_result.json"
-    if legacy.is_file():
-        out.append(("base", legacy))
-    for prof_dir in sorted(model_dir.iterdir()):
-        if prof_dir.is_dir() and not prof_dir.name.startswith("."):
-            mp = prof_dir / "merged_safety_result.json"
-            if mp.is_file():
-                out.append((prof_dir.name, mp))
     return out
 
 
@@ -218,6 +226,79 @@ def _gate_stage(gate: dict) -> dict:
     return {"state": "blocked", "detail": gate["error"]}
 
 
+def _pipeline_url(endpoint: str, **kwargs: str) -> str:
+    """Flask url_for when in a request; path fallback for unit tests."""
+    try:
+        from flask import has_request_context, url_for
+
+        if has_request_context():
+            return url_for(endpoint, **kwargs)
+    except Exception:  # noqa: BLE001
+        pass
+    slug = kwargs.get("slug", "")
+    profile = kwargs.get("profile", "base")
+    if endpoint == "scan_detail" and slug:
+        return f"/scans/{slug}"
+    if endpoint == "safety_detail" and slug:
+        return f"/safety/{slug}/{profile or 'base'}"
+    if endpoint == "scan_run_new":
+        base = "/scans/new"
+    elif endpoint == "safety_run_new":
+        base = "/safety/new"
+    elif endpoint == "eval_run_new":
+        base = "/eval-run/new"
+    else:
+        return ""
+    query = {k: v for k, v in kwargs.items() if v and k not in ("slug", "profile")}
+    if not query:
+        return base
+    from urllib.parse import urlencode
+
+    return f"{base}?{urlencode(query)}"
+
+
+def _scan_stage_href(model: str, gate: dict, stage: dict) -> str:
+    if stage["state"] in ("n/a", "unsupported"):
+        return ""
+    if gate.get("status") is not None:
+        from frontend.model_identity import hf_slug
+
+        return _pipeline_url("scan_detail", slug=hf_slug(model))
+    return _pipeline_url("scan_run_new", model=model)
+
+
+def _safety_stage_href(model: str, gate: dict, stage: dict) -> str:
+    if stage["state"] in ("n/a", "unsupported"):
+        return ""
+    from safety.gateway_ids import normalize_gateway_model_id
+
+    slug = normalize_gateway_model_id(model)
+    if gate.get("status") is not None:
+        profile = str(gate.get("profile") or "base")
+        return _pipeline_url("safety_detail", slug=slug, profile=profile)
+    try:
+        from frontend.safety_data import _gateway_catalog_id_for_slug
+
+        catalog_id = _gateway_catalog_id_for_slug(model) or model
+    except Exception:  # noqa: BLE001
+        catalog_id = model
+    return _pipeline_url("safety_run_new", model=catalog_id)
+
+
+def _eval_stage_href(model: str, source: str, *, unlocked: bool) -> str:
+    if not unlocked:
+        return ""
+    if source == "gateway":
+        return _pipeline_url("eval_run_new", candidate=model)
+    return _pipeline_url("eval_run_new", hf_repo=model)
+
+
+def _attach_stage_href(stage: dict, href: str) -> dict:
+    if href:
+        stage = {**stage, "href": href}
+    return stage
+
+
 def stage_state(model: str, source: str) -> dict:
     """Per-model pipeline state for the /pipeline view (read-only)."""
     if source == "hf":
@@ -225,25 +306,65 @@ def stage_state(model: str, source: str) -> dict:
         from frontend.eval_launch import validate_hf_scan_gate
 
         scan_gate = validate_hf_scan_gate(model)
+        scan_stage = _gate_stage(scan_gate)
+        scan_stage = _attach_stage_href(
+            scan_stage, _scan_stage_href(model, scan_gate, scan_stage)
+        )
+        safety_stage = {
+            "state": "unsupported",
+            "detail": "safety red-teaming not yet supported for served HF models",
+        }
+        unlocked = scan_gate["ok"]
         return {
             "model": model,
             "source": source,
-            "scan": _gate_stage(scan_gate),
-            "safety": {
-                "state": "unsupported",
-                "detail": "safety red-teaming not yet supported for served HF models",
-            },
-            "eval_unlocked": scan_gate["ok"],
+            "scan": scan_stage,
+            "safety": safety_stage,
+            "eval_unlocked": unlocked,
+            "eval_href": _eval_stage_href(model, source, unlocked=unlocked),
         }
 
     safety_gate = validate_safety_gate(model)
+    safety_stage = _gate_stage(safety_gate)
+    safety_stage = _attach_stage_href(
+        safety_stage, _safety_stage_href(model, safety_gate, safety_stage)
+    )
+    scan_stage = {"state": "n/a", "detail": "nothing to scan (API endpoint)"}
+    unlocked = safety_gate["ok"]
     return {
         "model": model,
         "source": source,
-        "scan": {"state": "n/a", "detail": "nothing to scan (API endpoint)"},
-        "safety": _gate_stage(safety_gate),
-        "eval_unlocked": safety_gate["ok"],
+        "scan": scan_stage,
+        "safety": safety_stage,
+        "eval_unlocked": unlocked,
+        "eval_href": _eval_stage_href(model, source, unlocked=unlocked),
     }
+
+
+def _row_or_placeholder(model: str | None, source: str) -> dict:
+    """``stage_state`` for one model, but never propagate a per-model failure.
+
+    A single model with an unreadable artifact used to raise inside the build
+    loop, and the broad handler then dropped that model AND every model after it
+    (the table showed 15 of 41). Each model is now isolated: on error it still
+    gets a row, with its gate marked unknown, so the full catalog always renders.
+    """
+    try:
+        return stage_state(model, source)
+    except Exception as exc:  # noqa: BLE001 — keep the model visible, don't abort
+        detail = f"pipeline state unavailable: {exc}"
+        return {
+            "model": model,
+            "source": source,
+            "scan": (
+                {"state": "n/a", "detail": "nothing to scan (API endpoint)"}
+                if source == "gateway"
+                else {"state": "unknown", "detail": detail}
+            ),
+            "safety": {"state": "unknown", "detail": detail},
+            "eval_unlocked": False,
+            "eval_href": _eval_stage_href(model, source, unlocked=False),
+        }
 
 
 def build_overview() -> dict:
@@ -260,7 +381,7 @@ def build_overview() -> dict:
         models = catalog.get("models") or []
         gateway_count = len(models)
         for m in models:
-            rows.append(stage_state(m["id"], "gateway"))
+            rows.append(_row_or_placeholder(m.get("id"), "gateway"))
     except Exception as exc:  # noqa: BLE001 — a catalog hiccup must not 500 the page
         gateway_error = str(exc)
     try:
@@ -269,7 +390,7 @@ def build_overview() -> dict:
         for s in get_scans_data().get("scans", []):
             repo = s.get("model_id")
             if repo:
-                rows.append(stage_state(repo, "hf"))
+                rows.append(_row_or_placeholder(repo, "hf"))
     except Exception:  # noqa: BLE001
         pass
     return {

@@ -137,5 +137,66 @@ class AvailabilityTest(unittest.TestCase):
         self.assertIn("has_runs", data)  # silent fallback, never a 500
 
 
+def _exec_jsonl_row(qid, candidate_response, *, suite="mini_exec_v1"):
+    """A results row for an execution suite (overrides suite + response)."""
+    row = _jsonl_row(qid=qid, overall=4.0)
+    row["suite"] = suite
+    row["adaptation"] = {**row["adaptation"],
+                         "task_suite_version": suite,
+                         "rubric_version": suite}
+    row["candidate_response"] = candidate_response
+    return row
+
+
+class ExecutionPassRateOnDbPathTest(unittest.TestCase):
+    """The DB path must attach the functional pass-rate for execution suites,
+    exactly like the file path — otherwise the Exec column reads — for every
+    model whenever the dashboard is served from Postgres."""
+
+    @staticmethod
+    def _write_mini_json_suite(tmp) -> Path:
+        # A self-contained JSON-check suite (no SQLite, no model calls): the
+        # metadata line selects the checker; each task carries an `expected`.
+        suite = Path(tmp) / "mini_exec_v1.jsonl"
+        suite.write_text("\n".join(json.dumps(r) for r in [
+            {"check": "json"},
+            {"id": "q1", "expected": {"a": 1}},
+            {"id": "q2", "expected": {"a": 2}},
+        ]), encoding="utf-8")
+        return Path(tmp)
+
+    def test_db_path_emits_pass_rate_matching_file_path(self) -> None:
+        import execution_eval  # bare import: eval_run_data put evaluator/ on sys.path
+
+        rows = [
+            _exec_jsonl_row("q1", '{"a": 1}'),   # matches expected -> pass
+            _exec_jsonl_row("q2", '{"a": 5}'),   # wrong value     -> fail
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            tasks_dir = self._write_mini_json_suite(tmp)
+            results_path = Path(tmp) / "20260612T150000Z_mini_exec_v1_gpt-5-chat.jsonl"
+            results_path.write_text(
+                "\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+            with mock.patch.object(execution_eval, "TASKS_DIR", tasks_dir):
+                file_row = eval_run_data._aggregate_file(results_path)
+                run, results = _db_shape(rows, results_path.name)
+                db_row = eval_db_data._aggregate_db_run(run, results)
+
+        self.assertEqual(file_row["execution_pass_rate"], 0.5)   # 1 of 2 passed
+        self.assertEqual(db_row["execution_pass_rate"], 0.5)     # DB path agrees
+        self.assertEqual(db_row["execution_passed"], 1)
+        self.assertEqual(db_row["execution_n"], 2)
+        self.assertEqual(
+            db_row["execution_pass_rate"], file_row["execution_pass_rate"])
+
+    def test_judge_only_suite_has_no_pass_rate(self) -> None:
+        # it_support_v1 is judge-scored (no `expected` answers) -> Exec shows —.
+        rows = [_jsonl_row()]
+        run, results = _db_shape(
+            rows, "20260612T150000Z_it_support_v1_gpt-5-chat.jsonl")
+        db_row = eval_db_data._aggregate_db_run(run, results)
+        self.assertNotIn("execution_pass_rate", db_row)
+
+
 if __name__ == "__main__":
     unittest.main()

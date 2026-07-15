@@ -100,7 +100,7 @@ def _run_visibility(
 
 _RUNS_SQL = """
 SELECT r.id::text, r.source_file, r.gateway_model_id, r.judge_model,
-       r.started_at, r.adaptation
+       r.started_at, r.adaptation, r.config_json
 FROM public.eval_runs r
 WHERE {visibility_filter}
 """
@@ -131,9 +131,16 @@ FROM public.eval_results WHERE eval_run_id = %(run_id)s ORDER BY task_id
 
 
 def _run_dict(row) -> dict:
-    rid, sf, gm, jm, st, ad = row
-    return {"id": rid, "source_file": sf, "gateway_model_id": gm,
+    if len(row) >= 7:
+        rid, sf, gm, jm, st, ad, config_json = row[:7]
+    else:
+        rid, sf, gm, jm, st, ad = row
+        config_json = None
+    out = {"id": rid, "source_file": sf, "gateway_model_id": gm,
             "judge_model": jm, "started_at": st, "adaptation": ad}
+    if config_json is not None:
+        out["config_json"] = config_json
+    return out
 
 
 def _result_dict(row) -> dict:
@@ -147,6 +154,48 @@ def _result_dict(row) -> dict:
 # ---------------------------------------------------------------------------
 # Public repository functions — return plain RunRecords
 # ---------------------------------------------------------------------------
+
+
+_RESULTS_LIST_SQL = """
+SELECT eval_run_id::text, task_id, score, latency_ms, tokens_in, tokens_out,
+       cost_usd, candidate_failed, judge_failed,
+       detail->'scores' AS scores,
+       detail->'dim_order' AS dim_order,
+       (COALESCE(TRIM(detail->>'candidate_response'), '') = '') AS empty_response
+FROM public.eval_results
+WHERE metric = 'judge_score' AND eval_run_id = ANY(%(run_ids)s::uuid[])
+ORDER BY task_id
+"""
+
+
+def fetch_runs_list(conn) -> list[dict]:
+    """List-page runs: aggregate fields without full result detail JSONB."""
+    vis_clause, vis_params = _run_visibility()
+    with conn.cursor() as cur:
+        cur.execute(_RUNS_SQL.format(visibility_filter=vis_clause), vis_params)
+        runs = [_run_dict(r) for r in cur.fetchall()]
+        run_ids = [r["id"] for r in runs if r["source_file"]]
+        if not run_ids:
+            return []
+        cur.execute(_RESULTS_LIST_SQL, {"run_ids": run_ids})
+        by_run: dict[str, list[dict]] = {}
+        for (rid, task_id, score, lat, tin, tout, cost, cfail, jfail,
+             scores, dim_order, empty_response) in cur.fetchall():
+            by_run.setdefault(rid, []).append({
+                "task_id": task_id, "score": score, "latency_ms": lat,
+                "tokens_in": tin, "tokens_out": tout, "cost_usd": cost,
+                "candidate_failed": cfail, "judge_failed": jfail,
+                "detail": {
+                    "scores": scores or {},
+                    "dim_order": dim_order,
+                    "candidate_response": "" if empty_response else "…",
+                },
+            })
+    return [
+        {"run": run, "results": by_run[run["id"]]}
+        for run in runs
+        if run["id"] in by_run and run["source_file"]
+    ]
 
 
 def fetch_runs(conn) -> list[dict]:

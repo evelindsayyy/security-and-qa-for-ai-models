@@ -1,7 +1,8 @@
 """
 Data source for /personality and /personality/<slug>.
 
-Disk artifacts only (not part of benchmark rollup or Postgres ingest in v1).
+Postgres when a DSN is reachable (personality_db_data); disk artifacts otherwise.
+Not part of model rollup / aggregate score.
 """
 
 from __future__ import annotations
@@ -192,6 +193,60 @@ def _legacy_mirror_paths(d: Path, slug: str) -> list[Path]:
     return mirrors
 
 
+def _attach_test_fields(row: dict, *, test_key: str, summary: dict) -> dict:
+    """Add BFI / compass fields expected by list + detail templates."""
+    if test_key == "bfi":
+        traits = summary.get("traits") or {}
+        row["traits"] = traits
+        row["trait_rows"] = [
+            {
+                "key": key,
+                "label": TRAIT_LABELS.get(key, key.title()),
+                "score": traits.get(key),
+            }
+            for key in TRAIT_ORDER
+        ]
+    elif test_key == "compass":
+        axes = summary.get("axes") or {}
+        axis_labels = summary.get("axis_labels") or {}
+        row["axes"] = axes
+        row["quadrant"] = summary.get("quadrant") or "—"
+        row["economic_score"] = (axes.get("economic") or {}).get("score")
+        row["social_score"] = (axes.get("social") or {}).get("score")
+        row["weak_reading"] = bool(summary.get("weak_reading"))
+        row["near_even_count"] = int(summary.get("near_even_count") or 0)
+        row["axis_rows"] = []
+        for key in AXIS_ORDER:
+            meta = axes.get(key) or {}
+            if key == "economic":
+                neg_label, pos_label = "Left", "Right"
+            else:
+                neg_label, pos_label = "Libertarian", "Authoritarian"
+            row["axis_rows"].append(
+                {
+                    "key": key,
+                    "label": axis_labels.get(key) or key.title(),
+                    "score": meta.get("score"),
+                    "neg_label": neg_label,
+                    "pos_label": pos_label,
+                    "neg_pct": meta.get("neg_pct"),
+                    "pos_pct": meta.get("pos_pct"),
+                    "lean": meta.get("lean"),
+                    "clarity": meta.get("clarity"),
+                    "clarity_label": {
+                        "near_even": "Near even",
+                        "lean": "Slight lean",
+                        "clear": "Clear",
+                    }.get(meta.get("clarity") or "", meta.get("clarity") or "—"),
+                }
+            )
+        econ = (axes.get("economic") or {}).get("score")
+        social = (axes.get("social") or {}).get("score")
+        row["plot_x"] = round((float(econ) + 100) / 2, 1) if econ is not None else 50.0
+        row["plot_y"] = round((100.0 - float(social)) / 2, 1) if social is not None else 50.0
+    return row
+
+
 def _summarize_file(path: Path, *, slug: str) -> dict | None:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -214,16 +269,41 @@ def _summarize_file(path: Path, *, slug: str) -> dict | None:
         "attempted": summary.get("attempted"),
         "scored": summary.get("scored"),
     }
-    if test_key == "bfi":
-        row["traits"] = summary.get("traits") or {}
-    elif test_key == "compass":
-        axes = summary.get("axes") or {}
-        row["axes"] = axes
-        row["quadrant"] = summary.get("quadrant") or "—"
-        row["economic_score"] = (axes.get("economic") or {}).get("score")
-        row["social_score"] = (axes.get("social") or {}).get("score")
-        row["weak_reading"] = bool(summary.get("weak_reading"))
-    return row
+    return _attach_test_fields(row, test_key=test_key, summary=summary)
+
+
+def build_detail_payload(
+    *,
+    slug: str,
+    test_key: str,
+    model: str,
+    timestamp_raw: str,
+    filename: str,
+    items: list,
+    summary: dict,
+    visibility: str = "public",
+) -> dict | None:
+    """Shared detail dict for disk and Postgres readers."""
+    if test_key not in KNOWN_TESTS:
+        return None
+    summary = summary or {}
+    detail = {
+        "slug": slug,
+        "test": test_key,
+        "test_label": _test_label(test_key),
+        "model": _normalize_model_name(model or "—"),
+        "timestamp_raw": timestamp_raw or "",
+        "timestamp": _format_ts(timestamp_raw or ""),
+        "timestamp_iso": _iso_ts(timestamp_raw or ""),
+        "filename": filename,
+        "items": items or [],
+        "summary": summary,
+        "coverage": summary.get("coverage"),
+        "attempted": summary.get("attempted"),
+        "scored": summary.get("scored"),
+        "is_private": visibility == "private",
+    }
+    return _attach_test_fields(detail, test_key=test_key, summary=summary)
 
 
 def _postprocess_runs(rows: list[dict]) -> dict:
@@ -247,7 +327,9 @@ def _postprocess_runs(rows: list[dict]) -> dict:
     }
 
 
-def get_personality_data(*, visibility: str = "public", owner_user_id: str | None = None) -> dict:
+def _get_personality_data_files(
+    *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict:
     from dbutils import fs_safe
 
     dirs = _result_dirs(view_mode=visibility, owner_user_id=owner_user_id)
@@ -274,7 +356,7 @@ def get_personality_data(*, visibility: str = "public", owner_user_id: str | Non
     return out
 
 
-def get_personality_detail(
+def _get_personality_detail_files(
     slug: str, *, visibility: str = "public", owner_user_id: str | None = None
 ) -> dict | None:
     if not is_safe_slug(slug):
@@ -291,77 +373,58 @@ def get_personality_detail(
             data = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             return None
-        test_key = data.get("test")
-        if test_key not in KNOWN_TESTS:
-            return None
-        summary = data.get("summary") or {}
-        detail: dict = {
-            "slug": slug,
-            "test": test_key,
-            "test_label": _test_label(test_key),
-            "model": _normalize_model_name(data.get("model") or "—"),
-            "timestamp_raw": data.get("timestamp") or "",
-            "timestamp": _format_ts(data.get("timestamp") or ""),
-            "timestamp_iso": _iso_ts(data.get("timestamp") or ""),
-            "filename": path.name,
-            "items": data.get("items") or [],
-            "summary": summary,
-            "coverage": summary.get("coverage"),
-            "attempted": summary.get("attempted"),
-            "scored": summary.get("scored"),
-            "is_private": visibility == "private",
-        }
-        if test_key == "bfi":
-            traits = summary.get("traits") or {}
-            detail["traits"] = traits
-            detail["trait_rows"] = [
-                {
-                    "key": key,
-                    "label": TRAIT_LABELS.get(key, key.title()),
-                    "score": traits.get(key),
-                }
-                for key in TRAIT_ORDER
-            ]
-        elif test_key == "compass":
-            axes = summary.get("axes") or {}
-            axis_labels = summary.get("axis_labels") or {}
-            detail["quadrant"] = summary.get("quadrant") or "—"
-            detail["weak_reading"] = bool(summary.get("weak_reading"))
-            detail["near_even_count"] = int(summary.get("near_even_count") or 0)
-            detail["axis_rows"] = []
-            for key in AXIS_ORDER:
-                meta = axes.get(key) or {}
-                if key == "economic":
-                    neg_label, pos_label = "Left", "Right"
-                else:
-                    neg_label, pos_label = "Libertarian", "Authoritarian"
-                detail["axis_rows"].append(
-                    {
-                        "key": key,
-                        "label": axis_labels.get(key) or key.title(),
-                        "score": meta.get("score"),
-                        "neg_label": neg_label,
-                        "pos_label": pos_label,
-                        "neg_pct": meta.get("neg_pct"),
-                        "pos_pct": meta.get("pos_pct"),
-                        "lean": meta.get("lean"),
-                        "clarity": meta.get("clarity"),
-                        "clarity_label": {
-                            "near_even": "Near even",
-                            "lean": "Slight lean",
-                            "clear": "Clear",
-                        }.get(meta.get("clarity") or "", meta.get("clarity") or "—"),
-                    }
-                )
-            # Marker position on 0–100 plot (score −100…+100 → 0…100)
-            econ = (axes.get("economic") or {}).get("score")
-            social = (axes.get("social") or {}).get("score")
-            detail["plot_x"] = round((float(econ) + 100) / 2, 1) if econ is not None else 50.0
-            # Screen Y: authoritarian at top → invert signed social score.
-            detail["plot_y"] = round((100.0 - float(social)) / 2, 1) if social is not None else 50.0
-        return detail
+        return build_detail_payload(
+            slug=slug,
+            test_key=data.get("test") or "",
+            model=data.get("model") or "—",
+            timestamp_raw=data.get("timestamp") or "",
+            filename=path.name,
+            items=data.get("items") or [],
+            summary=data.get("summary") or {},
+            visibility=visibility,
+        )
     return None
 
+
+def get_personality_data(*, visibility: str = "public", owner_user_id: str | None = None) -> dict:
+    from frontend import personality_db_data
+    from frontend.db_fallback import get_data_with_db_fallback
+
+    return get_data_with_db_fallback(
+        personality_db_data.available,
+        lambda: personality_db_data.get_personality_data_db(
+            visibility=visibility, owner_user_id=owner_user_id
+        ),
+        lambda: _get_personality_data_files(
+            visibility=visibility, owner_user_id=owner_user_id
+        ),
+        pillar="personality",
+    )
+
+
+def get_personality_detail(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> dict | None:
+    """Detail payload for one personality run. Postgres first when DSN reachable."""
+    if not is_safe_slug(slug):
+        return None
+    try:
+        from frontend import personality_db_data
+
+        if personality_db_data.available():
+            detail = personality_db_data.get_personality_detail_db(
+                slug, visibility=visibility, owner_user_id=owner_user_id
+            )
+            if detail is not None:
+                return detail
+            return _get_personality_detail_files(
+                slug, visibility=visibility, owner_user_id=owner_user_id
+            )
+    except Exception:
+        pass
+    return _get_personality_detail_files(
+        slug, visibility=visibility, owner_user_id=owner_user_id
+    )
 
 def get_latest_for_model(
     model_name: str,
@@ -394,10 +457,33 @@ def get_latest_for_model(
 def delete_personality_run(
     slug: str, *, visibility: str = "public", owner_user_id: str | None = None
 ) -> str | None:
+    """Remove personality artifacts (and DB row when configured)."""
+    from frontend.delete_db import db_delete_error
+
     if not is_safe_slug(slug):
         return f"invalid slug: {slug!r}"
 
-    removed = 0
+    exists = False
+    try:
+        from frontend import personality_db_data
+
+        if personality_db_data.available():
+            exists = (
+                personality_db_data.get_personality_detail_db(
+                    slug, visibility=visibility, owner_user_id=owner_user_id
+                )
+                is not None
+            )
+    except Exception:
+        pass
+    if not exists:
+        detail = _get_personality_detail_files(
+            slug, visibility=visibility, owner_user_id=owner_user_id
+        )
+        if detail is None:
+            return f"no personality result found for slug {slug!r}"
+
+    removed_files = 0
     for d in _result_dirs(view_mode=visibility, owner_user_id=owner_user_id):
         if not _artifact_visible_for_personality(
             d / slug, view_mode=visibility, user_id=owner_user_id
@@ -407,14 +493,58 @@ def delete_personality_run(
             path = d / f"{slug}{suffix}"
             if path.is_file() and resolves_inside(d, path):
                 path.unlink(missing_ok=True)
-                removed += 1
+                removed_files += 1
         for mirror in _legacy_mirror_paths(d, slug):
             if mirror.is_file() and resolves_inside(d, mirror):
                 mirror.unlink(missing_ok=True)
-                removed += 1
+                removed_files += 1
         meta_path = d / slug / "run_meta.json"
         if meta_path.is_file():
             meta_path.unlink(missing_ok=True)
-    if removed == 0:
+            removed_files += 1
+        meta_dir = d / slug
+        if meta_dir.is_dir():
+            try:
+                meta_dir.rmdir()
+            except OSError:
+                pass
+
+    removed_db = False
+    db_available = False
+    db_row_existed = False
+    db_exc: BaseException | None = None
+    try:
+        from frontend import personality_db_data
+
+        db_available = personality_db_data.available()
+        if db_available:
+            try:
+                db_row_existed = (
+                    personality_db_data.get_personality_detail_db(
+                        slug, visibility=visibility, owner_user_id=owner_user_id
+                    )
+                    is not None
+                )
+            except Exception:
+                pass
+            try:
+                removed_db = personality_db_data.delete_run(
+                    slug, visibility=visibility, owner_user_id=owner_user_id
+                )
+            except Exception as exc:
+                db_exc = exc
+    except Exception as exc:
+        db_exc = exc
+
+    err = db_delete_error(
+        db_available=db_available,
+        db_row_existed=db_row_existed,
+        removed_db=removed_db,
+        db_exc=db_exc,
+    )
+    if err:
+        return err
+
+    if removed_files == 0 and not removed_db:
         return f"no personality result found for slug {slug!r}"
     return None

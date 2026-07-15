@@ -99,6 +99,23 @@ class DbRowMatchesFileRowTest(unittest.TestCase):
         self.assertEqual(row["severity_summary"], "1 high, 1 low")
 
 
+class FindingsListSqlTest(unittest.TestCase):
+    def test_list_findings_to_json_accepts_slim_sql_row(self) -> None:
+        row = (
+            "finding-1",
+            "modelscan",
+            "Pickle load",
+            "high",
+            "model.pkl",
+            "HIGH",
+            [],
+        )
+        out = scan_db_data._findings_to_json([row], list_view=True)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["id"], "finding-1")
+        self.assertEqual(out[0]["description"], "")
+
+
 class AvailabilityTest(unittest.TestCase):
     def test_no_dsn_means_unavailable(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=True):

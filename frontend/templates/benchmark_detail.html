@@ -6,7 +6,7 @@
 {% block content %}
 <div class="scan-detail">
   {% if missing %}
-    <h1>Benchmark not found</h1>
+    <h1 class="page-title">Benchmark not found</h1>
     <p class="sub empty">No benchmark result found for <code>{{ slug }}</code>.</p>
     <p class="form-hint">{{ start_button(url_for('benchmark_run_new'), 'Start a benchmark', classes='') }}</p>
     <p><a class="font-semibold text-duke-blue" href="{{ url_for('benchmarks') }}">← all benchmarks</a></p>
@@ -34,12 +34,15 @@
     {% endif %}
   {% else %}
     {{ back_link(url_for('benchmarks'), 'all benchmarks') }}
-    <h1>{{ kind_label }} — {{ model }}{% if is_reference %} <span class="badge badge-pilot">Reference</span>{% endif %}{% if is_private %} {{ private_badge() }}{% endif %}</h1>
-    <p class="sub">
-      slug <code>{{ slug }}</code> ·
-      file <code>{{ filename }}</code> ·
-      {{ timestamp }}
-    </p>
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">{{ kind_label }} — <span class="model">{{ model }}</span>{% if is_reference %} <span class="badge badge-pilot">Reference</span>{% endif %}{% if is_private %} {{ private_badge() }}{% endif %}</h1>
+        <p class="page-subtitle">
+          completed {{ timestamp[:10] if timestamp and timestamp != "—" else "—" }} ·
+          slug <code>{{ slug }}</code> · file <code>{{ filename }}</code>
+        </p>
+      </div>
+    </div>
 
     {% if not is_reference %}
     {% if is_logged_in %}

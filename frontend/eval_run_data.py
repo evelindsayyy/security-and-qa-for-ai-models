@@ -200,6 +200,15 @@ def _aggregate_file(path: Path) -> dict | None:
         data["execution_pass_rate"] = ex["pass_rate"]
         data["execution_passed"] = ex["passed"]
         data["execution_n"] = ex["n"]
+    from dbutils.run_meta import read_run_meta_for_pillar
+
+    meta = read_run_meta_for_pillar(path.parent, pillar="eval")
+    config = meta.get("config_json") if isinstance(meta.get("config_json"), dict) else {}
+    if config:
+        data["config_json"] = config
+        digests = config.get("eval_suite_file_digests")
+        if isinstance(digests, dict):
+            data["eval_suite_file_digests"] = digests
     return data
 
 
@@ -369,10 +378,13 @@ def _postprocess_runs(runs: list[dict]) -> dict:
     """Shared tail for both data paths (files and DB): dedupe to the latest
     run per (candidate, judge, suite), sort best-first, flag ``is_best``,
     and build the page-level summary fields."""
-    # Custom ("bring your own") runs are ad-hoc, not a locked comparable suite —
-    # keep them out of the cross-model comparison table (they're still reachable
-    # by slug from the launch redirect / detail page).
-    runs = [r for r in runs if not str(r.get("suite", "")).startswith("custom_")]
+    # The comparison table is only meaningful across the current curated suites.
+    # Drop anything else: custom ("bring your own") ad-hoc runs, and retired or
+    # experimental suites (e.g. robustness_v1, an old smoke_v1) that would
+    # otherwise linger with a permanent "Needs rerun". Their data is preserved —
+    # each run stays reachable by slug from the launch redirect / detail page.
+    from frontend.eval_launch import SUITES
+    runs = [r for r in runs if r.get("suite") in SUITES]
     # Result filenames are timestamped, so the lexicographically-largest
     # filename is newest. This drops superseded runs (e.g. an old
     # "12/12 empty" row that a fresh run already fixed) instead of showing both.
@@ -614,34 +626,6 @@ def get_model_card(slug: str) -> dict | None:
     }
 
 
-def get_all_model_cards() -> list[dict]:
-    """Report cards for every evaluated model, most-recently-evaluated first.
-
-    One card per distinct candidate model that has at least one eval run
-    (``get_model_card`` returns None otherwise, so it can't appear). Feeds the
-    ``/labels`` gallery. Each card is independently N/A-safe."""
-    runs = get_runs_data().get("runs", [])
-    # Distinct model slugs, ordered by most recent eval first.
-    ordered_slugs: list[str] = []
-    seen: set[str] = set()
-    for r in sorted(runs, key=lambda r: r.get("timestamp", ""), reverse=True):
-        slug = model_slug(r["candidate_model"])
-        if slug not in seen:
-            seen.add(slug)
-            ordered_slugs.append(slug)
-    cards = [get_model_card(slug) for slug in ordered_slugs]
-    return [c for c in cards if c is not None]
-
-
-def featured_model_slug() -> str | None:
-    """Slug of the most-recently-evaluated model, for the home-page card."""
-    runs = get_runs_data().get("runs", [])
-    if not runs:
-        return None
-    latest = max(runs, key=lambda r: r.get("timestamp", ""))
-    return model_slug(latest["candidate_model"])
-
-
 def attach_cost_perf(data: dict, weights: CostPerfWeights = BALANCED) -> dict:
     """Enrich comparison runs with cost-vs-performance metrics, then return data.
 
@@ -703,22 +687,52 @@ def attach_cost_perf(data: dict, weights: CostPerfWeights = BALANCED) -> dict:
 # Public entry points — Postgres when configured, artifact fallback otherwise.
 
 
+# Judges retired from the pool are hidden from every dashboard view so users
+# never see them presented as a judge — their results stay on disk / in the DB,
+# they're just not displayed. Fuzzy match catches id variants ("Llama 3.3",
+# "Llama-3.3", "llama-3.3-70b").
+def _is_retired_judge(judge: str | None) -> bool:
+    j = (judge or "").lower()
+    return "llama" in j and "3.3" in j
+
+
+def _is_failed_run(run: dict) -> bool:
+    """True when every candidate call errored (e.g. the gateway returned 429
+    'budget exceeded' for the whole run → all responses empty). Such a run
+    carries no signal, so it's hidden from every view instead of showing as a
+    spurious '12/12 empty' row. Execution suites (overall None but candidates
+    succeeded, cand_fail 0) are NOT matched."""
+    n = run.get("n") or 0
+    return n > 0 and (run.get("cand_fail") or 0) >= n
+
+
 def get_runs_data() -> dict:
     from frontend import eval_db_data
     from frontend.db_fallback import get_data_with_db_fallback
 
-    data = attach_cost_perf(
-        get_data_with_db_fallback(
-            eval_db_data.available,
-            eval_db_data.get_runs_data_db,
-            _get_runs_data_files,
-            pillar="eval",
-        )
+    data = get_data_with_db_fallback(
+        eval_db_data.available,
+        eval_db_data.get_runs_data_db,
+        _get_runs_data_files,
+        pillar="eval",
     )
+    # Drop retired-judge and fully-failed (all-candidate-error, e.g. gateway
+    # budget-exceeded) runs before any downstream processing (cost-perf cohorts,
+    # comparison matrix, report cards) so they never surface.
+    data["runs"] = [
+        r for r in (data.get("runs") or [])
+        if not _is_retired_judge(r.get("judge_model")) and not _is_failed_run(r)
+    ]
+    data = attach_cost_perf(data)
     runs = data.get("runs") or []
     from frontend.staleness import attach_staleness
+    from frontend.eval_launch import suite_display_name
 
     attach_staleness(runs, "eval")
+    # User-facing suite name (no version tag). The raw ``suite`` key stays the
+    # record/sort/filter value; ``suite_display`` is display-only.
+    for r in runs:
+        r["suite_display"] = suite_display_name(r.get("suite") or "")
     data.update(_build_eval_comparison_section(runs))
     return data
 
@@ -1039,11 +1053,12 @@ _EVAL_SUITE_ABOUT = {
 }
 
 
-def get_eval_guide_data() -> dict:
+def get_eval_guide_data(*, runs: list[dict] | None = None) -> dict:
     """Rows for the eval reference/guide pages."""
-    from frontend.eval_launch import SUITES, suite_question_count
+    from frontend.eval_launch import SUITES, suite_question_count, suite_display_name
 
-    runs = get_runs_data().get("runs") or []
+    if runs is None:
+        runs = get_runs_data().get("runs") or []
     example = runs[0] if runs else None
     rows = []
     for key, cfg in SUITES.items():
@@ -1068,7 +1083,7 @@ def get_eval_guide_data() -> dict:
         "has_example": example is not None,
         "example_slug": example["slug"] if example else None,
         "example_model": example["candidate_model"] if example else None,
-        "example_suite": example["suite"] if example else None,
+        "example_suite": suite_display_name(example["suite"]) if example else None,
     }
 
 
