@@ -48,8 +48,11 @@ from runner import _COST_PER_M_TOKENS, _safe_slug  # noqa: E402
 # Allowlists — the security boundary for POST /eval-run/start
 # ---------------------------------------------------------------------------
 
-# Candidate categories eligible for the IT-support/chat suites.
-_CANDIDATE_CATEGORIES = frozenset({"general_chat"})
+# Candidate categories eligible for the task suites — every chat-capable model
+# family (general chat, agentic coding, deep-research/reasoning). Audio,
+# embeddings, and rerank models can't answer the suites, so they're excluded.
+# Mirrors the safety scan form's categories so both offer the same catalog.
+_CANDIDATE_CATEGORIES = frozenset({"general_chat", "codex", "research"})
 
 # Offline fallback (gateway unreachable): the curated/priced known-good set.
 _CANDIDATE_FALLBACK: tuple[str, ...] = tuple(_COST_PER_M_TOKENS.keys())
@@ -64,6 +67,28 @@ def candidate_models() -> tuple[str, ...]:
     except Exception:  # noqa: BLE001 — never break the form on a gateway hiccup
         ids = []
     return tuple(ids) if ids else _CANDIDATE_FALLBACK
+
+
+def candidate_groups() -> list[dict]:
+    """Eligible candidates grouped by gateway category (General chat, Codex,
+    Research), for the ``<optgroup>`` dropdown — same shape/structure the safety
+    scan form uses. Falls back to one flat group when the gateway is offline."""
+    try:
+        from gateway.catalog import get_gateway_catalog
+
+        catalog = get_gateway_catalog()
+        groups: list[dict] = []
+        for section in catalog.get("by_category", []):
+            if section["key"] not in _CANDIDATE_CATEGORIES:
+                continue
+            models = [m["id"] for m in section["models"]]
+            if models:
+                groups.append({"label": section["label"], "models": models})
+        if groups:
+            return groups
+    except Exception:  # noqa: BLE001 — never break the form on a gateway hiccup
+        pass
+    return [{"label": "Gateway models", "models": list(candidate_models())}]
 
 
 # Judges the team has actually calibrated (cross-judge experiment, week 4).
@@ -1060,6 +1085,7 @@ def get_launch_options() -> dict:
     candidates = candidate_models()
     return {
         "candidates": list(candidates),
+        "candidate_groups": candidate_groups(),
         "judges": list(JUDGE_MODELS),
         "suites": [
             {
