@@ -144,6 +144,17 @@ def _cache_write(key: str, result: CandidateResult) -> None: # save the results 
 
 # Public API
 
+def _is_temperature_unsupported(err: Exception) -> bool:
+    """True for the gateway's 400 when a model only allows the default
+    temperature — newer reasoning models return "temperature does not support
+    0.2 ... Only the default (1) value is supported". We retry these at
+    temperature=1 rather than record a spurious empty/failed run."""
+    msg = str(err).lower()
+    return "temperature" in msg and (
+        "does not support" in msg or "only the default" in msg
+    )
+
+
 def generate_candidate(
     *,
     question: str,
@@ -180,26 +191,38 @@ def generate_candidate(
         return cached
 
     t0 = time.perf_counter()
-    try: # otherwise call the API, and capture latency and token usage. If it fails, return a CandidateResult with failed=True and the error message.
-        client = _client_for(endpoint).with_options(timeout=timeout_sec)
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": question},
+    ]
+    client = _client_for(endpoint).with_options(timeout=timeout_sec)
+    try: # call the API, capturing latency and token usage.
         resp = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": question},
-            ],
-            temperature=temperature,
-            max_tokens=max_tokens,
+            model=model, messages=messages,
+            temperature=temperature, max_tokens=max_tokens,
         )
     except Exception as e:  # never crash a run; record and continue.
-        return CandidateResult(
-            response="",
-            latency_ms=int((time.perf_counter() - t0) * 1000),
-            prompt_tokens=0,
-            completion_tokens=0,
-            failed=True,
-            error=f"{type(e).__name__}: {e}",
-        )
+        if _is_temperature_unsupported(e):
+            # Newer reasoning models only accept the default temperature; retry
+            # once at 1 so they can still be evaluated (comparability caveat:
+            # these rows were graded at temperature 1, not the run's config).
+            try:
+                resp = client.chat.completions.create(
+                    model=model, messages=messages,
+                    temperature=1.0, max_tokens=max_tokens,
+                )
+            except Exception as e2:
+                return CandidateResult(
+                    response="", latency_ms=int((time.perf_counter() - t0) * 1000),
+                    prompt_tokens=0, completion_tokens=0, failed=True,
+                    error=f"{type(e2).__name__}: {e2}",
+                )
+        else:
+            return CandidateResult(
+                response="", latency_ms=int((time.perf_counter() - t0) * 1000),
+                prompt_tokens=0, completion_tokens=0, failed=True,
+                error=f"{type(e).__name__}: {e}",
+            )
     latency_ms = int((time.perf_counter() - t0) * 1000)
 
     # if successful, parse the response and token usage. 
