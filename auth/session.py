@@ -76,6 +76,9 @@ def logout_user() -> None:
     session.pop("user", None)
     session["dev_logged_out"] = True
     set_view_mode("public")
+    from frontend.read_context import invalidate_view_caches
+
+    invalidate_view_caches()
 
 
 def dev_user_from_env() -> dict[str, Any] | None:
@@ -115,6 +118,9 @@ def sync_session_for_auth() -> None:
         return
     if not is_logged_in() and get_view_mode() != "public":
         set_view_mode("public")
+        from frontend.read_context import invalidate_view_caches
+
+        invalidate_view_caches()
 
 
 def require_private_access() -> tuple[dict[str, Any] | None, str | None]:

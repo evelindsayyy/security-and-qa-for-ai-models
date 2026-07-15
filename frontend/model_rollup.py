@@ -20,9 +20,19 @@ from frontend import benchmark_data, eval_run_data, safety_data, scan_data
 from frontend.oss_gateway_hf import gateway_slug_for_hf_repo
 from frontend.model_identity import gateway_slug, hf_repo_id
 
-_UNION_CACHE: list[dict] | None = None
-_UNION_CACHE_AT: float = 0.0
+_UNION_CACHE: dict[tuple[str, str | None], list[dict]] = {}
+_UNION_CACHE_AT: dict[tuple[str, str | None], float] = {}
 _UNION_CACHE_TTL_SEC = 45.0
+
+
+def _union_cache_key() -> tuple[str, str | None]:
+    """Scope rollup cache to the active public/private view and owner."""
+    try:
+        from frontend.read_context import read_context
+
+        return read_context()
+    except Exception:
+        return "public", None
 
 
 def _row(by_key: dict[str, dict], key: str, display_name: str) -> dict:
@@ -132,10 +142,10 @@ def empty_gateway_rollup(gateway_id: str) -> dict:
 
 
 def clear_models_union_cache() -> None:
-    """Reset in-process union cache (for tests)."""
+    """Reset in-process union cache (for tests and view-mode toggles)."""
     global _UNION_CACHE, _UNION_CACHE_AT
-    _UNION_CACHE = None
-    _UNION_CACHE_AT = 0.0
+    _UNION_CACHE = {}
+    _UNION_CACHE_AT = {}
 
 
 def lookup_rollup_for_gateway(gateway_id: str, *, by_slug: dict[str, dict] | None = None) -> dict:
@@ -235,9 +245,14 @@ def _add_benchmark_rows(by_key: dict[str, dict], *, runs: list[dict] | None = No
 def get_models_union(*, payloads: dict | None = None) -> list[dict]:
     """One row per model with data in at least one pillar."""
     global _UNION_CACHE, _UNION_CACHE_AT
+    cache_key = _union_cache_key()
     now = time.monotonic()
-    if payloads is None and _UNION_CACHE is not None and (now - _UNION_CACHE_AT) < _UNION_CACHE_TTL_SEC:
-        return _UNION_CACHE
+    if (
+        payloads is None
+        and cache_key in _UNION_CACHE
+        and (now - _UNION_CACHE_AT.get(cache_key, 0.0)) < _UNION_CACHE_TTL_SEC
+    ):
+        return _UNION_CACHE[cache_key]
 
     by_key: dict[str, dict] = {}
     if payloads is not None:
@@ -258,8 +273,8 @@ def get_models_union(*, payloads: dict | None = None) -> list[dict]:
         _add_benchmark_rows(by_key)
     rows = [enrich_row(r) for r in sorted(by_key.values(), key=lambda r: r["slug"])]
     if payloads is None:
-        _UNION_CACHE = rows
-        _UNION_CACHE_AT = now
+        _UNION_CACHE[cache_key] = rows
+        _UNION_CACHE_AT[cache_key] = now
     return rows
 
 
