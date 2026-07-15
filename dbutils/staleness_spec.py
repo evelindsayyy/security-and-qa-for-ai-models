@@ -228,6 +228,15 @@ def eval_staleness_reasons(row: dict[str, Any]) -> list[str]:
         reasons.append(f"suite {suite!r} is not a current curated suite")
         return reasons
 
+    # Execution-scored suites (text-to-SQL/JSON/numeric/tool-use) are graded by
+    # RUNNING the answer, not an LLM judge. They carry an inert placeholder
+    # rubric that the runner never loads, and their rows have no judge
+    # dimensions. Applying the rubric-version and rubric-dimension checks below
+    # would flag EVERY execution run stale forever (the placeholder's version /
+    # dims never match the run's), so skip them — only the suite version, the
+    # suite file, and the system prompt are meaningful here.
+    is_execution = SUITES.get(suite, {}).get("scoring") == "execution"
+
     current = current_eval_suite_versions(suite)
     if not current:
         return reasons
@@ -235,28 +244,34 @@ def eval_staleness_reasons(row: dict[str, Any]) -> list[str]:
     for field, current_val in current.items():
         if field == "suite":
             continue
+        if is_execution and field == "rubric_version":
+            continue  # inert placeholder rubric — meaningless for execution
         run_val = row.get(field)
         if run_val and run_val != current_val:
             reasons.append(f"{field} changed ({run_val} → {current_val})")
 
     cfg = _eval_suite_cfg(suite)
     if cfg:
+        # The suite JSONL and system prompt must still exist; the (inert) rubric
+        # file only matters for judge-scored suites.
         for label, path in cfg.items():
-            digest = _file_digest(path)
-            if digest is None:
+            if is_execution and label == "rubric":
+                continue
+            if _file_digest(path) is None:
                 reasons.append(f"suite file missing: {path.name}")
 
-        expected_dims = _rubric_dimension_keys(cfg["rubric"])
-        dim_means = row.get("dim_means") or {}
-        if isinstance(dim_means, dict) and expected_dims:
-            missing = [
-                d for d in expected_dims
-                if dim_means.get(d) is None
-            ]
-            if missing:
-                reasons.append(
-                    f"missing rubric dimensions: {', '.join(missing)}"
-                )
+        if not is_execution:
+            expected_dims = _rubric_dimension_keys(cfg["rubric"])
+            dim_means = row.get("dim_means") or {}
+            if isinstance(dim_means, dict) and expected_dims:
+                missing = [
+                    d for d in expected_dims
+                    if dim_means.get(d) is None
+                ]
+                if missing:
+                    reasons.append(
+                        f"missing rubric dimensions: {', '.join(missing)}"
+                    )
     return reasons
 
 
