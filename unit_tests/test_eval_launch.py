@@ -642,5 +642,35 @@ class RerunReusesScanHistoryTest(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
 
 
+class IsReasoningModelTest(unittest.TestCase):
+    """The launch form auto-selects the top completion budget for reasoning
+    models. The whole GPT-5 family reasons by default — only the -chat/-instruct
+    variants don't — so a new gpt-5.x must be flagged without a code change."""
+
+    def test_gpt5_family_is_reasoning(self) -> None:
+        for m in ("gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5.1", "gpt-5.2",
+                  "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.4-pro",
+                  "gpt-5.5", "gpt-5.6-luna"):
+            self.assertTrue(eval_launch.is_reasoning_model(m), m)
+
+    def test_chat_and_instruct_variants_are_not(self) -> None:
+        for m in ("gpt-5-chat", "gpt-5.1-chat", "gpt-5.3-chat",
+                  "Qwen/Qwen2.5-7B-Instruct"):
+            self.assertFalse(eval_launch.is_reasoning_model(m), m)
+
+    def test_non_reasoning_families(self) -> None:
+        for m in ("GPT 4.1", "GPT 4.1 Mini", "Llama 3.3", "Llama 4 Maverick"):
+            self.assertFalse(eval_launch.is_reasoning_model(m), m)
+
+    def test_other_reasoning_families(self) -> None:
+        for m in ("o1", "o3-mini", "o4", "gpt-oss-120b", "DeepSeek-R1", "QwQ-32B"):
+            self.assertTrue(eval_launch.is_reasoning_model(m), m)
+
+    def test_default_tier_maps_from_reasoning(self) -> None:
+        self.assertEqual(eval_launch.default_tier_for("gpt-5.4"), "reasoning")
+        self.assertEqual(eval_launch.default_tier_for("gpt-5-chat"), "standard")
+        self.assertEqual(eval_launch.default_tier_for("GPT 4.1 Mini"), "standard")
+
+
 if __name__ == "__main__":
     unittest.main()

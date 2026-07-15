@@ -283,9 +283,10 @@
   function isReasoningModel(id) {
     if (REASONING_MODELS.has(id)) return true;
     const m = (id || "").toLowerCase();
+    if (m.includes("chat") || m.includes("instruct")) return false;  // conversational variants
     if (/^o[134]/.test(m)) return true;
-    return ["gpt-oss", "gpt-5-mini", "gpt-5-nano", "qwq", "reasoning", "-r1", "deepseek-r"]
-      .some((k) => m.includes(k));
+    if (/gpt[\s-]?5/.test(m)) return true;  // GPT-5 reasoning family (non -chat)
+    return ["gpt-oss", "qwq", "reasoning", "-r1", "deepseek-r"].some((k) => m.includes(k));
   }
   const defaultTierFor = (id) => (isReasoningModel(id) ? "reasoning" : DEFAULT_TIER);
 
