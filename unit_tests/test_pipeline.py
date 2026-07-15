@@ -223,6 +223,43 @@ class StageStateTest(unittest.TestCase):
         self.assertEqual(st["scan"]["state"], "cleared")
         self.assertEqual(st["safety"]["state"], "unsupported")
         self.assertTrue(st["eval_unlocked"])
+        self.assertIn("/scans/", st["scan"]["href"])
+        self.assertNotIn("href", st["safety"])
+        self.assertIn("hf_repo=", st["eval_href"])
+
+    def test_gateway_missing_safety_links_to_prefilled_run(self) -> None:
+        with mock.patch.object(
+            pipeline, "validate_safety_gate",
+            return_value={"ok": False, "error": "run safety", "status": None},
+        ):
+            st = pipeline.stage_state("Llama 4 Maverick", "gateway")
+        self.assertEqual(st["safety"]["state"], "missing")
+        self.assertIn("/safety/new", st["safety"]["href"])
+        self.assertIn("model=", st["safety"]["href"])
+
+    def test_gateway_cleared_safety_links_to_detail(self) -> None:
+        with mock.patch.object(
+            pipeline, "validate_safety_gate",
+            return_value={
+                "ok": True,
+                "error": None,
+                "status": "complete",
+                "profile": "education",
+            },
+        ):
+            st = pipeline.stage_state("Llama 4 Maverick", "gateway")
+        self.assertEqual(st["safety"]["state"], "cleared")
+        self.assertIn("/safety/llama-4-maverick/education", st["safety"]["href"])
+
+    def test_hf_missing_scan_links_to_prefilled_run(self) -> None:
+        with mock.patch(
+            "frontend.eval_launch.validate_hf_scan_gate",
+            return_value={"ok": False, "error": "scan required", "status": None},
+        ):
+            st = pipeline.stage_state("Qwen/Qwen2.5-7B-Instruct", "hf")
+        self.assertEqual(st["scan"]["state"], "missing")
+        self.assertIn("/scans/new", st["scan"]["href"])
+        self.assertIn("model=Qwen", st["scan"]["href"])
 
 
 class BuildOverviewTest(unittest.TestCase):
@@ -286,11 +323,14 @@ class PipelineRouteTest(unittest.TestCase):
         rows = [
             {"model": "Llama 4 Maverick", "source": "gateway",
              "scan": {"state": "n/a", "detail": ""},
-             "safety": {"state": "missing", "detail": "run safety"},
-             "eval_unlocked": False},
+             "safety": {"state": "missing", "detail": "run safety",
+                        "href": "/safety/new?model=Llama+4+Maverick"},
+             "eval_unlocked": False, "eval_href": ""},
         ]
         with mock.patch("frontend.pipeline.build_overview",
                         return_value={"rows": rows, "has_rows": True}):
             r = self.client.get("/pipeline")
         self.assertEqual(r.status_code, 200)
         self.assertIn(b"Llama 4 Maverick", r.data)
+        self.assertIn(b"/safety/new?model=Llama+4+Maverick", r.data)
+        self.assertIn(b"tier-link", r.data)

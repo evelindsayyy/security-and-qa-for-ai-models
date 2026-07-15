@@ -6,7 +6,7 @@
 {% block content %}
 <div class="scan-detail">
   {% if missing %}
-    <h1>Run not found</h1>
+    <h1 class="page-title">Run not found</h1>
     <p class="sub empty">no results JSONL for slug <code>{{ slug }}</code>.</p>
     <p class="form-hint">{{ start_button(url_for('eval_run_new'), 'Start an eval run', classes='') }}</p>
     <p><a class="font-semibold text-duke-blue" href="{{ url_for('eval_run') }}">← all eval runs</a></p>

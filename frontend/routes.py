@@ -187,6 +187,8 @@ def register_routes(app):
             opts["rerun"] = get_scan_rerun_params(
                 from_slug, visibility=visibility, owner_user_id=owner_user_id
             )
+        elif request.args.get("model", "").strip():
+            opts["rerun"] = {"hf_repo": request.args.get("model", "").strip()}
         return render_template("scan_run_new.html", **opts)
 
     @app.route("/scans/start", methods=["POST"])
@@ -386,6 +388,13 @@ def register_routes(app):
             opts["rerun"] = get_eval_rerun_params(
                 from_slug, visibility=visibility, owner_user_id=owner_user_id
             )
+        else:
+            candidate = request.args.get("candidate", "").strip()
+            hf_repo = request.args.get("hf_repo", "").strip()
+            if candidate:
+                opts["rerun"] = {"candidate_model": candidate}
+            elif hf_repo:
+                opts["rerun"] = {"hf_repo": hf_repo}
         return render_template("eval_run_new.html", **opts)
 
     @app.route("/eval-run/start", methods=["POST"])
@@ -1047,11 +1056,12 @@ def register_routes(app):
         from frontend.personality_launch import start_run, validate_launch
 
         model = request.form.get("model", "")
-        error = validate_launch(model)
+        test_key = request.form.get("test", "bfi")
+        error = validate_launch(model, test_key)
         if error:
             return error, 400
         try:
-            slug, _already, visibility = start_run(model)
+            slug, _already, visibility = start_run(model, test_key)
         except OutputDirError as exc:
             return str(exc), 503
         endpoint = "personality_detail_private" if visibility == "private" else "personality_detail"
@@ -1211,6 +1221,17 @@ def register_routes(app):
             opts["rerun"] = get_safety_rerun_params(
                 from_slug, profile, visibility=visibility, owner_user_id=owner_user_id
             )
+        elif request.args.get("model", "").strip():
+            from frontend.safety_data import _gateway_catalog_id_for_slug
+
+            model = request.args.get("model", "").strip()
+            opts["rerun"] = {
+                "gateway_model": _gateway_catalog_id_for_slug(model) or model,
+                "redteam_profile": profile,
+                "run_policy": True,
+                "run_redteam": True,
+                "run_garak": True,
+            }
         return render_template("safety_run_new.html", **opts)
 
     @app.route("/safety/start", methods=["POST"])
@@ -1218,9 +1239,63 @@ def register_routes(app):
     def safety_run_start():
         from flask import redirect, request, url_for
 
-        from frontend.safety_launch import start_run, validate_launch
         from frontend import docker_launch
         from frontend.output_dirs import OutputDirError
+        from frontend.safety_launch import (
+            get_launch_options,
+            start_run,
+            validate_hf_candidate,
+            validate_hf_launch,
+            validate_launch,
+        )
+
+        # Candidate source: a gateway model, or a Hugging Face model. An HF
+        # model with no endpoint just validates the repo (no server to scan
+        # against yet); with an endpoint, it actually launches. Red-team for
+        # an HF target needs its own dedicated attacker endpoint (see
+        # validate_hf_launch's docstring) — the attacker model itself is
+        # fixed (safety_launch.MANDATORY_ATTACKER_REPO), not user input.
+        if request.form.get("source") == "hf":
+            hf_repo = request.form.get("hf_repo", "").strip()
+            hf_endpoint = request.form.get("hf_endpoint", "").strip()
+            hf_redteam_profile = request.form.get("redteam_profile", "base")
+            hf_skip_policy = not bool(request.form.get("run_policy"))
+            hf_skip_garak = not bool(request.form.get("run_garak"))
+            hf_redteam = bool(request.form.get("run_redteam"))
+            hf_attacker_endpoint = request.form.get("attacker_endpoint", "").strip()
+
+            if not hf_endpoint:
+                hf_result = validate_hf_candidate(hf_repo)
+                return render_template("safety_run_new.html",
+                                       hf_result=hf_result, **get_launch_options())
+
+            error = validate_hf_launch(
+                hf_repo, hf_endpoint,
+                redteam_profile=hf_redteam_profile,
+                skip_policy=hf_skip_policy,
+                skip_garak=hf_skip_garak,
+                redteam=hf_redteam,
+                attacker_endpoint=hf_attacker_endpoint,
+            )
+            if error:
+                hf_result = {"ok": False, "error": error, "repo_id": hf_repo,
+                            "architectures": None, "num_params": None}
+                return render_template("safety_run_new.html",
+                                       hf_result=hf_result, **get_launch_options()), 400
+
+            run_key, _already, visibility = start_run(
+                hf_repo,
+                redteam_profile=hf_redteam_profile,
+                skip_policy=hf_skip_policy,
+                skip_garak=hf_skip_garak,
+                skip_redteam=not hf_redteam,
+                hf_repo=hf_repo,
+                endpoint=hf_endpoint,
+                attacker_endpoint=hf_attacker_endpoint or None,
+            )
+            slug, profile = run_key.split("/", 1)
+            endpoint_name = "safety_detail_private" if visibility == "private" else "safety_detail"
+            return redirect(url_for(endpoint_name, slug=slug, profile=profile, status="running"))
 
         model = request.form.get("gateway_model", "")
         redteam_profile = request.form.get("redteam_profile", "base")
@@ -1487,17 +1562,23 @@ def register_routes(app):
         from frontend.read_context import read_context
 
         visibility, owner_user_id = read_context()
-        personality_row = get_latest_for_model(
+        personality_bfi = get_latest_for_model(
             rollup["display_name"],
             test_key="bfi",
             visibility=visibility,
             owner_user_id=owner_user_id,
         )
+        personality_compass = get_latest_for_model(
+            rollup["display_name"],
+            test_key="compass",
+            visibility=visibility,
+            owner_user_id=owner_user_id,
+        )
         personality_summary = None
-        if personality_row:
-            traits = personality_row.get("traits") or {}
+        if personality_bfi:
+            traits = personality_bfi.get("traits") or {}
             personality_summary = {
-                "slug": personality_row.get("slug"),
+                "slug": personality_bfi.get("slug"),
                 "trait_rows": [
                     {
                         "label": TRAIT_LABELS[key],
@@ -1505,6 +1586,14 @@ def register_routes(app):
                     }
                     for key in TRAIT_ORDER
                 ],
+            }
+        personality_compass_summary = None
+        if personality_compass:
+            personality_compass_summary = {
+                "slug": personality_compass.get("slug"),
+                "quadrant": personality_compass.get("quadrant") or "—",
+                "economic_score": personality_compass.get("economic_score"),
+                "social_score": personality_compass.get("social_score"),
             }
         linked_scan_slug = get_linked_scan(rollup["display_name"])
         available_scans = [
@@ -1518,6 +1607,7 @@ def register_routes(app):
             recommendation=recommendation,
             pillar_findings=pillar_findings,
             personality_summary=personality_summary,
+            personality_compass_summary=personality_compass_summary,
             gateway_profile=gateway_profile,
             gateway_id=gateway_id or rollup["display_name"],
             can_hf_scan=can_hf_scan,

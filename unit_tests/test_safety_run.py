@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
+import io
 import os
 import unittest
+from contextlib import redirect_stderr
 from unittest import mock
 
-from safety.run import RunConfig, garak_xdg_env, parse_args, run_pipeline
+from evaluator import hf_intake
+from safety.run import (
+    RunConfig,
+    _resolve_attacker_target,
+    _resolve_hf_target,
+    garak_xdg_env,
+    parse_args,
+    run_pipeline,
+)
 
 
 class ParseArgsTest(unittest.TestCase):
@@ -27,6 +37,33 @@ class ParseArgsTest(unittest.TestCase):
         self.assertIsNone(sub)
         self.assertTrue(cfg.skip_garak)
         self.assertFalse(cfg.redteam)
+
+    def test_hf_repo_and_endpoint_parsed(self) -> None:
+        sub, cfg = parse_args([
+            "--hf-repo", "Qwen/Qwen2.5-3B-Instruct",
+            "--endpoint", "http://gpu-node:8000/v1",
+            "--skip-redteam",
+        ])
+        self.assertIsNone(sub)
+        self.assertEqual(cfg.hf_repo, "Qwen/Qwen2.5-3B-Instruct")
+        self.assertEqual(cfg.base_url, "http://gpu-node:8000/v1")
+        # --hf-repo also becomes the model id sent to garak/promptfoo
+        self.assertEqual(cfg.model, "Qwen/Qwen2.5-3B-Instruct")
+
+    def test_hf_repo_overrides_positional_model(self) -> None:
+        sub, cfg = parse_args(["GPT 4.1 Mini", "--hf-repo", "Qwen/Qwen2.5-3B-Instruct"])
+        self.assertIsNone(sub)
+        self.assertEqual(cfg.model, "Qwen/Qwen2.5-3B-Instruct")
+
+    def test_attacker_repo_and_endpoint_parsed(self) -> None:
+        sub, cfg = parse_args([
+            "--hf-repo", "Qwen/Qwen2.5-3B-Instruct", "--endpoint", "http://target:8000/v1",
+            "--attacker-repo", "huihui-ai/Qwen2.5-7B-Instruct-abliterated-v2",
+            "--attacker-endpoint", "http://attacker:8001/v1",
+        ])
+        self.assertIsNone(sub)
+        self.assertEqual(cfg.attacker_repo, "huihui-ai/Qwen2.5-7B-Instruct-abliterated-v2")
+        self.assertEqual(cfg.attacker_base_url, "http://attacker:8001/v1")
 
 
 class GarakXdgEnvTest(unittest.TestCase):
@@ -51,6 +88,109 @@ class RunPipelineValidationTest(unittest.TestCase):
         with mock.patch("safety.run.run_lock.should_skip_cli_acquire", return_value=False):
             with mock.patch("safety.run.run_lock.try_acquire", return_value=False):
                 self.assertEqual(run_pipeline(cfg), 2)
+
+    def test_rejects_hf_repo_with_redteam_and_no_real_key(self) -> None:
+        # redteam defaults to True; the grader always stays on Duke and needs a
+        # real key regardless of target — block only when none is configured.
+        cfg = RunConfig(model="org/model", hf_repo="org/model")
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("OPENAI_API_KEY", None)
+            self.assertEqual(run_pipeline(cfg), 1)
+
+    def test_allows_hf_repo_with_redteam_when_real_key_present(self) -> None:
+        # With a real key set, --hf-repo + redteam is no longer blocked outright.
+        # Uses a deliberately invalid repo id so it fails at preflight instead —
+        # a different, distinguishable error from the redteam/key block.
+        cfg = RunConfig(model="a;rm -rf /", hf_repo="a;rm -rf /")
+        err = io.StringIO()
+        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "real-duke-key"}):
+            with redirect_stderr(err):
+                code = run_pipeline(cfg)
+        self.assertEqual(code, 1)
+        self.assertIn("pre-flight validation", err.getvalue())
+        self.assertNotIn("red-team grading needs", err.getvalue())
+
+    def test_hf_repo_with_redteam_disabled_reaches_preflight(self) -> None:
+        # No mocking of hf_preflight here: an invalid repo id fails the
+        # allowlist offline, so this proves the hf_repo path is actually
+        # reached (not silently skipped) without touching the network.
+        cfg = RunConfig(model="a;rm -rf /", hf_repo="a;rm -rf /", redteam=False, skip_garak=True)
+        self.assertEqual(run_pipeline(cfg), 1)
+
+    def test_attacker_repo_requires_endpoint(self) -> None:
+        # A valid-looking attacker repo id (mocked so no network call happens)
+        # with no --attacker-endpoint must be rejected before anything else runs.
+        canned = hf_intake.ValidationResult(True, None, _hf_info(repo_id="org/attacker"))
+        cfg = RunConfig(
+            model="a;rm -rf /", hf_repo="a;rm -rf /", redteam=False, skip_garak=True,
+            attacker_repo="org/attacker",
+        )
+        err = io.StringIO()
+        with mock.patch.object(hf_intake, "validate", return_value=canned):
+            with redirect_stderr(err):
+                code = run_pipeline(cfg)
+        self.assertEqual(code, 1)
+        self.assertIn("--attacker-repo requires --attacker-endpoint", err.getvalue())
+
+
+def _hf_info(**kw) -> hf_intake.ModelInfo:
+    base = dict(repo_id="org/model", architectures=["Qwen2ForCausalLM"],
+                num_params=3_000_000_000, gated=False)
+    base.update(kw)
+    return hf_intake.ModelInfo(**base)
+
+
+class ResolveHfTargetTest(unittest.TestCase):
+    def test_invalid_repo_id_returns_none(self) -> None:
+        self.assertIsNone(_resolve_hf_target("a;rm -rf /", ""))
+
+    def test_explicit_endpoint_skips_dcc_state(self) -> None:
+        canned = hf_intake.ValidationResult(True, None, _hf_info())
+        with mock.patch.object(hf_intake, "validate", return_value=canned):
+            result = _resolve_hf_target("org/model", "http://gpu-node:8000/v1")
+        self.assertEqual(result, "http://gpu-node:8000/v1")
+
+    def test_no_endpoint_no_session_returns_none(self) -> None:
+        canned = hf_intake.ValidationResult(True, None, _hf_info())
+        with mock.patch.object(hf_intake, "validate", return_value=canned), \
+             mock.patch("safety.run.dcc_vllm._read_state", side_effect=FileNotFoundError):
+            result = _resolve_hf_target("org/model", "")
+        self.assertIsNone(result)
+
+    def test_session_without_host_returns_none(self) -> None:
+        canned = hf_intake.ValidationResult(True, None, _hf_info())
+        with mock.patch.object(hf_intake, "validate", return_value=canned), \
+             mock.patch("safety.run.dcc_vllm._read_state", return_value={"PORT": "8000"}):
+            result = _resolve_hf_target("org/model", "")
+        self.assertIsNone(result)
+
+    def test_session_with_host_builds_url(self) -> None:
+        canned = hf_intake.ValidationResult(True, None, _hf_info())
+        with mock.patch.object(hf_intake, "validate", return_value=canned), \
+             mock.patch(
+                 "safety.run.dcc_vllm._read_state",
+                 return_value={"HOST": "gpu-node-42", "PORT": "8000"},
+             ):
+            result = _resolve_hf_target("org/model", "")
+        self.assertEqual(result, "http://gpu-node-42:8000/v1")
+
+
+class ResolveAttackerTargetTest(unittest.TestCase):
+    def test_invalid_repo_id_returns_none(self) -> None:
+        self.assertIsNone(_resolve_attacker_target("a;rm -rf /", "http://attacker:8001/v1"))
+
+    def test_valid_repo_no_endpoint_returns_none(self) -> None:
+        # No DCC-session fallback for the attacker — an endpoint must be explicit.
+        canned = hf_intake.ValidationResult(True, None, _hf_info())
+        with mock.patch.object(hf_intake, "validate", return_value=canned):
+            result = _resolve_attacker_target("org/model", "")
+        self.assertIsNone(result)
+
+    def test_valid_repo_with_endpoint_returns_it(self) -> None:
+        canned = hf_intake.ValidationResult(True, None, _hf_info())
+        with mock.patch.object(hf_intake, "validate", return_value=canned):
+            result = _resolve_attacker_target("org/model", "http://attacker:8001/v1")
+        self.assertEqual(result, "http://attacker:8001/v1")
 
 
 if __name__ == "__main__":

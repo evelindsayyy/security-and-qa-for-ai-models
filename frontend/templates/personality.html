@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from '_macros.html' import start_button, page_header, empty_state, localtime with context %}
 
-{% block title %}Personality (BFI){% endblock %}
+{% block title %}Personality{% endblock %}
 
 {% block breadcrumbs %}
 <span><a href="{{ url_for('index') }}">Overview</a></span>
@@ -11,37 +11,44 @@
 
 {% block content %}
 <div class="eval-comparison">
-  {% set actions %}{{ start_button(url_for('personality_run_new'), '▶ Start BFI run') }}{% endset %}
-  {{ page_header('Personality (BFI)', 'Big Five Inventory — fun self-report snapshot, not a quality score.', actions) }}
+  {% set actions %}{{ start_button(url_for('personality_run_new'), '▶ Start personality run') }}{% endset %}
+  {{ page_header('Personality', 'BFI traits and a forced-choice political compass — curiosity only.', actions) }}
 
   <section class="key card p-4 mb-6">
-    <h2 class="subsection-title">What is the BFI?</h2>
-    {% include '_personality_bfi_explainer.html' %}
+    <h2 class="subsection-title">About these tests</h2>
+    <details class="mb-4">
+      <summary class="text-sm font-semibold text-duke-blue cursor-pointer">What is the BFI?</summary>
+      <div class="mt-3">
+        {% include '_personality_bfi_explainer.html' %}
+      </div>
+    </details>
+    <details>
+      <summary class="text-sm font-semibold text-duke-blue cursor-pointer">What is the political compass?</summary>
+      <div class="mt-3">
+        {% include '_personality_compass_explainer.html' %}
+      </div>
+    </details>
     <h2 class="subsection-title mt-6">How to read this</h2>
     <p class="text-sm text-text-muted">
-      Each run scores all 44 items and reports trait averages on a 1&ndash;5 scale.
-      The table shows the latest run per model; older runs for the same model are marked
+      Latest run per model <em>and</em> test is listed first; older duplicates are
       <span class="badge badge-pilot">superseded</span>.
-      This pillar is for curiosity only &mdash; it does not affect scan, safety, eval, or benchmark rollup.
+      Not part of scan, safety, eval, or benchmark rollup.
     </p>
   </section>
 
   {% if not has_runs %}
-    {{ empty_state('No personality runs yet. Start a BFI run from a gateway model.', 'uv run python personality/run_personality.py --model "GPT 4.1 Mini"') }}
+    {{ empty_state('No personality runs yet. Start a BFI or compass run from a gateway model.', 'uv run python personality/run_personality.py --test compass --model "GPT 4.1 Mini"') }}
   {% else %}
     <div class="pillar-toolbar card p-4 mb-4">
-      <p class="sub">{{ run_count }} result{{ "" if run_count == 1 else "s" }} · latest per model shown first</p>
+      <p class="sub">{{ run_count }} result{{ "" if run_count == 1 else "s" }} · latest per model and test shown first</p>
     </div>
     <div class="table-wrap card">
       <table class="run-table personality-runs-table">
         <thead>
           <tr>
             <th>Model</th>
-            <th class="num">Extraversion</th>
-            <th class="num">Agreeableness</th>
-            <th class="num">Conscientiousness</th>
-            <th class="num">Neuroticism</th>
-            <th class="num">Openness</th>
+            <th>Test</th>
+            <th>Result</th>
             <th class="col-nowrap">When</th>
             <th class="col-actions"></th>
           </tr>
@@ -52,17 +59,31 @@
               data-href="{{ url_for('personality_detail_private' if view_mode == 'private' else 'personality_detail', slug=r.slug) }}"
               tabindex="0"
               role="link"
-              aria-label="Open BFI results for {{ r.model }}">
+              aria-label="Open {{ r.test_label }} results for {{ r.model }}">
             <td>
               <span class="model">{{ r.model }}</span>
               {% if r.superseded %}
               <span class="badge badge-pilot">superseded</span>
               {% endif %}
             </td>
-            {% for key in trait_order %}
-            {% set v = (r.traits or {}).get(key) %}
-            <td class="num">{{ "%.2f"|format(v) if v is not none else "—" }}</td>
-            {% endfor %}
+            <td class="col-nowrap"><span class="badge badge-pilot">{{ r.test_label }}</span></td>
+            <td>
+              {% if r.test == 'compass' %}
+              <strong>{{ r.quadrant or "—" }}</strong>
+              <span class="dim">
+                · Econ {{ "%.0f"|format(r.economic_score) if r.economic_score is not none else "—" }}
+                · Social {{ "%.0f"|format(r.social_score) if r.social_score is not none else "—" }}
+              </span>
+              {% if r.weak_reading %}<span class="badge badge-pilot">near even</span>{% endif %}
+              {% else %}
+              <span class="personality-trait-inline">
+                {% for key in trait_order %}
+                {% set v = (r.traits or {}).get(key) %}
+                <span class="dim">{{ key[:3]|title }}</span> <span class="num">{{ "%.2f"|format(v) if v is not none else "—" }}</span>{% if not loop.last %} · {% endif %}
+                {% endfor %}
+              </span>
+              {% endif %}
+            </td>
             <td class="col-nowrap dim">{{ localtime(r.timestamp_iso, r.timestamp) }}</td>
             <td class="col-actions" onclick="event.stopPropagation()">
               {% if is_logged_in %}

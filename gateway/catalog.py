@@ -262,7 +262,7 @@ DEPRECATED_IDS: dict[str, str] = {
 CHAT_CATEGORIES: frozenset[str] = frozenset({"general_chat", "codex", "research"})
 
 _CATEGORY_LABELS = {
-    "general_chat": "General chat (safety + efficacy)",
+    "general_chat": "General chat",
     "codex": "Codex / agentic coding",
     "audio": "Audio / transcription",
     "embeddings": "Embeddings",

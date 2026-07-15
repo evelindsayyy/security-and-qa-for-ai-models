@@ -1,11 +1,11 @@
 """
-api.ingest — unified Postgres ingest for scan, safety, eval, and benchmark pillars.
+api.ingest — unified Postgres ingest for scan, safety, eval, benchmark, and personality.
 
 Dry-run by default. Each pillar loader prints what it would load;
 ``--apply`` writes to Postgres when a DSN is set.
 
 Run from repo root:
-    uv run python -m api.ingest                    # dry-run all four pillars
+    uv run python -m api.ingest                    # dry-run all pillars
     uv run python -m api.ingest --apply            # load all (needs DSN)
     uv run python -m api.ingest --scan             # single pillar
     uv run python -m api.ingest bootstrap --apply  # all pillars + seed summary
@@ -21,7 +21,7 @@ from typing import Callable
 
 from dbutils import load_repo_env, resolve_dsn
 
-PILLARS = ("scan", "safety", "eval", "benchmark")
+PILLARS = ("scan", "safety", "eval", "benchmark", "personality")
 
 
 @dataclass
@@ -59,11 +59,19 @@ def _run_benchmark(*, apply: bool, dsn: str | None, output_dir: Path | None) -> 
     return PillarResult("benchmark", r.count, r.label)
 
 
+def _run_personality(*, apply: bool, dsn: str | None, output_dir: Path | None) -> PillarResult:
+    from personality.db.load_personality import run_ingest
+
+    r = run_ingest(apply=apply, dsn=dsn, output_dir=output_dir)
+    return PillarResult("personality", r.count, r.label)
+
+
 _PILLAR_RUNNERS: dict[str, Callable[..., PillarResult]] = {
     "scan": _run_scan,
     "safety": _run_safety,
     "eval": _run_eval,
     "benchmark": _run_benchmark,
+    "personality": _run_personality,
 }
 
 
@@ -76,6 +84,7 @@ def run_ingest_all(
     safety_dir: Path | None = None,
     eval_dir: Path | None = None,
     benchmark_dir: Path | None = None,
+    personality_dir: Path | None = None,
 ) -> list[PillarResult]:
     """Run selected pillar ingest functions and return per-pillar counts."""
     dirs = {
@@ -83,6 +92,7 @@ def run_ingest_all(
         "safety": safety_dir,
         "eval": eval_dir,
         "benchmark": benchmark_dir,
+        "personality": personality_dir,
     }
     results: list[PillarResult] = []
     for name in pillars:
@@ -106,7 +116,10 @@ def main(argv: list[str] | None = None) -> int:
     load_repo_env()
 
     ap = argparse.ArgumentParser(
-        description="Unified Postgres ingest for scan, safety, eval, and benchmark pillars."
+        description=(
+            "Unified Postgres ingest for scan, safety, eval, benchmark, "
+            "and personality pillars."
+        )
     )
     ap.add_argument(
         "command",
@@ -135,10 +148,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--benchmark", action="store_true", help="ingest benchmark results only"
     )
+    ap.add_argument(
+        "--personality", action="store_true", help="ingest personality results only"
+    )
     ap.add_argument("--scan-output-dir", type=Path, default=None)
     ap.add_argument("--safety-output-dir", type=Path, default=None)
     ap.add_argument("--eval-results-dir", type=Path, default=None)
     ap.add_argument("--benchmark-output-dir", type=Path, default=None)
+    ap.add_argument("--personality-output-dir", type=Path, default=None)
     args = ap.parse_args(argv)
 
     selected = tuple(p for p in PILLARS if getattr(args, p))
@@ -156,6 +173,7 @@ def main(argv: list[str] | None = None) -> int:
         safety_dir=args.safety_output_dir,
         eval_dir=args.eval_results_dir,
         benchmark_dir=args.benchmark_output_dir,
+        personality_dir=args.personality_output_dir,
     )
     _print_summary(results, bootstrap=args.command == "bootstrap")
 

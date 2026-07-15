@@ -266,7 +266,14 @@ def cancel_run(
 
 
 def get_launch_options() -> dict:
+    from personality.test_catalog import DEFAULT_TEST_KEY, TESTS
+
     return {
         "models": candidate_models(),
         "docker_available": docker_launch.docker_available(),
+        "tests": [
+            {"key": key, "label": spec["label"], "total_items": spec["total_items"]}
+            for key, spec in TESTS.items()
+        ],
+        "default_test_key": DEFAULT_TEST_KEY,
     }

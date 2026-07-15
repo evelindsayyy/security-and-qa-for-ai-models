@@ -20,6 +20,8 @@
 {% macro stage_pill(stage) -%}
 {%- if stage.state == 'n/a' -%}
 <span class="dim" title="{{ stage.detail }}">n/a</span>
+{%- elif stage.href -%}
+<a href="{{ stage.href }}" class="tier-link" title="{{ stage.detail }}"><span class="tier tier-{{ stage_tier(stage.state) }}">{{ stage.state }}</span></a>
 {%- else -%}
 <span class="tier tier-{{ stage_tier(stage.state) }}" title="{{ stage.detail }}">{{ stage.state }}</span>
 {%- endif -%}
@@ -37,14 +39,14 @@
       <dt>Hugging Face repos</dt>
       <dd>Must clear the <b>artifact scan</b> (completed, low tier); safety red-teaming isn't yet supported for served HF models.</dd>
     </dl>
-    <form method="post" action="{{ url_for('gateway_refresh') }}" class="refresh-form mt-4">
+    <form method="post" action="{{ url_for('gateway_refresh') }}" class="refresh-form gateway-refresh-row mt-4">
       <input type="hidden" name="next" value="{{ url_for('pipeline_overview') }}">
       <button type="submit" class="btn-secondary btn-sm" title="Re-fetch GET /v1/models now">↻ Refresh gateway catalog</button>
       {% if gateway_count %}
-      <span class="form-hint ml-2">{{ gateway_count }} live gateway model{{ "" if gateway_count == 1 else "s" }}</span>
+      <span class="form-hint">{{ gateway_count }} live gateway model{{ "" if gateway_count == 1 else "s" }}</span>
       {% endif %}
       {% if gateway_error %}
-      <span class="form-warning ml-2">Catalog issue: {{ gateway_error }}</span>
+      <span class="form-warning">Catalog issue: {{ gateway_error }}</span>
       {% endif %}
     </form>
   </section>
@@ -73,7 +75,7 @@
             <td class="col-nowrap">{{ stage_pill(r.safety) }}</td>
             <td class="col-nowrap">
               {% if r.eval_unlocked %}
-                <a href="{{ url_for('eval_run_new') }}" class="status-ok">unlocked →</a>
+                <a href="{{ r.eval_href or url_for('eval_run_new') }}" class="status-ok">unlocked →</a>
               {% else %}
                 <span class="dim">locked</span>
               {% endif %}

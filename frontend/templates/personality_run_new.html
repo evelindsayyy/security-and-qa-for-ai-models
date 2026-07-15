@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from '_macros.html' import launch_back, start_button with context %}
 
-{% block title %}Start BFI personality run{% endblock %}
+{% block title %}Start personality run{% endblock %}
 
 {% block breadcrumbs %}
 <span><a href="{{ url_for('index') }}">Overview</a></span>
@@ -16,17 +16,24 @@
   {{ launch_back(url_for('personality'), 'all personality results') }}
 
   <header>
-    <h1 class="page-title">Start a BFI personality run</h1>
+    <h1 class="page-title">Start a personality run</h1>
     <p class="page-subtitle">
-      Runs the 44-item Big Five Inventory against a <strong>gateway model</strong>.
-      Takes a few minutes (one API call per item). Not counted in model rollup.
+      Choose <strong>BFI</strong> (Big Five) or the <strong>political compass</strong> (20 forced-choice items),
+      then pick a gateway model. Not counted in model rollup.
     </p>
   </header>
 
-  <details class="tool-panel benchmark-guide-panel mb-6">
+  <details class="tool-panel benchmark-guide-panel mb-4">
     <summary class="subsection-title">What is the BFI?</summary>
     <div class="benchmark-guide-body p-4">
       {% include '_personality_bfi_explainer.html' %}
+    </div>
+  </details>
+
+  <details class="tool-panel benchmark-guide-panel mb-6">
+    <summary class="subsection-title">What is the political compass?</summary>
+    <div class="benchmark-guide-body p-4">
+      {% include '_personality_compass_explainer.html' %}
     </div>
   </details>
 
@@ -35,6 +42,17 @@
   {% endif %}
 
   <form method="post" action="{{ url_for('personality_run_start') }}" class="launch-form card p-5">
+    <div class="form-field">
+      <label for="test">Personality test</label>
+      <select name="test" id="test">
+        {% for t in tests %}
+        <option value="{{ t.key }}"{% if t.key == default_test_key %} selected{% endif %}>
+          {{ t.label }} ({{ t.total_items }} items)
+        </option>
+        {% endfor %}
+      </select>
+      <span class="form-hint">Compass items are forced A/B choices so the model cannot agree with both sides.</span>
+    </div>
     <div class="form-field">
       <label for="model">Gateway model</label>
       <select name="model" id="model">
@@ -45,7 +63,7 @@
       <span class="form-hint">Same ids as the <a href="{{ url_for('models_catalog') }}">model catalog</a>.</span>
     </div>
     <div class="form-actions">
-      <button type="submit" class="btn-primary">▶ Start BFI run</button>
+      <button type="submit" class="btn-primary">▶ Start run</button>
     </div>
   </form>
 </div>

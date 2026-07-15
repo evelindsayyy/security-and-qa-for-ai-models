@@ -238,6 +238,94 @@ _RUNNING: dict[str, subprocess.Popen] = {}
 _INFLIGHT: dict[tuple, str] = {}
 _LOCK = threading.Lock()
 
+# Suggested open-weight models for the HF-model launcher field (datalist hints).
+SUGGESTED_HF_REPOS: tuple[str, ...] = (
+    "Qwen/Qwen2.5-7B-Instruct",
+    "mistralai/Mistral-7B-Instruct-v0.3",
+    "meta-llama/Llama-3.2-1B-Instruct",
+    "gpt2",
+)
+
+# The one, fixed attack-generator for HF red-team — not user-configurable.
+# "Abliterated" models have their refusal training stripped out, so they'll
+# actually write adversarial prompts instead of declining (see the huihui-ai
+# account's abliterated releases). Only its serving endpoint varies per launch;
+# already hf_preflight-verified once (architecture/size), so launches don't
+# re-check it over the network every time — it's a trusted constant, not
+# user input.
+MANDATORY_ATTACKER_REPO = "huihui-ai/Qwen2.5-7B-Instruct-abliterated-v2"
+
+
+def validate_hf_launch(
+    repo_id: str,
+    endpoint: str,
+    *,
+    redteam_profile: str = "base",
+    skip_policy: bool = False,
+    skip_garak: bool = False,
+    redteam: bool = False,
+    attacker_endpoint: str | None = None,
+) -> str | None:
+    """Validate an HF-repo safety launch. Returns an error string, or None if OK.
+
+    Unlike a gateway launch, an HF target's red-team never reuses itself as
+    the attacker (see safety/run.py's REDTEAM_ATTACKER_MODEL/BASE_URL split) —
+    it always needs its own dedicated attack-generator, fixed to
+    MANDATORY_ATTACKER_REPO, running at its own endpoint. The grader still
+    always stays on Duke regardless, so a real OPENAI_API_KEY is required
+    whenever red-team is requested at all."""
+    from safety import hf_preflight
+
+    if not endpoint:
+        return "an endpoint is required to launch a scan (leave blank to only validate the repo)"
+    if redteam_profile not in _VALID_PROFILES:
+        return f"unknown profile {redteam_profile!r}; valid: {sorted(_VALID_PROFILES)}"
+    if skip_policy and skip_garak and not redteam:
+        return "must run at least one suite (policy, red-team, or garak)"
+    if redteam:
+        if not attacker_endpoint:
+            return (
+                f"red-team needs a server endpoint for the attack-generator "
+                f"({MANDATORY_ATTACKER_REPO} — not configurable)"
+            )
+        if not os.environ.get("OPENAI_API_KEY"):
+            return (
+                "red-team grading needs a real Duke OPENAI_API_KEY configured "
+                "(the grader always stays on Duke, regardless of target)"
+            )
+    result = hf_preflight.check_repo(repo_id)
+    if not result.ok:
+        return result.error
+    if docker_launch.use_docker() and not docker_launch.docker_available():
+        return docker_launch.docker_required_message("safety")
+    slug = normalize_gateway_model_id(repo_id)
+    if is_safety_inflight(repo_id, redteam_profile):
+        return (
+            f"a safety run for {repo_id!r} (profile {redteam_profile}) is already running — "
+            "wait for it to finish or open the progress page"
+        )
+    return _prepare_output_dirs(slug, redteam_profile)
+
+
+def validate_hf_candidate(repo_id: str) -> dict:
+    """Validate a user-supplied Hugging Face model for a safety scan (link path).
+
+    Wraps safety/hf_preflight — checks the repo exists, is open, is vLLM-servable,
+    and fits a single GPU. Shapes the verdict for safety_run_new.html. Running the
+    scan needs an --endpoint (a server already serving this model); here we only
+    validate the repo before that."""
+    from safety import hf_preflight
+
+    res = hf_preflight.check_repo(repo_id)
+    info = res.info
+    return {
+        "ok": res.ok,
+        "error": res.error,
+        "repo_id": repo_id,
+        "architectures": info.architectures if info else None,
+        "num_params": info.num_params if info else None,
+    }
+
 
 def _eligible_gateway_models() -> tuple[str, ...]:
     from gateway.catalog import get_gateway_catalog
@@ -350,7 +438,19 @@ def build_command(
     skip_garak: bool = False,
     skip_promptfoo: bool = False,
     garak_probes: str | None = None,
+    hf_repo: str | None = None,
+    endpoint: str | None = None,
+    attacker_endpoint: str | None = None,
 ) -> list[str]:
+    has_attacker = bool(attacker_endpoint)
+    # An HF target's red-team always needs its own dedicated attack-generator
+    # (see safety/run.py's REDTEAM_ATTACKER_MODEL split — it never reuses the
+    # target), fixed to MANDATORY_ATTACKER_REPO. Force --skip-redteam unless
+    # an endpoint for it was actually supplied, regardless of what was
+    # requested upstream (defense in depth, not just a UI checkbox default).
+    if hf_repo and not has_attacker:
+        skip_redteam = True
+
     inner: list[str] = ["python", "-m", RUN_MODULE]
     inner.extend(["--redteam-profile", redteam_profile])
     if skip_policy:
@@ -363,18 +463,28 @@ def build_command(
         inner.append("--skip-promptfoo")
     if garak_probes:
         inner.extend(["--garak-probes", garak_probes])
-    inner.append(model)
+    if hf_repo:
+        inner.extend(["--hf-repo", hf_repo, "--endpoint", endpoint or ""])
+        if has_attacker:
+            inner.extend(["--attacker-repo", MANDATORY_ATTACKER_REPO, "--attacker-endpoint", attacker_endpoint])
+    else:
+        inner.append(model)
 
     if not docker_launch.use_docker():
         return ["uv", "run", "python", "-m", RUN_MODULE, *inner[3:]]
 
+    extra_env = {"GATEWAY_MODEL": model}
+    if not hf_repo:
+        # Grader always stays on a real Duke model — never set this to an HF
+        # repo id (it would send a nonexistent model name to Duke's gateway
+        # for grading). Redteam is force-skipped for HF above, so omitting
+        # it here is safe; safety.run's own default fills it in if needed.
+        extra_env["REDTEAM_GRADER_MODEL"] = model
+
     return docker_launch.compose_run_argv(
         "safety",
         inner,
-        extra_env={
-            "GATEWAY_MODEL": model,
-            "REDTEAM_GRADER_MODEL": model,
-        },
+        extra_env=extra_env,
     )
 
 
@@ -395,13 +505,24 @@ def start_run(
     skip_garak: bool = False,
     skip_promptfoo: bool = False,
     garak_probes: str | None = None,
+    hf_repo: str | None = None,
+    endpoint: str | None = None,
+    attacker_endpoint: str | None = None,
 ) -> tuple[str, bool, str]:
-    """Returns (run_key, already_running, visibility)."""
+    """Returns (run_key, already_running, visibility).
+
+    For an HF-repo launch, pass ``model=hf_repo`` (so the existing
+    slug/lock/dedup logic below — all keyed on ``model`` — works unchanged)
+    plus ``hf_repo``/``endpoint`` so build_command() knows to emit
+    --hf-repo/--endpoint instead of a plain positional model name.
+    ``attacker_endpoint`` is optional — only meaningful together with
+    ``hf_repo`` and red-team requested; build_command() forces --skip-redteam
+    if it's missing, and always uses MANDATORY_ATTACKER_REPO as the model."""
     from frontend.run_launch import build_launch_plan, persist_run_meta_dir
 
     plan = build_launch_plan(
         "safety",
-        force_private=bool(garak_probes) or redteam_profile != "base",
+        force_private=bool(garak_probes) or redteam_profile != "base" or bool(hf_repo),
         model=model,
         redteam_profile=redteam_profile,
         skip_policy=skip_policy,
@@ -441,6 +562,9 @@ def start_run(
             skip_garak=skip_garak,
             skip_promptfoo=skip_promptfoo,
             garak_probes=garak_probes,
+            hf_repo=hf_repo,
+            endpoint=endpoint,
+            attacker_endpoint=attacker_endpoint,
         )
         cmd_str = " ".join(cmd)
 
@@ -572,6 +696,8 @@ def get_launch_options() -> dict:
         "model_has_results": model_has_results,
         "model_slugs": model_slugs,
         "inflight_safety_keys": sorted(inflight_safety_keys()),
+        "suggested_hf_repos": list(SUGGESTED_HF_REPOS),
+        "mandatory_attacker_repo": MANDATORY_ATTACKER_REPO,
         "launch_mode": "docker" if docker_launch.use_docker() else "host",
         "docker_available": docker_launch.docker_available(),
         "profiles": [

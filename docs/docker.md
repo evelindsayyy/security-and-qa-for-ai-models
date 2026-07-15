@@ -1,6 +1,6 @@
 # Docker model
 
-How images and compose stacks fit together. Commands: [`cli.md`](cli.md).
+How images and compose stacks fit together. **Commands:** [`cli.md`](cli.md#web-ui-containerized) · [`docker/README.md`](../docker/README.md).
 
 ## Recommended paths
 

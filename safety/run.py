@@ -25,7 +25,9 @@ from dbutils.compose import compose_build, compose_run
 from dbutils.env import REPO_ROOT
 from safety.garak.report_validation import DEFAULT_PROBE_SPEC, validate_report
 from dbutils import run_lock
+from safety import hf_preflight
 from safety.gateway_ids import normalize_gateway_model_id
+from scripts.dcc import vllm as dcc_vllm
 
 VALID_PROFILES = frozenset({"base", "education", "healthcare", "finance", "rag", "agentic"})
 
@@ -58,6 +60,10 @@ class RunConfig:
     skip_promptfoo: bool = False
     skip_garak: bool = False
     garak_probes: str = ""
+    hf_repo: str = ""
+    base_url: str = ""
+    attacker_repo: str = ""
+    attacker_base_url: str = ""
 
 
 def garak_xdg_env(slug: str) -> dict[str, str]:
@@ -122,6 +128,68 @@ def _promptfoo_compose_env(base: dict[str, str], *, slug: str, profile: str) -> 
         f"/app/safety/promptfoo/output/{slug}/{profile}/.promptfoo"
     )
     return env
+
+
+def _resolve_hf_target(repo_id: str, endpoint: str) -> str | None:
+    """Validate repo_id and resolve its OpenAI-compatible base URL.
+
+    Prints an actionable error and returns None on failure. If `endpoint`
+    isn't given explicitly, reads the host/port scripts.dcc.vllm wrote to its
+    session state file after a successful `wait`.
+    """
+    result = hf_preflight.check_repo(repo_id)
+    if not result.ok:
+        print(f"ERROR: {repo_id!r} failed pre-flight validation: {result.error}", file=sys.stderr)
+        return None
+
+    if endpoint:
+        return endpoint
+
+    try:
+        state = dcc_vllm._read_state()
+    except FileNotFoundError:
+        print(
+            "ERROR: no active vLLM session found "
+            f"({dcc_vllm.STATE_FILE}). Start one with "
+            f"`uv run python -m scripts.dcc.vllm start --model {repo_id}` "
+            "then `... wait`, or pass --endpoint http://host:port/v1 directly.",
+            file=sys.stderr,
+        )
+        return None
+
+    host, port = state.get("HOST"), state.get("PORT")
+    if not host:
+        print(
+            "ERROR: vLLM session has no HOST yet — run "
+            "`uv run python -m scripts.dcc.vllm wait` until it reports ready, "
+            "or pass --endpoint http://host:port/v1 directly.",
+            file=sys.stderr,
+        )
+        return None
+    return f"http://{host}:{port}/v1"
+
+
+def _resolve_attacker_target(repo_id: str, endpoint: str) -> str | None:
+    """Validate an attacker repo_id; requires an explicit endpoint.
+
+    Unlike the target, there's no DCC session-state fallback here: the state
+    file only tracks one running vLLM session, and target + attacker are two
+    different models that would need two concurrent servers — so ambiguity
+    is refused rather than guessed at.
+    """
+    result = hf_preflight.check_repo(repo_id)
+    if not result.ok:
+        print(f"ERROR: attacker {repo_id!r} failed pre-flight validation: {result.error}", file=sys.stderr)
+        return None
+    if not endpoint:
+        print(
+            "ERROR: --attacker-repo requires --attacker-endpoint (no DCC "
+            "session auto-resolution for the attacker — start a second vLLM "
+            "session for it and pass its URL explicitly).",
+            file=sys.stderr,
+        )
+        return None
+    return endpoint
 
 
 def _promptfoo_sqlite_contention(stderr: str) -> bool:
@@ -224,6 +292,15 @@ def run_pipeline(cfg: RunConfig) -> int:
     if cfg.skip_promptfoo and cfg.skip_garak:
         print("ERROR: cannot use --skip-promptfoo and --skip-garak together", file=sys.stderr)
         return 1
+    if cfg.hf_repo and cfg.redteam and not cfg.skip_promptfoo and not os.environ.get("OPENAI_API_KEY"):
+        print(
+            "ERROR: red-team grading needs a real Duke OPENAI_API_KEY configured "
+            "(the grader always stays on Duke, regardless of target) — that's "
+            "true whether the target is Duke or self-hosted. Set OPENAI_API_KEY, "
+            "or pass --skip-redteam.",
+            file=sys.stderr,
+        )
+        return 1
     if cfg.skip_policy and not cfg.redteam:
         cfg = RunConfig(
             model=cfg.model,
@@ -233,7 +310,23 @@ def run_pipeline(cfg: RunConfig) -> int:
             skip_promptfoo=True,
             skip_garak=cfg.skip_garak,
             garak_probes=cfg.garak_probes,
+            hf_repo=cfg.hf_repo,
+            base_url=cfg.base_url,
+            attacker_repo=cfg.attacker_repo,
+            attacker_base_url=cfg.attacker_base_url,
         )
+
+    if cfg.attacker_repo:
+        resolved_attacker = _resolve_attacker_target(cfg.attacker_repo, cfg.attacker_base_url)
+        if resolved_attacker is None:
+            return 1
+        cfg.attacker_base_url = resolved_attacker
+
+    if cfg.hf_repo:
+        resolved = _resolve_hf_target(cfg.hf_repo, cfg.base_url)
+        if resolved is None:
+            return 1
+        cfg.base_url = resolved
 
     os.environ["GATEWAY_MODEL"] = cfg.model
     os.environ.setdefault("REDTEAM_GRADER_MODEL", "GPT 4.1 Mini")
@@ -274,7 +367,9 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
 
     print(
         f"Safety run: model={cfg.model} slug={slug} "
-        f"profile={cfg.redteam_profile} redteam={cfg.redteam}",
+        f"profile={cfg.redteam_profile} redteam={cfg.redteam}"
+        + (f" base_url={cfg.base_url}" if cfg.base_url else "")
+        + (f" attacker={cfg.attacker_repo}@{cfg.attacker_base_url}" if cfg.attacker_repo else ""),
         flush=True,
     )
 
@@ -284,7 +379,16 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
     pf_env = _promptfoo_compose_env({
         "GATEWAY_MODEL": cfg.model,
         "REDTEAM_GRADER_MODEL": grader,
+        **({"GATEWAY_BASE_URL": cfg.base_url} if cfg.base_url else {}),
+        **({"REDTEAM_ATTACKER_MODEL": cfg.attacker_repo} if cfg.attacker_repo else {}),
+        **({"REDTEAM_ATTACKER_BASE_URL": cfg.attacker_base_url} if cfg.attacker_base_url else {}),
     }, slug=slug, profile=cfg.redteam_profile)
+    if cfg.base_url and not os.environ.get("OPENAI_API_KEY"):
+        # promptfoo's OpenAI provider hard-requires this env var to be
+        # non-empty even though a vLLM server started without --api-key
+        # ignores the Authorization header entirely (mirrors run_garak.py's
+        # OPENAICOMPATIBLE_API_KEY default).
+        pf_env["OPENAI_API_KEY"] = "unused-local-vllm-key"
 
     pf_output = REPO_ROOT / "safety" / "promptfoo" / "output" / slug / cfg.redteam_profile
 
@@ -410,6 +514,8 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
             "safety/garak/run_garak.py", cfg.model,
             "--report-dir", str(REPO_ROOT / "safety" / "garak" / "output" / slug),
         ]
+        if cfg.base_url:
+            garak_argv.extend(["--base-url", cfg.base_url])
         if cfg.garak_probes:
             garak_argv.extend(["-p", cfg.garak_probes])
 
@@ -587,6 +693,36 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--skip-garak", action="store_true", help="Skip Garak")
     ap.add_argument("--garak-probes", default="", metavar="LIST", help="Comma-separated Garak modules")
     ap.add_argument(
+        "--hf-repo",
+        default="",
+        metavar="REPO_ID",
+        help="Scan a self-hosted Hugging Face model (e.g. Qwen/Qwen2.5-3B-Instruct) "
+        "instead of a Duke gateway model. Red-team needs a real OPENAI_API_KEY "
+        "set (the grader always uses Duke) or --skip-redteam.",
+    )
+    ap.add_argument(
+        "--endpoint",
+        default="",
+        metavar="URL",
+        help="OpenAI-compatible base URL for --hf-repo "
+        "(default: read from the active scripts.dcc.vllm session)",
+    )
+    ap.add_argument(
+        "--attacker-repo",
+        default="",
+        metavar="REPO_ID",
+        help="Use a dedicated Hugging Face model (e.g. an uncensored/abliterated "
+        "one) as the red-team attack-generator instead of reusing the target. "
+        "Requires --attacker-endpoint (no DCC auto-resolution for a second "
+        "concurrent vLLM session).",
+    )
+    ap.add_argument(
+        "--attacker-endpoint",
+        default="",
+        metavar="URL",
+        help="OpenAI-compatible base URL for --attacker-repo",
+    )
+    ap.add_argument(
         "--all-models",
         action="store_true",
         help="Run sequentially for all default gateway models",
@@ -609,6 +745,14 @@ def parse_args(argv: list[str] | None = None) -> tuple[str | None, RunConfig | N
     if positionals and not positionals[0].startswith("-"):
         model = positionals[0]
 
+    if args.hf_repo:
+        if positionals and not positionals[0].startswith("-"):
+            print(
+                f"WARNING: --hf-repo overrides positional model {positionals[0]!r}",
+                file=sys.stderr,
+            )
+        model = args.hf_repo
+
     cfg = RunConfig(
         model=model,
         redteam_profile=args.redteam_profile,
@@ -617,6 +761,10 @@ def parse_args(argv: list[str] | None = None) -> tuple[str | None, RunConfig | N
         skip_promptfoo=args.skip_promptfoo,
         skip_garak=args.skip_garak,
         garak_probes=args.garak_probes or "",
+        hf_repo=args.hf_repo,
+        base_url=args.endpoint,
+        attacker_repo=args.attacker_repo,
+        attacker_base_url=args.attacker_endpoint,
     )
     if args.all_models:
         return "all-models", cfg

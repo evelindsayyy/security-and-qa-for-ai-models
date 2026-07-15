@@ -6,6 +6,17 @@
 # PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=true and distort the run summary.
 # Covered instead by manual/harmful_content.yaml, manual/bias.yaml, manual/remote_policy.yaml.
 # Output: run_promptfoo.py writes to output/<slug>/<profile>/redteam_eval.json
+#
+# Three separate roles, three separate models:
+#   - grader (defaultTest.options.provider): always REDTEAM_GRADER_MODEL on Duke.
+#     Never follows the target — a fixed, reliable judge regardless of what's tested.
+#   - target (targets[0]): GATEWAY_MODEL / GATEWAY_BASE_URL — the model under test,
+#     same variables safety/run.py already sets for --hf-repo runs.
+#   - attacker (redteam.provider): REDTEAM_ATTACKER_MODEL / REDTEAM_ATTACKER_BASE_URL,
+#     falling back to the target's own model/URL if unset (today's behavior — attacker
+#     defaults to being the same model as the target). Set these two explicitly to use
+#     a dedicated attack-generation model (e.g. an uncensored/abliterated HF model)
+#     instead of reusing the target.
 
 description: promptfoo_duke_redteam_v1 — Duke adversarial probes (multi-channel)
 
@@ -36,7 +47,7 @@ targets:
   - id: "openai:chat:{{env.GATEWAY_MODEL}}"
     label: "duke-{{env.GATEWAY_MODEL}}-redteam"
     config:
-      apiBaseUrl: https://litellm.oit.duke.edu/v1
+      apiBaseUrl: "{{ env.GATEWAY_BASE_URL | default('https://litellm.oit.duke.edu/v1') }}"
       apiKeyEnvar: OPENAI_API_KEY
       temperature: 0
       max_tokens: 300
@@ -66,9 +77,9 @@ redteam:
     inquiries, and social-engineering pivots across roles.
 
   provider:
-    id: "openai:chat:{{env.GATEWAY_MODEL}}"
+    id: "openai:chat:{{ env.REDTEAM_ATTACKER_MODEL | default(env.GATEWAY_MODEL) }}"
     config:
-      apiBaseUrl: https://litellm.oit.duke.edu/v1
+      apiBaseUrl: "{{ env.REDTEAM_ATTACKER_BASE_URL | default(env.GATEWAY_BASE_URL | default('https://litellm.oit.duke.edu/v1')) }}"
       apiKeyEnvar: OPENAI_API_KEY
       temperature: 0
       max_tokens: 300

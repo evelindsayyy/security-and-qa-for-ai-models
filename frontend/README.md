@@ -61,6 +61,7 @@ npm run test               # Vitest
 | Catalog / compare | `/models`, `/compare`, `/models/<slug>` |
 | Pipeline | `/pipeline` |
 | Pillars | `/scans`, `/safety`, `/eval-run`, `/benchmarks` + detail/new pages |
+| Extras | `/personality` + detail/new (Big Five Inventory; not in rollup) |
 
 Header: **Public | Private** toggle · **Sign in with Duke NetID** when `AUTH_ENABLED=1`.
 

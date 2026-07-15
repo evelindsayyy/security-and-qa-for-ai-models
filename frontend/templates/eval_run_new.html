@@ -383,6 +383,12 @@
     }
     // RERUN.max_tokens is applied to the tier picker by the init block below,
     // after the picker controller exists.
+    if (RERUN.hf_repo) {
+      const hfRadio = form.querySelector('input[name="source"][value="hf"]');
+      if (hfRadio) hfRadio.checked = true;
+      const hfInput = form.querySelector('#hf_repo');
+      if (hfInput) hfInput.value = RERUN.hf_repo;
+    }
   }
 
   // Mirrors evaluator model_family(): match the family keyword anywhere in the

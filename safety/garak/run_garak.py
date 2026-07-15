@@ -15,6 +15,12 @@ profile from _generator_profiles in garak_duke.yaml:
   - openai5  →  gpt-5.x, o3, o4-mini  (uses suppressed_params + max_completion_tokens)
   - standard →  everything else        (uses temperature / max_tokens)
 
+Pass --base-url to scan a self-hosted OpenAI-compatible endpoint (e.g. a
+vLLM server serving a Hugging Face model) instead of the Duke gateway. This
+bypasses profile auto-selection entirely — a vLLM target takes the same
+params as the "standard" profile, just against a different uri:
+    python run_garak.py "Qwen/Qwen2.5-3B-Instruct" --base-url http://gpu-node:8000/v1
+
 Probe list lives in garak_duke.yaml plugins.probe_spec (single source of truth).
 """
 
@@ -111,6 +117,24 @@ def _pick_profile(model_name: str) -> str:
     return "openai5" if _OPENAI5.match(model_name.strip()) else "standard"
 
 
+def _resolve_generator_cfg(cfg: dict, model_name: str, base_url: str | None) -> tuple[str, dict]:
+    """Pick the OpenAICompatible generator config for this run.
+
+    Returns (profile_label, generator_cfg). Duke gateway runs auto-select a
+    profile by model name (see _pick_profile). A --base-url override (e.g. a
+    self-hosted vLLM endpoint) skips that entirely: vLLM's OpenAI-compatible
+    server takes the same params as the "standard" Duke profile (no GPT-5-style
+    suppressed_params quirk), so we reuse that profile's defaults and swap in
+    the given uri.
+    """
+    if base_url:
+        generator_cfg = dict(cfg["_generator_profiles"]["standard"])
+        generator_cfg["uri"] = base_url
+        return "base-url", generator_cfg
+    profile = _pick_profile(model_name)
+    return profile, cfg["_generator_profiles"][profile]
+
+
 def _probe_cli_args(extra_args: list[str], probe_spec: str) -> list[str]:
     """Pass probes via CLI -p (reliable across garak 0.14/0.15 yaml quirks)."""
     if any(a in ("-p", "--probes") for a in extra_args):
@@ -157,6 +181,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("model_name")
     parser.add_argument("--report-dir", default=None)
+    parser.add_argument(
+        "--base-url",
+        default=None,
+        help="OpenAI-compatible endpoint to scan instead of the Duke gateway "
+        "(e.g. a self-hosted vLLM server)",
+    )
     args, extra_args = parser.parse_known_args()
 
     model_name = args.model_name
@@ -175,11 +205,16 @@ def main() -> int:
     _prefetch_hf_models()
     _prefetch_toxic_detector()
 
-    profile = _pick_profile(model_name)
-    generator_cfg = cfg["_generator_profiles"][profile]
+    profile, generator_cfg = _resolve_generator_cfg(cfg, model_name, args.base_url)
 
     cfg["plugins"]["generators"]["openai"]["OpenAICompatible"] = generator_cfg
     cfg.pop("_generator_profiles", None)
+
+    if args.base_url and not os.environ.get("OPENAICOMPATIBLE_API_KEY"):
+        # garak's OpenAICompatible generator hard-requires this env var to be
+        # non-empty (APIKeyMissingError) even though a vLLM server started
+        # without --api-key ignores the Authorization header entirely.
+        os.environ["OPENAICOMPATIBLE_API_KEY"] = "unused-local-vllm-key"
 
     if args.report_dir:
         report_dir = str(Path(args.report_dir).resolve())

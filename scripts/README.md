@@ -24,3 +24,9 @@ the DCC server is reached at the cluster node URL printed by `dcc/wait_vllm.sh`.
 These are examples/spikes for the optional second backend in
 [`docs/architecture.md`](../docs/architecture.md). Evaluator CLI wiring exists
 today; safety and benchmarks UI/CLI parity is on the roadmap.
+
+## Dev tooling
+
+| Script | Purpose |
+|--------|---------|
+| [`dev/fake_vllm.py`](dev/fake_vllm.py) | Minimal stand-in OpenAI-compatible server (Flask) — answers `/health` and `/v1/chat/completions` with a fixed canned reply. Lets you exercise `safety.run --hf-repo ... --endpoint http://localhost:PORT/v1` end-to-end without a GPU or an active `dcc/` session. Proves the pipeline's plumbing works; says nothing about whether a real model is safe. Promptfoo's eval runs inside its own Docker container, so its `--endpoint` must use the Docker bridge gateway IP (e.g. `http://172.17.0.1:PORT/v1` on Linux), not `localhost` — see the script's docstring. |

@@ -17,6 +17,15 @@ TESTS: dict[str, dict[str, Any]] = {
         "legacy_glob": "bfi_*.json",
         "env_prefix": "BFI",
     },
+    "compass": {
+        "label": "Political compass",
+        "short_label": "Compass",
+        "script": "compass_test.py",
+        "total_items": 20,
+        "progress_label": "Political compass",
+        "legacy_glob": "compass_*.json",
+        "env_prefix": "COMPASS",
+    },
 }
 
 DEFAULT_TEST_KEY = "bfi"
