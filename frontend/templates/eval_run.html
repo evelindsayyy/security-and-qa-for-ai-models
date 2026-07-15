@@ -181,7 +181,7 @@
 
       /* Zone 3 — filters: labelled field stack + sort hint */
       .ptb-filters { padding-top: 0.5rem; }
-      .ptb-filters-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.7rem 1rem; align-items: end; }
+      .ptb-filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.7rem 1rem; align-items: end; }
       @media (max-width: 640px) { .ptb-filters-grid { grid-template-columns: repeat(2, 1fr); } }
       .ptb-field { display: flex; flex-direction: column; gap: 0.28rem; min-width: 0; }
       .ptb-field-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-subtle); }
@@ -273,6 +273,14 @@
             <select id="f-candidate"><option value="">all</option></select>
           </div>
           <div class="ptb-field">
+            <span class="ptb-field-label" title="Open vs closed weights of the candidate model (not the judge)">Candidate source</span>
+            <select id="f-openness" title="Filter by whether the candidate model is open- or closed-weight">
+              <option value="">all</option>
+              <option value="open">open-source</option>
+              <option value="closed">closed-source</option>
+            </select>
+          </div>
+          <div class="ptb-field">
             <span class="ptb-field-label">Judge</span>
             <select id="f-judge"><option value="">all</option></select>
           </div>
@@ -281,6 +289,7 @@
             <select id="g-by">
               <option value="">none</option>
               <option value="candidate">candidate</option>
+              <option value="openness">source</option>
               <option value="judge">judge</option>
               <option value="suite">tasks</option>
             </select>
@@ -396,8 +405,25 @@
         rows.forEach(r => {
           if (r.dataset.suite) suiteLabels[r.dataset.suite] = r.dataset.suiteLabel || r.dataset.suite;
         });
-        const GROUP_WORDS = { suite: "tasks", candidate: "candidate", judge: "judge" };
-        const displayFor = (key, v) => (key === "suite" && suiteLabels[v]) ? suiteLabels[v] : v;
+        const GROUP_WORDS = { suite: "tasks", candidate: "candidate", judge: "judge", openness: "source" };
+        const OPENNESS_LABEL = { open: "open-source", closed: "closed-source" };
+        const displayFor = (key, v) =>
+          (key === "suite" && suiteLabels[v]) ? suiteLabels[v]
+          : (key === "openness" && OPENNESS_LABEL[v]) ? OPENNESS_LABEL[v]
+          : v;
+
+        // Open-weight (inspectable / self-hostable) vs closed (proprietary,
+        // API-only). gpt-oss is OpenAI's open-weight line, so it's checked first;
+        // other gpt-*/o-series/claude/gemini/grok are closed; everything else
+        // (Llama, Qwen, Mistral, Phi, and any DCC-served HF repo) is open.
+        function modelOpenness(id) {
+          const m = (id || "").toLowerCase();
+          if (m.includes("gpt-oss")) return "open";
+          if (/^o[134]\b/.test(m) || m.includes("gpt") || m.includes("openai")) return "closed";
+          if (["claude", "gemini", "grok"].some(k => m.includes(k))) return "closed";
+          return "open";
+        }
+        rows.forEach(r => { r.dataset.openness = modelOpenness(r.dataset.candidate); });
 
         for (const [id, key] of [["f-suite", "suite"], ["f-candidate", "candidate"], ["f-judge", "judge"]]) {
           const sel = document.getElementById(id);
@@ -408,6 +434,7 @@
           });
           sel.addEventListener("change", render);
         }
+        document.getElementById("f-openness").addEventListener("change", render);
         document.getElementById("g-by").addEventListener("change", function () {
           groupBy = this.value; render();
         });
@@ -427,11 +454,13 @@
           const fs = document.getElementById("f-suite").value;
           const fc = document.getElementById("f-candidate").value;
           const fj = document.getElementById("f-judge").value;
+          const fo = document.getElementById("f-openness").value;
 
           let visible = rows.filter(r =>
             (!fs || r.dataset.suite === fs) &&
             (!fc || r.dataset.candidate === fc) &&
-            (!fj || r.dataset.judge === fj));
+            (!fj || r.dataset.judge === fj) &&
+            (!fo || r.dataset.openness === fo));
 
           visible.sort((a, b) => {
             if (sortKey === "when") {
