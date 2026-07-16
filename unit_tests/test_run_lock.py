@@ -37,6 +37,23 @@ class RunLockTest(unittest.TestCase):
         self.assertFalse(run_lock.is_active(self.lock))
         self.assertFalse(self.lock.is_file())
 
+    def test_update_pid_rewrites_holder_without_reacquiring(self) -> None:
+        # Simulates claiming with a placeholder pid (e.g. the request
+        # thread) before the real holder (a subprocess) is spawned.
+        placeholder = os.getpid()
+        self.assertTrue(run_lock.try_acquire(self.lock, pid=placeholder, source=run_lock.FRONTEND_SOURCE))
+        run_lock.update_pid(self.lock, 424242)
+        data = run_lock._read_lock(self.lock)
+        self.assertEqual(data["pid"], 424242)
+        # Other fields (source, command) survive the rewrite.
+        self.assertEqual(data["source"], run_lock.FRONTEND_SOURCE)
+
+    def test_update_pid_on_missing_lock_is_a_noop_write(self) -> None:
+        # Defensive: shouldn't raise even if called against a path that was
+        # never actually acquired.
+        run_lock.update_pid(self.lock, 123)
+        self.assertEqual(run_lock._read_lock(self.lock), {"pid": 123})
+
     def test_should_skip_cli_when_frontend_holds_lock(self) -> None:
         run_lock.try_acquire(
             self.lock,

@@ -194,6 +194,47 @@ class GetStatusTest(unittest.TestCase):
         self.assertEqual(status["status"], "partial")
         self.assertTrue(any("partial" in w.lower() for w in status["warnings"]))
 
+    def test_partial_when_promptfoo_policy_incomplete_in_merged(self) -> None:
+        slug = "gpt-4.1-mini"
+        (self.out / slug / "base").mkdir(parents=True)
+        merged = self.out / slug / "base" / "merged_safety_result.json"
+        merged.write_text(
+            json.dumps(
+                {
+                    "missing_suites": [],
+                    "tool_results": {
+                        "promptfoo_duke_policy_v1": {
+                            "promptfoo": {"process_complete": False}
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        status = safety_launch.get_status(slug, "base")
+        self.assertEqual(status["status"], "partial")
+        self.assertTrue(any("policy partial" in w.lower() for w in status["warnings"]))
+
+    def test_no_warning_when_promptfoo_process_complete(self) -> None:
+        slug = "gpt-4.1-mini"
+        (self.out / slug / "base").mkdir(parents=True)
+        merged = self.out / slug / "base" / "merged_safety_result.json"
+        merged.write_text(
+            json.dumps(
+                {
+                    "missing_suites": [],
+                    "tool_results": {
+                        "promptfoo_duke_policy_v1": {
+                            "promptfoo": {"process_complete": True}
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        status = safety_launch.get_status(slug, "base")
+        self.assertEqual(status["status"], "complete")
+
 
 class LaunchRoutesTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -276,6 +317,143 @@ class LaunchRoutesTest(unittest.TestCase):
             sess.pop("user", None)
         r = self.client.get("/safety/gpt-5.5/base/private")
         self.assertIn(r.status_code, (302, 401, 403))
+
+
+def _fresh_launch_plan():
+    from frontend.run_launch import LaunchPlan
+
+    return LaunchPlan(
+        config={"gateway_model": "gpt-5.5"},
+        config_fingerprint="test-fp",
+        visibility="public",
+        owner_user_id=None,
+        owner_netid=None,
+        reused=None,
+    )
+
+
+class StartRunLockOrderingTest(unittest.TestCase):
+    """start_run() must claim the cross-process lock before wiping output
+    dirs or spawning a subprocess — a losing request used to do both first
+    and only discover the lock conflict afterward, stranding an already-
+    wiped directory and an unlocked subprocess with nothing to release it."""
+
+    def setUp(self) -> None:
+        _isolate_safety_output(self)
+        patcher = mock.patch.object(safety_launch.docker_launch, "use_docker", return_value=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_lock_conflict_prevents_wipe_and_spawn(self) -> None:
+        with mock.patch.object(safety_launch, "_wipe_outputs") as wipe, mock.patch.object(
+            safety_launch.subprocess, "Popen"
+        ) as popen, mock.patch(
+            "frontend.run_launch.build_launch_plan", return_value=_fresh_launch_plan()
+        ), mock.patch("dbutils.run_lock.try_acquire", return_value=False):
+            _run_key, already, _visibility = safety_launch.start_run("gpt-5.5")
+
+        self.assertTrue(already)
+        wipe.assert_not_called()
+        popen.assert_not_called()
+
+    def test_lock_claimed_with_placeholder_then_fixed_up_to_real_pid(self) -> None:
+        fake_proc = mock.Mock()
+        fake_proc.poll.return_value = None
+        fake_proc.pid = 777777
+        with mock.patch.object(
+            safety_launch.subprocess, "Popen", return_value=fake_proc
+        ), mock.patch(
+            "frontend.run_launch.build_launch_plan", return_value=_fresh_launch_plan()
+        ), mock.patch(
+            "dbutils.run_lock.try_acquire", return_value=True
+        ) as acquire, mock.patch("dbutils.run_lock.update_pid") as update_pid:
+            _run_key, already, _visibility = safety_launch.start_run("gpt-5.5")
+
+        self.assertFalse(already)
+        # Claimed under our own pid, before the subprocess existed...
+        self.assertEqual(acquire.call_args_list[0].kwargs.get("pid"), os.getpid())
+        # ...then fixed up to the real subprocess pid once known, so later
+        # orphan detection (is_active -> _pid_alive) tracks the actual job.
+        update_pid.assert_any_call(mock.ANY, 777777)
+
+    def test_setup_failure_releases_the_lock(self) -> None:
+        with mock.patch.object(
+            safety_launch, "_wipe_outputs", side_effect=RuntimeError("boom")
+        ), mock.patch(
+            "frontend.run_launch.build_launch_plan", return_value=_fresh_launch_plan()
+        ), mock.patch(
+            "dbutils.run_lock.try_acquire", return_value=True
+        ), mock.patch("dbutils.run_lock.release") as release:
+            with self.assertRaises(RuntimeError):
+                safety_launch.start_run("gpt-5.5")
+
+        release.assert_called()
+
+
+class GarakSlugLockTest(unittest.TestCase):
+    """Garak's output tree (safety/garak/output/<slug>/) has no per-profile
+    subdirectory — see frontend.safety_launch._garak_lock_path — so two
+    different-profile runs for the same model must not be allowed to
+    concurrently wipe/write it."""
+
+    def setUp(self) -> None:
+        self.root = _isolate_safety_output(self)
+        patcher = mock.patch.object(safety_launch.docker_launch, "use_docker", return_value=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _mark_garak_lock_active(self, slug: str) -> None:
+        lock = safety_launch._garak_lock_path(slug)
+        lock.parent.mkdir(parents=True, exist_ok=True)
+        lock.write_text(
+            json.dumps({"pid": os.getpid(), "source": safety_launch.run_lock.FRONTEND_SOURCE}),
+            encoding="utf-8",
+        )
+
+    def test_second_profile_blocked_while_garak_active(self) -> None:
+        slug = safety_launch.normalize_gateway_model_id("gpt-5.5")
+        self._mark_garak_lock_active(slug)
+
+        with mock.patch.object(safety_launch, "_wipe_outputs") as wipe, mock.patch.object(
+            safety_launch.subprocess, "Popen"
+        ) as popen, mock.patch(
+            "frontend.run_launch.build_launch_plan", return_value=_fresh_launch_plan()
+        ):
+            _run_key, already, _visibility = safety_launch.start_run(
+                "gpt-5.5", redteam_profile="healthcare"
+            )
+
+        self.assertTrue(already)
+        wipe.assert_not_called()
+        popen.assert_not_called()
+
+    def test_validate_launch_blocked_while_garak_active(self) -> None:
+        slug = safety_launch.normalize_gateway_model_id("gpt-5.5")
+        self._mark_garak_lock_active(slug)
+        with mock.patch.object(
+            safety_launch, "_eligible_gateway_models", return_value=safety_launch._GATEWAY_FALLBACK
+        ), mock.patch.object(safety_launch, "_prepare_output_dirs") as prepare:
+            err = safety_launch.validate_launch("gpt-5.5", redteam_profile="healthcare")
+
+        self.assertIsNotNone(err)
+        self.assertIn("Garak", err)
+        prepare.assert_not_called()
+
+    def test_skip_garak_run_ignores_garak_lock(self) -> None:
+        slug = safety_launch.normalize_gateway_model_id("gpt-5.5")
+        self._mark_garak_lock_active(slug)
+
+        fake_proc = mock.Mock()
+        fake_proc.poll.return_value = None
+        fake_proc.pid = 555555
+        with mock.patch.object(
+            safety_launch.subprocess, "Popen", return_value=fake_proc
+        ), mock.patch("frontend.run_launch.build_launch_plan", return_value=_fresh_launch_plan()):
+            _run_key, already, _visibility = safety_launch.start_run(
+                "gpt-5.5", redteam_profile="healthcare", skip_garak=True
+            )
+
+        self.assertFalse(already)
 
 
 class UnreadableSafetyOutputTest(unittest.TestCase):

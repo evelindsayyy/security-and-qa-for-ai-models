@@ -183,6 +183,20 @@ def release(path: Path | str) -> None:
     Path(path).unlink(missing_ok=True)
 
 
+def update_pid(path: Path | str, pid: int) -> None:
+    """Rewrite the lock's pid after claiming it with a placeholder.
+
+    Lets a caller call try_acquire() (closing the race window against other
+    claimants) before the real holder — e.g. a not-yet-spawned subprocess —
+    has a pid. Once it does, this fixes up the stored pid so later liveness
+    checks (is_active -> _pid_alive) track the actual job, not the request
+    thread that claimed the lock on its behalf."""
+    p = Path(path)
+    data = _read_lock(p) or {}
+    data["pid"] = int(pid)
+    p.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
 def should_skip_cli_acquire(path: Path | str) -> bool:
     """True when a frontend launcher already holds the lock on the host."""
     data = _read_lock(Path(path))

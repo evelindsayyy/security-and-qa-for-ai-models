@@ -267,6 +267,7 @@ def export_from_promptfoo_eval(
     *,
     source_file: str,
     probe_suite: str | None = None,
+    process_complete: bool = True,
 ) -> dict[str, Any]:
     """Build ``SafetyRunResult`` from policy or red-team Promptfoo eval JSON."""
     results = payload.get("results") or {}
@@ -280,6 +281,18 @@ def export_from_promptfoo_eval(
         for idx, row in enumerate(rows)
         if not _is_harness_error(row) and not _is_ungraded_setup_row(row)
     ]
+    if rows and not findings:
+        # Every row got filtered out as a harness error / ungraded setup
+        # turn — there's no real pass/fail signal here, so this must not be
+        # scored as a genuine 0% (which is indistinguishable downstream from
+        # "every probe actually failed" and gets weighted the same in
+        # safety_scorer's composite tier). Mirrors
+        # safety.exporters.garak.export_from_garak_report's "no signal"
+        # ValueError for the same situation.
+        raise ValueError(
+            f"all {len(rows)} row(s) in {source_file!r} were filtered as harness "
+            "errors / ungraded setup turns — no real pass/fail signal to score"
+        )
     passed = sum(1 for f in findings if f["passed"])
     n = len(findings)
     pass_rate = (passed / n) if n else 0.0
@@ -303,6 +316,13 @@ def export_from_promptfoo_eval(
                 "description": description,
                 "probe_ids": [f["probe_id"] for f in findings],
                 "plugins": plugin_ids or None,
+                # Mirrors garak's report_complete: False when the caller
+                # (safety.run) knows the promptfoo subprocess exited
+                # non-zero before producing this eval.json, so a crash that
+                # still left a partially-written file isn't presented as a
+                # clean, fully-weighted suite (see _promptfoo_partial_warnings
+                # in frontend.safety_launch).
+                "process_complete": process_complete,
             }
         },
         "started_at": results.get("timestamp") or _utc_now(),

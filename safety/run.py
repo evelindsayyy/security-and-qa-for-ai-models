@@ -269,12 +269,15 @@ def _require_artifact(path: Path, label: str) -> int | None:
     return None
 
 
-def _export_promptfoo_eval(eval_json: Path, *, label: str) -> int | None:
+def _export_promptfoo_eval(eval_json: Path, *, label: str, incomplete: bool = False) -> int | None:
     err = _require_artifact(eval_json, label)
     if err:
         return err
+    argv = ["safety/promptfoo/export_safety_result.py", str(eval_json)]
+    if incomplete:
+        argv.append("--incomplete")
     try:
-        run_py(["safety/promptfoo/export_safety_result.py", str(eval_json)])
+        run_py(argv)
     except subprocess.CalledProcessError as exc:
         print(
             f"ERROR: export failed for {eval_json} (exit {exc.returncode})",
@@ -347,11 +350,36 @@ def run_pipeline(cfg: RunConfig) -> int:
         )
         return 2
 
+    # Garak's report isn't split by redteam profile (one shared tree per
+    # slug — see frontend.safety_launch._garak_lock_path), so a second,
+    # different-profile run for the same model must not be allowed to wipe
+    # or interleave writes into it while this one is still using Garak.
+    garak_lock_file: Path | None = None
+    if not cfg.skip_garak:
+        garak_lock_file = REPO_ROOT / "safety" / "garak" / "output" / f"{slug}.run.lock"
+        if run_lock.should_skip_cli_acquire(garak_lock_file):
+            pass
+        elif not run_lock.try_acquire(
+            garak_lock_file,
+            command=f"safety.run {cfg.model} profile={cfg.redteam_profile} (garak)",
+            source="cli",
+        ):
+            print(
+                f"ERROR: {cfg.model!r} already has a Garak run in progress "
+                f"(a different profile) — see {garak_lock_file}",
+                file=sys.stderr,
+            )
+            if not run_lock.should_skip_cli_acquire(lock_file):
+                run_lock.release(lock_file)
+            return 2
+
     try:
         return _run_pipeline_impl(cfg, slug)
     finally:
         if not run_lock.should_skip_cli_acquire(lock_file):
             run_lock.release(lock_file)
+        if garak_lock_file is not None and not run_lock.should_skip_cli_acquire(garak_lock_file):
+            run_lock.release(garak_lock_file)
 
 
 def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
@@ -396,6 +424,7 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
         if not cfg.skip_policy:
             print("--- Promptfoo policy ---", flush=True)
             eval_json = pf_output / "eval.json"
+            policy_incomplete = False
             try:
                 _compose_run_promptfoo(
                     [
@@ -412,8 +441,18 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
                         file=sys.stderr,
                     )
                     return exc.returncode or 1
+                # A partial eval.json survived the crash — salvage it (e.g.
+                # the known SQLite-contention failure mode still writes
+                # real results), but mark it incomplete so it isn't
+                # presented downstream as a clean, fully-weighted suite.
+                policy_incomplete = True
+                print(
+                    f"WARNING: policy eval exited {exc.returncode} but left a "
+                    "partial eval.json — exporting as incomplete",
+                    file=sys.stderr,
+                )
 
-            rc = _export_promptfoo_eval(eval_json, label="policy eval")
+            rc = _export_promptfoo_eval(eval_json, label="policy eval", incomplete=policy_incomplete)
             if rc:
                 return rc
             merge_args.extend([
@@ -435,6 +474,7 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
             config_in_container = (
                 f"output/{slug}/{cfg.redteam_profile}/redteam_promptfooconfig.yaml"
             )
+            redteam_incomplete = False
             try:
                 _compose_run_promptfoo(
                     [
@@ -457,8 +497,15 @@ def _run_pipeline_impl(cfg: RunConfig, slug: str) -> int:
                             file=sys.stderr,
                         )
                     return exc.returncode or 1
+                # See the matching comment on the policy eval above.
+                redteam_incomplete = True
+                print(
+                    f"WARNING: red-team eval exited {exc.returncode} but left a "
+                    "partial redteam_eval.json — exporting as incomplete",
+                    file=sys.stderr,
+                )
 
-            rc = _export_promptfoo_eval(redteam_json, label="red-team eval")
+            rc = _export_promptfoo_eval(redteam_json, label="red-team eval", incomplete=redteam_incomplete)
             if rc:
                 return rc
             merge_args.extend([
