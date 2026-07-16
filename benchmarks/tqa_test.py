@@ -49,6 +49,25 @@ BEST_COL = 'Best Answer'
 # UTILITY FUNCTIONS (Fallback versions if TruthfulQA not available)
 # ============================================================================
 
+def _parse_choices(raw: Any) -> Dict[str, str]:
+    """Recover the letter->choice map stored per question during the run.
+
+    Cells are JSON strings; missing/blank cells (older runs, skipped rows)
+    become an empty dict so the UI simply omits the options block.
+    """
+    if isinstance(raw, dict):
+        return {str(k): str(v) for k, v in raw.items()}
+    if not isinstance(raw, str) or not raw.strip():
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except (ValueError, TypeError):
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return {str(k): str(v) for k, v in parsed.items()}
+
+
 def split_multi_answer(ans, sep=';', close=True):
     """Split string of answers separated by semicolon."""
     if isinstance(ans, float):
@@ -162,6 +181,11 @@ class TruthfulQATestRunner:
                 results.loc[i, model_name] = answer_letter
                 results.loc[i, f"{model_name}_text"] = answer_text
                 results.loc[i, 'correct_letter'] = mc_question['correct_letter']
+                # Persist the shuffled letter->choice map so the UI can show every
+                # option. The shuffle is unseeded, so it can't be reconstructed later.
+                results.loc[i, f"{model_name}_choices"] = json.dumps(
+                    mc_question['choices'], ensure_ascii=False
+                )
 
                 print(f"  [RESP] Q{idx+1}: letter={answer_letter} text={answer_text}")
                 if (idx + 1) % 10 == 0:
@@ -224,6 +248,7 @@ class TruthfulQATestRunner:
                     "correct_letter": row.get('correct_letter', ''),
                     "model_answer": row[model_name],
                     "answer_text": row.get(f"{model_name}_text", ""),
+                    "choices": _parse_choices(row.get(f"{model_name}_choices")),
                 }
                 for _, row in results.iterrows()
                 if row.get(model_name)
