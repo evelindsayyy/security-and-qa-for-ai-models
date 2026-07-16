@@ -11,6 +11,7 @@ from unittest import mock
 from evaluator import hf_intake
 from safety.run import (
     RunConfig,
+    _export_promptfoo_eval,
     _resolve_attacker_target,
     _resolve_hf_target,
     garak_xdg_env,
@@ -66,6 +67,37 @@ class ParseArgsTest(unittest.TestCase):
         self.assertEqual(cfg.attacker_base_url, "http://attacker:8001/v1")
 
 
+class ExportPromptfooEvalIncompleteTest(unittest.TestCase):
+    """A promptfoo subprocess that crashes but still leaves a partial
+    eval.json must be exported with process_complete=False (--incomplete),
+    not presented as a clean, fully-weighted suite — see safety.exporters
+    .promptfoo's process_complete field and frontend.safety_launch's
+    _promptfoo_partial_warnings."""
+
+    def setUp(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.eval_json = Path(tmp.name) / "eval.json"
+        self.eval_json.write_text("{}", encoding="utf-8")
+
+    def test_incomplete_true_passes_incomplete_flag(self) -> None:
+        with mock.patch("safety.run.run_py") as run_py:
+            rc = _export_promptfoo_eval(self.eval_json, label="policy eval", incomplete=True)
+        self.assertIsNone(rc)
+        argv = run_py.call_args.args[0]
+        self.assertIn("--incomplete", argv)
+
+    def test_incomplete_false_omits_flag(self) -> None:
+        with mock.patch("safety.run.run_py") as run_py:
+            rc = _export_promptfoo_eval(self.eval_json, label="policy eval")
+        self.assertIsNone(rc)
+        argv = run_py.call_args.args[0]
+        self.assertNotIn("--incomplete", argv)
+
+
 class GarakXdgEnvTest(unittest.TestCase):
     def test_creates_dirs_and_returns_env(self) -> None:
         env = garak_xdg_env("test-slug-xdg")
@@ -88,6 +120,49 @@ class RunPipelineValidationTest(unittest.TestCase):
         with mock.patch("safety.run.run_lock.should_skip_cli_acquire", return_value=False):
             with mock.patch("safety.run.run_lock.try_acquire", return_value=False):
                 self.assertEqual(run_pipeline(cfg), 2)
+
+    def test_blocks_when_garak_slug_lock_held_by_other_profile(self) -> None:
+        """Garak's output tree has no per-profile subdirectory (one shared
+        tree per model slug), so a second, different-profile run must not
+        proceed while another profile's run is still using Garak for the
+        same model — even though its own per-profile lock is free."""
+        from unittest import mock
+
+        cfg = RunConfig(model="GPT 4.1 Mini", redteam_profile="healthcare", skip_garak=False, redteam=False)
+
+        def fake_try_acquire(path, **_kwargs):
+            # The per-profile lock (safety/output/<slug>/<profile>/run.lock)
+            # is free; the shared per-slug garak lock is held by the other
+            # profile's run.
+            return "garak" not in str(path)
+
+        with mock.patch("safety.run.run_lock.should_skip_cli_acquire", return_value=False), mock.patch(
+            "safety.run.run_lock.try_acquire", side_effect=fake_try_acquire
+        ), mock.patch("safety.run.run_lock.release") as release, mock.patch(
+            "safety.run._run_pipeline_impl"
+        ) as impl:
+            self.assertEqual(run_pipeline(cfg), 2)
+
+        impl.assert_not_called()
+        # The per-profile lock it did manage to claim must be released again
+        # rather than left dangling now that the run isn't proceeding.
+        release.assert_called_once()
+
+    def test_skip_garak_never_touches_garak_lock(self) -> None:
+        from unittest import mock
+
+        cfg = RunConfig(model="GPT 4.1 Mini", redteam_profile="base", skip_garak=True, redteam=False)
+        with mock.patch("safety.run.run_lock.should_skip_cli_acquire", return_value=False), mock.patch(
+            "safety.run.run_lock.try_acquire", return_value=True
+        ) as acquire, mock.patch("safety.run.run_lock.release"), mock.patch(
+            "safety.run._run_pipeline_impl", return_value=0
+        ):
+            self.assertEqual(run_pipeline(cfg), 0)
+
+        # Only the per-profile lock — never a garak-slug lock — is touched
+        # when this run isn't using Garak at all.
+        self.assertEqual(acquire.call_count, 1)
+        self.assertNotIn("garak", str(acquire.call_args.args[0]))
 
     def test_rejects_hf_repo_with_redteam_and_no_real_key(self) -> None:
         # redteam defaults to True; the grader always stays on Duke and needs a

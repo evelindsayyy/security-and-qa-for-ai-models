@@ -6,7 +6,9 @@ Tests for safety/exporters/promptfoo.py grading helpers.
 
 from __future__ import annotations
 
+import json
 import unittest
+from unittest import mock
 
 from safety.exporters import promptfoo as pf
 
@@ -43,6 +45,69 @@ class UngradedSetupRowTest(unittest.TestCase):
     def test_graded_row_is_not_setup(self) -> None:
         row = {"gradingResult": {"pass": True, "reason": "All assertions passed"}}
         self.assertFalse(pf._is_ungraded_setup_row(row))
+
+
+class AllFilteredEvalTest(unittest.TestCase):
+    """A config problem (e.g. every prompt exceeding maxCharsPerMessage) that
+    causes every row to be filtered as a harness error must not be scored
+    as a genuine 0% pass rate — that's indistinguishable downstream from
+    every probe actually failing (see safety_scorer's composite tier)."""
+
+    def test_all_rows_harness_errors_raises(self) -> None:
+        payload = {
+            "config": {"description": "Duke policy"},
+            "results": {
+                "results": [
+                    {"response": {"error": "message exceeds maxcharspermessage limit"}},
+                    {"response": {"error": "message exceeds maxcharspermessage limit"}},
+                ]
+            },
+        }
+        with self.assertRaises(ValueError):
+            pf.export_from_promptfoo_eval(payload, source_file="eval.json")
+
+    def test_all_rows_ungraded_setup_raises(self) -> None:
+        payload = {
+            "config": {"description": "Duke redteam"},
+            "results": {
+                "results": [
+                    {"gradingResult": {"pass": True, "reason": "No assertions"}},
+                ]
+            },
+        }
+        with self.assertRaises(ValueError):
+            pf.export_from_promptfoo_eval(payload, source_file="redteam_eval.json")
+
+    def test_empty_results_does_not_raise(self) -> None:
+        # No rows at all (e.g. a genuinely empty config) is a different,
+        # pre-existing case — not what this guards against — so it should
+        # still export cleanly at pass_rate 0.0/n=0 rather than raise.
+        payload = {"config": {"description": "Duke policy"}, "results": {"results": []}}
+        doc = pf.export_from_promptfoo_eval(payload, source_file="eval.json")
+        self.assertEqual(doc["findings"], [])
+        self.assertEqual(doc["summary_pass_rate"], 0.0)
+
+    def test_mixed_real_and_filtered_rows_does_not_raise(self) -> None:
+        payload = _manual_eval_payload("bias:gender", passed=True)
+        payload["results"]["results"].append(
+            {"response": {"error": "message exceeds maxcharspermessage limit"}}
+        )
+        doc = pf.export_from_promptfoo_eval(payload, source_file="eval.json")
+        self.assertEqual(len(doc["findings"]), 1)
+
+
+class ProcessCompleteFlagTest(unittest.TestCase):
+    def test_defaults_to_complete(self) -> None:
+        payload = _manual_eval_payload("bias:gender", passed=True)
+        doc = pf.export_from_promptfoo_eval(payload, source_file="eval.json")
+        self.assertTrue(doc["tool_results"]["promptfoo"]["process_complete"])
+
+    def test_incomplete_flag_propagates(self) -> None:
+        payload = _manual_eval_payload("bias:gender", passed=True)
+        doc = pf.export_from_promptfoo_eval(
+            payload, source_file="eval.json", process_complete=False
+        )
+        self.assertFalse(doc["tool_results"]["promptfoo"]["process_complete"])
 
 
 class DetectSuiteTest(unittest.TestCase):
@@ -131,6 +196,43 @@ class ManualEvalExportTest(unittest.TestCase):
         payload = _manual_eval_payload("bias:race", passed=True)
         doc = pf.export_from_promptfoo_eval(payload, source_file="manual_bias_eval.json")
         self.assertEqual(doc["gateway_model_id"], "gpt-4.1-mini")
+
+
+class ExportCliIncompleteFlagTest(unittest.TestCase):
+    """The --incomplete CLI flag (safety.run passes it when the promptfoo
+    subprocess crashed but left a partial eval.json) must propagate through
+    to the written SafetyRunResult's process_complete field."""
+
+    def setUp(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmpdir = Path(tmp.name)
+        self.input_path = self.tmpdir / "eval.json"
+        self.input_path.write_text(
+            json.dumps(_manual_eval_payload("bias:gender", passed=True)),
+            encoding="utf-8",
+        )
+
+    def _run_main(self, extra_args: list[str]) -> dict:
+        from safety.promptfoo import export_safety_result
+
+        out_path = self.tmpdir / "out.json"
+        argv = [str(self.input_path), "-o", str(out_path), *extra_args]
+        with mock.patch("sys.argv", ["export_safety_result.py", *argv]):
+            rc = export_safety_result.main()
+        self.assertEqual(rc, 0)
+        return json.loads(out_path.read_text(encoding="utf-8"))
+
+    def test_default_is_complete(self) -> None:
+        doc = self._run_main([])
+        self.assertTrue(doc["tool_results"]["promptfoo"]["process_complete"])
+
+    def test_incomplete_flag_marks_process_incomplete(self) -> None:
+        doc = self._run_main(["--incomplete"])
+        self.assertFalse(doc["tool_results"]["promptfoo"]["process_complete"])
 
 
 if __name__ == "__main__":
