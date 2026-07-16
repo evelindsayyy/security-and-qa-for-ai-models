@@ -113,6 +113,25 @@ def _run_lock_path(slug: str, profile: str) -> Path:
     return run_lock.lock_path(ROOT / "safety" / "output" / slug / profile)
 
 
+def _garak_lock_path(slug: str) -> Path:
+    """Guards the shared (non-profile-scoped) safety/garak/output/<slug> tree.
+
+    A flat sibling of that directory, not a file inside it — wiping the
+    directory (prepare_output_dir's rmtree+recreate) must not delete our own
+    lock out from under us. Garak's report isn't split by redteam profile
+    (see _private_garak_dir), so two different-profile runs for the same
+    model would otherwise both wipe/write the same directory concurrently."""
+    return ROOT / "safety" / "garak" / "output" / f"{slug}.run.lock"
+
+
+def _garak_slug_inflight(slug: str, *, skip_garak: bool) -> bool:
+    """True when another (any-profile) run is actively using the shared
+    Garak output tree for this model — see _garak_lock_path."""
+    if skip_garak:
+        return False
+    return run_lock.is_active(_garak_lock_path(slug))
+
+
 _GATEWAY_FALLBACK: tuple[str, ...] = (
     "GPT 4.1 Mini",
     "gpt-5-chat",
@@ -196,6 +215,26 @@ def _garak_partial_warning(data: dict) -> str | None:
     return None
 
 
+_PROMPTFOO_SUITE_LABELS = {
+    "promptfoo_duke_policy_v1": "policy",
+    "promptfoo_duke_redteam_v1": "red-team",
+}
+
+
+def _promptfoo_partial_warnings(data: dict) -> list[str]:
+    """Mirrors _garak_partial_warning — flags a suite whose promptfoo
+    subprocess crashed mid-run but still left a (partial) eval.json that
+    got exported and merged anyway (see safety.run's incomplete= handling
+    and safety.exporters.promptfoo's process_complete field)."""
+    tool_results = data.get("tool_results") or {}
+    warnings: list[str] = []
+    for suite, label in _PROMPTFOO_SUITE_LABELS.items():
+        pf_meta = (tool_results.get(suite) or {}).get("promptfoo") or {}
+        if pf_meta and pf_meta.get("process_complete") is False:
+            warnings.append(f"Promptfoo {label} partial (crashed mid-run)")
+    return warnings
+
+
 def _log_alert(log_path: Path) -> str | None:
     if not log_path.is_file():
         return None
@@ -219,6 +258,7 @@ def _merged_warnings(merged: Path) -> list[str]:
     partial = _garak_partial_warning(data)
     if partial:
         warnings.append(partial)
+    warnings.extend(_promptfoo_partial_warnings(data))
     return warnings
 
 
@@ -303,6 +343,11 @@ def validate_hf_launch(
         return (
             f"a safety run for {repo_id!r} (profile {redteam_profile}) is already running — "
             "wait for it to finish or open the progress page"
+        )
+    if _garak_slug_inflight(slug, skip_garak=skip_garak):
+        return (
+            f"a safety run for {repo_id!r} is already using Garak (a different profile) — "
+            "wait for it to finish before starting another"
         )
     return _prepare_output_dirs(slug, redteam_profile)
 
@@ -414,6 +459,11 @@ def validate_launch(
             f"a safety run for {model!r} (profile {redteam_profile}) is already running — "
             "wait for it to finish or open the progress page"
         )
+    if _garak_slug_inflight(slug, skip_garak=skip_garak):
+        return (
+            f"a safety run for {model!r} is already using Garak (a different profile) — "
+            "wait for it to finish before starting another"
+        )
     from frontend.purge_rerun import purge_safety_for_launch
     from frontend.read_context import read_context
 
@@ -488,9 +538,16 @@ def build_command(
     )
 
 
-def _watch_process(run_key: str, proc: subprocess.Popen, lock_path: Path) -> None:
+def _watch_process(
+    run_key: str,
+    proc: subprocess.Popen,
+    lock_path: Path,
+    garak_lock_path: Path | None = None,
+) -> None:
     proc.wait()
     run_lock.release(lock_path)
+    if garak_lock_path is not None:
+        run_lock.release(garak_lock_path)
     with _LOCK:
         if _RUNNING.get(run_key) is proc:
             _RUNNING.pop(run_key, None)
@@ -537,6 +594,7 @@ def start_run(
     run_key = f"{slug}/{redteam_profile}"
     combo = (model, redteam_profile, skip_policy, skip_redteam, skip_garak, skip_promptfoo, garak_probes or "")
     lock_file = _run_lock_path(slug, redteam_profile)
+    garak_lock_file = _garak_lock_path(slug) if not skip_garak else None
 
     with _LOCK:
         if is_safety_inflight(model, redteam_profile):
@@ -546,53 +604,83 @@ def start_run(
         if existing:
             return existing, True, plan.visibility
 
-        _wipe_outputs(slug, redteam_profile)
-
-        if docker_launch.use_docker():
-            docker_launch.ensure_stack("safety")
-
-        log_path = ROOT / "safety" / "output" / slug / redteam_profile / "run.log"
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        persist_run_meta_dir(log_path.parent, plan)
-        cmd = build_command(
-            model,
-            redteam_profile=redteam_profile,
-            skip_policy=skip_policy,
-            skip_redteam=skip_redteam,
-            skip_garak=skip_garak,
-            skip_promptfoo=skip_promptfoo,
-            garak_probes=garak_probes,
-            hf_repo=hf_repo,
-            endpoint=endpoint,
-            attacker_endpoint=attacker_endpoint,
-        )
-        cmd_str = " ".join(cmd)
-
-        with log_path.open("ab") as log_f:
-            log_f.write(f"\n=== UI launch: {cmd_str} ===\n".encode())
-            env = os.environ.copy()
-            env["PYTHONUNBUFFERED"] = "1"
-            proc = subprocess.Popen(
-                cmd,
-                cwd=str(ROOT),
-                stdout=log_f,
-                stderr=subprocess.STDOUT,
-                env=env,
-                start_new_session=True,
-            )
+        # Claim the cross-process lock(s) *before* touching any output
+        # directory or spawning anything. The checks above only guard
+        # against other requests handled by this same process; a concurrent
+        # CLI run (or another web worker) can still race to start between
+        # here and where the lock used to be acquired (after wipe+spawn) —
+        # that let a loser's already-wiped/already-spawned state strand
+        # itself with no lock recorded. Claim with our own pid as a
+        # placeholder; update_pid() below fixes it up once the real
+        # subprocess pid is known, so later liveness checks track the
+        # actual job, not this request-handling thread.
+        placeholder_cmd = f"safety.run {model} profile={redteam_profile} (starting)"
         if not run_lock.try_acquire(
             lock_file,
-            pid=proc.pid,
-            command=cmd_str,
+            pid=os.getpid(),
+            command=placeholder_cmd,
             source=run_lock.FRONTEND_SOURCE,
         ):
-            proc.terminate()
             return run_key, True, plan.visibility
+
+        if garak_lock_file is not None and not run_lock.try_acquire(
+            garak_lock_file,
+            pid=os.getpid(),
+            command=placeholder_cmd,
+            source=run_lock.FRONTEND_SOURCE,
+        ):
+            run_lock.release(lock_file)
+            return run_key, True, plan.visibility
+
+        try:
+            _wipe_outputs(slug, redteam_profile)
+
+            if docker_launch.use_docker():
+                docker_launch.ensure_stack("safety")
+
+            log_path = ROOT / "safety" / "output" / slug / redteam_profile / "run.log"
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            persist_run_meta_dir(log_path.parent, plan)
+            cmd = build_command(
+                model,
+                redteam_profile=redteam_profile,
+                skip_policy=skip_policy,
+                skip_redteam=skip_redteam,
+                skip_garak=skip_garak,
+                skip_promptfoo=skip_promptfoo,
+                garak_probes=garak_probes,
+                hf_repo=hf_repo,
+                endpoint=endpoint,
+                attacker_endpoint=attacker_endpoint,
+            )
+            cmd_str = " ".join(cmd)
+
+            with log_path.open("ab") as log_f:
+                log_f.write(f"\n=== UI launch: {cmd_str} ===\n".encode())
+                env = os.environ.copy()
+                env["PYTHONUNBUFFERED"] = "1"
+                proc = subprocess.Popen(
+                    cmd,
+                    cwd=str(ROOT),
+                    stdout=log_f,
+                    stderr=subprocess.STDOUT,
+                    env=env,
+                    start_new_session=True,
+                )
+        except Exception:
+            run_lock.release(lock_file)
+            if garak_lock_file is not None:
+                run_lock.release(garak_lock_file)
+            raise
+
+        run_lock.update_pid(lock_file, proc.pid)
+        if garak_lock_file is not None:
+            run_lock.update_pid(garak_lock_file, proc.pid)
         _RUNNING[run_key] = proc
         _INFLIGHT[combo] = run_key
         threading.Thread(
             target=_watch_process,
-            args=(run_key, proc, lock_file),
+            args=(run_key, proc, lock_file, garak_lock_file),
             daemon=True,
         ).start()
         return run_key, False, plan.visibility

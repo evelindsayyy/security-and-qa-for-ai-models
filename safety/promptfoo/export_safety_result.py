@@ -42,6 +42,16 @@ def main() -> int:
         action="store_true",
         help=f"Force {SUITE_REDTEAM} (same as auto-detect on redteam_eval.json)",
     )
+    parser.add_argument(
+        "--incomplete",
+        action="store_true",
+        help=(
+            "Mark this export as process_complete=False — pass this when the "
+            "promptfoo subprocess exited non-zero but still left a (partial) "
+            "eval.json, so the merged result doesn't present a crashed run as "
+            "a clean, fully-weighted suite."
+        ),
+    )
     args = parser.parse_args()
 
     if not args.input.is_file():
@@ -80,6 +90,7 @@ def main() -> int:
             payload,
             source_file=str(args.input),
             probe_suite=suite,
+            process_complete=not args.incomplete,
         )
     except Exception as exc:
         print(
