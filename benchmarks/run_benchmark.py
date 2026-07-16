@@ -83,7 +83,7 @@ BENCHMARKS: dict[str, dict] = {
         "glob": "consistency_*.json",
         "env_model": "CONSISTENCY_MODEL",
         "env_output": "CONSISTENCY_OUTPUT",
-        "sample": {"env": "CONSISTENCY_LIMIT", "label": "Topics", "unit": "topics", "default": 5, "max": 500},
+        "sample": {"env": "CONSISTENCY_LIMIT", "label": "Topics", "unit": "topics", "default": 5, "max": 50},
     },
     "mbpp": {
         "label": "MBPP (Mostly Basic Python Problems)",
