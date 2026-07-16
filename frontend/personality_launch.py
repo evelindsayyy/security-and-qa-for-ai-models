@@ -1,4 +1,4 @@
-"""Launch BFI personality runs from the browser."""
+"""Launch personality runs (BFI, compass, …) from the browser."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 from dbutils import run_lock
+from dbutils.run_paths import PRIVATE_SEGMENT
 from frontend import docker_launch
 from frontend.launch_registry import check_inflight_combo
 from frontend.log_status import run_log_payload
@@ -23,6 +24,8 @@ ROOT = Path(__file__).resolve().parent.parent
 PERSONALITY_DIR = ROOT / "personality"
 RESULTS_DIR = PERSONALITY_DIR / "results"
 RUNNER = PERSONALITY_DIR / "run_personality.py"
+# Path of the results tree inside the personality Compose service.
+_DOCKER_RESULTS = "/app/personality/results"
 
 _CANDIDATE_CATEGORIES = frozenset({"general_chat", "codex", "research"})
 
@@ -60,7 +63,31 @@ def predict_stem(model: str, test_key: str = DEFAULT_TEST_KEY) -> str:
     return f"{ts}_{test_key}_{slug}"
 
 
-def build_command(model: str, stem: str, test_key: str = DEFAULT_TEST_KEY) -> list[str]:
+def _results_root(*, visibility: str = "public", owner_user_id: str | None = None) -> Path:
+    """Host path for flat JSON / log / progress / locks for one view."""
+    if visibility == "private" and owner_user_id:
+        return RESULTS_DIR / PRIVATE_SEGMENT / owner_user_id
+    return RESULTS_DIR
+
+
+def _docker_output_dir(*, visibility: str, owner_user_id: str | None) -> str:
+    if visibility == "private" and owner_user_id:
+        return f"{_DOCKER_RESULTS}/{PRIVATE_SEGMENT}/{owner_user_id}"
+    return _DOCKER_RESULTS
+
+
+def build_command(
+    model: str,
+    stem: str,
+    test_key: str = DEFAULT_TEST_KEY,
+    *,
+    visibility: str = "public",
+    owner_user_id: str | None = None,
+) -> list[str]:
+    if docker_launch.use_docker():
+        out_dir = _docker_output_dir(visibility=visibility, owner_user_id=owner_user_id)
+    else:
+        out_dir = str(_results_root(visibility=visibility, owner_user_id=owner_user_id))
     inner = [
         "python",
         "run_personality.py",
@@ -70,23 +97,18 @@ def build_command(model: str, stem: str, test_key: str = DEFAULT_TEST_KEY) -> li
         model,
         "--output-stem",
         stem,
+        "--output-dir",
+        out_dir,
     ]
     if docker_launch.use_docker():
         return docker_launch.compose_run_argv("personality", inner)
-    return [
-        sys.executable,
-        str(RUNNER),
-        "--test",
-        test_key,
-        "--model",
-        model,
-        "--output-stem",
-        stem,
-    ]
+    return [sys.executable, str(RUNNER), *inner[2:]]
 
 
-def _run_lock_path(slug: str) -> Path:
-    return RESULTS_DIR / f"{slug}.lock"
+def _run_lock_path(
+    slug: str, *, visibility: str = "public", owner_user_id: str | None = None
+) -> Path:
+    return _results_root(visibility=visibility, owner_user_id=owner_user_id) / f"{slug}.lock"
 
 
 def _watch_process(stem: str, proc: subprocess.Popen, lock_path: Path) -> None:
@@ -120,11 +142,12 @@ def start_run(model: str, test_key: str = DEFAULT_TEST_KEY) -> tuple[str, bool, 
             docker_launch.ensure_stack("personality")
 
         stem = predict_stem(model, test_key)
-        lock_file = _run_lock_path(stem)
-        RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-        persist_run_meta_dir(RESULTS_DIR / stem, plan)
-        log_path = RESULTS_DIR / f"{stem}.log"
-        progress_path = RESULTS_DIR / f"{stem}.progress.json"
+        out_root = _results_root(visibility=plan.visibility, owner_user_id=plan.owner_user_id)
+        out_root.mkdir(parents=True, exist_ok=True)
+        lock_file = out_root / f"{stem}.lock"
+        persist_run_meta_dir(out_root / stem, plan)
+        log_path = out_root / f"{stem}.log"
+        progress_path = out_root / f"{stem}.progress.json"
 
         sys.path.insert(0, str(ROOT / "benchmarks"))
         from benchmark_progress import write_progress_stub  # noqa: E402
@@ -138,7 +161,13 @@ def start_run(model: str, test_key: str = DEFAULT_TEST_KEY) -> tuple[str, bool, 
             unit="items",
         )
 
-        cmd = build_command(model, stem, test_key)
+        cmd = build_command(
+            model,
+            stem,
+            test_key,
+            visibility=plan.visibility,
+            owner_user_id=plan.owner_user_id,
+        )
         cmd_str = " ".join(cmd)
         with log_path.open("wb") as log_f:
             log_f.write(f"=== command: {cmd_str} ===\n".encode())
@@ -171,47 +200,87 @@ def start_run(model: str, test_key: str = DEFAULT_TEST_KEY) -> tuple[str, bool, 
         return stem, False, plan.visibility
 
 
-def _output_path(stem: str) -> Path | None:
-    path = RESULTS_DIR / f"{stem}.json"
-    return path if path.is_file() else None
+def _candidate_roots(
+    *, visibility: str = "public", owner_user_id: str | None = None
+) -> list[Path]:
+    """Roots to probe for status — preferred scope first, then legacy flat tree."""
+    preferred = _results_root(visibility=visibility, owner_user_id=owner_user_id)
+    roots = [preferred]
+    if preferred != RESULTS_DIR:
+        roots.append(RESULTS_DIR)
+    return roots
 
 
-def _progress_path(slug: str) -> Path:
-    return RESULTS_DIR / f"{slug}.progress.json"
+def _find_sidecar(
+    slug: str,
+    suffix: str,
+    *,
+    visibility: str = "public",
+    owner_user_id: str | None = None,
+) -> Path | None:
+    for root in _candidate_roots(visibility=visibility, owner_user_id=owner_user_id):
+        path = root / f"{slug}{suffix}"
+        if path.is_file():
+            return path
+    return None
 
 
-def _with_log(status: dict, slug: str) -> dict:
-    log_path = RESULTS_DIR / f"{slug}.log"
+def _with_log(
+    status: dict,
+    slug: str,
+    *,
+    visibility: str = "public",
+    owner_user_id: str | None = None,
+) -> dict:
+    log_path = _find_sidecar(
+        slug, ".log", visibility=visibility, owner_user_id=owner_user_id
+    )
+    if log_path is None:
+        log_path = RESULTS_DIR / f"{slug}.log"
     payload = run_log_payload(log_path)
     status["log"] = payload["log"]
     status["log_truncated"] = payload["log_truncated"]
-    status["log_path"] = f"personality/results/{slug}.log"
+    try:
+        rel = log_path.resolve().relative_to(RESULTS_DIR.resolve())
+        status["log_path"] = f"personality/results/{rel.as_posix()}"
+    except ValueError:
+        status["log_path"] = f"personality/results/{slug}.log"
     return status
 
 
 def get_status(
     slug: str, *, visibility: str = "public", owner_user_id: str | None = None
 ) -> dict:
-    del visibility, owner_user_id
     if not is_safe_slug(slug):
         return {"status": "not_found", "progress": 0, "total": 0, "unit": "items", "message": ""}
 
     sys.path.insert(0, str(ROOT / "benchmarks"))
     from benchmark_progress import load_progress  # noqa: E402
 
-    prog = load_progress(_progress_path(slug))
+    progress_path = _find_sidecar(
+        slug, ".progress.json", visibility=visibility, owner_user_id=owner_user_id
+    )
+    prog = load_progress(progress_path) if progress_path else {}
     total = int(prog.get("total") or 0)
     if prog.get("cancelled"):
-        return _with_log({
-            "status": "cancelled",
-            "progress": int(prog.get("progress") or 0),
-            "total": total,
-            "unit": prog.get("unit") or "items",
-            "message": prog.get("message") or "Cancelled",
-            "model": prog.get("model") or "",
-        }, slug)
+        return _with_log(
+            {
+                "status": "cancelled",
+                "progress": int(prog.get("progress") or 0),
+                "total": total,
+                "unit": prog.get("unit") or "items",
+                "message": prog.get("message") or "Cancelled",
+                "model": prog.get("model") or "",
+            },
+            slug,
+            visibility=visibility,
+            owner_user_id=owner_user_id,
+        )
 
-    out = _output_path(slug)
+    out = _find_sidecar(slug, ".json", visibility=visibility, owner_user_id=owner_user_id)
+    # Ignore progress.json mistaken as result
+    if out is not None and out.name.endswith(".progress.json"):
+        out = None
     progress = int(prog.get("progress") or 0)
     meta = {
         "unit": prog.get("unit") or "items",
@@ -223,32 +292,47 @@ def get_status(
 
     proc = _RUNNING.get(slug)
     if proc is not None and proc.poll() is None:
-        return _with_log({
-            "status": "running",
-            "progress": progress,
-            "total": total,
-            **meta,
-        }, slug)
+        return _with_log(
+            {"status": "running", "progress": progress, "total": total, **meta},
+            slug,
+            visibility=visibility,
+            owner_user_id=owner_user_id,
+        )
     if proc is not None:
-        return _with_log({"status": "failed", "progress": progress, "total": total, **meta}, slug)
-    if _progress_path(slug).is_file() and total and progress < total:
-        if run_lock.is_active(_run_lock_path(slug)):
-            return _with_log({
-                "status": "running",
-                "progress": progress,
-                "total": total,
-                **meta,
-            }, slug)
-        return _with_log({"status": "failed", "progress": progress, "total": total, **meta}, slug)
-    if (RESULTS_DIR / f"{slug}.log").is_file():
-        return _with_log({"status": "failed", "progress": progress, "total": total, **meta}, slug)
+        return _with_log(
+            {"status": "failed", "progress": progress, "total": total, **meta},
+            slug,
+            visibility=visibility,
+            owner_user_id=owner_user_id,
+        )
+    lock_path = _run_lock_path(slug, visibility=visibility, owner_user_id=owner_user_id)
+    if progress_path is not None and total and progress < total:
+        if run_lock.is_active(lock_path) or run_lock.is_active(RESULTS_DIR / f"{slug}.lock"):
+            return _with_log(
+                {"status": "running", "progress": progress, "total": total, **meta},
+                slug,
+                visibility=visibility,
+                owner_user_id=owner_user_id,
+            )
+        return _with_log(
+            {"status": "failed", "progress": progress, "total": total, **meta},
+            slug,
+            visibility=visibility,
+            owner_user_id=owner_user_id,
+        )
+    if _find_sidecar(slug, ".log", visibility=visibility, owner_user_id=owner_user_id):
+        return _with_log(
+            {"status": "failed", "progress": progress, "total": total, **meta},
+            slug,
+            visibility=visibility,
+            owner_user_id=owner_user_id,
+        )
     return {"status": "not_found", "progress": 0, "total": total, "unit": "items", "message": ""}
 
 
 def cancel_run(
     slug: str, *, visibility: str = "public", owner_user_id: str | None = None
 ) -> str | None:
-    del visibility, owner_user_id
     if not is_safe_slug(slug):
         return f"invalid slug: {slug!r}"
     proc = _RUNNING.get(slug)
@@ -261,7 +345,11 @@ def cancel_run(
     sys.path.insert(0, str(ROOT / "benchmarks"))
     from benchmark_progress import mark_cancelled  # noqa: E402
 
-    mark_cancelled(_progress_path(slug), message="Cancelled")
+    progress_path = _find_sidecar(
+        slug, ".progress.json", visibility=visibility, owner_user_id=owner_user_id
+    )
+    if progress_path is not None:
+        mark_cancelled(progress_path, message="Cancelled")
     return None
 
 

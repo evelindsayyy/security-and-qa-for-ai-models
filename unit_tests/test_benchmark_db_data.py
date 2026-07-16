@@ -33,8 +33,6 @@ def _db_row(**overrides):
             "total_evaluated": 10,
             "summary": {"accuracy": 0.9, "correct": 9, "total_evaluated": 10},
         },
-        "items": [{"question": "q1", "model_answer": "A"}],
-        "run_params": None,
         "completed_at": "2026-06-08T09:55:40+00:00",
     }
     base.update(overrides)
@@ -47,8 +45,6 @@ def _db_row(**overrides):
         base["headline_value"],
         base["n_items"],
         base["metrics"],
-        base["items"],
-        base["run_params"],
         base["completed_at"],
         base.get("config_json"),
     )
@@ -73,14 +69,45 @@ class DbRowMatchesFileRowTest(unittest.TestCase):
         self.assertAlmostEqual(file_row["headline_value"], db_row["headline_value"])
 
 
+def _detail_db_row(**overrides):
+    """12-column row matching ``_DETAIL_SQL`` (list row + items + run_params)."""
+    list_row = _db_row(**{k: v for k, v in overrides.items() if k not in ("items", "run_params")})
+    items = overrides.get("items", [{"topic": "t1", "f1": 0.8}])
+    run_params = overrides.get("run_params", {"sample": 5})
+    # list: slug, file, model, key, metric, value, n, metrics, completed_at, config
+    return list_row[:8] + (items, run_params) + list_row[8:]
+
+
 class DetailSqlShapeTest(unittest.TestCase):
     def test_detail_sql_selects_config_json(self) -> None:
-        # Must match _summarize_db_run's 12-field unpack (was missing and 404'd).
+        # Must match _build_detail_db's 12-field unpack (was missing and 404'd).
         self.assertIn("config_json", benchmark_db_data._DETAIL_SQL)
         self.assertRegex(
             benchmark_db_data._DETAIL_SQL,
             r"completed_at,\s*config_json",
         )
+
+    def test_build_detail_db_accepts_twelve_column_row(self) -> None:
+        row = _detail_db_row(
+            output_slug="20260701T234340Z_consistency_GPT-4.1-Mini",
+            source_filename="20260701T234340Z_consistency_GPT-4.1-Mini.json",
+            gateway_model_id="GPT 4.1 Mini",
+            benchmark_key="consistency",
+            headline_metric="mean_f1",
+            headline_value=0.817,
+            n_items=5,
+            metrics={"mean_f1_overall": 0.817},
+            completed_at="2026-07-01T23:43:40+00:00",
+        )
+        detail = benchmark_db_data._build_detail_db(row)
+        self.assertEqual(detail["slug"], "20260701T234340Z_consistency_GPT-4.1-Mini")
+        self.assertEqual(detail["kind"], "consistency")
+        self.assertEqual(detail["kind_label"], "Consistency")
+        self.assertEqual(detail["model"], "GPT 4.1 Mini")
+        self.assertAlmostEqual(detail["headline_value"], 0.817)
+        self.assertEqual(detail["run_params"]["sample"], 5)
+        self.assertEqual(len(detail["questions"]), 1)
+        self.assertEqual(detail["raw_row_count"], 1)
     def test_no_dsn_means_unavailable(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=True):
             os.environ.pop("POSTGRES_DSN", None)

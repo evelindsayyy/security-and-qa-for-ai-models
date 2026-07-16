@@ -104,20 +104,44 @@ function initCompareBar(): void {
   const countEl = bar.querySelector("[data-compare-count]");
   const btn = bar.querySelector<HTMLButtonElement>("[data-compare-go]");
   const compareUrl = document.body.dataset.compareUrl || "/compare";
+  const maxCompare = 5;
 
   const sync = () => {
-    const selected = [...document.querySelectorAll<HTMLInputElement>(".compare-select:checked")].map((el) => el.value);
-    if (countEl) countEl.textContent = String(selected.length);
+    const all = document.querySelectorAll<HTMLInputElement>(".compare-select");
+    const selected = [...all].filter((el) => el.checked).map((el) => el.value);
+    all.forEach((cb) => {
+      if (!cb.checked && selected.length >= maxCompare) {
+        cb.disabled = true;
+      } else {
+        cb.disabled = false;
+      }
+    });
+    if (countEl) {
+      countEl.textContent =
+        selected.length >= maxCompare ? `${selected.length} (max ${maxCompare})` : String(selected.length);
+    }
     if (btn) btn.disabled = selected.length === 0;
     bar.hidden = selected.length === 0;
   };
 
   document.querySelectorAll<HTMLInputElement>(".compare-select").forEach((cb) => {
-    cb.addEventListener("change", sync);
+    cb.addEventListener("change", () => {
+      const all = document.querySelectorAll<HTMLInputElement>(".compare-select");
+      const selected = [...all].filter((el) => el.checked);
+      if (selected.length > maxCompare) {
+        cb.checked = false;
+      }
+      sync();
+    });
   });
   btn?.addEventListener("click", () => {
-    const selected = [...document.querySelectorAll<HTMLInputElement>(".compare-select:checked")].map((el) => el.value);
-    if (selected.length) window.location.href = `${compareUrl}?models=${selected.join(",")}`;
+    const selected = [...document.querySelectorAll<HTMLInputElement>(".compare-select:checked")].map(
+      (el) => el.value,
+    );
+    if (selected.length) {
+      const params = selected.map((s) => `models=${encodeURIComponent(s)}`).join("&");
+      window.location.href = `${compareUrl}?${params}`;
+    }
   });
   sync();
 }

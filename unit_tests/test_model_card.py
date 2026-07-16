@@ -105,45 +105,5 @@ class GetModelCardTest(unittest.TestCase):
         self.assertEqual(card["detail_slug"], "gpt-4.1-mini")  # link form
 
 
-class GetAllModelCardsTest(unittest.TestCase):
-    def test_dedups_and_orders_most_recent_first(self) -> None:
-        data = {"runs": [
-            {"candidate_model": "GPT 4.1 Mini", "timestamp": "20260101T000000Z"},
-            {"candidate_model": "GPT 4.1 Mini", "timestamp": "20260701T000000Z"},
-            {"candidate_model": "Qwen/Qwen2.5-7B-Instruct", "timestamp": "20260705T000000Z"},
-        ]}
-        with mock.patch.object(erd, "get_runs_data", return_value=data), \
-             mock.patch.object(erd, "get_model_card", side_effect=lambda s: {"slug": s}):
-            cards = erd.get_all_model_cards()
-        self.assertEqual(
-            [c["slug"] for c in cards],
-            [erd.model_slug("Qwen/Qwen2.5-7B-Instruct"), erd.model_slug("GPT 4.1 Mini")],
-        )
-
-    def test_filters_out_none_cards(self) -> None:
-        data = {"runs": [{"candidate_model": "M", "timestamp": "t"}]}
-        with mock.patch.object(erd, "get_runs_data", return_value=data), \
-             mock.patch.object(erd, "get_model_card", return_value=None):
-            self.assertEqual(erd.get_all_model_cards(), [])
-
-    def test_empty_when_no_runs(self) -> None:
-        with mock.patch.object(erd, "get_runs_data", return_value={"runs": []}):
-            self.assertEqual(erd.get_all_model_cards(), [])
-
-
-class FeaturedModelTest(unittest.TestCase):
-    def test_picks_most_recent(self) -> None:
-        data = {"runs": [
-            {"candidate_model": "old-model", "timestamp": "20260101T000000Z"},
-            {"candidate_model": "gpt-5-chat", "timestamp": "20260709T000000Z"},
-        ]}
-        with mock.patch.object(erd, "get_runs_data", return_value=data):
-            self.assertEqual(erd.featured_model_slug(), erd.model_slug("gpt-5-chat"))
-
-    def test_none_when_empty(self) -> None:
-        with mock.patch.object(erd, "get_runs_data", return_value={"runs": []}):
-            self.assertIsNone(erd.featured_model_slug())
-
-
 if __name__ == "__main__":
     unittest.main()

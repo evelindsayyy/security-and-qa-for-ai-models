@@ -45,7 +45,7 @@ Set in **Settings → CI/CD → Variables** (maintainers):
 | `DEPLOY_AUTO` | Variable (optional) | `true` — deploy automatically on every `main` pipeline (default: manual) |
 | `BUILD_PILLARS` | Variable (optional) | `1` to rebuild pillar images on deploy |
 
-**VM prerequisites:** git clone + deploy key, `.env` (include `CADDY_DOMAIN` + `TRUST_PROXY` for HTTPS), Docker, one-time `./docker/build-pillars.sh`. Deploy pulls the CI web image, runs `git pull`, then `./docker/run.sh restart-deploy` (same via `uv run python main.py restart-deploy` with `WEB_IMAGE` set).
+**VM prerequisites:** git clone + deploy key, `.env` (include `CADDY_DOMAIN` + `TRUST_PROXY` for HTTPS), Docker, one-time `./docker/build-pillars.sh`. Deploy SSHes as `security-qa-deploy`, resets the repo to the CI commit, then `./docker/run.sh restart` with `HOST_UID`/`HOST_GID` taken from the **repo owner** (`vcm`) so the web container matches an interactive VM restart.
 
 ---
 

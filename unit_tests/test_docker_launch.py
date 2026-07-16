@@ -9,7 +9,12 @@ class ComposeRunArgvTest(unittest.TestCase):
         with mock.patch.object(docker_launch, "_docker_sock_gid", return_value=998):
             argv = docker_launch.compose_run_argv("safety", ["bash", "-lc", "true"])
         self.assertIn("--project-name", argv)
-        self.assertIn("qa-ai-models", argv)
+        self.assertIn(docker_launch.COMPOSE_PROJECT_NAME, argv)
+        self.assertTrue(
+            docker_launch.COMPOSE_PROJECT_NAME.endswith("-pillars")
+            or docker_launch.COMPOSE_PROJECT_NAME == "qa-ai-models-pillars"
+        )
+        self.assertNotEqual(docker_launch.COMPOSE_PROJECT_NAME, docker_launch.WEB_COMPOSE_PROJECT)
         self.assertIn("DOCKER_GID=998", argv)
 
     def test_includes_host_repo(self) -> None:

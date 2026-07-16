@@ -29,7 +29,15 @@ log = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent.parent
 ENV_FILE = ROOT / ".env"
-COMPOSE_PROJECT_NAME = os.environ.get("COMPOSE_PROJECT_NAME", "qa-ai-models")
+# Pillar one-shots must NOT share the web stack project name. Web deploy runs
+# ``compose up --remove-orphans`` for ``qa-ai-models``; if scanner/safety/eval
+# ``compose run`` containers lived in that same project they were treated as
+# orphans and killed mid-job on every GitLab deploy.
+WEB_COMPOSE_PROJECT = os.environ.get("COMPOSE_PROJECT_NAME", "qa-ai-models")
+COMPOSE_PROJECT_NAME = os.environ.get(
+    "PILLAR_COMPOSE_PROJECT_NAME",
+    f"{WEB_COMPOSE_PROJECT}-pillars",
+)
 
 # stack_key -> (compose_file relative to ROOT, service name)
 STACKS: dict[str, tuple[Path, str]] = {

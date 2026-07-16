@@ -200,6 +200,15 @@ def _aggregate_file(path: Path) -> dict | None:
         data["execution_pass_rate"] = ex["pass_rate"]
         data["execution_passed"] = ex["passed"]
         data["execution_n"] = ex["n"]
+    from dbutils.run_meta import read_run_meta_for_pillar
+
+    meta = read_run_meta_for_pillar(path.parent, pillar="eval")
+    config = meta.get("config_json") if isinstance(meta.get("config_json"), dict) else {}
+    if config:
+        data["config_json"] = config
+        digests = config.get("eval_suite_file_digests")
+        if isinstance(digests, dict):
+            data["eval_suite_file_digests"] = digests
     return data
 
 
@@ -369,10 +378,13 @@ def _postprocess_runs(runs: list[dict]) -> dict:
     """Shared tail for both data paths (files and DB): dedupe to the latest
     run per (candidate, judge, suite), sort best-first, flag ``is_best``,
     and build the page-level summary fields."""
-    # Custom ("bring your own") runs are ad-hoc, not a locked comparable suite —
-    # keep them out of the cross-model comparison table (they're still reachable
-    # by slug from the launch redirect / detail page).
-    runs = [r for r in runs if not str(r.get("suite", "")).startswith("custom_")]
+    # The comparison table is only meaningful across the current curated suites.
+    # Drop anything else: custom ("bring your own") ad-hoc runs, and retired or
+    # experimental suites (e.g. robustness_v1, an old smoke_v1) that would
+    # otherwise linger with a permanent "Needs rerun". Their data is preserved —
+    # each run stays reachable by slug from the launch redirect / detail page.
+    from frontend.eval_launch import SUITES
+    runs = [r for r in runs if r.get("suite") in SUITES]
     # Result filenames are timestamped, so the lexicographically-largest
     # filename is newest. This drops superseded runs (e.g. an old
     # "12/12 empty" row that a fresh run already fixed) instead of showing both.
@@ -612,34 +624,6 @@ def get_model_card(slug: str) -> dict | None:
         ],
         "recommended_use": _recommend(it, qa, cost["cls"]),
     }
-
-
-def get_all_model_cards() -> list[dict]:
-    """Report cards for every evaluated model, most-recently-evaluated first.
-
-    One card per distinct candidate model that has at least one eval run
-    (``get_model_card`` returns None otherwise, so it can't appear). Feeds the
-    ``/labels`` gallery. Each card is independently N/A-safe."""
-    runs = get_runs_data().get("runs", [])
-    # Distinct model slugs, ordered by most recent eval first.
-    ordered_slugs: list[str] = []
-    seen: set[str] = set()
-    for r in sorted(runs, key=lambda r: r.get("timestamp", ""), reverse=True):
-        slug = model_slug(r["candidate_model"])
-        if slug not in seen:
-            seen.add(slug)
-            ordered_slugs.append(slug)
-    cards = [get_model_card(slug) for slug in ordered_slugs]
-    return [c for c in cards if c is not None]
-
-
-def featured_model_slug() -> str | None:
-    """Slug of the most-recently-evaluated model, for the home-page card."""
-    runs = get_runs_data().get("runs", [])
-    if not runs:
-        return None
-    latest = max(runs, key=lambda r: r.get("timestamp", ""))
-    return model_slug(latest["candidate_model"])
 
 
 def attach_cost_perf(data: dict, weights: CostPerfWeights = BALANCED) -> dict:
@@ -1069,11 +1053,12 @@ _EVAL_SUITE_ABOUT = {
 }
 
 
-def get_eval_guide_data() -> dict:
+def get_eval_guide_data(*, runs: list[dict] | None = None) -> dict:
     """Rows for the eval reference/guide pages."""
     from frontend.eval_launch import SUITES, suite_question_count, suite_display_name
 
-    runs = get_runs_data().get("runs") or []
+    if runs is None:
+        runs = get_runs_data().get("runs") or []
     example = runs[0] if runs else None
     rows = []
     for key, cfg in SUITES.items():

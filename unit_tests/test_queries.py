@@ -49,6 +49,8 @@ class _FakeCursor:
             self._mode = "detail_results"
         elif "FROM public.eval_runs" in sql:  # _RUNS_SQL
             self._mode = "runs"
+        elif "AS candidate_response" in sql:  # _RESULTS_LIST_SQL (trimmed list)
+            self._mode = "results_list"
         elif "FROM public.eval_results" in sql:  # _RESULTS_SQL
             self._mode = "results"
         else:
@@ -84,6 +86,37 @@ def _result_row(rid="rid1", task_id="q1", metric="judge_score"):
     detail = {"scores": {"accuracy": {"score": 5.0, "rationale": "ok"}},
               "dim_order": ["accuracy"], "candidate_response": "a"}
     return (rid, task_id, metric, 4.5, 1000, 200, 100, 0.001, False, False, detail)
+
+
+def _result_list_row(rid="rid1", task_id="q1", candidate_response="a"):
+    # Columns of _RESULTS_LIST_SQL: no metric column; ends with candidate_response.
+    return (rid, task_id, 4.5, 1000, 200, 100, 0.001, False, False,
+            {"accuracy": {"score": 5.0, "rationale": "ok"}}, ["accuracy"],
+            candidate_response)
+
+
+class FetchRunsListTest(unittest.TestCase):
+    """The list query must carry the REAL candidate_response — the execution
+    oracle scores SQL/JSON/numeric suites from it, so a placeholder makes every
+    check fail (the Exec column showed a uniform 0%/20%)."""
+
+    def test_preserves_real_candidate_response(self) -> None:
+        data = {
+            "runs": [_run_row()],
+            "results_list": [_result_list_row(candidate_response='{"code":"CS"}')],
+        }
+        recs = queries.fetch_runs_list(_FakeConn(data))
+        self.assertEqual(len(recs), 1)
+        detail = recs[0]["results"][0]["detail"]
+        self.assertEqual(detail["candidate_response"], '{"code":"CS"}')  # not "…"
+
+    def test_empty_response_stays_empty(self) -> None:
+        data = {
+            "runs": [_run_row()],
+            "results_list": [_result_list_row(candidate_response=None)],
+        }
+        recs = queries.fetch_runs_list(_FakeConn(data))
+        self.assertEqual(recs[0]["results"][0]["detail"]["candidate_response"], "")
 
 
 class FetchRunsTest(unittest.TestCase):
@@ -170,9 +203,9 @@ class ConnectionLayerTest(unittest.TestCase):
 
 
 class DashboardRoutesThroughRepositoryTest(unittest.TestCase):
-    """get_runs_data_db must obtain its rows from queries.fetch_runs."""
+    """get_runs_data_db must obtain its rows from queries.fetch_runs_list."""
 
-    def test_get_runs_data_db_uses_fetch_runs(self) -> None:
+    def test_get_runs_data_db_uses_fetch_runs_list(self) -> None:
         from frontend import eval_db_data
 
         record = {"run": {"id": "rid1", "source_file": "zzz_repo_test.jsonl",
@@ -194,7 +227,7 @@ class DashboardRoutesThroughRepositoryTest(unittest.TestCase):
 
         with mock.patch.object(eval_db_data.queries, "connect",
                                return_value=_NullCtx()), \
-             mock.patch.object(eval_db_data.queries, "fetch_runs",
+             mock.patch.object(eval_db_data.queries, "fetch_runs_list",
                                return_value=[record]) as fetch:
             data = eval_db_data.get_runs_data_db()
 

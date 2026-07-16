@@ -8,6 +8,58 @@ from typing import Any
 from frontend import launch_registry
 
 
+def pillar_payloads_once() -> dict[str, dict]:
+    """Load each pillar list payload at most once per HTTP request."""
+    try:
+        from flask import g, has_request_context
+
+        if has_request_context():
+            cached = getattr(g, "_overview_pillar_payloads", None)
+            if cached is not None:
+                return cached
+    except Exception:
+        pass
+
+    payloads = _fetch_pillar_payloads()
+    try:
+        from flask import g, has_request_context
+
+        if has_request_context():
+            g._overview_pillar_payloads = payloads
+    except Exception:
+        pass
+    return payloads
+
+
+def _fetch_pillar_payloads() -> dict[str, dict]:
+    out: dict[str, dict] = {}
+    try:
+        from frontend.scan_data import get_scans_data
+
+        out["scans"] = get_scans_data()
+    except Exception:
+        out["scans"] = {}
+    try:
+        from frontend.safety_data import get_safety_data
+
+        out["safety"] = get_safety_data()
+    except Exception:
+        out["safety"] = {}
+    try:
+        from frontend.eval_run_data import get_runs_data
+
+        out["eval"] = get_runs_data()
+    except Exception:
+        out["eval"] = {}
+    try:
+        from frontend.benchmark_data import get_benchmarks_data
+
+        out["benchmarks"] = get_benchmarks_data()
+    except Exception:
+        out["benchmarks"] = {}
+    return out
+
+
 def _parse_ts(value: str | None) -> datetime | None:
     if not value or value == "—":
         return None
@@ -84,15 +136,15 @@ def _pillar_list_url(pillar: str | None) -> str:
     return f"/{endpoint}" if endpoint != "eval_run" else "/eval-run"
 
 
-def _collect_stale_and_critical() -> dict[str, Any]:
+def _collect_stale_and_critical(*, payloads: dict | None = None) -> dict[str, Any]:
+    if payloads is None:
+        payloads = pillar_payloads_once()
     stale_by: dict[str, int] = {p: 0 for p in _STALE_PILLAR_ORDER}
     critical_by: dict[str, int] = {p: 0 for p in _CRITICAL_PILLAR_ORDER}
     high_risk_scans = 0
 
     try:
-        from frontend.scan_data import get_scans_data
-
-        for row in get_scans_data().get("scans", []):
+        for row in (payloads.get("scans") or {}).get("scans", []):
             if row.get("staleness", {}).get("stale"):
                 stale_by["scan"] += 1
             if row.get("severity_tier") == "critical":
@@ -103,9 +155,7 @@ def _collect_stale_and_critical() -> dict[str, Any]:
         pass
 
     try:
-        from frontend.safety_data import get_safety_data
-
-        for row in get_safety_data().get("models", []):
+        for row in (payloads.get("safety") or {}).get("models", []):
             if row.get("staleness", {}).get("stale"):
                 stale_by["safety"] += 1
             if row.get("tier") == "critical":
@@ -114,18 +164,14 @@ def _collect_stale_and_critical() -> dict[str, Any]:
         pass
 
     try:
-        from frontend.eval_run_data import get_runs_data
-
-        for row in get_runs_data().get("runs", []):
+        for row in (payloads.get("eval") or {}).get("runs", []):
             if row.get("staleness", {}).get("stale"):
                 stale_by["eval"] += 1
     except Exception:
         pass
 
     try:
-        from frontend.benchmark_data import get_benchmarks_data
-
-        for row in get_benchmarks_data().get("runs", []):
+        for row in (payloads.get("benchmarks") or {}).get("runs", []):
             if row.get("staleness", {}).get("stale"):
                 stale_by["benchmark"] += 1
     except Exception:
@@ -144,7 +190,9 @@ def _collect_stale_and_critical() -> dict[str, Any]:
     }
 
 
-def _activity_events(limit: int = 5) -> list[dict[str, Any]]:
+def _activity_events(limit: int = 5, *, payloads: dict | None = None) -> list[dict[str, Any]]:
+    if payloads is None:
+        payloads = pillar_payloads_once()
     events: list[dict[str, Any]] = []
 
     def add(
@@ -171,9 +219,7 @@ def _activity_events(limit: int = 5) -> list[dict[str, Any]]:
         )
 
     try:
-        from frontend.scan_data import get_scans_data
-
-        for row in get_scans_data().get("scans", [])[:20]:
+        for row in (payloads.get("scans") or {}).get("scans", [])[:20]:
             slug = row.get("slug") or ""
             add(
                 "scan",
@@ -186,9 +232,7 @@ def _activity_events(limit: int = 5) -> list[dict[str, Any]]:
         pass
 
     try:
-        from frontend.safety_data import get_safety_data
-
-        for row in get_safety_data().get("models", [])[:20]:
+        for row in (payloads.get("safety") or {}).get("models", [])[:20]:
             slug = row.get("slug") or ""
             profile = row.get("profile") or "base"
             add(
@@ -202,9 +246,7 @@ def _activity_events(limit: int = 5) -> list[dict[str, Any]]:
         pass
 
     try:
-        from frontend.eval_run_data import get_runs_data
-
-        for row in get_runs_data().get("runs", [])[:20]:
+        for row in (payloads.get("eval") or {}).get("runs", [])[:20]:
             slug = row.get("slug") or ""
             add(
                 "eval",
@@ -217,9 +259,7 @@ def _activity_events(limit: int = 5) -> list[dict[str, Any]]:
         pass
 
     try:
-        from frontend.benchmark_data import get_benchmarks_data
-
-        for row in get_benchmarks_data().get("runs", [])[:20]:
+        for row in (payloads.get("benchmarks") or {}).get("runs", [])[:20]:
             slug = row.get("slug") or ""
             add(
                 "benchmark",
@@ -237,10 +277,11 @@ def _activity_events(limit: int = 5) -> list[dict[str, Any]]:
 
 def get_overview_data() -> dict[str, Any]:
     """Cross-pillar overview for the home dashboard."""
+    payloads = pillar_payloads_once()
     try:
         from frontend.routes import _hub_context
 
-        hub = _hub_context()
+        hub = _hub_context(payloads=payloads)
     except Exception:
         hub = {}
 
@@ -248,11 +289,11 @@ def get_overview_data() -> dict[str, Any]:
     try:
         from frontend.model_rollup import get_models_union
 
-        rollup_count = len(get_models_union())
+        rollup_count = len(get_models_union(payloads=payloads))
     except Exception:
         pass
 
-    stale_stats = _collect_stale_and_critical()
+    stale_stats = _collect_stale_and_critical(payloads=payloads)
 
     inflight = 0
     try:
@@ -265,5 +306,5 @@ def get_overview_data() -> dict[str, Any]:
         **stale_stats,
         "rollup_count": rollup_count,
         "inflight_count": inflight,
-        "activity": _activity_events(),
+        "activity": _activity_events(payloads=payloads),
     }

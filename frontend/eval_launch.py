@@ -48,8 +48,11 @@ from runner import _COST_PER_M_TOKENS, _safe_slug  # noqa: E402
 # Allowlists — the security boundary for POST /eval-run/start
 # ---------------------------------------------------------------------------
 
-# Candidate categories eligible for the IT-support/chat suites.
-_CANDIDATE_CATEGORIES = frozenset({"general_chat"})
+# Candidate categories eligible for the task suites — every chat-capable model
+# family (general chat, agentic coding, deep-research/reasoning). Audio,
+# embeddings, and rerank models can't answer the suites, so they're excluded.
+# Mirrors the safety scan form's categories so both offer the same catalog.
+_CANDIDATE_CATEGORIES = frozenset({"general_chat", "codex", "research"})
 
 # Offline fallback (gateway unreachable): the curated/priced known-good set.
 _CANDIDATE_FALLBACK: tuple[str, ...] = tuple(_COST_PER_M_TOKENS.keys())
@@ -64,6 +67,28 @@ def candidate_models() -> tuple[str, ...]:
     except Exception:  # noqa: BLE001 — never break the form on a gateway hiccup
         ids = []
     return tuple(ids) if ids else _CANDIDATE_FALLBACK
+
+
+def candidate_groups() -> list[dict]:
+    """Eligible candidates grouped by gateway category (General chat, Codex,
+    Research), for the ``<optgroup>`` dropdown — same shape/structure the safety
+    scan form uses. Falls back to one flat group when the gateway is offline."""
+    try:
+        from gateway.catalog import get_gateway_catalog
+
+        catalog = get_gateway_catalog()
+        groups: list[dict] = []
+        for section in catalog.get("by_category", []):
+            if section["key"] not in _CANDIDATE_CATEGORIES:
+                continue
+            models = [m["id"] for m in section["models"]]
+            if models:
+                groups.append({"label": section["label"], "models": models})
+        if groups:
+            return groups
+    except Exception:  # noqa: BLE001 — never break the form on a gateway hiccup
+        pass
+    return [{"label": "Gateway models", "models": list(candidate_models())}]
 
 
 # Judges the team has actually calibrated (cross-judge experiment, week 4).
@@ -234,6 +259,56 @@ SUITES: dict[str, dict] = {
 JUDGE_PROMPT = EVALUATOR / "prompts" / "judge" / "reference_based_v2.txt"
 
 MAX_TOKENS_MIN, MAX_TOKENS_MAX = 50, 4000
+
+# Completion-budget tiers shown on the launch form instead of a raw number box.
+# `tokens` is the max_tokens actually sent to the runner; still bounded by
+# MAX_TOKENS_MIN..MAX_TOKENS_MAX so the server validation is unchanged. The UI
+# preselects "reasoning" for reasoning models (they burn hidden thinking tokens
+# and go empty at a chat-sized budget) and "standard" for everyone else.
+MAX_TOKEN_TIERS: tuple[dict, ...] = (
+    {"key": "quick", "label": "Quick", "tokens": 512,
+     "hint": "Short, structured answers — SQL, extraction, classification"},
+    {"key": "standard", "label": "Standard", "tokens": 2000,
+     "hint": "Most chat models and everyday drafting tasks"},
+    {"key": "extended", "label": "Extended", "tokens": 3000,
+     "hint": "Long-form drafting or multi-step answers"},
+    {"key": "reasoning", "label": "Reasoning", "tokens": 4000,
+     "hint": "Thinking models that spend tokens reasoning before answering"},
+)
+DEFAULT_TOKEN_TIER = "standard"
+REASONING_TOKEN_TIER = "reasoning"
+
+
+def is_reasoning_model(model: str) -> bool:
+    """True for models that emit hidden reasoning/thinking tokens before the
+    answer (o-series, the GPT-5 reasoning family, gpt-oss, DeepSeek-R1, Qwen
+    QwQ). These need the top completion budget or they run out mid-thought and
+    return an empty response.
+
+    The GPT-5 family reasons by default — ``gpt-5``, ``gpt-5.1``, ``gpt-5-mini``,
+    ``gpt-5.4-nano``, ``gpt-5.4-pro`` … — EXCEPT the conversational ``-chat`` /
+    ``-instruct`` variants, which don't. We match the whole family and exclude
+    those, so a newly added ``gpt-5.x`` is flagged automatically. Erring toward
+    reasoning is deliberate: over-budgeting merely costs a little; under-budgeting
+    a reasoning model produces empty answers.
+    """
+    m = (model or "").lower()
+    # Explicit conversational / instruct variants don't hide-reason.
+    if "chat" in m or "instruct" in m:
+        return False
+    if m.startswith(("o1", "o3", "o4")):
+        return True
+    # GPT-5 family: gpt-5, gpt5, "gpt 5", gpt-5.4-mini, … (the -chat ones already
+    # returned False above).
+    if re.search(r"gpt[\s-]?5", m):
+        return True
+    keywords = ("gpt-oss", "qwq", "reasoning", "-r1", "deepseek-r")
+    return any(k in m for k in keywords)
+
+
+def default_tier_for(model: str) -> str:
+    """Preselected tier key for a candidate model."""
+    return REASONING_TOKEN_TIER if is_reasoning_model(model) else DEFAULT_TOKEN_TIER
 # Clear a completed scan unless it flagged the repo as high risk — block only
 # high/critical (low + medium pass), matching the safety gate in pipeline.py.
 SCAN_ALLOWED_TIERS = frozenset({"low", "medium"})
@@ -1010,6 +1085,7 @@ def get_launch_options() -> dict:
     candidates = candidate_models()
     return {
         "candidates": list(candidates),
+        "candidate_groups": candidate_groups(),
         "judges": list(JUDGE_MODELS),
         "suites": [
             {
@@ -1027,6 +1103,11 @@ def get_launch_options() -> dict:
         "pricing_json": json.dumps({m: list(r) for m, r in _COST_PER_M_TOKENS.items()}),
         "max_tokens_min": MAX_TOKENS_MIN,
         "max_tokens_max": MAX_TOKENS_MAX,
+        "token_tiers": [dict(t) for t in MAX_TOKEN_TIERS],
+        "default_token_tier": DEFAULT_TOKEN_TIER,
+        # Preselected tier per candidate so the form can jump to "Reasoning" the
+        # moment a reasoning model is picked (JS mirrors is_reasoning_model()).
+        "reasoning_models": [m for m in candidates if is_reasoning_model(m)],
         "suggested_hf_repos": list(SUGGESTED_HF_REPOS),
         "custom_max_questions": CUSTOM_MAX_QUESTIONS,
         "launch_mode": "docker" if docker_launch.use_docker() else "host",

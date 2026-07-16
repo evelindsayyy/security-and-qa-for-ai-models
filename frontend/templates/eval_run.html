@@ -10,35 +10,111 @@
 {% endblock %}
 
 {% block content %}
+{#- Rating -> colour band (green strong ... red weak), mirroring the safety tables. -#}
+{% macro overall_pill(v) -%}
+  {%- if v is none -%}<span class="dim">—</span>
+  {%- else -%}
+    {%- set cls = 'score-strong' if v >= 4.5 else ('score-good' if v >= 4.0 else ('score-fair' if v >= 3.5 else 'score-weak')) -%}
+    <span class="score-pill {{ cls }}">{{ '%.2f'|format(v) }}</span>
+  {%- endif -%}
+{%- endmacro %}
+{% macro exec_pill(rate) -%}
+  {%- if rate is none -%}<span class="dim">—</span>
+  {%- else -%}
+    {%- set pct = rate * 100 -%}
+    {%- set cls = 'score-strong' if pct >= 90 else ('score-good' if pct >= 70 else ('score-fair' if pct >= 50 else 'score-weak')) -%}
+    <span class="score-pill {{ cls }}">{{ '%.0f%%'|format(pct) }}</span>
+  {%- endif -%}
+{%- endmacro %}
 <div class="eval-comparison">
   {% set actions %}{{ start_button(url_for('eval_run_new'), '▶ Start eval') }}{% endset %}
   {{ page_header('Eval runs', 'LLM-as-judge task suites — rubric dimensions, overall score, cost/quality tradeoffs.', actions) }}
 
-  {% if guide_rows %}
-  {% with title="Eval reference & guide", intro="Task rubrics, scoring, and reference comparisons." %}
-  {% include '_eval_guide.html' %}
-  {% endwith %}
-  {% endif %}
+  <style>
+    /* ---- Eval guide: two parallel, equal-weight cards (navy / white / blue) ---- */
+    .eval-guide-grid { display: grid; grid-template-columns: 1fr; gap: 1.25rem; margin-bottom: 1.5rem; }
+    @media (min-width: 900px) { .eval-guide-grid { grid-template-columns: 1fr 1fr; align-items: stretch; } }
+    .eval-guide-card { display: flex; flex-direction: column; height: 100%; }
+    .eval-guide-title { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; color: var(--color-duke-blue); margin: 0; }
+    .eval-guide-intro { font-size: 0.9rem; line-height: 1.55; color: var(--color-text-muted); margin: 0.5rem 0 0; }
 
-  <section class="key card p-4 mb-6">
-    <h2 class="subsection-title">How to read this</h2>
-    <dl class="legend-grid mt-3">
-      <dt>Score columns</dt>
-      <dd>From each run's rubric (usually 1–5; tone 1–3). Higher is better; "—" means not graded.</dd>
-      <dt class="num-sample">Overall</dt>
-      <dd>Weighted rubric score on 0–5 — headline per run. Click a row for per-question detail.</dd>
-      <dt class="num-sample">q / $</dt>
-      <dd>Quality per dollar (overall ÷ cost/response). Higher is more efficient; <b>N/A</b> for $0 self-hosted models.</dd>
-      <dt class="num-sample">Value</dt>
-      <dd>Weighted tradeoff <code>w_Q·quality − w_C·cost − w_L·latency</code> (weights shown above the table); compares models within a suite, not an absolute score.</dd>
-      <dt><span class="badge badge-warn">⚠ empty</span></dt>
-      <dd>Candidate returned no text (often token budget) — re-run with higher max-tokens before comparing.</dd>
-      {% if has_comparison %}
-      <dt>Compare</dt>
-      <dd>Matrix of overall scores (suite × model). Best run per suite shown when multiple judges exist.</dd>
-      {% endif %}
-    </dl>
-  </section>
+    /* Left card — numbered steps */
+    .eval-howto-steps { list-style: none; counter-reset: howto; margin: 1rem 0 0; padding: 0; display: grid; gap: 1rem; }
+    .eval-howto-steps > li { counter-increment: howto; display: grid; grid-template-columns: auto 1fr; gap: 0.8rem; align-items: start; }
+    .eval-howto-steps > li::before {
+      content: counter(howto); display: flex; align-items: center; justify-content: center;
+      width: 1.9rem; height: 1.9rem; border-radius: 999px; flex: none;
+      font-size: 0.95rem; font-weight: 700; font-variant-numeric: tabular-nums;
+      background: var(--color-duke-blue); color: #fff;
+    }
+    .eval-howto-steps .step-title { font-weight: 700; color: var(--color-text); }
+    .eval-howto-steps .step-body { display: block; margin-top: 0.15rem; font-size: 0.875rem; line-height: 1.5; color: var(--color-text-muted); }
+
+    /* Right card — legend */
+    .eval-legend { display: grid; grid-template-columns: auto 1fr; gap: 0.7rem 1.1rem; font-size: 0.875rem; margin-top: 1rem; }
+    .eval-legend dt { font-weight: 700; color: var(--color-duke-blue); }
+    .eval-legend dd { color: var(--color-text-muted); margin: 0; line-height: 1.5; }
+  </style>
+
+  <div class="eval-guide-grid">
+    <section class="key card p-4 eval-guide-card">
+      <h2 class="eval-guide-title">How the eval page works</h2>
+      <p class="eval-guide-intro">
+        This page compares language models on real Duke IT tasks. An LLM-as-judge grades
+        each model's answers, and the results land in the report card below.
+      </p>
+      <ol class="eval-howto-steps">
+        <li>
+          <div>
+            <span class="step-title">Start a run</span>
+            <span class="step-body">Click <b>▶ Start eval</b>, choose the models to compare and one or
+            more task suites. Each suite is a different Duke use case (e.g. email drafting, SQL, policy Q&A).</span>
+          </div>
+        </li>
+        <li>
+          <div>
+            <span class="step-title">Let the judge score it</span>
+            <span class="step-body">Every answer is graded against a reference answer on a rubric (accuracy,
+            tone, and so on). Finished runs appear as rows in the table below.</span>
+          </div>
+        </li>
+        <li>
+          <div>
+            <span class="step-title">Compare models</span>
+            <span class="step-body">Each row is one model on one suite. Sort by <b>Overall</b> for raw quality,
+            <b>Quality per $</b> for value for money, or drag the <b>Value</b> weights to match your own priorities.</span>
+          </div>
+        </li>
+        <li>
+          <div>
+            <span class="step-title">Dig into the detail</span>
+            <span class="step-body">Click any row (or a cell in the Compare matrix) to see every question, the
+            model's answer, and the judge's score and reasoning.</span>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="key card p-4 eval-guide-card">
+      <h2 class="eval-guide-title">How to read the table</h2>
+      <dl class="eval-legend">
+        <dt>Score columns</dt>
+        <dd>One score per thing the judge graded (accuracy, tone, …), usually 1–5. Higher is better; "—" means not graded.</dd>
+        <dt>Overall</dt>
+        <dd>The main quality score, 0–5. Compare models by this.</dd>
+        <dt>Quality per $</dt>
+        <dd>Quality per dollar — how much quality you get for the price. Higher is better. <b>N/A</b> for free self-hosted models.</dd>
+        <dt>Value</dt>
+        <dd>Your custom quality-vs-cost score, set by the weights above. Higher is better; only compare within one suite.</dd>
+        <dt><span class="badge badge-warn">⚠ empty</span></dt>
+        <dd>The model gave no answer (usually out of tokens). Re-run with more tokens before comparing.</dd>
+        {% if has_comparison %}
+        <dt>Compare</dt>
+        <dd>A grid of Overall scores — suites down, models across — for side-by-side comparison.</dd>
+        {% endif %}
+      </dl>
+    </section>
+  </div>
 
   {% if not has_runs %}
     {{ empty_state('No eval runs yet. Start an eval run from the button above.') }}
@@ -46,54 +122,180 @@
     {{ list_compare_tabs(has_comparison) }}
 
     <div id="pillar-view-list" class="bench-view-panel" role="tabpanel">
+    <style>
+      /* Overall (rating) + Exec columns — center the score/pass-rate and the — placeholder */
+      .run-table th.col-rating, .run-table td.col-rating,
+      .run-table th.col-exec, .run-table td.col-exec { text-align: center; }
+
+      /* Score pills — colour a rating by band (green→red) so higher vs lower reads
+         at a glance, reusing the safety tables' tier palette. */
+      .score-pill { display: inline-block; min-width: 2.9rem; padding: 0.12rem 0.5rem; border-radius: 999px;
+        font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.35; }
+      .score-strong   { background: var(--color-tier-low-bg);      color: var(--color-tier-low); }
+      .score-good     { background: var(--color-tier-medium-bg);   color: var(--color-tier-medium); }
+      .score-fair     { background: var(--color-tier-high-bg);     color: var(--color-tier-high); }
+      .score-weak     { background: var(--color-tier-critical-bg); color: var(--color-tier-critical); }
+
+      /* ---- Eval report-card toolbar: three stacked zones (summary · value · filters) ---- */
+      .pillar-toolbar { display: flex; flex-direction: column; }
+      .ptb-divider { height: 1px; background: var(--color-border); border: 0; margin: 0; }
+
+      /* Zone 1 — summary: counts on the left, judge chips on the right */
+      .ptb-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem 1.25rem; padding-bottom: 0.5rem; }
+      .ptb-counts { display: flex; align-items: baseline; gap: 0.5rem; font-size: 0.8rem; color: var(--color-text-subtle); }
+      .ptb-counts b { color: var(--color-text-muted); font-weight: 600; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+      .ptb-counts .ptb-dot { color: var(--color-border-strong); }
+      .ptb-judges { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+      .ptb-judges-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-subtle); margin-right: 0.1rem; }
+      .ptb-chip { font-size: 0.78rem; font-weight: 600; padding: 0.12rem 0.55rem; border-radius: 999px; background: var(--color-duke-blue-muted); color: var(--color-duke-blue); border: 1px solid rgb(1 33 105 / 0.12); white-space: nowrap; }
+
+      /* Zone 2 — value weighting: title + subtitle on the left, presets on the right */
+      .ptb-value { padding: 0 0 0.5rem; }
+      .ptb-value-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.6rem 1.25rem; margin-bottom: 0.7rem; }
+      .ptb-value-heading { display: flex; flex-direction: column; gap: 0.2rem; }
+      .ptb-value-title { font-size: 1rem; font-weight: 700; color: var(--color-text); margin: 0; letter-spacing: -0.01em; }
+      .ptb-presets { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; padding-top: 0.15rem; }
+      .ptb-presets-label { font-size: 0.72rem; color: var(--color-text-subtle); margin-right: 0.05rem; }
+      .cp-preset { font-size: 0.78rem; font-weight: 600; padding: 0.3rem 0.75rem; margin: 0; cursor: pointer; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface-raised); color: var(--color-text-muted); transition: color 0.12s, background 0.12s, border-color 0.12s; }
+      .cp-preset:hover { border-color: var(--color-duke-blue); color: var(--color-duke-blue); }
+      .cp-preset.is-active { background: var(--color-duke-blue); border-color: var(--color-duke-blue); color: #fff; }
+      .ptb-formula { font-size: 0.8rem; color: var(--color-text-muted); margin: 0; }
+      .ptb-formula #cp-formula { font-family: var(--font-mono); color: var(--color-text); }
+      .ptb-formula .ptb-formula-sep { color: var(--color-border-strong); margin: 0 0.35rem; }
+
+      .ptb-direction { font-size: 0.8rem; line-height: 1.5; color: var(--color-text-muted); margin: 0 0 0.85rem; padding: 0.5rem 0.75rem; border-left: 3px solid var(--color-duke-blue); background: var(--color-duke-blue-muted); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+      .ptb-direction b { color: var(--color-text); }
+      .cp-sliders { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.7rem; }
+      @media (max-width: 640px) { .cp-sliders { grid-template-columns: 1fr; } }
+      .cp-slider { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.6rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+      .cp-slider-top { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+      .cp-slider-name { font-size: 0.82rem; font-weight: 600; color: var(--color-text); }
+      .cp-slider-name .cp-axis-note { display: block; font-weight: 400; color: var(--color-text-subtle); font-size: 0.7rem; margin-top: 0.05rem; }
+      .cp-slider output { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 0.9rem; color: var(--color-duke-blue); min-width: 2ch; text-align: right; }
+      .cp-slider input[type=range] { width: 100%; margin: 0; accent-color: var(--color-duke-blue); cursor: pointer; }
+      .ptb-hint { font-size: 0.76rem; color: var(--color-text-subtle); margin-top: 0.65rem; line-height: 1.45; }
+      .ptb-hint b { color: var(--color-text-muted); }
+      .ptb-hint .ptb-frontier-key { font-weight: 700; color: var(--color-tier-low); }
+      /* "✓ efficient" frontier badge used in the table below (was defined in the old inline block) */
+      .badge-frontier { background: var(--color-tier-low-bg); color: var(--color-tier-low); border: 1px solid rgb(27 127 59 / 0.28); border-radius: var(--radius-sm); padding: 0 5px; font-size: 0.75em; margin-left: 4px; white-space: nowrap; }
+
+      /* Zone 3 — filters: labelled field stack + sort hint */
+      .ptb-filters { padding-top: 0.5rem; }
+      .ptb-filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.7rem 1rem; align-items: end; }
+      @media (max-width: 640px) { .ptb-filters-grid { grid-template-columns: repeat(2, 1fr); } }
+      .ptb-field { display: flex; flex-direction: column; gap: 0.28rem; min-width: 0; }
+      .ptb-field-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-subtle); }
+      .ptb-field select { width: 100%; padding: 0.42rem 0.6rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-raised); color: var(--color-text); font-size: 0.85rem; }
+      .ptb-field select:focus { outline: 2px solid var(--color-duke-blue); outline-offset: 1px; }
+      .ptb-sort-hint { font-size: 0.74rem; color: var(--color-text-subtle); margin-top: 0.65rem; }
+    </style>
     <div class="pillar-toolbar card p-4 mb-4">
-      <div class="pillar-list-meta">
-        <p class="sub">
-          {{ runs|length }} run{{ "" if runs|length == 1 else "s" }} ·
-          {{ n_summary }} question{{ "" if n_summary == "1" else "s" }} ·
-          judge: <b>{{ judge_summary }}</b>
-        </p>
+      <!-- Zone 1: run / question / judge summary -->
+      <div class="ptb-summary">
+        <div class="ptb-counts">
+          <span><b>{{ runs|length }}</b> run{{ "" if runs|length == 1 else "s" }}</span>
+          {% if n_summary %}<span class="ptb-dot">·</span>
+          <span title="Distinct question counts across the suites in view"><b>{{ n_summary }}</b> question{{ "" if n_summary == "1" else "s" }}/suite</span>{% endif %}
+        </div>
+        {% if judge_summary %}
+        <div class="ptb-judges">
+          <span class="ptb-judges-label">Judges</span>
+          {% for j in judge_summary.split(' · ') %}<span class="ptb-chip">{{ j }}</span>{% endfor %}
+        </div>
+        {% endif %}
       </div>
+
       {% if cost_perf_weights %}
-      <style>
-        .cp-controls { margin: 0.3rem 0 0.6rem; }
-        .cp-sliders { display: flex; flex-wrap: wrap; gap: 0.9rem; align-items: center; margin-top: 0.35rem; }
-        .cp-sliders label { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85em; }
-        .cp-sliders input[type=range] { width: 92px; vertical-align: middle; }
-        .cp-sliders output { min-width: 1.8em; font-variant-numeric: tabular-nums; color: #555; }
-        .cp-preset { font-size: 0.8em; padding: 1px 7px; margin-left: 3px; cursor: pointer; }
-        .badge-frontier { background: #e6f4ea; color: #1a7f37; border: 1px solid #b7e0c4; border-radius: 3px; padding: 0 5px; font-size: 0.75em; margin-left: 4px; white-space: nowrap; }
-        .cp-hint { display: block; font-size: 0.78em; color: #777; margin-top: 0.3rem; }
-      </style>
-      <div class="cp-controls sub" id="cp-controls">
-        <b>Value</b> = <span id="cp-formula"></span> · <b>q / $</b> = quality points per dollar
-        <div class="cp-sliders">
-          <label>quality <input type="range" id="w-quality" min="0" max="3" step="0.05" value="{{ cost_perf_weights.w_quality }}"><output id="o-quality"></output></label>
-          <label>cost <input type="range" id="w-cost" min="0" max="3" step="0.05" value="{{ cost_perf_weights.w_cost }}"><output id="o-cost"></output></label>
-          <label>latency <input type="range" id="w-latency" min="0" max="3" step="0.05" value="{{ cost_perf_weights.w_latency }}"><output id="o-latency"></output></label>
-          <span class="cp-presets">presets:
+      <hr class="ptb-divider">
+      <!-- Zone 2: Value weighting -->
+      <div class="ptb-value" id="cp-controls">
+        <div class="ptb-value-head">
+          <div class="ptb-value-heading">
+            <h3 class="ptb-value-title">Value weighting</h3>
+            <p class="ptb-formula">
+              <b>Value</b> = <span id="cp-formula"></span>
+              <span class="ptb-formula-sep">·</span>
+              <b>Quality per $</b> = Overall score ÷ cost per response
+            </p>
+          </div>
+          <span class="ptb-presets">
+            <span class="ptb-presets-label">presets</span>
             <button type="button" class="cp-preset" data-q="1" data-c="1" data-l="0.5">Balanced</button>
             <button type="button" class="cp-preset" data-q="0.5" data-c="2" data-l="1">Budget</button>
             <button type="button" class="cp-preset" data-q="2" data-c="0.1" data-l="0.05">Quality-first</button>
           </span>
         </div>
-        <span class="cp-hint">✓ = on the quality-vs-cost efficient frontier (no model beats it on both). Drag a slider to re-weight <b>Value</b> live; each axis is normalized 0–1 within a suite.</span>
+        <p class="ptb-direction">
+          <b>Higher Value = better.</b> It rewards quality and subtracts cost &amp; latency, so the top-ranked
+          model gives the most quality for the least spend. Choose <b>Budget</b> to favor cheaper models,
+          <b>Quality-first</b> to favor the best scores.
+        </p>
+        <div class="cp-sliders">
+          <label class="cp-slider">
+            <span class="cp-slider-top">
+              <span class="cp-slider-name">quality <span class="cp-axis-note">reward</span></span>
+              <output id="o-quality"></output>
+            </span>
+            <input type="range" id="w-quality" min="0" max="3" step="0.05" value="{{ cost_perf_weights.w_quality }}">
+          </label>
+          <label class="cp-slider">
+            <span class="cp-slider-top">
+              <span class="cp-slider-name">cost <span class="cp-axis-note">penalty</span></span>
+              <output id="o-cost"></output>
+            </span>
+            <input type="range" id="w-cost" min="0" max="3" step="0.05" value="{{ cost_perf_weights.w_cost }}">
+          </label>
+          <label class="cp-slider">
+            <span class="cp-slider-top">
+              <span class="cp-slider-name">latency <span class="cp-axis-note">penalty</span></span>
+              <output id="o-latency"></output>
+            </span>
+            <input type="range" id="w-latency" min="0" max="3" step="0.05" value="{{ cost_perf_weights.w_latency }}">
+          </label>
+        </div>
+        <p class="ptb-hint">
+          <span class="ptb-frontier-key">✓ efficient</span> = on the quality-vs-cost frontier (no model beats it on both).
+          Drag a slider to re-weight <b>Value</b> live; each axis is normalized 0–1 within a suite.
+        </p>
       </div>
       {% endif %}
 
-      <div class="table-controls pillar-table-controls mb-0">
-        <label>Tasks <select id="f-suite"><option value="">all</option></select></label>
-        <label>Candidate <select id="f-candidate"><option value="">all</option></select></label>
-        <label>Judge <select id="f-judge"><option value="">all</option></select></label>
-        <label>Group by
-          <select id="g-by">
-            <option value="">none</option>
-            <option value="candidate">candidate</option>
-            <option value="judge">judge</option>
-            <option value="suite">tasks</option>
-          </select>
-        </label>
-        <span class="controls-hint">click Overall / Latency / Cost headers to sort ⇅ · click a row for per-question detail</span>
+      <hr class="ptb-divider">
+      <!-- Zone 3: filters & grouping -->
+      <div class="ptb-filters">
+        <div class="ptb-filters-grid">
+          <div class="ptb-field">
+            <span class="ptb-field-label">Tasks</span>
+            <select id="f-suite"><option value="">all</option></select>
+          </div>
+          <div class="ptb-field">
+            <span class="ptb-field-label">Candidate</span>
+            <select id="f-candidate"><option value="">all</option></select>
+          </div>
+          <div class="ptb-field">
+            <span class="ptb-field-label" title="Open vs closed weights of the candidate model (not the judge)">Candidate source</span>
+            <select id="f-openness" title="Filter by whether the candidate model is open- or closed-weight">
+              <option value="">all</option>
+              <option value="open">open-source</option>
+              <option value="closed">closed-source</option>
+            </select>
+          </div>
+          <div class="ptb-field">
+            <span class="ptb-field-label">Judge</span>
+            <select id="f-judge"><option value="">all</option></select>
+          </div>
+          <div class="ptb-field">
+            <span class="ptb-field-label">Group by</span>
+            <select id="g-by">
+              <option value="">none</option>
+              <option value="candidate">candidate</option>
+              <option value="openness">source</option>
+              <option value="judge">judge</option>
+              <option value="suite">tasks</option>
+            </select>
+          </div>
+        </div>
+        <p class="ptb-sort-hint">click Overall / Latency / Cost headers to sort ⇅ · click a row for per-question detail</p>
       </div>
     </div>
 
@@ -104,11 +306,11 @@
           <th class="col-candidate min-w-[11rem]">Candidate</th>
           <th>Judge</th>
           <th>Tasks</th>
-          <th class="num sortable" data-sort="overall" style="cursor: pointer;">Overall <span class="s-ind">▼</span></th>
-          <th class="num" title="Functional pass-rate — execution-scored suites (SQL/JSON/numeric) only; the oracle, not the judge">Exec</th>
+          <th class="num sortable col-rating" data-sort="overall" style="cursor: pointer;">Overall <span class="s-ind">▼</span></th>
+          <th class="num col-exec" title="Functional pass-rate — execution-scored suites (SQL/JSON/numeric) only; the oracle, not the judge">Exec</th>
           <th class="num sortable" data-sort="latency" style="cursor: pointer;">Latency (mean / p95) <span class="s-ind"></span></th>
           <th class="num sortable" data-sort="cost" style="cursor: pointer;">Cost <span class="s-ind"></span></th>
-          <th class="num sortable" data-sort="qpd" style="cursor: pointer;">q / $ <span class="s-ind"></span></th>
+          <th class="num sortable" data-sort="qpd" style="cursor: pointer;">Quality per $ <span class="s-ind"></span></th>
           <th class="num sortable" data-sort="utility" style="cursor: pointer;">Value <span class="s-ind"></span></th>
           <th class="col-nowrap sortable" data-sort="when" style="cursor: pointer;">Completed <span class="s-ind"></span></th>
           <th class="col-nowrap">Status</th>
@@ -143,8 +345,8 @@
           </td>
           <td><span class="dim">{{ r.judge_model }}</span></td>
           <td><span class="dim">{{ r.suite_display }}</span></td>
-          <td class="num overall">{{ "%.2f"|format(r.overall) if r.overall is not none else "—" }}</td>
-          <td class="num">{% if r.execution_pass_rate is defined and r.execution_pass_rate is not none %}{{ "%.0f%%"|format(r.execution_pass_rate * 100) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+          <td class="num overall col-rating">{{ overall_pill(r.overall) }}</td>
+          <td class="num col-exec">{{ exec_pill(r.execution_pass_rate if r.execution_pass_rate is defined else none) }}</td>
           <td class="num">{{ r.mean_latency_ms }} / {{ r.p95_latency_ms }} ms</td>
           <td class="num">${{ "%.4f"|format(r.total_cost_usd) }}</td>
           <td class="num">
@@ -203,8 +405,25 @@
         rows.forEach(r => {
           if (r.dataset.suite) suiteLabels[r.dataset.suite] = r.dataset.suiteLabel || r.dataset.suite;
         });
-        const GROUP_WORDS = { suite: "tasks", candidate: "candidate", judge: "judge" };
-        const displayFor = (key, v) => (key === "suite" && suiteLabels[v]) ? suiteLabels[v] : v;
+        const GROUP_WORDS = { suite: "tasks", candidate: "candidate", judge: "judge", openness: "source" };
+        const OPENNESS_LABEL = { open: "open-source", closed: "closed-source" };
+        const displayFor = (key, v) =>
+          (key === "suite" && suiteLabels[v]) ? suiteLabels[v]
+          : (key === "openness" && OPENNESS_LABEL[v]) ? OPENNESS_LABEL[v]
+          : v;
+
+        // Open-weight (inspectable / self-hostable) vs closed (proprietary,
+        // API-only). gpt-oss is OpenAI's open-weight line, so it's checked first;
+        // other gpt-*/o-series/claude/gemini/grok are closed; everything else
+        // (Llama, Qwen, Mistral, Phi, and any DCC-served HF repo) is open.
+        function modelOpenness(id) {
+          const m = (id || "").toLowerCase();
+          if (m.includes("gpt-oss")) return "open";
+          if (/^o[134]\b/.test(m) || m.includes("gpt") || m.includes("openai")) return "closed";
+          if (["claude", "gemini", "grok"].some(k => m.includes(k))) return "closed";
+          return "open";
+        }
+        rows.forEach(r => { r.dataset.openness = modelOpenness(r.dataset.candidate); });
 
         for (const [id, key] of [["f-suite", "suite"], ["f-candidate", "candidate"], ["f-judge", "judge"]]) {
           const sel = document.getElementById(id);
@@ -215,6 +434,7 @@
           });
           sel.addEventListener("change", render);
         }
+        document.getElementById("f-openness").addEventListener("change", render);
         document.getElementById("g-by").addEventListener("change", function () {
           groupBy = this.value; render();
         });
@@ -234,11 +454,13 @@
           const fs = document.getElementById("f-suite").value;
           const fc = document.getElementById("f-candidate").value;
           const fj = document.getElementById("f-judge").value;
+          const fo = document.getElementById("f-openness").value;
 
           let visible = rows.filter(r =>
             (!fs || r.dataset.suite === fs) &&
             (!fc || r.dataset.candidate === fc) &&
-            (!fj || r.dataset.judge === fj));
+            (!fj || r.dataset.judge === fj) &&
+            (!fo || r.dataset.openness === fo));
 
           visible.sort((a, b) => {
             if (sortKey === "when") {
@@ -280,6 +502,17 @@
           latency: document.getElementById("w-latency"),
         };
         const cpFormula = document.getElementById("cp-formula");
+        const cpPresetBtns = Array.from(document.querySelectorAll(".cp-preset"));
+        // Highlight the preset button (if any) whose weights match the sliders.
+        function cpSyncPresets() {
+          const eq = (a, b) => Math.abs(parseFloat(a) - parseFloat(b)) < 1e-9;
+          cpPresetBtns.forEach(b => {
+            const match = eq(b.dataset.q, cpS.quality.value)
+              && eq(b.dataset.c, cpS.cost.value)
+              && eq(b.dataset.l, cpS.latency.value);
+            b.classList.toggle("is-active", match);
+          });
+        }
         function cpUpdateFormula() {
           const g = k => parseFloat(cpS[k].value);
           for (const k of ["quality", "cost", "latency"]) {
@@ -288,6 +521,7 @@
           }
           if (cpFormula) cpFormula.textContent =
             g("quality") + "·quality − " + g("cost") + "·cost − " + g("latency") + "·latency";
+          cpSyncPresets();
         }
         function cpRecompute() {
           const wq = parseFloat(cpS.quality.value),

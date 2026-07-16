@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}AI Model Security & QA{% endblock %}</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
   {% for css_href in vite_css_entries %}
   <link rel="stylesheet" href="{{ url_for('static', filename=css_href) }}">
   {% endfor %}
@@ -15,19 +17,22 @@
 >
   <div class="app-shell">
     <aside class="app-sidebar" aria-label="Main navigation">
-      <div class="flex items-center gap-2 border-b border-border px-4 py-4">
-        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-duke-blue text-sm font-bold text-white">M</div>
-        <div>
-          <p class="text-sm font-bold text-text">Model Advisor</p>
-          <p class="text-xs text-text-subtle">Security &amp; QA</p>
-        </div>
-      </div>
+      <a href="{{ url_for('index') }}" class="flex flex-col items-center gap-1 border-b border-border px-4 py-3 no-underline hover:no-underline" aria-label="Model Advisor home">
+        <img
+          src="{{ url_for('static', filename='model-advisor-logo.png') }}"
+          alt="Model Advisor"
+          class="h-20 w-auto"
+          width="906"
+          height="815"
+          decoding="async"
+        />
+        <p class="text-xs text-text-subtle">Security &amp; QA</p>
+      </a>
 
       <nav class="flex-1 space-y-4 px-3 py-4">
         <div class="space-y-1">
           <a href="{{ url_for('index') }}" class="nav-link{% if request.endpoint == 'index' %} is-active{% endif %}">Overview</a>
           <a href="{{ url_for('models_catalog') }}" class="nav-link{% if request.endpoint in ('models_catalog', 'model_detail') %} is-active{% endif %}">Model catalog</a>
-          <a href="{{ url_for('model_labels') }}" class="nav-link{% if request.endpoint == 'model_labels' %} is-active{% endif %}">Report cards</a>
           <a href="{{ url_for('compare_models') }}" class="nav-link{% if request.endpoint == 'compare_models' %} is-active{% endif %}">Compare</a>
           <a href="{{ url_for('pipeline_overview') }}" class="nav-link{% if request.endpoint == 'pipeline_overview' %} is-active{% endif %}">Pipeline</a>
         </div>

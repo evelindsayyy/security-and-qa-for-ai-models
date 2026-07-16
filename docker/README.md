@@ -74,6 +74,10 @@ always uses the CI-built image bundle.
 
 ## Container HOME
 
+`HOST_UID` / `HOST_GID` are taken from the **repo directory owner** (not
+necessarily the shell user). That way GitLab deploy as `security-qa-deploy`
+still recreates `web` as `vcm`, matching interactive VM restarts.
+
 `HOME` is `<repo>/.docker-home/<HOST_UID>`. Deploy ensures `.docker-home` is
 group-writable so CI deploy users and interactive VM users do not collide on Docker
 CLI config.
@@ -82,11 +86,13 @@ CLI config.
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
+| 500s on model detail / Start after GitLab deploy; fixed by `vcm` `./docker/run.sh restart` | Web container ran as the SSH deploy user (`security-qa-deploy`) instead of the repo owner (`vcm`), so bind-mounted writes failed | Fixed: `host-env.sh` sets `HOST_UID`/`HOST_GID` from the repo directory owner. Redeploy or restart once. |
+| In-flight pillar runs die on every deploy | Pillar `compose run` shared project name `qa-ai-models` with web, so `--remove-orphans` killed them | Fixed: pillars use `qa-ai-models-pillars`. |
 | Start buttons fail after deploy | `.docker-home` UID mismatch | `./docker/run.sh up -d --force-recreate` or redeploy |
 | Unstyled / 404 on `/static/dist/…` | Missing frontend build | Dev: `./docker/run.sh up -d --build`. VM: CI deploy with `frontend-build` + `build-web-image` |
 | `https://…` unreachable, `localhost:5000` works | `CADDY_DOMAIN` unset or Caddy not running | Set `CADDY_DOMAIN` + `TRUST_PROXY=1`; confirm `qa-ai-models-caddy-1` is up |
 | Port 5000 in use | Stray process or wrong compose project | `ss -ltnp \| grep :5000`; use `--project-name qa-ai-models` |
-| Deploy health wait timeout | Web failed to start | `docker compose --project-name qa-ai-models logs web`; `curl -s http://127.0.0.1:5000/api/health` |
+| Deploy health wait timeout | Web failed to start | `docker compose --project-name qa-ai-models logs web`; `./docker/run.sh wait-health` (production has no host :5000 when Caddy is enabled) |
 
 Do not run `python3 main.py --host` on the shared VM — it binds port 5000 outside
 Docker and blocks the production container.

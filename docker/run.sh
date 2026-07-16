@@ -11,7 +11,7 @@
 #   ./docker/run.sh up --build         # start (foreground; Ctrl+C stops)
 #   ./docker/run.sh up -d --build      # start (background / detached)
 #   ./docker/run.sh restart            # stop + rebuild + recreate (pick up code)
-#   ./docker/run.sh restart-deploy     # production: pull CI web image + recreate (WEB_IMAGE set)
+#   ./docker/run.sh wait-health [sec]    # block until web /api/health answers (deploy)
 #   ./docker/run.sh down               # stop
 #   ./docker/run.sh logs -f web        # follow logs (works for detached too)
 #
@@ -39,73 +39,38 @@ compose() {
     "${COMPOSE_FILES[@]}" "$@"
 }
 
-_deploy_compose_files() {
-  COMPOSE_FILES=(-f docker/compose.yml -f docker/compose.deploy.yml)
-  if [ -f .env ] && grep -qE '^CADDY_DOMAIN=.+' .env 2>/dev/null; then
-    COMPOSE_FILES+=(-f docker/compose.caddy.yml)
-  fi
-}
-
-_deploy_services() {
-  SERVICES=(web)
-  if [ -f .env ] && grep -qE '^CADDY_DOMAIN=.+' .env 2>/dev/null; then
-    SERVICES+=(caddy)
-  fi
-  printf '%s\n' "${SERVICES[@]}"
-}
-
-# GitLab deploy on the VM — same as `uv run python main.py restart-deploy` when WEB_IMAGE is set.
-if [ "${1:-}" = "restart-deploy" ]; then
-  shift || true
-  WEB_IMAGE="${WEB_IMAGE:?WEB_IMAGE required for restart-deploy}"
-  _deploy_compose_files
-  mapfile -t SERVICES < <(_deploy_services)
-
-  APP_PORT="$(grep -E '^APP_PORT=' .env 2>/dev/null | tail -1 | cut -d= -f2- || true)"
-  APP_PORT="${APP_PORT:-5000}"
-  if ss -ltn 2>/dev/null | grep -q ":${APP_PORT} "; then
-    if ! docker compose --project-name qa-ai-models --env-file .env \
-      "${COMPOSE_FILES[@]}" ps --status running --format '{{.Name}}' 2>/dev/null \
-      | grep -q 'qa-ai-models-web'; then
-      echo "Port ${APP_PORT} is in use by a non-qa-ai-models process — free it before deploy" >&2
-      ss -ltnp 2>/dev/null | grep ":${APP_PORT} " || true
-      exit 1
-    fi
-  fi
-
-  echo "Pulling ${WEB_IMAGE}…"
-  compose pull web
-
-  echo "Recreating qa-ai-models (production image)…"
-  compose stop "${SERVICES[@]}" 2>/dev/null || true
-  compose rm -f "${SERVICES[@]}" 2>/dev/null || true
-
-  _compose_up() {
-    compose up -d --force-recreate --no-build --pull always --no-deps --remove-orphans \
-      --wait --wait-timeout 90 "${SERVICES[@]}"
-  }
-
-  if ! _compose_up; then
-    echo "compose up failed — clearing stale qa-ai-models containers and retrying" >&2
-    docker ps -aq --filter "name=qa-ai-models-" | xargs -r docker rm -f
-    _compose_up
-  fi
-
-  echo "Production stack restarted (${WEB_IMAGE})."
-  exit 0
-fi
-
 # Full recreate so bind-mounted Python/templates are reloaded and the image
 # is rebuilt. Prefer this after git pull instead of hunting for a VS Code port.
 if [ "${1:-}" = "restart" ]; then
   shift || true
-  echo "Stopping qa-ai-models…"
-  compose down --remove-orphans || true
-  echo "Rebuilding and starting (detached)…"
+  echo "Recreating qa-ai-models (build + force-recreate)…"
+  # Keep the old web container serving until the replacement is up — avoid a
+  # compose-down gap that shows Internal Server Error during deploy.
   compose up -d --build --force-recreate --remove-orphans "$@"
   echo "UI recreating. Follow logs with: ./docker/run.sh logs -f web"
   echo "Stop with: ./docker/run.sh down"
   exit 0
+fi
+
+if [ "${1:-}" = "wait-health" ]; then
+  shift || true
+  max_sec="${1:-120}"
+  attempts=$((max_sec / 2))
+  if [ "$attempts" -lt 1 ]; then
+    attempts=1
+  fi
+  echo "Waiting for web health (up to ${max_sec}s)…"
+  for attempt in $(seq 1 "$attempts"); do
+    if compose exec -T web curl -sf http://localhost:5000/api/health >/dev/null 2>&1; then
+      echo "Web healthy after ${attempt} attempt(s)."
+      exit 0
+    fi
+    if [ "$attempt" -eq "$attempts" ]; then
+      echo "Web did not become healthy within ${max_sec}s — check: ./docker/run.sh logs web" >&2
+      exit 1
+    fi
+    sleep 2
+  done
 fi
 
 exec docker compose --project-name qa-ai-models "${ENV_ARGS[@]}" \

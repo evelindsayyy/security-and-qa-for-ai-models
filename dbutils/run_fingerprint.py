@@ -8,28 +8,18 @@ from typing import Any, Literal
 
 Pillar = Literal["scan", "safety", "eval", "benchmark", "personality"]
 
-# Curated eval suites (must match frontend/eval_launch.SUITES keys)
-_CURATED_EVAL_SUITES = frozenset(
-    {
-        "it_support_v1",
-        "policy_qa_v1",
-        "policy_qa_v1.1",
-        "summarization_v1",
-    }
-)
+# Curated eval suites and benchmark keys — synced from live catalogs.
+def _curated_eval_suites() -> frozenset[str]:
+    from frontend.eval_launch import SUITES
 
-# Benchmark keys (must match benchmarks/run_benchmark.BENCHMARKS)
-_BENCHMARK_KEYS = frozenset(
-    {
-        "truthfulqa",
-        "ifeval",
-        "mmlu",
-        "tomi",
-        "consistency",
-        "mbpp",
-        "quality",
-    }
-)
+    return frozenset(SUITES.keys())
+
+
+def _benchmark_keys() -> frozenset[str]:
+    from benchmarks.run_benchmark import BENCHMARKS
+
+    return frozenset(BENCHMARKS.keys())
+
 
 _SAFETY_PROFILES_PUBLIC = frozenset({"base"})
 
@@ -168,9 +158,9 @@ def is_public_default(pillar: Pillar, config: dict[str, Any]) -> bool:
         )
     if pillar == "eval":
         suite = config.get("suite_key", "")
-        return bool(suite) and suite in _CURATED_EVAL_SUITES and not str(suite).startswith("custom_")
+        return bool(suite) and suite in _curated_eval_suites() and not str(suite).startswith("custom_")
     if pillar == "benchmark":
-        return config.get("benchmark_key") in _BENCHMARK_KEYS
+        return config.get("benchmark_key") in _benchmark_keys()
     if pillar == "personality":
         return True
     return False

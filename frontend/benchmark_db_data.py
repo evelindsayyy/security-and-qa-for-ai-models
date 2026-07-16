@@ -70,8 +70,7 @@ def _connect():
 
 _LIST_SQL = """
 SELECT output_slug, source_filename, gateway_model_id, benchmark_key,
-       headline_metric, headline_value, n_items, metrics, items, run_params,
-       completed_at, config_json
+       headline_metric, headline_value, n_items, metrics, completed_at, config_json
 FROM public.benchmark_runs b
 WHERE {visibility_filter}
 ORDER BY completed_at DESC NULLS LAST, output_slug
@@ -152,8 +151,6 @@ def _summarize_db_run(row: tuple) -> dict:
         headline_value,
         n_items,
         metrics,
-        _items,
-        _run_params,
         completed_at,
         config_json,
     ) = row
@@ -180,17 +177,48 @@ def _summarize_db_run(row: tuple) -> dict:
 
 
 def _build_detail_db(row: tuple) -> dict:
-    summary = _summarize_db_run(row)
-    kind = row[3]
-    metrics = row[7] or {}
-    items = row[8] or []
-    run_params = row[9]
+    """Build detail payload from a ``_DETAIL_SQL`` row (12 columns).
+
+    Detail selects ``items`` and ``run_params`` between ``metrics`` and
+    ``completed_at``. List rows omit those two columns, so we project back to
+    the 10-field shape ``_summarize_db_run`` expects — passing the raw 12-tuple
+    used to raise ``ValueError`` and the detail page fell through to a missing
+    file fallback ("Benchmark not found").
+    """
+    (
+        output_slug,
+        source_filename,
+        gateway_model_id,
+        benchmark_key,
+        headline_metric,
+        headline_value,
+        n_items,
+        metrics,
+        items,
+        run_params,
+        completed_at,
+        config_json,
+    ) = row
+    summary = _summarize_db_run(
+        (
+            output_slug,
+            source_filename,
+            gateway_model_id,
+            benchmark_key,
+            headline_metric,
+            headline_value,
+            n_items,
+            metrics,
+            completed_at,
+            config_json,
+        )
+    )
     detail = dict(summary)
     if run_params:
         detail["run_params"] = run_params
-    if kind == "mmlu":
-        _attach_per_subject(detail, metrics.get("per_subject") or {})
-    _paginate_detail_items(detail, items)
+    if benchmark_key == "mmlu":
+        _attach_per_subject(detail, (metrics or {}).get("per_subject") or {})
+    _paginate_detail_items(detail, items or [])
     return _attach_meta(detail)
 
 

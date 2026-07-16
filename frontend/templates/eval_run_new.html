@@ -36,6 +36,22 @@
   .qb-advanced { margin-top:.6rem; }
   .qb-advanced > summary { cursor:pointer; color: var(--color-text-muted); font-size:.85rem; }
   .qb-advanced textarea { width:100%; box-sizing:border-box; }
+
+  /* Completion-budget tier picker (replaces the raw max-tokens number box) */
+  .tier-picker { display:grid; grid-template-columns:repeat(4, 1fr); gap:.5rem; margin-top:.4rem; }
+  @media (max-width: 640px) { .tier-picker { grid-template-columns:repeat(2, 1fr); } }
+  .tier-card { text-align:left; display:flex; flex-direction:column; gap:.25rem; padding:.55rem .65rem;
+    border:1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-raised);
+    cursor:pointer; transition:border-color .12s, background .12s, box-shadow .12s; }
+  .tier-card:hover { border-color: var(--color-duke-blue); }
+  .tier-card[aria-pressed="true"] { border-color: var(--color-duke-blue); background: var(--color-duke-blue-muted);
+    box-shadow: inset 0 0 0 1px var(--color-duke-blue); }
+  .tier-card-top { display:flex; align-items:baseline; justify-content:space-between; gap:.5rem; }
+  .tier-name { font-weight:700; font-size:.88rem; color: var(--color-text); }
+  .tier-tokens { font-size:.72rem; font-variant-numeric:tabular-nums; color: var(--color-text-subtle); white-space:nowrap; }
+  .tier-card[aria-pressed="true"] .tier-name, .tier-card[aria-pressed="true"] .tier-tokens { color: var(--color-duke-blue); }
+  .tier-hint { font-size:.72rem; line-height:1.35; color: var(--color-text-muted); }
+  .tier-reason { display:inline-block; margin-left:.35rem; font-size:.7rem; font-weight:600; color: var(--color-duke-blue); }
 </style>
 
 <div class="launch-page">
@@ -60,8 +76,12 @@
       <fieldset class="candidate-source">
         <label class="src-opt"><input type="radio" name="source" value="gateway" checked> Gateway model</label>
         <select name="candidate" id="candidate">
-          {% for m in candidates %}
-          <option value="{{ m }}">{{ m }}</option>
+          {% for group in candidate_groups %}
+          <optgroup label="{{ group.label }}">
+            {% for m in group.models %}
+            <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </optgroup>
           {% endfor %}
         </select>
 
@@ -113,12 +133,24 @@
     </section>
 
     <section class="form-section">
-      <h2 class="form-section-title">Parameters</h2>
+      <h2 class="form-section-title">Answer length</h2>
+      {% set _def = (token_tiers | selectattr('key', 'equalto', default_token_tier) | first) %}
       <div class="form-field">
-        <label for="max_tokens">Max tokens (candidate completion budget)</label>
-        <input type="number" name="max_tokens" id="max_tokens" value="2000"
-               min="{{ max_tokens_min }}" max="{{ max_tokens_max }}">
-        <span class="form-hint">Chat models (GPT 4.1 Mini, gpt-5-chat) work at 500–2000; reasoning models (gpt-5-mini, gpt-5-nano) need 2000–4000.</span>
+        <label>Completion budget<span class="tier-reason" data-tier-auto hidden>· auto-set for a reasoning model</span></label>
+        <div class="tier-picker" data-tier-picker role="group" aria-label="Completion budget">
+          {% for t in token_tiers %}
+          <button type="button" class="tier-card" data-tier="{{ t.key }}" data-tokens="{{ t.tokens }}"
+                  aria-pressed="{{ 'true' if t.key == default_token_tier else 'false' }}">
+            <span class="tier-card-top">
+              <span class="tier-name">{{ t.label }}</span>
+              <span class="tier-tokens">{{ t.tokens }} tok</span>
+            </span>
+            <span class="tier-hint">{{ t.hint }}</span>
+          </button>
+          {% endfor %}
+        </div>
+        <input type="hidden" name="max_tokens" id="max_tokens" value="{{ _def.tokens }}" data-tier-input>
+        <span class="form-hint">How many tokens the model may use to answer. Bigger budgets cost more but prevent cut-off / empty replies; reasoning models are set to <b>Reasoning</b> automatically.</span>
       </div>
 
       <p id="family-warning" class="form-warning js-family-warning mt-3" style="display: none;">
@@ -164,8 +196,12 @@
         <fieldset class="candidate-source">
           <label class="src-opt"><input type="radio" name="source" value="gateway" checked> Gateway model</label>
           <select name="candidate" id="candidate_c">
-            {% for m in candidates %}
-            <option value="{{ m }}">{{ m }}</option>
+            {% for group in candidate_groups %}
+            <optgroup label="{{ group.label }}">
+              {% for m in group.models %}
+              <option value="{{ m }}">{{ m }}</option>
+              {% endfor %}
+            </optgroup>
             {% endfor %}
           </select>
 
@@ -188,9 +224,20 @@
           <span class="form-hint">Must be a different model family than the candidate.</span>
         </div>
         <div class="form-field mt-3">
-          <label for="max_tokens_c">Max tokens</label>
-          <input type="number" name="max_tokens" id="max_tokens_c" value="2000"
-                 min="{{ max_tokens_min }}" max="{{ max_tokens_max }}">
+          <label>Completion budget<span class="tier-reason" data-tier-auto hidden>· auto-set for a reasoning model</span></label>
+          <div class="tier-picker" data-tier-picker role="group" aria-label="Completion budget">
+            {% for t in token_tiers %}
+            <button type="button" class="tier-card" data-tier="{{ t.key }}" data-tokens="{{ t.tokens }}"
+                    aria-pressed="{{ 'true' if t.key == default_token_tier else 'false' }}">
+              <span class="tier-card-top">
+                <span class="tier-name">{{ t.label }}</span>
+                <span class="tier-tokens">{{ t.tokens }} tok</span>
+              </span>
+              <span class="tier-hint">{{ t.hint }}</span>
+            </button>
+            {% endfor %}
+          </div>
+          <input type="hidden" name="max_tokens" id="max_tokens_c" value="{{ _def.tokens }}" data-tier-input>
         </div>
       </section>
 
@@ -236,6 +283,82 @@
   const FAMILIES = {{ families | tojson }};
   const MAX_Q = {{ custom_max_questions }};
   const RERUN = {{ rerun | default(none) | tojson }};
+  const REASONING_MODELS = new Set({{ reasoning_models | tojson }});
+  const DEFAULT_TIER = {{ default_token_tier | tojson }};
+
+  // Mirror of eval_launch.is_reasoning_model(): gateway ids come precomputed in
+  // REASONING_MODELS; the keyword check also catches typed HF repos.
+  function isReasoningModel(id) {
+    if (REASONING_MODELS.has(id)) return true;
+    const m = (id || "").toLowerCase();
+    if (m.includes("chat") || m.includes("instruct")) return false;  // conversational variants
+    if (/^o[134]/.test(m)) return true;
+    if (/gpt[\s-]?5/.test(m)) return true;  // GPT-5 reasoning family (non -chat)
+    return ["gpt-oss", "qwq", "reasoning", "-r1", "deepseek-r"].some((k) => m.includes(k));
+  }
+  const defaultTierFor = (id) => (isReasoningModel(id) ? "reasoning" : DEFAULT_TIER);
+
+  function currentCandidate(form) {
+    const source = (form.querySelector('input[name="source"]:checked') || {}).value || "gateway";
+    return source === "hf"
+      ? (form.querySelector('input[name="hf_repo"]') || {}).value || ""
+      : (form.querySelector('select[name="candidate"]') || {}).value || "";
+  }
+
+  // Tier picker: buttons write the chosen budget into the hidden max_tokens input
+  // the backend + cost preview already read. Auto-picks the model's default tier
+  // on a *model change* (so reasoning models jump to Reasoning), but a manual
+  // click sticks until the model changes again.
+  function wireTierPicker(form) {
+    if (!form) return null;
+    const picker = form.querySelector("[data-tier-picker]");
+    const input = form.querySelector("[data-tier-input]");
+    if (!picker || !input) return null;
+    const cards = [...picker.querySelectorAll(".tier-card")];
+    const autoNote = form.querySelector("[data-tier-auto]");
+
+    function setActive(card) {
+      cards.forEach((c) => c.setAttribute("aria-pressed", String(c === card)));
+      input.value = card.dataset.tokens;
+    }
+    function selectTier(key) {
+      const card = cards.find((c) => c.dataset.tier === key) || cards[0];
+      const changed = card.getAttribute("aria-pressed") !== "true";
+      setActive(card);
+      if (changed) form.dispatchEvent(new Event("change"));  // refresh cost preview
+    }
+    cards.forEach((c) => c.addEventListener("click", () => {
+      selectTier(c.dataset.tier);
+      if (autoNote) autoNote.hidden = true;  // user chose — drop the "auto" note
+    }));
+    return {
+      applyDefault(model) {
+        const key = defaultTierFor(model);
+        selectTier(key);
+        if (autoNote) autoNote.hidden = key !== "reasoning";
+      },
+      selectTokens(tokens) {
+        const card = cards.find((c) => parseInt(c.dataset.tokens, 10) === tokens);
+        if (card) setActive(card);
+        else { cards.forEach((c) => c.setAttribute("aria-pressed", "false")); input.value = String(tokens); }
+        if (autoNote) autoNote.hidden = true;
+        form.dispatchEvent(new Event("change"));
+      },
+    };
+  }
+
+  // Re-default the tier only when the candidate model actually changes.
+  function autoTier(form, ctrl) {
+    if (!ctrl) return;
+    let last = null;
+    const maybe = () => {
+      const model = currentCandidate(form);
+      if (model !== last) { last = model; ctrl.applyDefault(model); }
+    };
+    form.querySelectorAll('select[name="candidate"], input[name="hf_repo"], input[name="source"]')
+      .forEach((el) => { el.addEventListener("change", maybe); el.addEventListener("input", maybe); });
+    maybe();  // initial
+  }
 
   function applyRerunPrefill() {
     if (!RERUN) return;
@@ -267,10 +390,8 @@
         });
       }
     }
-    if (RERUN.max_tokens != null) {
-      const maxTok = form.querySelector('input[name="max_tokens"]');
-      if (maxTok) maxTok.value = String(RERUN.max_tokens);
-    }
+    // RERUN.max_tokens is applied to the tier picker by the init block below,
+    // after the picker controller exists.
     if (RERUN.hf_repo) {
       const hfRadio = form.querySelector('input[name="source"][value="hf"]');
       if (hfRadio) hfRadio.checked = true;
@@ -415,9 +536,23 @@
     h.addEventListener("mouseleave", close);
   });
 
-  wireForm(document.getElementById("std-form"), suiteCount);
-  wireForm(document.getElementById("custom-form"), pastedCount);
+  // `customForm` is already declared above (question builder). Reuse it here.
+  const stdForm = document.getElementById("std-form");
+  wireForm(stdForm, suiteCount);
+  wireForm(customForm, pastedCount);
+
+  // Tier pickers: wire clicks, then auto-default per selected candidate model.
+  const stdTier = wireTierPicker(stdForm);
+  const customTier = wireTierPicker(customForm);
+  autoTier(stdForm, stdTier);
+  autoTier(customForm, customTier);
+
   applyRerunPrefill();
-  document.getElementById("std-form")?.dispatchEvent(new Event("change"));
+  if (RERUN && RERUN.max_tokens != null && stdTier) {
+    // Explicit rerun budget wins over the model default; runs after autoTier so
+    // it isn't overwritten (autoTier only re-defaults on a model *change*).
+    stdTier.selectTokens(RERUN.max_tokens);
+  }
+  stdForm?.dispatchEvent(new Event("change"));
 </script>
 {% endblock %}

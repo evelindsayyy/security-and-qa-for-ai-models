@@ -179,5 +179,32 @@ class LookupRollupTest(unittest.TestCase):
         self.assertIn("inputs_hash", row)
 
 
+class ViewModeCacheTest(unittest.TestCase):
+    def test_union_cache_is_scoped_by_view_mode(self) -> None:
+        private_scan = [{"slug": "private-only", "model_id": "org/private",
+                         "severity_tier": "low", "overall_risk_score": 1}]
+        public_scan = [{"slug": "public-only", "model_id": "org/public",
+                        "severity_tier": "low", "overall_risk_score": 2}]
+        mode = {"value": "private"}
+
+        def _scans_data() -> dict:
+            rows = private_scan if mode["value"] == "private" else public_scan
+            return {"scans": rows}
+
+        def _read_context() -> tuple[str, str | None]:
+            return mode["value"], "user-1"
+
+        patches = _patched()
+        with patches[0], patches[1], patches[2], patches[3], \
+             mock.patch("frontend.read_context.read_context", side_effect=_read_context), \
+             mock.patch.object(model_rollup.scan_data, "get_scans_data", side_effect=_scans_data):
+            private_rows = model_rollup.get_models_union()
+            mode["value"] = "public"
+            public_rows = model_rollup.get_models_union()
+
+        self.assertEqual({r["slug"] for r in private_rows}, {"private-only"})
+        self.assertEqual({r["slug"] for r in public_rows}, {"public-only"})
+
+
 if __name__ == "__main__":
     unittest.main()

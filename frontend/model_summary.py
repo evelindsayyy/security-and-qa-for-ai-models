@@ -40,12 +40,17 @@ def _read_cache(slug: str, *, kind: str, inputs_hash: str) -> dict | None:
 
 
 def _write_cache(slug: str, *, kind: str, inputs_hash: str, payload: dict) -> None:
-    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    path = _cache_path(slug, kind=kind)
-    path.write_text(
-        json.dumps({**payload, "inputs_hash": inputs_hash}, indent=2),
-        encoding="utf-8",
-    )
+    try:
+        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        path = _cache_path(slug, kind=kind)
+        path.write_text(
+            json.dumps({**payload, "inputs_hash": inputs_hash}, indent=2),
+            encoding="utf-8",
+        )
+    except OSError:
+        # Cache is best-effort — a deploy UID / permission mismatch must not 500
+        # the model detail page.
+        pass
 
 
 def _gateway_configured() -> bool:

@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # Run on the application VM (invoked by GitLab deploy job over SSH).
 #
-# Expects env: DEPLOY_PATH, WEB_IMAGE, CI_REGISTRY, CI_JOB_TOKEN
+# Expects env: DEPLOY_PATH, CI_REGISTRY, CI_JOB_TOKEN
 # Optional: GIT_REF (default main), BUILD_PILLARS=1 to rebuild pillar images after pull
 # Optional: CI_SERVER_HOST, CI_PROJECT_PATH, CI_SERVER_PROTOCOL — HTTPS git sync via CI_JOB_TOKEN
 set -euo pipefail
 
 DEPLOY_PATH="${DEPLOY_PATH:?DEPLOY_PATH required}"
-WEB_IMAGE="${WEB_IMAGE:?WEB_IMAGE required}"
 CI_REGISTRY="${CI_REGISTRY:?CI_REGISTRY required}"
 CI_JOB_TOKEN="${CI_JOB_TOKEN:?CI_JOB_TOKEN required}"
 GIT_REF="${GIT_REF:-main}"
@@ -34,9 +33,12 @@ _sync_repo() {
   origin_url="$(_git_origin_url)"
   local attempt
   for attempt in 1 2 3; do
+    # Hard reset to the fetched CI ref — merge --ff-only left the VM "ahead of
+    # origin" with local commits and could skip the commit GitLab just built.
     if git fetch "$origin_url" "$ref" \
-      && git checkout "$ref" \
-      && git merge --ff-only "FETCH_HEAD"; then
+      && git checkout -B "$ref" FETCH_HEAD \
+      && git reset --hard FETCH_HEAD \
+      && git clean -fd --exclude=.env --exclude=.docker-home --exclude='*.local'; then
       return 0
     fi
     echo "git sync attempt ${attempt}/3 failed; retrying..." >&2
@@ -48,20 +50,19 @@ _sync_repo() {
 
 _sync_repo "$GIT_REF"
 
-# The VM never builds frontend assets on the host; production serves the Vite
-# bundle baked into the CI-built image (/opt/frontend-dist). frontend/static/dist
-# is gitignored and must not exist here, or a stale leftover (e.g. from an older
-# deploy) would shadow the fresh image bake and the UI would render with outdated
-# styles. Remove it so vite_assets.py falls through to the image bake.
+# Stale host dist must not shadow the image bake (vite_assets.py fallback).
 rm -rf "${DEPLOY_PATH}/frontend/static/dist"
 
 # shellcheck source=docker/host-env.sh
 source docker/host-env.sh
 
-# Per-UID Docker CLI homes under .docker-home; group-writable so deploy user and
-# interactive VM users (different UIDs) can each mkdir their own subdir.
+echo "Deploy runtime identity: ssh=$(id -un) HOST_UID=${HOST_UID} HOST_GID=${HOST_GID} (repo owner)"
+
 mkdir -p "${DEPLOY_PATH}/.docker-home"
 chmod 2775 "${DEPLOY_PATH}/.docker-home" 2>/dev/null || chmod 775 "${DEPLOY_PATH}/.docker-home" 2>/dev/null || true
+# Ensure the UID the web container will run as can use Docker CLI config here.
+mkdir -p "${DEPLOY_PATH}/.docker-home/${HOST_UID}"
+chmod 2775 "${DEPLOY_PATH}/.docker-home/${HOST_UID}" 2>/dev/null || true
 
 printf '%s' "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin "$CI_REGISTRY"
 
@@ -69,7 +70,12 @@ if [ "${BUILD_PILLARS:-0}" = "1" ]; then
   ./docker/build-pillars.sh
 fi
 
-export WEB_IMAGE
-./docker/run.sh restart-deploy
+./docker/run.sh restart
 
-echo "Deployed ${WEB_IMAGE} at ${DEPLOY_PATH} ($(git rev-parse --short HEAD))"
+HEALTH_WAIT_SEC="${DEPLOY_HEALTH_WAIT_SEC:-120}"
+if [ "${BUILD_PILLARS:-0}" = "1" ]; then
+  HEALTH_WAIT_SEC="${DEPLOY_HEALTH_WAIT_SEC:-180}"
+fi
+./docker/run.sh wait-health "$HEALTH_WAIT_SEC"
+
+echo "Deployed at ${DEPLOY_PATH} ($(git rev-parse --short HEAD))"

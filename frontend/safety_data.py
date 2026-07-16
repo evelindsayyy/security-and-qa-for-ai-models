@@ -116,25 +116,22 @@ def _summarize_merged_data(data: dict, slug: str, profile: str = "base") -> dict
 
 
 def _attach_safety_staleness_fields(row: dict, data: dict, *, sidecar: dict | None = None) -> None:
-    from dbutils.staleness_spec import (
-        current_safety_garak_probe_spec,
-        garak_probe_spec_digest,
-    )
-
     config = (sidecar or {}).get("config_json")
     if isinstance(config, dict):
         row["config_json"] = config
         if sidecar and sidecar.get("config_fingerprint"):
             row["config_fingerprint"] = sidecar["config_fingerprint"]
+        stored_digest = config.get("garak_probe_spec_digest")
+        if stored_digest:
+            row["garak_probe_spec_digest"] = stored_digest
+            return
     garak_probes = ""
     if isinstance(config, dict):
         garak_probes = (config.get("garak_probes") or "").strip()
     if garak_probes:
+        from dbutils.staleness_spec import garak_probe_spec_digest
+
         row["garak_probe_spec_digest"] = garak_probe_spec_digest(garak_probes)
-    elif isinstance(config, dict) and not config.get("skip_garak"):
-        row["garak_probe_spec_digest"] = garak_probe_spec_digest(
-            current_safety_garak_probe_spec()
-        )
 
 
 def _summarize_merged(path: Path, slug: str, profile: str = "base") -> dict | None:
@@ -712,9 +709,10 @@ def delete_safety(
     return None
 
 
-def get_safety_guide_data() -> dict:
+def get_safety_guide_data(*, models: list[dict] | None = None) -> dict:
     """Rows for the safety reference/guide pages."""
-    models = get_safety_data().get("models") or []
+    if models is None:
+        models = get_safety_data().get("models") or []
     example = models[0] if models else None
     return {
         "guide_rows": [

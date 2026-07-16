@@ -12,6 +12,7 @@ from collections import Counter
 from pathlib import Path
 
 from frontend.path_safety import is_safe_slug
+from dbutils.staleness_spec import SCAN_TOOL_ROWS
 
 ROOT = Path(__file__).parent.parent
 OUTPUT_DIR = ROOT / "scanner" / "output"
@@ -82,13 +83,7 @@ def _tool_status_from_data(data: dict) -> dict[str, dict]:
     return status
 
 
-_SCAN_TOOL_ROWS = (
-    ("modelscan", "ModelScan", "badge-scan"),
-    ("fickling", "Fickling", "badge-scan"),
-    ("modelaudit", "ModelAudit", "badge-scan"),
-    ("dependencies", "Dependencies", "badge-scan"),
-    ("secrets", "Secrets", "badge-scan"),
-)
+_SCAN_TOOL_ROWS = SCAN_TOOL_ROWS
 
 
 def _order_scan_model_ids(model_ids: list[str]) -> list[str]:
