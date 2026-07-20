@@ -1061,6 +1061,7 @@ def register_routes(app):
     def personality_run_start():
         from flask import redirect, request, url_for
 
+        from frontend import docker_launch
         from frontend.output_dirs import OutputDirError
         from frontend.personality_launch import start_run, validate_launch
 
@@ -1072,6 +1073,8 @@ def register_routes(app):
         try:
             slug, _already, visibility = start_run(model, test_key)
         except OutputDirError as exc:
+            return str(exc), 503
+        except docker_launch.DockerUnavailableError as exc:
             return str(exc), 503
         endpoint = "personality_detail_private" if visibility == "private" else "personality_detail"
         return redirect(url_for(endpoint, slug=slug, status="running"))
