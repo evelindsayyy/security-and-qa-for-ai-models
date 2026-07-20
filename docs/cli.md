@@ -184,6 +184,15 @@ docker run --rm -v "$PWD/scanner/output:/out" -u root busybox \
   chown -R "$(id -u):$(id -g)" /out
 ```
 
+Scanner model weights use the named volume `qa-ai-models_scanner_models`. If a scan fails with **Permission denied** under `/app/scanner/models`, fix ownership once (replace `1002` with the repo owner's uid/gid — usually `stat -c '%u' .`):
+
+```bash
+docker run --rm -v qa-ai-models_scanner_models:/models -u root busybox \
+  sh -c 'mkdir -p /models && chown -R 1002:1002 /models'
+```
+
+Then rebuild the scanner image (`./docker/build-pillars.sh` or restart the stack) so the entrypoint keeps the volume owned correctly.
+
 ## Pillar jobs
 
 Browser "Start" buttons run these for you. To run them directly, set the file

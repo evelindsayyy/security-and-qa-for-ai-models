@@ -6,8 +6,9 @@ Populated during `python -m scanner scan <repo_id>` (or the browser **Start scan
 
 In Docker, weights live on the named volume `qa-ai-models_scanner_models` (typically
 under Docker’s data root on `/`), not on the repo bind-mount under `/home`. That
-keeps multi-GB downloads off a tight home partition. Override with
-`SCANNER_MODELS_HOST_PATH` or host-mode `MODELS_ROOT` (see `.env.example`).
+keeps multi-GB downloads off a tight home partition. The scanner entrypoint chowns
+that volume to `UID`/`GID` on each run. Override with `SCANNER_MODELS_HOST_PATH` or
+host-mode `MODELS_ROOT` (see `.env.example`).
 
 Only JSON under `scanner/output/` is kept long-term — that is what the UI and
 Postgres ingest read. A rescan re-downloads from Hugging Face Hub.

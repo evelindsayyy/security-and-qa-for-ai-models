@@ -14,8 +14,6 @@ services:
       context: ../..
       dockerfile: scanner/docker/Dockerfile
 
-    user: "${UID:-1000}:${GID:-1000}"
-
     volumes:
       - ..:/app/scanner
       - ../output:/app/scanner/output
@@ -23,6 +21,8 @@ services:
       - ${SCANNER_MODELS_HOST_PATH:-scanner_models}:/app/scanner/models
 
     environment:
+      - UID=${UID:-1000}
+      - GID=${GID:-1000}
       - HF_TOKEN=${HF_TOKEN:-}
       - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
       - HF_HUB_DOWNLOAD_TIMEOUT=${HF_HUB_DOWNLOAD_TIMEOUT:-300}

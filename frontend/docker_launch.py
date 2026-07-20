@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import socket
 import subprocess
 import threading
@@ -198,6 +199,71 @@ def _passwdless_uid_env() -> dict[str, str]:
     }
 
 
+def _scanner_models_volume_name() -> str:
+    return os.environ.get("SCANNER_MODELS_VOLUME_NAME", "qa-ai-models_scanner_models")
+
+
+def ensure_scanner_models_volume() -> None:
+    """Chown the scanner weights volume so non-root pillar runs can mkdir there."""
+    if not hasattr(os, "getuid") or not shutil.which("docker"):
+        return
+    uid, gid = os.getuid(), os.getgid()
+    host_path = os.environ.get("SCANNER_MODELS_HOST_PATH", "").strip()
+    if host_path:
+        path = Path(host_path)
+        path.mkdir(parents=True, exist_ok=True)
+        proc = subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{path.resolve()}:/models",
+                "-u",
+                "root",
+                "busybox",
+                "sh",
+                "-c",
+                f"mkdir -p /models && chown -R {uid}:{gid} /models",
+            ],
+            capture_output=True,
+            timeout=120,
+            check=False,
+        )
+        if proc.returncode != 0:
+            log.warning(
+                "scanner models bind chown failed (%s): %s",
+                path,
+                (proc.stderr or proc.stdout or b"").decode(errors="replace").strip(),
+            )
+        return
+    vol = _scanner_models_volume_name()
+    proc = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{vol}:/models",
+            "-u",
+            "root",
+            "busybox",
+            "sh",
+            "-c",
+            f"mkdir -p /models && chown -R {uid}:{gid} /models",
+        ],
+        capture_output=True,
+        timeout=120,
+        check=False,
+    )
+    if proc.returncode != 0:
+        log.warning(
+            "scanner models volume chown failed (%s): %s",
+            vol,
+            (proc.stderr or proc.stdout or b"").decode(errors="replace").strip(),
+        )
+
+
 def ensure_stack(stack: str) -> None:
     """One-time ``docker compose build`` for a pillar stack (UID/GID exported first)."""
     if not use_docker():
@@ -211,6 +277,8 @@ def ensure_stack(stack: str) -> None:
         if not docker_available():
             raise DockerUnavailableError(docker_required_message(stack))
         _export_uid_gid()
+        if stack == "scanner":
+            ensure_scanner_models_volume()
         compose, service = _stack_paths(stack)
         try:
             _compose_build(compose, service)
