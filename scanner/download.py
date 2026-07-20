@@ -176,7 +176,11 @@ def download_model(model_id: str) -> Path:
         elif "429" in msg or "rate" in low:
             hint = " Hub rate-limited anonymous downloads — set HF_TOKEN in .env."
         elif "no space" in low or "enospc" in low or "errno 28" in low:
-            hint = " Free disk under scanner/models/ and retry."
+            hint = (
+                " Free disk under MODELS_ROOT (Docker named volume / "
+                "SCANNER_MODELS_HOST_PATH) and retry; "
+                "./scripts/reclaim-disk.sh --apply frees leftover Garak caches."
+            )
         elif "timed out" in low or "timeout" in low:
             hint = (
                 " Increase HF_HUB_DOWNLOAD_TIMEOUT (seconds) or set HF_TOKEN "

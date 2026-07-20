@@ -66,13 +66,40 @@ class RunConfig:
     attacker_base_url: str = ""
 
 
+# Detector HF weights (roberta_toxicity_classifier, etc.) are shared once under
+# safety/garak/output/.garak-cache — not copied per model slug (that burned ~50G).
+_GARAK_OUTPUT = REPO_ROOT / "safety" / "garak" / "output"
+_LEGACY_PER_SLUG_XDG = (".garak-cache", ".garak-data", ".garak-config")
+
+
+def reclaim_legacy_per_slug_garak_xdg(*, output_root: Path | None = None) -> int:
+    """Remove per-slug XDG trees from the old layout. Returns directories removed."""
+    root = output_root or _GARAK_OUTPUT
+    if not root.is_dir():
+        return 0
+    removed = 0
+    for child in root.iterdir():
+        if not child.is_dir() or child.name.startswith("."):
+            continue
+        for name in _LEGACY_PER_SLUG_XDG:
+            target = child / name
+            if target.is_dir():
+                shutil.rmtree(target, ignore_errors=True)
+                removed += 1
+    return removed
+
+
 def garak_xdg_env(slug: str) -> dict[str, str]:
-    """Per-slug XDG dirs so Garak writes as the container user."""
-    base = REPO_ROOT / "safety" / "garak" / "output" / slug
-    home = base / ".garak-home"
-    data = base / ".garak-data"
-    cache = base / ".garak-cache"
-    config = base / ".garak-config"
+    """XDG dirs for Garak: shared HF cache/data, thin per-slug HOME.
+
+    Matches ``safety/garak/docker/compose.yml`` for cache/data/config so detector
+    weights download once. Per-slug ``HOME`` keeps process-local state isolated
+    when concurrent safety runs share the same host tree.
+    """
+    home = _GARAK_OUTPUT / slug / ".garak-home"
+    data = _GARAK_OUTPUT / ".garak-data"
+    cache = _GARAK_OUTPUT / ".garak-cache"
+    config = _GARAK_OUTPUT / ".garak-config"
     for d in (home, data / "garak", cache, config):
         d.mkdir(parents=True, exist_ok=True)
     return {
@@ -295,6 +322,13 @@ def run_pipeline(cfg: RunConfig) -> int:
     if cfg.skip_promptfoo and cfg.skip_garak:
         print("ERROR: cannot use --skip-promptfoo and --skip-garak together", file=sys.stderr)
         return 1
+    if not cfg.skip_garak:
+        n = reclaim_legacy_per_slug_garak_xdg()
+        if n:
+            print(
+                f"reclaimed {n} legacy per-slug Garak XDG dir(s) under {_GARAK_OUTPUT}",
+                flush=True,
+            )
     if cfg.hf_repo and cfg.redteam and not cfg.skip_promptfoo and not os.environ.get("OPENAI_API_KEY"):
         print(
             "ERROR: red-team grading needs a real Duke OPENAI_API_KEY configured "

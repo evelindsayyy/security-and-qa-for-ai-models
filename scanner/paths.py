@@ -4,7 +4,10 @@ Filesystem layout for downloaded weights and scan artifacts.
 All paths are rooted under ``scanner/models`` and ``scanner/output`` by default.
 Hub ids like ``BAAI/bge-small-en-v1.5`` become directory slugs ``BAAI--bge-small-en-v1.5``.
 
-Override roots in Docker or CI via ``MODELS_ROOT`` / ``OUTPUT_ROOT`` env vars.
+Override roots via ``MODELS_ROOT`` / ``OUTPUT_ROOT``. In Docker, compose sets
+``MODELS_ROOT=/app/scanner/models`` on a named volume (or
+``SCANNER_MODELS_HOST_PATH`` bind) so large downloads use space on ``/``, not a
+small ``/home`` repo partition.
 """
 
 from __future__ import annotations
