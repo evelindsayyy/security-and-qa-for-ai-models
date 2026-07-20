@@ -19,6 +19,10 @@ services:
 
     environment:
       - HF_TOKEN=${HF_TOKEN:-}
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+      - HF_HUB_DOWNLOAD_TIMEOUT=${HF_HUB_DOWNLOAD_TIMEOUT:-300}
+      - HF_HUB_ETAG_TIMEOUT=${HF_HUB_ETAG_TIMEOUT:-60}
+      - SCAN_MAX_MODEL_GB=${SCAN_MAX_MODEL_GB:-80}
       - MODEL_ID=${MODEL_ID:-distilbert-base-uncased}
       - POSTGRES_DSN=${POSTGRES_DSN:-}
       - DATABASE_URL=${DATABASE_URL:-}

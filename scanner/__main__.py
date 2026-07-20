@@ -25,7 +25,6 @@ import argparse
 import json
 import sys
 
-from scanner.download import download_model
 from scanner.metadata import build_metadata_report
 from scanner.paths import dump_json, model_dir, output_dir
 from scanner.pickle_scan import (
@@ -46,15 +45,19 @@ from scanner.schemas import ScanResult, build_scan_result_from_combined
 
 
 def _ensure_model(model_id: str) -> None:
-    """Download weights when ``models/<slug>`` is missing (debug subcommands)."""
-    if not model_dir(model_id).exists():
+    """Download weights when ``models/<slug>`` is incomplete or missing."""
+    from scanner.download import download_model, model_download_complete
+
+    if not model_download_complete(model_id):
         download_model(model_id)
 
 
 def cmd_scan(args: argparse.Namespace) -> int:
     """Full pipeline: download → tools → ``scan_result.json``."""
+    from scanner.download import DownloadError
+
     for model_id in args.models:
-        print(f"scanning {model_id} ...")
+        print(f"scanning {model_id} ...", flush=True)
         try:
             result = scan_model(
                 model_id,
@@ -65,13 +68,20 @@ def cmd_scan(args: argparse.Namespace) -> int:
                 run_dependencies=not args.skip_deps,
                 run_secrets=not args.skip_secrets,
             )
+        except DownloadError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr, flush=True)
+            return 1
         except Exception as exc:
             from dbutils.run_lock import RunLockError
 
             if isinstance(exc, RunLockError):
-                print(f"ERROR: {exc}", file=sys.stderr)
+                print(f"ERROR: {exc}", file=sys.stderr, flush=True)
                 return 2
-            raise
+            print(f"ERROR: scan failed for {model_id}: {exc}", file=sys.stderr, flush=True)
+            import traceback
+
+            traceback.print_exc(file=sys.stderr)
+            return 1
         out = output_dir(model_id) / "scan_result.json"
         print(
             f"  tier={result.severity_tier.value} score={result.overall_risk_score} "

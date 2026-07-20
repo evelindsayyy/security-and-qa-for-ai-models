@@ -394,9 +394,14 @@ def get_status(
         return {"status": "complete", "message": "", "log_path": rel_log}
 
     if proc is not None and proc.poll() is not None:
+        exit_code = proc.returncode
+        detail = status_message(staging_log, failed=True).strip()
+        prefix = f"Scan process exited with code {exit_code}."
+        message = f"{prefix}\n{detail}" if detail else prefix
         return {
             "status": "failed",
-            "message": status_message(staging_log, failed=True),
+            "message": message,
+            "exit_code": exit_code,
             "hf_repo": _read_hf_repo(slug),
             "log_path": staging_rel_log,
         }

@@ -19,7 +19,6 @@ from typing import Any
 
 from dbutils import run_lock
 from scanner import __version__
-from scanner.download import download_model
 from scanner.format_detector import FileFormatSummary, summarize as format_summarize
 from scanner.format_detector import summary_to_metadata_dict
 from scanner.modelaudit_scan import run_modelaudit_scoped
@@ -229,8 +228,12 @@ def _scan_model_impl(
     run_secrets: bool = True,
 ) -> ScanResult:
     mdir = model_dir(hf_repo)
-    if not mdir.exists() and auto_download:
-        download_model(hf_repo)
+    if auto_download:
+        from scanner.download import clear_incomplete_model, download_model, model_download_complete
+
+        if not model_download_complete(hf_repo):
+            clear_incomplete_model(hf_repo)
+            download_model(hf_repo)
     if not mdir.exists():
         raise FileNotFoundError(
             f"{mdir} not found — run download first or pass auto_download=True"
