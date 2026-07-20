@@ -27,6 +27,8 @@ services:
       - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
       - HF_HUB_DOWNLOAD_TIMEOUT=${HF_HUB_DOWNLOAD_TIMEOUT:-300}
       - HF_HUB_ETAG_TIMEOUT=${HF_HUB_ETAG_TIMEOUT:-60}
+      # Parallel HF file downloads (1 = safest on ~5 GiB RAM VMs). Empty → auto from MemAvailable.
+      - SCAN_HF_MAX_WORKERS=${SCAN_HF_MAX_WORKERS:-}
       - SCAN_MAX_MODEL_GB=${SCAN_MAX_MODEL_GB:-80}
       - MODEL_ID=${MODEL_ID:-distilbert-base-uncased}
       - MODELS_ROOT=/app/scanner/models

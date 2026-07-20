@@ -6,6 +6,10 @@ Does not run any security tools — see ``pipeline.scan_model`` for that.
 
 Requires ``HF_TOKEN`` (or ``HUGGING_FACE_HUB_TOKEN``) in the environment for
 gated repos; public repos download without a token but are rate-limited.
+
+On low-RAM hosts (e.g. ~5 GiB VCM), Hub/Xet defaults can OOM mid-download.
+This module caps ``snapshot_download(max_workers=…)`` and HF_XET concurrency
+from ``SCAN_HF_MAX_WORKERS`` / MemAvailable.
 """
 
 from __future__ import annotations
@@ -31,6 +35,11 @@ _DEFAULT_MAX_MODEL_GB = 80.0
 _DISK_MARGIN_GB = 5.0
 _DISK_FACTOR = 1.15
 
+# Below this MemAvailable, default to serial HF downloads (VCM is ~5.3 GiB).
+_LOW_RAM_BYTES = int(8 * 1024**3)
+_DEFAULT_WORKERS_LOW_RAM = 1
+_DEFAULT_WORKERS = 2
+
 
 class DownloadError(RuntimeError):
     """User-facing download failure (token, disk, size, Hub errors)."""
@@ -47,6 +56,51 @@ def _max_model_bytes() -> int:
 
 def _hub_token() -> str | None:
     return get_token() or (os.environ.get("HF_TOKEN") or "").strip() or None
+
+
+def mem_available_bytes() -> int | None:
+    """Linux MemAvailable from ``/proc/meminfo``, or None if unavailable."""
+    try:
+        with open("/proc/meminfo", encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("MemAvailable:"):
+                    parts = line.split()
+                    return int(parts[1]) * 1024  # kB → bytes
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def hf_max_workers(*, mem_avail: int | None = None) -> int:
+    """Parallel file downloads for ``snapshot_download`` (1–8).
+
+    ``SCAN_HF_MAX_WORKERS`` wins when set. Otherwise hosts with
+    MemAvailable < 8 GiB default to 1 (avoids Xet/Hub OOM on ~5 GiB VMs).
+    """
+    raw = os.environ.get("SCAN_HF_MAX_WORKERS", "").strip()
+    if raw:
+        try:
+            return max(1, min(8, int(raw)))
+        except ValueError:
+            pass
+    if mem_avail is None:
+        mem_avail = mem_available_bytes()
+    if mem_avail is not None and mem_avail < _LOW_RAM_BYTES:
+        return _DEFAULT_WORKERS_LOW_RAM
+    return _DEFAULT_WORKERS
+
+
+def apply_hf_download_env(*, max_workers: int) -> None:
+    """Cap Hub timeouts and Xet concurrency for the chosen worker count."""
+    os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "300")
+    os.environ.setdefault("HF_HUB_ETAG_TIMEOUT", "60")
+    # Never enable high-performance Xet on scanner hosts (large buffers).
+    os.environ["HF_XET_HIGH_PERFORMANCE"] = "0"
+    # Pin Xet streams to match file-level workers (bypass adaptive ramp to 64).
+    workers = str(max(1, max_workers))
+    os.environ["HF_XET_FIXED_DOWNLOAD_CONCURRENCY"] = workers
+    os.environ["HF_XET_DATA_MAX_CONCURRENT_FILE_DOWNLOADS"] = workers
+    os.environ.setdefault("HF_XET_NUM_CONCURRENT_RANGE_GETS", workers)
 
 
 def model_download_complete(model_id: str) -> bool:
@@ -124,11 +178,23 @@ def _preflight(model_id: str, *, token: str | None) -> int:
             file=sys.stderr,
         )
 
+    mem = mem_available_bytes()
+    workers = hf_max_workers(mem_avail=mem)
+    mem_s = f"{mem / (1024**3):.1f} GiB MemAvailable" if mem is not None else "MemAvailable n/a"
     print(
         f"download preflight: {model_id} ≈ {total / 1e9:.1f} GB "
-        f"({n_files} files), free disk {free / 1e9:.1f} GB",
+        f"({n_files} files), free disk {free / 1e9:.1f} GB, "
+        f"{mem_s}, HF max_workers={workers}",
         flush=True,
     )
+    if mem is not None and mem < _LOW_RAM_BYTES and total >= 15 * 1e9:
+        print(
+            "WARNING: large multi-GB download on a low-RAM host — using serial HF/Xet "
+            "concurrency (SCAN_HF_MAX_WORKERS). If the process is killed without an "
+            "ERROR line, the OS likely OOM'd; retry a smaller mirror.",
+            file=sys.stderr,
+            flush=True,
+        )
     return total
 
 
@@ -145,7 +211,9 @@ def download_model(model_id: str) -> Path:
     if model_download_complete(model_id):
         return model_dir(model_id)
 
-    clear_incomplete_model(model_id)
+    cleared = clear_incomplete_model(model_id)
+    if cleared:
+        print(f"cleared incomplete download for {model_id}", flush=True)
 
     token = _hub_token()
     _preflight(model_id, token=token)
@@ -153,15 +221,15 @@ def download_model(model_id: str) -> Path:
     target = model_dir(model_id)
     target.mkdir(parents=True, exist_ok=True)
 
-    # Prefer long timeouts for multi-GB shards (Hub default read timeout is 10s).
-    os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "300")
-    os.environ.setdefault("HF_HUB_ETAG_TIMEOUT", "60")
+    workers = hf_max_workers()
+    apply_hf_download_env(max_workers=workers)
 
     try:
         snapshot_download(
             repo_id=model_id,
             local_dir=str(target),
             token=token,
+            max_workers=workers,
             ignore_patterns=["*.msgpack", "*.h5", "flax_*", "tf_*"],
         )
     except DownloadError:

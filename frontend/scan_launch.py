@@ -17,7 +17,12 @@ from dotenv import load_dotenv
 from dbutils import run_lock
 from frontend import docker_launch, run_paths
 from frontend.launch_registry import check_inflight_combo
-from frontend.log_status import run_log_payload, status_message
+from frontend.log_status import (
+    OOM_KILL_MESSAGE,
+    is_oom_kill_exit,
+    run_log_payload,
+    status_message,
+)
 from frontend.output_dirs import OutputDirError, ensure_writable_dir, prepare_output_dir
 from frontend.path_safety import is_safe_slug
 from scanner.paths import safe_dir_name
@@ -234,6 +239,15 @@ def build_command(
 
 def _watch_process(slug: str, proc: subprocess.Popen, lock_path: Path) -> None:
     proc.wait()
+    exit_code = proc.returncode
+    if is_oom_kill_exit(exit_code):
+        log_path = _output_dir_for_slug(slug) / "scan_run.log"
+        try:
+            with log_path.open("a", encoding="utf-8") as fh:
+                fh.write(f"\n{OOM_KILL_MESSAGE}\n")
+                fh.write(f"ERROR: scanner child exit_code={exit_code}\n")
+        except OSError:
+            pass
     run_lock.release(lock_path)
     with _LOCK:
         if _RUNNING.get(slug) is proc:
@@ -396,8 +410,16 @@ def get_status(
     if proc is not None and proc.poll() is not None:
         exit_code = proc.returncode
         detail = status_message(staging_log, failed=True).strip()
-        prefix = f"Scan process exited with code {exit_code}."
-        message = f"{prefix}\n{detail}" if detail else prefix
+        if is_oom_kill_exit(exit_code):
+            prefix = OOM_KILL_MESSAGE
+        else:
+            prefix = f"Scan process exited with code {exit_code}."
+        if detail and OOM_KILL_MESSAGE in detail:
+            message = detail
+        elif detail:
+            message = f"{prefix}\n{detail}"
+        else:
+            message = prefix
         return {
             "status": "failed",
             "message": message,

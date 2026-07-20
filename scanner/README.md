@@ -114,7 +114,7 @@ See [`scanner/db/README.md`](db/README.md) for schema apply, load, and verify SQ
 |--------|----------------|
 | `__main__.py` | CLI: `scan`, `metadata`, debug subcommands, `validate` |
 | `pipeline.py` | Orchestrates download → tools → `scan_result.json` |
-| `download.py` | `snapshot_download` into `models/<slug>/` |
+| `download.py` | `snapshot_download` into `models/<slug>/` (caps HF/Xet workers on low-RAM hosts via `SCAN_HF_MAX_WORKERS`) |
 | `metadata.py` | Hub file list without weights |
 | `format_detector.py` | File categories + `safetensors_only` / Fickling flags |
 | `pickle_scan.py` | ModelScan whole-repo + Fickling per pickle-family file |
