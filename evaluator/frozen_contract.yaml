@@ -1,15 +1,22 @@
 # =============================================================================
-# FROZEN EVAL CONTRACT — Week 7, Day 4
+# FROZEN EVAL CONTRACT — Week 7, Day 4  (+ follow-up freeze: tool use)
 # =============================================================================
 # The artifacts below are LOCKED. Any change to a listed file breaks score
 # comparability across runs — new content must go in a NEW versioned file, not
 # an edit here. Enforced by unit_tests/test_contract_freeze.py (hash check).
 # To legitimately evolve the contract: add a new file + bump its version, then
 # add it to this manifest in a follow-up freeze.
+#
+# Follow-up freezes (append-only — existing pins are never re-hashed):
+#   2026-07-16 — tool_use_duke_v1 (suite + system prompt), 35 -> 37 artifacts.
+#     Its rubric is the inert placeholder (tasks/rubrics/it_support.yaml, already
+#     pinned): tool use is execution-scored, so the judge is auto-skipped and the
+#     rubric is never loaded.
 # =============================================================================
 freeze_date: "2026-07-02"
+last_follow_up_freeze: "2026-07-16"
 schema_version: "1.1.0"
-artifact_count: 35
+artifact_count: 37
 artifacts:
   # core
   "schemas.py": "b24dfd540474e7ff66dcfb1b058f672312e05e0d63c81458bbea4102c38c0e7e"
@@ -29,6 +36,7 @@ artifacts:
   "tasks/sql_duke_v1.jsonl": "d29fa90bf24d90a1e6838a4facf7ab702bf14176de112fc4b5478fe1e030f4ef"
   "tasks/sql_duke_v2.jsonl": "1e5b84136cfe6229ac7fccf198fc1e7053dc038748a29a69abf11d26b32e1766"
   "tasks/summarization_v1.jsonl": "8427d897063eb9cc2b3ba52516d0d22b0172f6fa8f2c911e3437b3292c054a90"
+  "tasks/tool_use_duke_v1.jsonl": "e0af1a280bbd626147ce9d29264da6a186aced949c2c7492dc7b28b83a86966c"
   "tasks/tutoring_hard_v1.jsonl": "098cbb0a0911dc3b4a1e21765b8139c76c4ecbfd5e90c69dbf6423281eda9b8f"
   "tasks/tutoring_v1.jsonl": "f09bde2ca18cf9c107ec9b6fca5af636df7730ecdbc8b67ce7341a89ddac65b9"
   # rubrics
@@ -50,3 +58,4 @@ artifacts:
   "prompts/system/numeric_v1.txt": "21e40d4c303e965fcb15cbd1f75799e60abaabb901b690122d5ff4a1dd224243"
   "prompts/system/sql_v1.txt": "4b11b8e231008faff8d93c6c02110a99fb8351fc5f84d1e359fd6fc2f0d1c9d4"
   "prompts/system/summarization_v1.txt": "a0661c66bb4165325240e9f45b44cba7a17fd2703800904430fe74dd857092cb"
+  "prompts/system/tool_use_v1.txt": "691bc8f5d09bafe76780dfc99a79cd0a9ec101334ff4964387349c44fa47674b"

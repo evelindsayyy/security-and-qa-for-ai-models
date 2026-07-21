@@ -20,6 +20,8 @@ Project guides. **GitLab CI/CD:** [`.gitlab/README.md`](../.gitlab/README.md).
 | [`team-tracks.md`](team-tracks.md) | Tracks, phases, deployment context |
 | [`track-a-framework.md`](track-a-framework.md) | Scanning + safety |
 | [`track-b-framework.md`](track-b-framework.md) | Evaluator + benchmarks |
+| [`handoff-efficacy.md`](handoff-efficacy.md) | **Eval pillar hand-off** — start here: the frozen contract, how to read the scores, gotchas |
+| [`validation-study.md`](validation-study.md) | Judge vs. human agreement (κ) — the evidence the judge is trustworthy |
 | [`tool-stack.md`](tool-stack.md) | Tools and rationale |
 
 ## Packages
