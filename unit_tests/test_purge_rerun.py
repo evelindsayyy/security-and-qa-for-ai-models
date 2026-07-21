@@ -6,7 +6,9 @@ Tests for rerun purge helpers — prior disk + Postgres rows removed before laun
 
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 
@@ -55,7 +57,47 @@ class PurgeScanLaunchTest(unittest.TestCase):
 
 
 class PurgeSafetyLaunchTest(unittest.TestCase):
-    def test_validate_launch_purges_prior_safety(self) -> None:
+    def setUp(self) -> None:
+        from frontend import safety_launch
+
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        patcher = mock.patch.object(safety_launch, "ROOT", Path(tmp.name))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(safety_launch._RUNNING.clear)
+        self.addCleanup(safety_launch._INFLIGHT.clear)
+
+    def test_start_run_purges_prior_safety(self) -> None:
+        """Purge (like the output-dir wipe) must happen inside start_run(),
+        *after* it claims the cross-process lock — not in validate_launch(),
+        which runs unlocked and would otherwise race a second concurrent
+        validate+start request the same way the pre-fix start_run() used
+        to (see StartRunLockOrderingTest in test_safety_launch.py)."""
+        from frontend import safety_launch
+
+        plan = mock.Mock(visibility="public", owner_user_id=None)
+        fake_proc = mock.Mock(pid=4242, poll=mock.Mock(return_value=None))
+        with (
+            mock.patch("frontend.run_launch.build_launch_plan", return_value=plan),
+            mock.patch(
+                "frontend.purge_rerun.purge_safety_for_launch",
+                return_value=None,
+            ) as purge,
+            mock.patch.object(safety_launch, "_wipe_outputs"),
+            mock.patch.object(safety_launch.docker_launch, "use_docker", return_value=False),
+            mock.patch.object(safety_launch.subprocess, "Popen", return_value=fake_proc),
+            mock.patch.object(safety_launch, "threading"),
+            mock.patch("frontend.run_launch.persist_run_meta_dir"),
+        ):
+            safety_launch.start_run("GPT 4.1 Mini", redteam_profile="base")
+        purge.assert_called_once_with(
+            "gpt-4.1-mini", "base", visibility="public", owner_user_id=None
+        )
+
+    def test_validate_launch_does_not_purge(self) -> None:
+        """validate_launch() is a pure check now — no purge, no wipe (see
+        the docstring above)."""
         from frontend import safety_launch
 
         with (
@@ -65,24 +107,14 @@ class PurgeSafetyLaunchTest(unittest.TestCase):
             ),
             mock.patch(
                 "frontend.purge_rerun.purge_safety_for_launch",
-                return_value=None,
             ) as purge,
-            mock.patch(
-                "frontend.safety_launch._prepare_output_dirs",
-                return_value=None,
-            ),
-            mock.patch(
-                "frontend.read_context.read_context",
-                return_value=("public", None),
-            ),
+            mock.patch.object(safety_launch, "_prepare_output_dirs") as prepare,
         ):
             self.assertIsNone(
                 safety_launch.validate_launch("GPT 4.1 Mini", redteam_profile="base")
             )
-        purge.assert_called_once()
-        args, kwargs = purge.call_args
-        self.assertEqual(kwargs["visibility"], "public")
-        self.assertIsNone(kwargs["owner_user_id"])
+        purge.assert_not_called()
+        prepare.assert_not_called()
 
 
 class PurgeEvalLaunchTest(unittest.TestCase):

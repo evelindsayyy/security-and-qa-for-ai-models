@@ -1292,16 +1292,27 @@ def register_routes(app):
                 return render_template("safety_run_new.html",
                                        hf_result=hf_result, **get_launch_options()), 400
 
-            run_key, _already, visibility = start_run(
-                hf_repo,
-                redteam_profile=hf_redteam_profile,
-                skip_policy=hf_skip_policy,
-                skip_garak=hf_skip_garak,
-                skip_redteam=not hf_redteam,
-                hf_repo=hf_repo,
-                endpoint=hf_endpoint,
-                attacker_endpoint=hf_attacker_endpoint or None,
-            )
+            try:
+                run_key, _already, visibility = start_run(
+                    hf_repo,
+                    redteam_profile=hf_redteam_profile,
+                    skip_policy=hf_skip_policy,
+                    skip_garak=hf_skip_garak,
+                    skip_redteam=not hf_redteam,
+                    hf_repo=hf_repo,
+                    endpoint=hf_endpoint,
+                    attacker_endpoint=hf_attacker_endpoint or None,
+                )
+            except OutputDirError as exc:
+                hf_result = {"ok": False, "error": str(exc), "repo_id": hf_repo,
+                            "architectures": None, "num_params": None}
+                return render_template("safety_run_new.html",
+                                       hf_result=hf_result, **get_launch_options()), 503
+            except docker_launch.DockerUnavailableError as exc:
+                hf_result = {"ok": False, "error": str(exc), "repo_id": hf_repo,
+                            "architectures": None, "num_params": None}
+                return render_template("safety_run_new.html",
+                                       hf_result=hf_result, **get_launch_options()), 503
             slug, profile = run_key.split("/", 1)
             endpoint_name = "safety_detail_private" if visibility == "private" else "safety_detail"
             return redirect(url_for(endpoint_name, slug=slug, profile=profile, status="running"))

@@ -349,7 +349,12 @@ def validate_hf_launch(
             f"a safety run for {repo_id!r} is already using Garak (a different profile) — "
             "wait for it to finish before starting another"
         )
-    return _prepare_output_dirs(slug, redteam_profile)
+    # Purge + output-dir wipe happen in start_run(), *after* it claims the
+    # cross-process lock — doing them here would race a second concurrent
+    # validate+start request the same way the pre-fix start_run() used to
+    # (see StartRunLockOrderingTest): both requests could see "not in
+    # flight" and wipe concurrently before either holds the lock.
+    return None
 
 
 def validate_hf_candidate(repo_id: str) -> dict:
@@ -464,19 +469,9 @@ def validate_launch(
             f"a safety run for {model!r} is already using Garak (a different profile) — "
             "wait for it to finish before starting another"
         )
-    from frontend.purge_rerun import purge_safety_for_launch
-    from frontend.read_context import read_context
-
-    visibility, owner_user_id = read_context()
-    err = purge_safety_for_launch(
-        slug,
-        redteam_profile,
-        visibility=visibility,
-        owner_user_id=owner_user_id,
-    )
-    if err:
-        return err
-    return _prepare_output_dirs(slug, redteam_profile)
+    # Purge + output-dir wipe happen in start_run(), *after* it claims the
+    # cross-process lock — see the matching comment in validate_hf_launch.
+    return None
 
 
 def build_command(
@@ -633,6 +628,16 @@ def start_run(
             return run_key, True, plan.visibility
 
         try:
+            from frontend.purge_rerun import purge_safety_for_launch
+
+            purge_err = purge_safety_for_launch(
+                slug,
+                redteam_profile,
+                visibility=plan.visibility,
+                owner_user_id=plan.owner_user_id,
+            )
+            if purge_err:
+                raise OutputDirError(purge_err)
             _wipe_outputs(slug, redteam_profile)
 
             if docker_launch.use_docker():
