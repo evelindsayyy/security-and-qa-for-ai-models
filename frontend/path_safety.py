@@ -14,8 +14,10 @@ from pathlib import Path
 # Slugs are filename stems produced by our own pipelines: timestamps,
 # model ids passed through the runner's _safe_slug, scanner output dirs.
 # Letters, digits, dot, dash, underscore only — and never an all-dots
-# name like ".." that would traverse upward.
-_SLUG_RE = re.compile(r"(?!\.+$)[A-Za-z0-9._-]+$")
+# name like ".." that would traverse upward. `\Z` (not `$`) at both anchor
+# points: `$` matches just before a trailing "\n" as well as at the true
+# end of the string, so "good\n" would otherwise slip through as "safe".
+_SLUG_RE = re.compile(r"(?!\.+\Z)[A-Za-z0-9._-]+\Z")
 
 
 def is_safe_slug(slug: str) -> bool:
