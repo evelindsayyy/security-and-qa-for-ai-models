@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -19,6 +20,7 @@ from frontend import docker_launch, run_paths
 from frontend.launch_registry import check_inflight_combo
 from frontend.log_status import (
     OOM_KILL_MESSAGE,
+    STALL_KILL_MESSAGE,
     is_oom_kill_exit,
     run_log_payload,
     status_message,
@@ -34,6 +36,10 @@ DOCKER_COMPOSE_FILE = ROOT / "scanner" / "docker" / "compose.yml"
 _RUNNING: dict[str, subprocess.Popen] = {}
 _INFLIGHT: dict[tuple, str] = {}
 _LOCK = threading.Lock()
+
+# Log quiet this long while status=running → kill hung download (backup for
+# in-process watchdog; also covers cases where native HF code freezes the GIL).
+_DEFAULT_SCAN_STALL_SECONDS = 45 * 60
 
 load_dotenv(ROOT / ".env", override=False)
 
@@ -237,11 +243,104 @@ def build_command(
     )
 
 
+def _scan_stall_seconds() -> int:
+    raw = os.environ.get("SCAN_STALL_SECONDS", "").strip()
+    if raw:
+        try:
+            return max(60, int(raw))
+        except ValueError:
+            pass
+    return _DEFAULT_SCAN_STALL_SECONDS
+
+
+def _log_age_seconds(log_path: Path) -> float | None:
+    try:
+        if not log_path.is_file():
+            return None
+        return time.time() - log_path.stat().st_mtime
+    except OSError:
+        return None
+
+
+def _terminate_scan_process(proc: subprocess.Popen) -> None:
+    """Best-effort kill of the compose/python process group."""
+    try:
+        if proc.poll() is not None:
+            return
+        if hasattr(os, "killpg"):
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
+                return
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+        proc.terminate()
+    except OSError:
+        pass
+
+
+def _kill_stalled_scan(slug: str, proc: subprocess.Popen | None, log_path: Path) -> bool:
+    """If the run log is stale, kill the child and append a clear ERROR. Returns True if killed."""
+    age = _log_age_seconds(log_path)
+    stall = _scan_stall_seconds()
+    if age is None or age < stall:
+        return False
+    try:
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(
+                f"\n{STALL_KILL_MESSAGE.format(minutes=stall / 60, age_min=age / 60)}\n"
+            )
+    except OSError:
+        pass
+    if proc is not None:
+        _terminate_scan_process(proc)
+    else:
+        # Web may have restarted; try the PID recorded in run.lock.
+        lock_pid = _read_lock_pid(slug)
+        if lock_pid is not None:
+            try:
+                os.kill(lock_pid, signal.SIGTERM)
+            except OSError:
+                pass
+    # Drop the lock now — writing the ERROR refreshes log mtime, which would
+    # otherwise keep run_lock.is_active() true via orphan-log heuristics.
+    run_lock.release(_run_lock_path(slug))
+    with _LOCK:
+        _clear_registry_for_slug(slug)
+    return True
+
+
+def _read_lock_pid(slug: str) -> int | None:
+    path = _run_lock_path(slug)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    try:
+        return int(data.get("pid") or 0) or None
+    except (TypeError, ValueError):
+        return None
+
+
 def _watch_process(slug: str, proc: subprocess.Popen, lock_path: Path) -> None:
-    proc.wait()
-    exit_code = proc.returncode
+    log_path = _output_dir_for_slug(slug) / "scan_run.log"
+    while proc.poll() is None:
+        if _kill_stalled_scan(slug, proc, log_path):
+            try:
+                proc.wait(timeout=120)
+            except subprocess.TimeoutExpired:
+                try:
+                    if hasattr(os, "killpg"):
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    else:
+                        proc.kill()
+                except OSError:
+                    pass
+            break
+        time.sleep(30)
+    exit_code = proc.returncode if proc.returncode is not None else proc.wait()
     if is_oom_kill_exit(exit_code):
-        log_path = _output_dir_for_slug(slug) / "scan_run.log"
         try:
             with log_path.open("a", encoding="utf-8") as fh:
                 fh.write(f"\n{OOM_KILL_MESSAGE}\n")
@@ -377,18 +476,28 @@ def get_status(
 
     proc = _RUNNING.get(slug)
     if proc is not None and proc.poll() is None:
-        return {
-            "status": "running",
-            "log_path": staging_rel_log,
-            **run_log_payload(staging_log),
-        }
+        if _kill_stalled_scan(slug, proc, staging_log):
+            # Fall through after terminate so the next poll reports failed.
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+        else:
+            return {
+                "status": "running",
+                "log_path": staging_rel_log,
+                **run_log_payload(staging_log),
+            }
 
     if run_lock.is_active(_run_lock_path(slug)) and not staging_result.is_file():
-        return {
-            "status": "running",
-            "log_path": staging_rel_log,
-            **run_log_payload(staging_log),
-        }
+        if _kill_stalled_scan(slug, proc if proc is not None and proc.poll() is None else None, staging_log):
+            pass
+        else:
+            return {
+                "status": "running",
+                "log_path": staging_rel_log,
+                **run_log_payload(staging_log),
+            }
 
     # A completed run's result may still be sitting in staging (not yet
     # moved) or may already be at its final scoped location — resolve that
@@ -412,14 +521,16 @@ def get_status(
         detail = status_message(staging_log, failed=True).strip()
         if is_oom_kill_exit(exit_code):
             prefix = OOM_KILL_MESSAGE
+        elif "download stalled" in detail.lower():
+            prefix = ""
         else:
             prefix = f"Scan process exited with code {exit_code}."
-        if detail and OOM_KILL_MESSAGE in detail:
+        if detail and (OOM_KILL_MESSAGE in detail or "download stalled" in detail.lower()):
             message = detail
-        elif detail:
+        elif detail and prefix:
             message = f"{prefix}\n{detail}"
         else:
-            message = prefix
+            message = detail or prefix
         return {
             "status": "failed",
             "message": message,

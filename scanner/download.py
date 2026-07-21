@@ -8,19 +8,21 @@ Requires ``HF_TOKEN`` (or ``HUGGING_FACE_HUB_TOKEN``) in the environment for
 gated repos; public repos download without a token but are rate-limited.
 
 On low-RAM hosts (e.g. ~5 GiB VCM), Hub/Xet defaults can OOM mid-download.
-This module caps ``snapshot_download(max_workers=…)`` and HF_XET concurrency
-from ``SCAN_HF_MAX_WORKERS`` / MemAvailable.
+This module caps ``snapshot_download(max_workers=…)`` and disables Xet by
+default (``HF_HUB_DISABLE_XET``) so long multi-GB fetches use classical HTTP
+instead of the Xet path that can hang forever after CDN 503/403.
+A progress watchdog fails the download if on-disk bytes stop growing.
 """
 
 from __future__ import annotations
 
 import os
 import shutil
+import signal
 import sys
+import threading
+import time
 from pathlib import Path
-
-from huggingface_hub import HfApi, snapshot_download
-from huggingface_hub.utils import get_token
 
 from scanner.paths import MODELS_ROOT, model_dir
 
@@ -40,6 +42,17 @@ _LOW_RAM_BYTES = int(8 * 1024**3)
 _DEFAULT_WORKERS_LOW_RAM = 1
 _DEFAULT_WORKERS = 2
 
+# No on-disk growth for this long → treat as hung (Xet/CDN stall).
+_DEFAULT_STALL_SECONDS = 30 * 60
+_DEFAULT_HEARTBEAT_SECONDS = 60
+
+STALL_ERROR = (
+    "ERROR: download stalled — no growth in MODELS_ROOT for "
+    "{stall_min:.0f} minutes (HF transfer hung after CDN errors is common). "
+    "Partial weights will be cleared on retry. Prefer a smaller mirror, or set "
+    "HF_HUB_DISABLE_XET=1 / SCAN_HF_STALL_SECONDS."
+)
+
 
 class DownloadError(RuntimeError):
     """User-facing download failure (token, disk, size, Hub errors)."""
@@ -54,7 +67,19 @@ def _max_model_bytes() -> int:
     return int(gb * 1e9)
 
 
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return default
+
+
 def _hub_token() -> str | None:
+    from huggingface_hub.utils import get_token
+
     return get_token() or (os.environ.get("HF_TOKEN") or "").strip() or None
 
 
@@ -75,7 +100,7 @@ def hf_max_workers(*, mem_avail: int | None = None) -> int:
     """Parallel file downloads for ``snapshot_download`` (1–8).
 
     ``SCAN_HF_MAX_WORKERS`` wins when set. Otherwise hosts with
-    MemAvailable < 8 GiB default to 1 (avoids Xet/Hub OOM on ~5 GiB VMs).
+    MemAvailable < 8 GiB default to 1 (avoids Hub OOM on ~5 GiB VMs).
     """
     raw = os.environ.get("SCAN_HF_MAX_WORKERS", "").strip()
     if raw:
@@ -90,17 +115,28 @@ def hf_max_workers(*, mem_avail: int | None = None) -> int:
     return _DEFAULT_WORKERS
 
 
+def _disable_xet_default() -> bool:
+    """Xet hangs after CDN 503/403 have been seen on VCM; default off."""
+    raw = os.environ.get("HF_HUB_DISABLE_XET", "").strip().lower()
+    if raw in ("0", "false", "no", "off"):
+        return False
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    # Unset → disable Xet for scanner reliability on long multi-GB jobs.
+    return True
+
+
 def apply_hf_download_env(*, max_workers: int) -> None:
-    """Cap Hub timeouts and Xet concurrency for the chosen worker count."""
+    """Cap Hub timeouts / workers and prefer classical HTTP over Xet."""
     os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "300")
     os.environ.setdefault("HF_HUB_ETAG_TIMEOUT", "60")
-    # Never enable high-performance Xet on scanner hosts (large buffers).
     os.environ["HF_XET_HIGH_PERFORMANCE"] = "0"
-    # Pin Xet streams to match file-level workers (bypass adaptive ramp to 64).
     workers = str(max(1, max_workers))
     os.environ["HF_XET_FIXED_DOWNLOAD_CONCURRENCY"] = workers
     os.environ["HF_XET_DATA_MAX_CONCURRENT_FILE_DOWNLOADS"] = workers
     os.environ.setdefault("HF_XET_NUM_CONCURRENT_RANGE_GETS", workers)
+    if _disable_xet_default():
+        os.environ["HF_HUB_DISABLE_XET"] = "1"
 
 
 def model_download_complete(model_id: str) -> bool:
@@ -120,8 +156,27 @@ def clear_incomplete_model(model_id: str) -> bool:
     return True
 
 
+def dir_byte_size(path: Path) -> int:
+    """Total size of regular files under *path* (best-effort)."""
+    if not path.is_dir():
+        return 0
+    total = 0
+    try:
+        for root, _dirs, files in os.walk(path):
+            for name in files:
+                try:
+                    total += (Path(root) / name).stat().st_size
+                except OSError:
+                    continue
+    except OSError:
+        return total
+    return total
+
+
 def _repo_download_bytes(model_id: str, *, token: str | None) -> tuple[int, int, bool | str]:
     """Return (total_bytes, file_count, gated) from Hub metadata."""
+    from huggingface_hub import HfApi
+
     api = HfApi(token=token)
     info = api.model_info(model_id, files_metadata=True)
     total = sum(int(s.size or 0) for s in (info.siblings or []))
@@ -181,21 +236,60 @@ def _preflight(model_id: str, *, token: str | None) -> int:
     mem = mem_available_bytes()
     workers = hf_max_workers(mem_avail=mem)
     mem_s = f"{mem / (1024**3):.1f} GiB MemAvailable" if mem is not None else "MemAvailable n/a"
+    xet = "off" if _disable_xet_default() else "on"
+    stall_min = _env_int("SCAN_HF_STALL_SECONDS", _DEFAULT_STALL_SECONDS) / 60
     print(
         f"download preflight: {model_id} ≈ {total / 1e9:.1f} GB "
         f"({n_files} files), free disk {free / 1e9:.1f} GB, "
-        f"{mem_s}, HF max_workers={workers}",
+        f"{mem_s}, HF max_workers={workers}, Xet={xet}, "
+        f"stall_watch={stall_min:.0f}m",
         flush=True,
     )
     if mem is not None and mem < _LOW_RAM_BYTES and total >= 15 * 1e9:
         print(
-            "WARNING: large multi-GB download on a low-RAM host — using serial HF/Xet "
-            "concurrency (SCAN_HF_MAX_WORKERS). If the process is killed without an "
-            "ERROR line, the OS likely OOM'd; retry a smaller mirror.",
+            "WARNING: large multi-GB download on a low-RAM host — using serial HF "
+            "concurrency (SCAN_HF_MAX_WORKERS). Prefer a smaller artifact-scan mirror "
+            "when possible; overnight hangs are killed by the stall watchdog.",
             file=sys.stderr,
             flush=True,
         )
     return total
+
+
+def _progress_watchdog(
+    target: Path,
+    *,
+    stop: threading.Event,
+    stall_sec: int,
+    heartbeat_sec: int,
+) -> None:
+    """Fail the process if *target* stops growing (native HF/Xet can hang)."""
+    last = dir_byte_size(target)
+    last_change = time.monotonic()
+    while not stop.wait(heartbeat_sec):
+        cur = dir_byte_size(target)
+        now = time.monotonic()
+        if cur > last:
+            delta_mb = (cur - last) / 1e6
+            print(
+                f"download progress: {cur / 1e9:.2f} GB on disk (+{delta_mb:.0f} MB)",
+                flush=True,
+            )
+            last = cur
+            last_change = now
+            continue
+        idle = now - last_change
+        if idle >= stall_sec:
+            msg = STALL_ERROR.format(stall_min=stall_sec / 60)
+            print(msg, file=sys.stderr, flush=True)
+            print(msg, flush=True)
+            # Native transfer code may never raise; force the scan process to exit
+            # so the UI leaves "running" and the next attempt can clear incompletes.
+            try:
+                os.kill(os.getpid(), signal.SIGTERM)
+            except OSError:
+                os._exit(2)
+            return
 
 
 def download_model(model_id: str) -> Path:
@@ -215,14 +309,33 @@ def download_model(model_id: str) -> Path:
     if cleared:
         print(f"cleared incomplete download for {model_id}", flush=True)
 
+    workers = hf_max_workers()
+    # Must run before huggingface_hub import so HF_HUB_DISABLE_XET is honored.
+    apply_hf_download_env(max_workers=workers)
+
+    from huggingface_hub import snapshot_download
+
     token = _hub_token()
     _preflight(model_id, token=token)
 
     target = model_dir(model_id)
     target.mkdir(parents=True, exist_ok=True)
 
-    workers = hf_max_workers()
-    apply_hf_download_env(max_workers=workers)
+    stall_sec = _env_int("SCAN_HF_STALL_SECONDS", _DEFAULT_STALL_SECONDS)
+    heartbeat_sec = _env_int("SCAN_HF_HEARTBEAT_SECONDS", _DEFAULT_HEARTBEAT_SECONDS)
+    stop = threading.Event()
+    watcher = threading.Thread(
+        target=_progress_watchdog,
+        kwargs={
+            "target": target,
+            "stop": stop,
+            "stall_sec": stall_sec,
+            "heartbeat_sec": heartbeat_sec,
+        },
+        name="hf-download-watchdog",
+        daemon=True,
+    )
+    watcher.start()
 
     try:
         snapshot_download(
@@ -249,12 +362,15 @@ def download_model(model_id: str) -> Path:
                 "SCANNER_MODELS_HOST_PATH) and retry; "
                 "./scripts/reclaim-disk.sh --apply frees leftover Garak caches."
             )
-        elif "timed out" in low or "timeout" in low:
+        elif "timed out" in low or "timeout" in low or "stall" in low:
             hint = (
-                " Increase HF_HUB_DOWNLOAD_TIMEOUT (seconds) or set HF_TOKEN "
-                "for faster authenticated downloads."
+                " Download stalled or timed out — retry, use a smaller mirror, "
+                "or raise SCAN_HF_STALL_SECONDS / HF_HUB_DOWNLOAD_TIMEOUT."
             )
         raise DownloadError(f"download failed for {model_id}: {msg}.{hint}") from exc
+    finally:
+        stop.set()
+        watcher.join(timeout=5)
 
     (target / _COMPLETE_MARKER).write_text("ok\n", encoding="utf-8")
     print(f"download complete: {target}", flush=True)

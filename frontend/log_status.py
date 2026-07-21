@@ -13,6 +13,13 @@ OOM_KILL_MESSAGE = (
     "(default on low-RAM hosts) or use a smaller HF mirror for artifact scanning."
 )
 
+STALL_KILL_MESSAGE = (
+    "ERROR: Download stalled (no log progress for {minutes:.0f} minutes; "
+    "log quiet ~{age_min:.0f}m). HF transfer may have hung after CDN errors. "
+    "Hung scanner was terminated — clear partial weights and retry, or use a "
+    "smaller artifact-scan mirror."
+)
+
 
 def is_oom_kill_exit(exit_code: int | None) -> bool:
     """True for SIGKILL (-9) or shell-style 128+9 (137)."""
@@ -56,6 +63,7 @@ def _prefer_error_lines(text: str) -> str:
         or "not enough free disk" in ln
         or "out of memory" in ln.lower()
         or "killed by the os" in ln.lower()
+        or "download stalled" in ln.lower()
         or "timed out" in ln.lower()
         or "HF_TOKEN" in ln
         or "SCAN_HF_MAX_WORKERS" in ln
@@ -65,6 +73,7 @@ def _prefer_error_lines(text: str) -> str:
         or "DownloadError" in ln
         or "killed by the os" in ln.lower()
         or "out of memory" in ln.lower()
+        or "download stalled" in ln.lower()
         for ln in lines
     )
     if not interesting:

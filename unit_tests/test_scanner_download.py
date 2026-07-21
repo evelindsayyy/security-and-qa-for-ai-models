@@ -62,10 +62,21 @@ class HfWorkersTest(unittest.TestCase):
         os.environ.pop("SCAN_HF_MAX_WORKERS", None)
         self.assertEqual(download_mod.hf_max_workers(mem_avail=32 * 1024**3), 2)
 
-    def test_apply_hf_download_env_pins_xet(self) -> None:
+    def test_apply_hf_download_env_disables_xet_by_default(self) -> None:
+        os.environ.pop("HF_HUB_DISABLE_XET", None)
         download_mod.apply_hf_download_env(max_workers=1)
+        self.assertEqual(os.environ["HF_HUB_DISABLE_XET"], "1")
         self.assertEqual(os.environ["HF_XET_FIXED_DOWNLOAD_CONCURRENCY"], "1")
         self.assertEqual(os.environ["HF_XET_HIGH_PERFORMANCE"], "0")
+
+    def test_dir_byte_size(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "a.bin").write_bytes(b"12345")
+            sub = root / "sub"
+            sub.mkdir()
+            (sub / "b.bin").write_bytes(b"abc")
+            self.assertEqual(download_mod.dir_byte_size(root), 8)
 
 
 class DownloadPreflightTest(unittest.TestCase):
@@ -112,8 +123,9 @@ class DownloadPreflightTest(unittest.TestCase):
         usage = mock.Mock(free=500_000_000_000)
         with mock.patch.object(download_mod, "_hub_token", return_value="tok"), mock.patch.object(
             download_mod, "_repo_download_bytes", return_value=(1_000_000, 2, False)
-        ), mock.patch.object(download_mod.shutil, "disk_usage", return_value=usage), mock.patch.object(
-            download_mod, "snapshot_download", side_effect=RuntimeError("429 Too Many Requests")
+        ), mock.patch.object(download_mod.shutil, "disk_usage", return_value=usage), mock.patch(
+            "huggingface_hub.snapshot_download",
+            side_effect=RuntimeError("429 Too Many Requests"),
         ) as snap:
             with self.assertRaises(download_mod.DownloadError) as ctx:
                 download_mod.download_model("org/model")
@@ -144,6 +156,13 @@ class FailedStatusMessageTest(unittest.TestCase):
         self.assertTrue(is_oom_kill_exit(-9))
         self.assertFalse(is_oom_kill_exit(1))
         self.assertFalse(is_oom_kill_exit(None))
+
+    def test_prefers_stall_error(self) -> None:
+        from frontend.log_status import _prefer_error_lines
+
+        text = "Fetching 17 files\nERROR: download stalled — no growth\n"
+        out = _prefer_error_lines(text)
+        self.assertIn("download stalled", out)
 
 
 if __name__ == "__main__":

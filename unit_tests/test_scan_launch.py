@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -137,6 +138,30 @@ class GetStatusTest(unittest.TestCase):
         status = scan_launch.get_status(slug)
         self.assertEqual(status["status"], "running")
         self.assertGreater(len(status["message"]), 500)
+
+    def test_stale_log_kills_hung_scan(self) -> None:
+        slug = "hung-model"
+        out_slug = self.out / slug
+        out_slug.mkdir(parents=True)
+        log = out_slug / "scan_run.log"
+        log.write_text("Fetching 17 files: 47%\n", encoding="utf-8")
+        # Make mtime look hours old
+        old = time.time() - (50 * 60)
+        os.utime(log, (old, old))
+        fake_proc = mock.Mock()
+        fake_proc.poll.side_effect = [None, 143]
+        fake_proc.returncode = 143
+        fake_proc.pid = 99999
+        fake_proc.wait.return_value = 143
+        scan_launch._RUNNING[slug] = fake_proc
+        self.addCleanup(lambda: scan_launch._RUNNING.pop(slug, None))
+        with mock.patch.object(scan_launch, "_terminate_scan_process") as term:
+            with mock.patch.dict(os.environ, {"SCAN_STALL_SECONDS": "600"}):
+                status = scan_launch.get_status(slug)
+        term.assert_called_once()
+        self.assertEqual(status["status"], "failed")
+        self.assertIn("download stalled", status["message"].lower())
+        self.assertIn("Download stalled", log.read_text(encoding="utf-8"))
 
     def test_validate_rejects_inflight(self) -> None:
         slug = "gpt2"

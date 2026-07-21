@@ -16,6 +16,8 @@ RUN uv sync --frozen --no-dev --no-install-project --group scanner
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH=/app
 ENV HF_HOME=/app/scanner/models/.cache/huggingface
+# Must be set before huggingface_hub import (image default; compose can override).
+ENV HF_HUB_DISABLE_XET=1
 
 COPY scanner/docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
