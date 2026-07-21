@@ -120,6 +120,12 @@ class MergedSafetyResult(BaseModel):
     composite_score: float = 0.0
     # Suites expected but absent from this merge (skipped/failed runs).
     missing_suites: list[str] = Field(default_factory=list)
+    # Suites that ran and are present in ``runs``/``findings`` but whose
+    # underlying tool run crashed/exited early (garak ``report_complete``:
+    # false or promptfoo ``process_complete``: false) — excluded from
+    # ``composite_score``/``composite_tier`` like a missing suite, but kept
+    # in ``findings`` for visibility. See ``safety_scorer._is_run_incomplete``.
+    partial_suites: list[str] = Field(default_factory=list)
     runs: list[SafetyRunSummary] = Field(default_factory=list)
     findings: list[SafetyFinding] = Field(default_factory=list)
     tool_results: dict[str, Any] = Field(default_factory=dict)

@@ -33,6 +33,13 @@ class IsSafeSlugTest(unittest.TestCase):
         self.assertFalse(is_safe_slug(""))
         self.assertFalse(is_safe_slug("   "))
 
+    def test_rejects_trailing_newline(self) -> None:
+        """`$` (unlike `\\Z`) matches just before a trailing newline, so a
+        naive regex would accept "good\\n" as a safe slug."""
+        for slug in ("good\n", "gpt-5.5\n", "..\n"):
+            with self.subTest(slug=slug):
+                self.assertFalse(is_safe_slug(slug))
+
 
 class ResolvesInsideTest(unittest.TestCase):
     def setUp(self) -> None:
