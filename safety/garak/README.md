@@ -135,6 +135,7 @@ Azure gateway may block jailbreak prompts before the model responds. Garak repor
 | Issue | Fix |
 |-------|-----|
 | `No detectors, nothing to do` / `getpwuid(): uid not found` | Full pipeline sets `USER`/`LOGNAME` via [`garak_xdg_env()`](../run.py) in Docker; standalone runs need the same env or [`safety/garak/docker/compose.yml`](docker/compose.yml) |
+| Disk full under `/home` from many `.garak-cache` dirs | Shared cache is `output/.garak-cache` (one copy). Reclaim leftovers: `./scripts/reclaim-disk.sh --apply` |
 | `ToxicCommentModel` preflight failed | Rebuild safety image; confirm `USER=garak` in XDG env before scan |
 | Scan exits non-zero after probes | Report missing `completion` or modules — see `report_validation.py`; partial reports are rejected |
 | Root-owned `output/` | `chown -R "$(id -u):$(id -g)" safety/garak/output` |

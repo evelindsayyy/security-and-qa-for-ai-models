@@ -18,6 +18,18 @@
     <div class="finding-detail-panel benchmark-item-panel">
       <h3>Question</h3>
       {{ expandable(r.question or "—", clamp=4) }}
+      {% if r.choices %}
+      <h3>Answer choices</h3>
+      <ul class="benchmark-choice-list">
+        {% for letter, choice in r.choices.items() %}
+        <li class="{% if letter == r.correct_letter %}choice-correct{% elif letter == r.model_answer and not passed %}choice-wrong{% endif %}">
+          <b>{{ letter }}.</b> {{ choice }}
+          {% if letter == r.correct_letter %}<span class="dim"> (correct)</span>{% endif %}
+          {% if letter == r.model_answer %}<span class="dim"> (model)</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
       {% if r.answer_text %}
       <h3>Model answer (text)</h3>
       {{ expandable(r.answer_text, clamp=3) }}

@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "benchmarks"))
 
 try:  # benchmarks deps (pandas/litellm) aren't always installed in every env
     import pandas as pd
-    from tqa_test import TruthfulQATestRunner
+    from tqa_test import TruthfulQATestRunner, _parse_choices
 
     _HAS_TQA = True
 except Exception:  # noqa: BLE001
@@ -51,6 +51,22 @@ class TestTqaCoverage(unittest.TestCase):
         self.assertEqual(m["attempted"], 1)
         self.assertEqual(m["scored"], 1)
         self.assertEqual(m["correct"], 1)
+
+
+@unittest.skipUnless(_HAS_TQA, "benchmarks deps (pandas) not installed")
+class TestParseChoices(unittest.TestCase):
+    def test_parses_json_string(self) -> None:
+        self.assertEqual(
+            _parse_choices('{"A": "yes", "B": "no"}'),
+            {"A": "yes", "B": "no"},
+        )
+
+    def test_passthrough_dict(self) -> None:
+        self.assertEqual(_parse_choices({"A": "x"}), {"A": "x"})
+
+    def test_blank_and_bad_input_is_empty(self) -> None:
+        for raw in ("", "   ", None, float("nan"), "not json", "[1, 2]"):
+            self.assertEqual(_parse_choices(raw), {})
 
 
 if __name__ == "__main__":

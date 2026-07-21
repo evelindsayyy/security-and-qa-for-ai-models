@@ -103,9 +103,12 @@ class GarakXdgEnvTest(unittest.TestCase):
         env = garak_xdg_env("test-slug-xdg")
         self.assertIn("HOME", env)
         self.assertIn("test-slug-xdg", env["HOME"])
+        self.assertNotIn("test-slug-xdg", env["XDG_CACHE_HOME"])
+        self.assertTrue(env["XDG_CACHE_HOME"].endswith(".garak-cache"))
         self.assertEqual(env["USER"], "garak")
         self.assertEqual(env["LOGNAME"], "garak")
         self.assertTrue(os.path.isdir(env["HOME"]))
+        self.assertTrue(os.path.isdir(env["XDG_CACHE_HOME"]))
 
 
 class RunPipelineValidationTest(unittest.TestCase):

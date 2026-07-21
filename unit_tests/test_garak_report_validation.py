@@ -73,6 +73,7 @@ class GarakXdgEnvTest(unittest.TestCase):
         self.assertEqual(env["USER"], "garak")
         self.assertEqual(env["LOGNAME"], "garak")
         self.assertIn("garak-env-test", env["HOME"])
+        self.assertNotIn("garak-env-test", env["XDG_CACHE_HOME"])
 
 
 class ToxicDetectorPreflightTest(unittest.TestCase):

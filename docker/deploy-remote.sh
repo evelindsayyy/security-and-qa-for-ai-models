@@ -32,19 +32,28 @@ _sync_repo() {
   local origin_url
   origin_url="$(_git_origin_url)"
   local attempt
+  # Keep secrets and runtime state; wipe everything else so CI is source of truth.
+  # Order matters: untracked files block ``checkout`` even with -f, so clean first.
+  local clean_args=( -fd
+    --exclude=.env
+    --exclude=.docker-home
+    --exclude='*.local'
+  )
   for attempt in 1 2 3; do
-    # Hard reset to the fetched CI ref — merge --ff-only left the VM "ahead of
-    # origin" with local commits and could skip the commit GitLab just built.
     if git fetch "$origin_url" "$ref" \
-      && git checkout -B "$ref" FETCH_HEAD \
+      && git clean "${clean_args[@]}" \
+      && git checkout -f -B "$ref" FETCH_HEAD \
       && git reset --hard FETCH_HEAD \
-      && git clean -fd --exclude=.env --exclude=.docker-home --exclude='*.local'; then
+      && git clean "${clean_args[@]}"; then
+      echo "git sync ok: $(git rev-parse --short HEAD) ($(git log -1 --pretty=%s))"
       return 0
     fi
     echo "git sync attempt ${attempt}/3 failed; retrying..." >&2
     sleep $((attempt * 2))
   done
   echo "git sync failed after 3 attempts (origin: ${origin_url%%gitlab-ci-token:*}…)" >&2
+  echo "Working tree status (for debugging):" >&2
+  git status -sb >&2 || true
   return 1
 }
 

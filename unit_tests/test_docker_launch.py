@@ -101,6 +101,19 @@ class EnsureStackGuardTest(unittest.TestCase):
                 docker_launch.ensure_stack("evaluator")
         self.assertIn("build blew up", str(ctx.exception))
 
+    def test_scanner_chowns_models_volume_before_build(self) -> None:
+        docker_launch._ready.discard("scanner")
+        self.addCleanup(docker_launch._ready.discard, "scanner")
+        with (
+            mock.patch.object(docker_launch, "use_docker", return_value=True),
+            mock.patch.object(docker_launch, "docker_available", return_value=True),
+            mock.patch.object(docker_launch, "_export_uid_gid"),
+            mock.patch.object(docker_launch, "_compose_build"),
+            mock.patch.object(docker_launch, "ensure_scanner_models_volume") as chown,
+        ):
+            docker_launch.ensure_stack("scanner")
+        chown.assert_called_once()
+
     def test_noop_when_host_mode(self) -> None:
         with mock.patch.object(docker_launch, "use_docker", return_value=False):
             self.assertIsNone(docker_launch.ensure_stack("evaluator"))

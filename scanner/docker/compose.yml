@@ -3,6 +3,10 @@
 #   docker compose --env-file .env -f scanner/docker/compose.yml build
 #   docker compose --env-file .env -f scanner/docker/compose.yml run --rm scanner \
 #     python -m scanner scan gpt2
+#
+# Model weights use a named Docker volume (typically on / under Docker's data
+# root) so multi-GB HF downloads are not capped by a small /home repo partition.
+# Override with SCANNER_MODELS_HOST_PATH=/path/on/host to bind-mount instead.
 
 services:
   scanner:
@@ -10,16 +14,29 @@ services:
       context: ../..
       dockerfile: scanner/docker/Dockerfile
 
-    user: "${UID:-1000}:${GID:-1000}"
-
     volumes:
       - ..:/app/scanner
-      - ../models:/app/scanner/models
       - ../output:/app/scanner/output
+      # Named volume by default; bind host path when SCANNER_MODELS_HOST_PATH is set.
+      - ${SCANNER_MODELS_HOST_PATH:-scanner_models}:/app/scanner/models
 
     environment:
+      - UID=${UID:-1000}
+      - GID=${GID:-1000}
       - HF_TOKEN=${HF_TOKEN:-}
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+      - HF_HUB_DOWNLOAD_TIMEOUT=${HF_HUB_DOWNLOAD_TIMEOUT:-300}
+      - HF_HUB_ETAG_TIMEOUT=${HF_HUB_ETAG_TIMEOUT:-60}
+      # Prefer classical HTTP over HF Xet (Xet can hang forever after CDN 503/403).
+      - HF_HUB_DISABLE_XET=${HF_HUB_DISABLE_XET:-1}
+      # Parallel HF file downloads (1 = safest on ~5 GiB RAM VMs). Empty → auto from MemAvailable.
+      - SCAN_HF_MAX_WORKERS=${SCAN_HF_MAX_WORKERS:-}
+      # Fail download if on-disk bytes stop growing (default 30 minutes).
+      - SCAN_HF_STALL_SECONDS=${SCAN_HF_STALL_SECONDS:-1800}
+      - SCAN_HF_HEARTBEAT_SECONDS=${SCAN_HF_HEARTBEAT_SECONDS:-60}
+      - SCAN_MAX_MODEL_GB=${SCAN_MAX_MODEL_GB:-80}
       - MODEL_ID=${MODEL_ID:-distilbert-base-uncased}
+      - MODELS_ROOT=/app/scanner/models
       - POSTGRES_DSN=${POSTGRES_DSN:-}
       - DATABASE_URL=${DATABASE_URL:-}
       # Weights under models/<slug>/ are removed after scan unless SCAN_KEEP_WEIGHTS=1
@@ -28,3 +45,7 @@ services:
 
     stdin_open: true
     tty: true
+
+volumes:
+  scanner_models:
+    name: ${SCANNER_MODELS_VOLUME_NAME:-qa-ai-models_scanner_models}
