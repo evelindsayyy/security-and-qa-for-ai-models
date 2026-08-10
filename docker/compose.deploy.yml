@@ -1,10 +1,10 @@
 # Production override: pull the CI-built web image instead of building locally.
 #
-#   export WEB_IMAGE=${CI_REGISTRY_IMAGE}/web:${CI_COMMIT_SHORT_SHA}
+#   export WEB_IMAGE=ghcr.io/evelindsayyy/security-and-qa-for-ai-models:${GIT_SHA}
 #   docker compose -f docker/compose.yml -f docker/compose.deploy.yml pull web
 #   docker compose -f docker/compose.yml -f docker/compose.deploy.yml up -d --no-build web
 #
-# Requires WEB_IMAGE (GitLab container registry tag from build-web-image job).
+# Requires WEB_IMAGE (container registry tag from the CI image build).
 
 services:
   web:

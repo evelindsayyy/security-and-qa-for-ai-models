@@ -4,7 +4,7 @@
 # pass IDs via env(1):  compose_with_pillar_ids docker compose …
 #
 # HOST_UID/HOST_GID must match the user that owns the bind-mounted repo tree.
-# GitLab deploy SSHes as security-qa-deploy; if we used that account's id(1), the
+# CI deploy SSHes as security-qa-deploy; if we used that account's id(1), the
 # web container could not write vcm-owned paths (summary cache, scan locks, …)
 # and browser routes would 500 until someone restarted as vcm. Always prefer the
 # repo owner's uid/gid unless the caller already exported HOST_UID/HOST_GID.

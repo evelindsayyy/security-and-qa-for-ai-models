@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-# Run on the application VM (invoked by GitLab deploy job over SSH).
+# Run on the application VM (invoked by CI over SSH).
 #
-# Expects env: DEPLOY_PATH, CI_REGISTRY, CI_JOB_TOKEN
+# Expects env: DEPLOY_PATH, DEPLOY_REGISTRY, DEPLOY_REGISTRY_USER,
+# DEPLOY_REGISTRY_TOKEN
 # Optional: GIT_REF (default main), BUILD_PILLARS=1 to rebuild pillar images after pull
-# Optional: CI_SERVER_HOST, CI_PROJECT_PATH, CI_SERVER_PROTOCOL — HTTPS git sync via CI_JOB_TOKEN
+# Optional: DEPLOY_GIT_URL. GitLab CI_* variables remain supported during cutover.
 set -euo pipefail
 
 DEPLOY_PATH="${DEPLOY_PATH:?DEPLOY_PATH required}"
-CI_REGISTRY="${CI_REGISTRY:?CI_REGISTRY required}"
-CI_JOB_TOKEN="${CI_JOB_TOKEN:?CI_JOB_TOKEN required}"
+DEPLOY_REGISTRY="${DEPLOY_REGISTRY:-${CI_REGISTRY:-}}"
+DEPLOY_REGISTRY_USER="${DEPLOY_REGISTRY_USER:-${CI_REGISTRY_USER:-gitlab-ci-token}}"
+DEPLOY_REGISTRY_TOKEN="${DEPLOY_REGISTRY_TOKEN:-${CI_JOB_TOKEN:-}}"
+: "${DEPLOY_REGISTRY:?DEPLOY_REGISTRY or CI_REGISTRY required}"
+: "${DEPLOY_REGISTRY_TOKEN:?DEPLOY_REGISTRY_TOKEN or CI_JOB_TOKEN required}"
 GIT_REF="${GIT_REF:-main}"
 
 cd "$DEPLOY_PATH"
@@ -18,6 +22,10 @@ test -f .env || { echo "Missing .env in ${DEPLOY_PATH}" >&2; exit 1; }
 umask 002
 
 _git_origin_url() {
+  if [[ -n "${DEPLOY_GIT_URL:-}" ]]; then
+    printf '%s' "$DEPLOY_GIT_URL"
+    return 0
+  fi
   if [[ -n "${CI_SERVER_HOST:-}" && -n "${CI_PROJECT_PATH:-}" ]]; then
     local proto="${CI_SERVER_PROTOCOL:-https}"
     printf '%s://gitlab-ci-token:%s@%s/%s.git' \
@@ -51,7 +59,7 @@ _sync_repo() {
     echo "git sync attempt ${attempt}/3 failed; retrying..." >&2
     sleep $((attempt * 2))
   done
-  echo "git sync failed after 3 attempts (origin: ${origin_url%%gitlab-ci-token:*}…)" >&2
+  echo "git sync failed after 3 attempts" >&2
   echo "Working tree status (for debugging):" >&2
   git status -sb >&2 || true
   return 1
@@ -73,7 +81,8 @@ chmod 2775 "${DEPLOY_PATH}/.docker-home" 2>/dev/null || chmod 775 "${DEPLOY_PATH
 mkdir -p "${DEPLOY_PATH}/.docker-home/${HOST_UID}"
 chmod 2775 "${DEPLOY_PATH}/.docker-home/${HOST_UID}" 2>/dev/null || true
 
-printf '%s' "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin "$CI_REGISTRY"
+printf '%s' "$DEPLOY_REGISTRY_TOKEN" \
+  | docker login -u "$DEPLOY_REGISTRY_USER" --password-stdin "$DEPLOY_REGISTRY"
 
 if [ "${BUILD_PILLARS:-0}" = "1" ]; then
   ./docker/build-pillars.sh

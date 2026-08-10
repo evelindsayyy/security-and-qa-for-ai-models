@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy the selected main commit to production
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --group dev
+      - run: uv run ruff check .
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    env:
+      AUTO_INGEST: "0"
+      POSTGRES_DSN: ""
+      EFFICACY_DB_DSN: ""
+      DATABASE_URL: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --group dev
+      - run: uv run python -m unittest discover -s unit_tests -q
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/assets/package-lock.json
+      - run: npm ci
+        working-directory: frontend/assets
+      - run: npm run build
+        working-directory: frontend/assets
+      - run: npm run test
+        working-directory: frontend/assets
+
+  build-web-image:
+    needs: [lint, unit-tests, frontend-build]
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-web-image
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.deploy) ||
+      (github.event_name == 'push' && vars.DEPLOY_AUTO == 'true')
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "${RUNNER_TEMP}/ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "${RUNNER_TEMP}/ssh/key"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "${RUNNER_TEMP}/ssh/known_hosts"
+          chmod 600 "${RUNNER_TEMP}/ssh/key" "${RUNNER_TEMP}/ssh/known_hosts"
+      - name: Deploy production
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: |
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_PATH"
+          test -n "$DEPLOY_USER"
+          ssh -i "${RUNNER_TEMP}/ssh/key" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="${RUNNER_TEMP}/ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "DEPLOY_PATH='${DEPLOY_PATH}' \
+            WEB_IMAGE='ghcr.io/${{ github.repository }}:${{ github.sha }}' \
+            DEPLOY_GIT_URL='https://github.com/${{ github.repository }}.git' \
+            DEPLOY_REGISTRY='ghcr.io' \
+            DEPLOY_REGISTRY_USER='${{ github.actor }}' \
+            DEPLOY_REGISTRY_TOKEN='${REGISTRY_TOKEN}' \
+            BUILD_PILLARS='${{ vars.BUILD_PILLARS }}' \
+            GIT_REF='${{ github.ref_name }}' \
+            bash -s" < docker/deploy-remote.sh
