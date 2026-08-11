@@ -24,7 +24,7 @@ load_repo_env()
 _DSN_KEYS = ("POSTGRES_DSN", "DATABASE_URL", "EFFICACY_DB_DSN")
 _CONNECT_TIMEOUT_S = 2
 _AVAILABILITY_TTL_S = 60.0
-_avail_cache = {"checked_at": 0.0, "ok": False}
+_avail_cache = {"checked_at": float("-inf"), "ok": False}
 
 _SUITE_ORDER = ("promptfoo_duke_policy_v1", "promptfoo_duke_redteam_v1", "garak_subset_v1")
 

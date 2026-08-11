@@ -26,7 +26,7 @@ load_repo_env()
 _DSN_KEYS = ("POSTGRES_DSN", "DATABASE_URL")
 _CONNECT_TIMEOUT_S = 2
 _AVAILABILITY_TTL_S = 60.0
-_avail_cache = {"checked_at": 0.0, "ok": False}
+_avail_cache = {"checked_at": float("-inf"), "ok": False}
 
 _KIND_LABELS = {
     "truthfulqa": "TruthfulQA",

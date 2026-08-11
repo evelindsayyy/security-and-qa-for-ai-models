@@ -112,7 +112,7 @@ class DbRowMatchesFileRowTest(unittest.TestCase):
 class AvailabilityTest(unittest.TestCase):
     def test_no_dsn_means_unavailable(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=True):
-            eval_db_data._avail_cache.update(checked_at=0.0, ok=False)
+            eval_db_data._avail_cache.update(checked_at=float("-inf"), ok=False)
             self.assertFalse(eval_db_data.available())
 
     def test_dispatcher_serves_files_when_db_unavailable(self) -> None:

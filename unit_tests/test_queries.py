@@ -187,13 +187,13 @@ class ConnectionLayerTest(unittest.TestCase):
             os.environ.pop("EFFICACY_DB_DSN", None)
             os.environ.pop("POSTGRES_DSN", None)
             os.environ.pop("DATABASE_URL", None)
-            queries._avail_cache.update(checked_at=0.0, ok=False)
+            queries._avail_cache.update(checked_at=float("-inf"), ok=False)
             self.assertFalse(queries.available())
 
     def test_available_uses_postgres_dsn_fallback(self) -> None:
         env = {"POSTGRES_DSN": "postgresql://u:p@h/db"}
         with mock.patch.dict(os.environ, env, clear=True):
-            queries._avail_cache.update(checked_at=0.0, ok=False)
+            queries._avail_cache.update(checked_at=float("-inf"), ok=False)
             cm = mock.MagicMock()
             cm.__enter__ = mock.Mock(return_value=cm)
             cm.__exit__ = mock.Mock(return_value=False)

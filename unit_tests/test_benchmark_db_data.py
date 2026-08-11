@@ -112,7 +112,7 @@ class DetailSqlShapeTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {}, clear=True):
             os.environ.pop("POSTGRES_DSN", None)
             os.environ.pop("DATABASE_URL", None)
-            benchmark_db_data._avail_cache.update(checked_at=0.0, ok=False)
+            benchmark_db_data._avail_cache.update(checked_at=float("-inf"), ok=False)
             self.assertFalse(benchmark_db_data.available())
 
     def test_dispatcher_serves_files_when_db_unavailable(self) -> None:

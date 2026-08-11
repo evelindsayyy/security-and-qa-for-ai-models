@@ -37,7 +37,7 @@ _AVAILABILITY_TTL_S = 60.0
 
 # Availability is probed at most once per TTL so an unreachable database
 # stalls one request by <=2s per minute, not every request.
-_avail_cache = {"checked_at": 0.0, "ok": False}
+_avail_cache = {"checked_at": float("-inf"), "ok": False}
 
 
 # ---------------------------------------------------------------------------
