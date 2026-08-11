@@ -71,7 +71,7 @@ GitHub Actions pipeline on hosted runners:
 
 The deploy job SSHs to the application VM, runs `git pull`, pulls `WEB_IMAGE`,
 and recreates `web` (+ `caddy` when `CADDY_DOMAIN` is set). See
-[`.github/README.md`](../.github/README.md).
+[`.github/OPERATIONS.md`](../.github/OPERATIONS.md).
 
 Postgres is external. End-to-end flow: [`architecture.md`](architecture.md#how-a-run-flows).
 

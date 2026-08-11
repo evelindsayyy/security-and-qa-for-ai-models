@@ -1,6 +1,6 @@
 # Documentation
 
-Project guides. **GitHub Actions:** [`.github/README.md`](../.github/README.md).
+Project guides. **GitHub Actions:** [`.github/OPERATIONS.md`](../.github/OPERATIONS.md).
 
 ## Core
 

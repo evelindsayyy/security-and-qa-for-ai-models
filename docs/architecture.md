@@ -224,7 +224,7 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 the repo and Docker socket; Postgres is external.
 
 **CI (GitHub Actions):** lint → tests → frontend-build → Buildx image on `main` → **deploy**
-(manual workflow dispatch, or `DEPLOY_AUTO=true`). See [`.github/README.md`](../.github/README.md).
+(manual workflow dispatch, or `DEPLOY_AUTO=true`). See [`.github/OPERATIONS.md`](../.github/OPERATIONS.md).
 
 ## Open questions
 
