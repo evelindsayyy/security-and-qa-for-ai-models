@@ -2,7 +2,7 @@
 
 Code+ 2026 — Duke OIT. The AI Model Advisor has two pillars — **security** (scanning + safety) and **efficacy**.
 
-**Execution (tasks):** GitLab — [`.gitlab/README.md`](../.gitlab/README.md) (Track A, Track B, Team).
+**Execution (tasks):** [GitHub Issues](https://github.com/evelindsayyy/security-and-qa-for-ai-models/issues) with Track A, Track B, and Team forms.
 
 | Doc | Contents |
 |-----|----------|
@@ -26,7 +26,7 @@ Code+ 2026 — Duke OIT. The AI Model Advisor has two pillars — **security** (
 
 ## Phases
 
-Dated, step-by-step milestones live in the GitLab tracker; this is the high-level shape.
+Dated, step-by-step milestones live in the GitHub tracker; this is the high-level shape.
 
 | Phase | Focus | Track A | Track B |
 |-------|-------|---------|---------|
@@ -36,7 +36,7 @@ Dated, step-by-step milestones live in the GitLab tracker; this is the high-leve
 | Full UI | `frontend/` reads `api/` | Scanning + safety views | Efficacy charts |
 | Demo freeze | Representative catalog; documented limits | Gateway safety + HF samples | Gateway efficacy |
 
-Shared: `frontend/`, `api/`, Postgres, GitLab CI.
+Shared: `frontend/`, `api/`, Postgres, GitHub Actions.
 
 ---
 

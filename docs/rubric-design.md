@@ -254,7 +254,7 @@ Copy-pasting `it_support.yaml` and renaming dimensions is faster than designing 
 
 ## How this fits the project plan
 
-Rough sequencing (step-by-step milestones live in the GitLab tracker):
+Rough sequencing (step-by-step milestones live in the GitHub tracker):
 
 - Refactor `it_support_v1` → `it_support_v1.1` referencing the shared library; design `_shared_dimensions.yaml`. Identify the 3–5 Duke tasks the project will cover.
 - Apply OIT-reviewed references → `it_support_v2.jsonl` + `it_support_v2.yaml`; design + pilot one new rubric (likely `policy_qa_v1`); re-weight after pilot.

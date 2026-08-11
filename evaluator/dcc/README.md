@@ -20,22 +20,22 @@ NetID on the cluster: `lz302`. Everything must live under `/work/lz302/`
 # 1. Log in (needs your NetID password + 2FA — only you can do this)
 ssh dcc
 
-# 2. Make an SSH key so the cluster can reach GitLab (accept defaults, no passphrase)
+# 2. Make an SSH key so the cluster can reach GitHub (accept defaults, no passphrase)
 ssh-keygen -t ed25519
 cat ~/.ssh/id_ed25519.pub          # copy this whole line
 
-# 3. Paste that key into GitLab → avatar → Preferences → SSH Keys (in your browser)
+# 3. Paste that key into GitHub → Settings → SSH and GPG keys (in your browser)
 
 # 4. Clone the repo onto /work (NOT home)
 cd /work/lz302
-git clone git@gitlab.oit.duke.edu:codeplus/security-and-qa-for-ai-models.git
+git clone git@github.com:evelindsayyy/security-and-qa-for-ai-models.git
 cd security-and-qa-for-ai-models
 
 # 5. Install deps (uv is already on the cluster, cache already points at /work)
 uv sync
 ```
 
-Alternative to steps 1–4 if GitLab auth is a hassle — push from your laptop,
+Alternative to steps 1–4 if GitHub auth is a hassle — push from your laptop,
 then `rsync` to the cluster (re-run after every change):
 
 ```bash

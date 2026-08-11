@@ -1,6 +1,6 @@
 # Documentation
 
-Project guides. **GitLab CI/CD:** [`.gitlab/README.md`](../.gitlab/README.md).
+Project guides. **GitHub Actions:** [`.github/README.md`](../.github/README.md).
 
 ## Core
 

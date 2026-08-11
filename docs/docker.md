@@ -63,15 +63,15 @@ working-tree first, image bake as fallback.
 
 ## CI and deploy
 
-GitLab pipeline on shared runners:
+GitHub Actions pipeline on hosted runners:
 
 1. **lint** (ruff) → **unit-tests** → **frontend-build** (`npm ci`, `npm run build`, vitest)
-2. On **`main`**: **build-web-image** (Buildah, `oit-shared-buildah`) → registry `web:${CI_COMMIT_SHORT_SHA}`
-3. **deploy** — manual Play on `main` by default (`DEPLOY_AUTO=true` for automatic)
+2. On **`main`**: **build-web-image** (Buildx) → `ghcr.io/evelindsayyy/security-and-qa-for-ai-models:${GITHUB_SHA}`
+3. **deploy** — manual workflow dispatch on `main` by default (`DEPLOY_AUTO=true` for automatic)
 
 The deploy job SSHs to the application VM, runs `git pull`, pulls `WEB_IMAGE`,
 and recreates `web` (+ `caddy` when `CADDY_DOMAIN` is set). See
-[`.gitlab/README.md`](../.gitlab/README.md).
+[`.github/README.md`](../.github/README.md).
 
 Postgres is external. End-to-end flow: [`architecture.md`](architecture.md#how-a-run-flows).
 

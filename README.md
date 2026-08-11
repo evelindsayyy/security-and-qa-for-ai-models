@@ -59,7 +59,7 @@ Default path: **containerized UI** (`python3 main.py` or `./docker/run.sh`) with
 ### One-time setup
 
 ```bash
-git clone git@gitlab.oit.duke.edu:codeplus/security-and-qa-for-ai-models.git
+git clone git@github.com:evelindsayyy/security-and-qa-for-ai-models.git
 cd security-and-qa-for-ai-models
 uv sync --group dev              # core + psycopg + pytest/ruff (schema apply, ingest, tests)
 cp .env.example .env             # paste DUKE_GATEWAY_KEY from dashboard.ai.duke.edu
@@ -134,5 +134,5 @@ Host-specific values (`HOST_UID`, `DOCKER_GID`, `HOST_REPO`) are auto-detected b
 ## Links
 
 - [Code+ project page](https://codeplus.duke.edu/project/security-quality-assurance-tools-dukes-ai-models/)
-- [GitLab](https://gitlab.oit.duke.edu/codeplus/security-and-qa-for-ai-models)
+- [GitHub](https://github.com/evelindsayyy/security-and-qa-for-ai-models)
 - [Duke AI Suite](https://oit.duke.edu/ai-suite) · [Gateway dashboard](https://dashboard.ai.duke.edu)

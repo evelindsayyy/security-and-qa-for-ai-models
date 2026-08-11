@@ -1,0 +1,33 @@
+name: Track B issue
+description: Evaluator or public benchmark work
+title: "[Track B] "
+labels: [track-b, efficacy]
+body:
+  - type: textarea
+    id: story
+    attributes:
+      label: User story
+      placeholder: As a role, I want a goal, so that benefit.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable completion conditions.
+    validations:
+      required: true
+  - type: checkboxes
+    id: integration
+    attributes:
+      label: Integration contract
+      options:
+        - label: Uses a gateway model identifier from the shared catalog.
+        - label: Output matches the documented evaluation or benchmark shape.
+        - label: Records latency and token usage when available.
+        - label: Safety probes remain in Track A.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sample output and data mapping
+      description: Link sample JSON and explain how fields map to persistence.

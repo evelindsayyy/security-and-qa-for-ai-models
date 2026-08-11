@@ -16,7 +16,7 @@ uv run python -m unittest discover -s unit_tests -v
 uv run python -m unittest unit_tests.test_risk_scorer -v
 ```
 
-**CI parity** (same as GitLab pipeline): [`docs/cli.md`](../docs/cli.md#tests-and-lint-matches-ci).
+**CI parity** (same as the GitHub Actions pipeline): [`docs/cli.md`](../docs/cli.md#tests-and-lint-matches-ci).
 
 Tests mock gateway calls and default to `FRONTEND_LAUNCH_MODE=host` — no Docker or secrets required.
 

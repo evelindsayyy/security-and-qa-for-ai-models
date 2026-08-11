@@ -223,8 +223,8 @@ Each job writes a JSON artifact first; **ingest** loads it into Postgres (see [K
 `./docker/build-pillars.sh` + `python3 main.py up -d --build`. Web container bind-mounts
 the repo and Docker socket; Postgres is external.
 
-**CI (GitLab):** lint → tests → frontend-build → Buildah image on `main` → **deploy**
-(manual Play, or `DEPLOY_AUTO=true`). See [`.gitlab/README.md`](../.gitlab/README.md).
+**CI (GitHub Actions):** lint → tests → frontend-build → Buildx image on `main` → **deploy**
+(manual workflow dispatch, or `DEPLOY_AUTO=true`). See [`.github/README.md`](../.github/README.md).
 
 ## Open questions
 

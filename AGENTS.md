@@ -57,7 +57,7 @@ Pillar groups (`scanner`, `safety`, `benchmarks`) conflict — use Docker for pi
 
 ## CI / deploy
 
-lint (ruff) → frontend-build (npm ci + build + vitest) → unit-tests. On `main`: Buildah → GitLab registry → `deploy` job to VM (manual Play or `DEPLOY_AUTO=true`), target `/home/vcm/security-and-qa-for-ai-models`.
+lint (ruff) → frontend-build (npm ci + build + vitest) → unit-tests. On `main`: Buildx → GitHub Container Registry → `deploy` job to VM (manual workflow dispatch or `DEPLOY_AUTO=true`), target `/home/vcm/security-and-qa-for-ai-models`.
 
 Always start the production UI via `./docker/run.sh` or `python3 main.py` — never bare `docker compose` without the pinned project name `qa-ai-models`. After code changes on a detached stack, use `./docker/run.sh restart` (rebuild + recreate) instead of hunting for a VS Code forwarded port.
 

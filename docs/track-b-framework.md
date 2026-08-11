@@ -4,7 +4,7 @@ Track A (security pillar): [`track-a-framework.md`](track-a-framework.md). Tools
 
 Track B implements `tasks/` and `evaluator/`. Duke suites and benchmark references below.
 
-Gateway catalog: [`gateway-models.md`](gateway-models.md). Structured outputs: [`data-model.md`](data-model.md) — Duke suites in `eval_runs` / `eval_results`, public benchmarks in `benchmark_runs`. GitLab: [`.gitlab/README.md`](../.gitlab/README.md).
+Gateway catalog: [`gateway-models.md`](gateway-models.md). Structured outputs: [`data-model.md`](data-model.md) — Duke suites in `eval_runs` / `eval_results`, public benchmarks in `benchmark_runs`. Work tracking: [GitHub Issues](https://github.com/evelindsayyy/security-and-qa-for-ai-models/issues).
 
 ---
 
@@ -48,7 +48,7 @@ First wave for gateway eval — not the full table above. Start on **one** cheap
 | P1 | Document summarization | ROUGE-L + judge |
 | P1 | Student study | Undergrad help — not graded submissions |
 
-Other suites (creative writing, med education, coding, etc.) follow in later milestones. GitLab: [`.gitlab/README.md`](../.gitlab/README.md).
+Other suites (creative writing, med education, coding, etc.) follow in later milestones. See [GitHub Issues](https://github.com/evelindsayyy/security-and-qa-for-ai-models/issues).
 
 ## Rollout
 
@@ -58,7 +58,7 @@ Other suites (creative writing, med education, coding, etc.) follow in later mil
 | Next | Remaining Duke suites; charts in `frontend/` |
 | Later | More benchmark subsets, variation overlay |
 
-Step-by-step sequencing lives in the GitLab milestones.
+Step-by-step sequencing lives in the GitHub milestones.
 
 ---
 

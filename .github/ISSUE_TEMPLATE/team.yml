@@ -1,0 +1,33 @@
+name: Team issue
+description: Cross-track work involving shared infrastructure or contracts
+title: "[Team] "
+labels: [team-shared]
+body:
+  - type: textarea
+    id: story
+    attributes:
+      label: User story
+      description: State the role, goal, and benefit.
+      placeholder: As a role, I want a goal, so that benefit.
+    validations:
+      required: true
+  - type: checkboxes
+    id: tracks
+    attributes:
+      label: Tracks affected
+      options:
+        - label: Track A, scanning and safety
+        - label: Track B, efficacy
+        - label: Shared infrastructure
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable completion conditions.
+    validations:
+      required: true
+  - type: textarea
+    id: integration
+    attributes:
+      label: Integration and data model notes
+      description: Link affected routes, tables, pages, and related issues.

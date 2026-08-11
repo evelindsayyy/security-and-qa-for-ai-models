@@ -1,6 +1,6 @@
 # Tool stack
 
-Technical reference for tool choices. Work tracking: [`.gitlab/README.md`](../.gitlab/README.md).
+Technical reference for tool choices. Work tracking: [GitHub Issues](https://github.com/evelindsayyy/security-and-qa-for-ai-models/issues).
 
 Pipelines: [`track-a-framework.md`](track-a-framework.md) (Track A) · [`track-b-framework.md`](track-b-framework.md) (Track B) · [`gateway-models.md`](gateway-models.md) · [`team-tracks.md`](team-tracks.md) (outcomes)
 

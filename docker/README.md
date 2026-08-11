@@ -41,7 +41,7 @@ When `CADDY_DOMAIN` is set, `run.sh` and `deploy-remote.sh` include
 it, only `web` listens on `APP_PORT` (default 5000) — suitable for dev and SSH
 tunnels, not public HTTPS.
 
-Preferred update path: GitLab CI **deploy** job (pulls registry image, recreates
+Preferred update path: GitHub Actions **deploy** job (pulls the GHCR image, recreates
 `web` + `caddy`). Manual fallback: `git pull && ./docker/run.sh up -d --build --force-recreate`.
 
 Detail: [`docs/docker.md`](../docs/docker.md).
@@ -75,7 +75,7 @@ always uses the CI-built image bundle.
 ## Container HOME
 
 `HOST_UID` / `HOST_GID` are taken from the **repo directory owner** (not
-necessarily the shell user). That way GitLab deploy as `security-qa-deploy`
+necessarily the shell user). That way CI can deploy as `security-qa-deploy`
 still recreates `web` as `vcm`, matching interactive VM restarts.
 
 `HOME` is `<repo>/.docker-home/<HOST_UID>`. Deploy ensures `.docker-home` is
@@ -86,7 +86,7 @@ CLI config.
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| 500s on model detail / Start after GitLab deploy; fixed by `vcm` `./docker/run.sh restart` | Web container ran as the SSH deploy user (`security-qa-deploy`) instead of the repo owner (`vcm`), so bind-mounted writes failed | Fixed: `host-env.sh` sets `HOST_UID`/`HOST_GID` from the repo directory owner. Redeploy or restart once. |
+| 500s on model detail / Start after CI deploy; fixed by `vcm` `./docker/run.sh restart` | Web container ran as the SSH deploy user (`security-qa-deploy`) instead of the repo owner (`vcm`), so bind-mounted writes failed | Fixed: `host-env.sh` sets `HOST_UID`/`HOST_GID` from the repo directory owner. Redeploy or restart once. |
 | In-flight pillar runs die on every deploy | Pillar `compose run` shared project name `qa-ai-models` with web, so `--remove-orphans` killed them | Fixed: pillars use `qa-ai-models-pillars`. |
 | Start buttons fail after deploy | `.docker-home` UID mismatch | `./docker/run.sh up -d --force-recreate` or redeploy |
 | Unstyled / 404 on `/static/dist/…` | Missing frontend build | Dev: `./docker/run.sh up -d --build`. VM: CI deploy with `frontend-build` + `build-web-image` |
