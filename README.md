@@ -1,7 +1,6 @@
 # AI Model Advisor
 
 [![CI](https://github.com/evelindsayyy/security-and-qa-for-ai-models/actions/workflows/ci.yml/badge.svg)](https://github.com/evelindsayyy/security-and-qa-for-ai-models/actions/workflows/ci.yml)
-[![Live system](https://img.shields.io/badge/live-model--advisor.colab.duke.edu-00539B)](https://model-advisor.colab.duke.edu)
 [![Python](https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![Tests](https://img.shields.io/badge/python%20tests-1%2C272%20passing-brightgreen)](unit_tests/)
 
@@ -9,7 +8,7 @@
 
 An end-to-end model governance platform that turns Hugging Face artifacts and live LLM behavior into evidence-backed report cards. It combines supply-chain scanning, adversarial safety testing, LLM evaluation, and public benchmarks in one deployed Flask application backed by Postgres.
 
-**[Explore the live Model Advisor](https://model-advisor.colab.duke.edu)**. The public catalog and report pages are open to browse. Starting or deleting a run requires Duke OIDC login because those actions consume shared infrastructure and model budget.
+The platform ran in production at Duke during Code+ 2026; that hosted deployment has since been retired. [Deployed Evidence](#2-deployed-evidence) records what it held, and [Quick Start](#7-quick-start) runs it locally.
 
 Built for the Duke Office of Information Technology through Code+ 2026.
 
