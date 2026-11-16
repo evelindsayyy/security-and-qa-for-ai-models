@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/evelindsayyy/security-and-qa-for-ai-models/actions/workflows/ci.yml/badge.svg)](https://github.com/evelindsayyy/security-and-qa-for-ai-models/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/python%20tests-1%2C272%20passing-brightgreen)](unit_tests/)
+[![Tests](https://img.shields.io/badge/python%20tests-1%2C274%20passing-brightgreen)](unit_tests/)
 
 ![AI Model Advisor logo](frontend/static/apple-touch-icon.png)
 

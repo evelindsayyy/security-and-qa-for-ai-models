@@ -29,26 +29,40 @@ def _usage() -> None:
     print(__doc__.strip(), file=sys.stderr)
 
 
-def _run_host_flask() -> int:
+def _bind_error(port: int) -> OSError | None:
+    """Why *port* cannot be bound right now, or None when it is free."""
     import socket
 
-    from dbutils.env import load_repo_env
-
-    load_repo_env()
-    port = int(os.environ.get("PORT", os.environ.get("APP_PORT", "5000")))
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             sock.bind(("0.0.0.0", port))
         except OSError as exc:
-            print(
-                f"Port {port} is already in use — stop the containerized UI first "
-                f"(./docker/run.sh down) or choose another port: "
-                f"APP_PORT=5001 uv run python main.py --host",
-                file=sys.stderr,
-            )
-            print(f"Bind error: {exc}", file=sys.stderr)
-            return 1
+            return exc
+    return None
+
+
+def _run_host_flask() -> int:
+    from werkzeug.serving import is_running_from_reloader
+
+    from dbutils.env import load_repo_env
+
+    load_repo_env()
+    port = int(os.environ.get("PORT", os.environ.get("APP_PORT", "5000")))
+    # With debug=True, Werkzeug binds the port in this process and re-runs this
+    # file in a reloader child that serves on the inherited socket. Check the
+    # port only here, before that: in the child it is busy because the parent
+    # holds it, and refusing there stopped the dev server on every start.
+    exc = None if is_running_from_reloader() else _bind_error(port)
+    if exc is not None:
+        print(
+            f"Port {port} is already in use — stop the containerized UI first "
+            f"(./docker/run.sh down) or choose another port: "
+            f"APP_PORT=5001 uv run python main.py --host",
+            file=sys.stderr,
+        )
+        print(f"Bind error: {exc}", file=sys.stderr)
+        return 1
     from frontend import create_app
 
     create_app().run(debug=True, host="0.0.0.0", port=port)
