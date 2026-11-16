@@ -12,6 +12,10 @@ The platform ran in production at Duke during Code+ 2026; that hosted deployment
 
 Built for the Duke Office of Information Technology through Code+ 2026.
 
+![Walkthrough: value-weighted eval results for Duke policy Q&A, the suite-by-model matrix, judge rationales per rubric dimension, and Hugging Face artifact scans](docs/screenshots/walkthrough.gif)
+
+<sub>Recorded from a local run on the team's July 2026 result files; no model was called.</sub>
+
 ## 1. Why It Exists
 
 Choosing an institutional AI model is not a one-score problem. A model can be capable but unsafe, secure at inference but packaged with risky artifacts, or impressive on a public benchmark while failing the tasks an institution actually cares about.
@@ -43,6 +47,13 @@ The production snapshot on August 11, 2026 contained:
 | Automated verification | 1,272 Python tests plus frontend Vitest coverage |
 
 Every run produces a versioned JSON artifact. When a database DSN is available, the artifact is idempotently ingested into Postgres and becomes visible through the web UI and REST API. Disk artifacts remain the offline fallback when no database is configured.
+
+### What the interface shows
+
+| | |
+|---|---|
+| ![Eval matrix: overall score per task suite and model](docs/screenshots/eval-matrix.png) **Suite-by-model matrix.** Overall judge score for every Duke task suite and candidate model, so a model that is strong on email drafting but weak on policy Q&A is visible at a glance. | ![Eval results: value weighting, filters, and per-run cost and latency](docs/screenshots/eval-results.png) **Value-weighted results.** Quality, cost and latency weights re-rank the runs live; on policy Q&A, gpt-5.4-pro scores no higher than gpt-5-mini at more than 60 times the cost. |
+| ![Judge rationales: one sentence per rubric dimension per question](docs/screenshots/judge-rationales.png) **Judge rationales.** Every score is explained per rubric dimension; here a correct phishing answer loses citation precision because it cites no Duke policy. | ![HF artifact scans ranked by risk](docs/screenshots/artifact-scans.png) **Artifact scans.** Hugging Face models ranked by worst severity across ModelScan, Fickling, ModelAudit, dependency and secret checks; a proof-of-concept file-extension mismatch is flagged critical. |
 
 ---
 
